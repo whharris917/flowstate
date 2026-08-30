@@ -1,6 +1,7 @@
 """Tests for Simulation.disconnect — pulling a run out of the graph."""
 from __future__ import annotations
 
+from conftest import wire_power
 from sim.components import FloatSwitch, Pump, Relay, Tank
 from sim.core import Simulation
 
@@ -11,6 +12,7 @@ def _loop() -> tuple[Simulation, Tank, FloatSwitch, Relay, Pump]:
     switch = sim.add(FloatSwitch("switch", 40.0, 80.0))
     relay = sim.add(Relay("relay"))
     pump = sim.add(Pump("pump", 4.0))
+    wire_power(sim, pump)
     sim.connect(tank, "level", switch, "level")
     sim.connect(switch, "contact", relay, "coil")
     sim.connect(relay, "contact", pump, "run")
@@ -41,4 +43,4 @@ class TestDisconnect:
         sim, tank, switch, relay, pump = _loop()
         assert not sim.disconnect(switch, "contact", pump, "run")
         assert not sim.disconnect(relay, "contact", pump, "nope")
-        assert len(sim.wires) == 4
+        assert len(sim.wires) == 5  # loop's four plus the power feed

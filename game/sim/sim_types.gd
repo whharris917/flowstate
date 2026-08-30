@@ -6,7 +6,7 @@ class_name SimTypes
 ## GDScript static typing simple, and the historian stores floats anyway.
 
 
-enum PortKind { SIGNAL_DISCRETE, SIGNAL_ANALOG, PROCESS_FLOW, PROCESS_LEVEL, PROCESS_PRESSURE }
+enum PortKind { SIGNAL_DISCRETE, SIGNAL_ANALOG, PROCESS_FLOW, PROCESS_LEVEL, PROCESS_PRESSURE, POWER }
 
 
 static func is_summing(kind: PortKind) -> bool:

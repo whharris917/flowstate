@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from conftest import wire_power
 from sim.components import Gauge, Pump, Relay, Tank
 from sim.core import Simulation
 from sim.historian import Historian
@@ -25,6 +26,7 @@ class TestGauge:
     def test_flow_gauge_reads_flow(self) -> None:
         sim = Simulation(dt=1.0)
         pump = sim.add(Pump("pump", rated_lps=4.0, mode="hand"))
+        wire_power(sim, pump)
         gauge = sim.add(Gauge("fi_1", "flow"))
         sim.connect(pump, "flow", gauge, "process")
         sim.tick()
@@ -58,6 +60,7 @@ class TestRemoval:
     def _plant(self) -> tuple[Simulation, Historian]:
         sim = Simulation(dt=1.0)
         pump = sim.add(Pump("pump", rated_lps=2.0, mode="hand"))
+        wire_power(sim, pump)
         tank = sim.add(Tank("tank", capacity_l=100.0))
         sim.connect(pump, "flow", tank, "in_flow")
         hist = sim.attach_historian(Historian())
@@ -80,6 +83,7 @@ class TestRemoval:
         sim.remove_component("pump")
         pump2 = sim.add(Pump(sim.unique_name("pump"), rated_lps=3.0, mode="hand"))
         assert pump2.name == "pump_1"
+        wire_power(sim, pump2)
         tank = sim.get_component("tank")
         sim.connect(pump2, "flow", tank, "in_flow")
         sim.run(2.0)

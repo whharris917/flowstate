@@ -65,6 +65,7 @@ class PLC(Component):
         self.program: list[dict] = []
         self.ao_moves: list[dict] = []
         self.scans = 0
+        self.power = self.add_input("power", PortKind.POWER, "24VDC")
         self.add_observable("scans", "scans")
 
     # ---- program management -------------------------------------------------
@@ -133,6 +134,18 @@ class PLC(Component):
         return self.timer_done[index]
 
     def tick(self, dt: float) -> None:
+        if float(self.power.value) <= 0.5:
+            # De-energized: outputs drop, timers reset, memory holds
+            # (battery-backed), no scan runs.
+            for port in self.do_ports:
+                port.value = False
+            for port in self.ao_ports:
+                port.value = 0.0
+            for i in range(len(self.timer_run)):
+                self.timer_run[i] = False
+                self.timer_acc[i] = 0.0
+                self.timer_done[i] = False
+            return
         self.scans += 1
         # Outputs no rung drives stay off; timers must be re-driven
         # every scan or they release (TON semantics).

@@ -17,14 +17,14 @@ func _init(name_: String) -> void:
 	comp_name = name_
 
 
-func add_input(name_: String, kind: SimTypes.PortKind) -> SimInputPort:
-	var port := SimInputPort.new(comp_name, name_, kind)
+func add_input(name_: String, kind: SimTypes.PortKind, spec: String = "") -> SimInputPort:
+	var port := SimInputPort.new(comp_name, name_, kind, spec)
 	inputs[name_] = port
 	return port
 
 
-func add_output(name_: String, kind: SimTypes.PortKind) -> SimOutputPort:
-	var port := SimOutputPort.new(comp_name, name_, kind)
+func add_output(name_: String, kind: SimTypes.PortKind, spec: String = "") -> SimOutputPort:
+	var port := SimOutputPort.new(comp_name, name_, kind, spec)
 	outputs[name_] = port
 	return port
 

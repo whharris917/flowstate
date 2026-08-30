@@ -94,6 +94,9 @@ func _after_plant() -> void:
 	plant.place("gauge_press", "pi_still_top", {}, Vector3(7.5, 9.72, -3.4), PI, true)
 	plant.connect_equipment("still_column", "p_top", "pi_still_top", "process",
 		[Vector3(7.5, 10.9, -3.3)])
+	# The reboiler is a 480 V load like any other: cable from the feeder.
+	plant.connect_equipment("plant_mains", "power", "still_column", "power",
+		[Vector3(-3.8, 0.3, -0.4), Vector3(7.7, 0.3, -3.5)])
 
 
 func _process(delta: float) -> void:

@@ -35,6 +35,7 @@ class PortKind(Enum):
     PROCESS_FLOW = "process_flow"        # liquid flow, L/s (float)
     PROCESS_LEVEL = "process_level"      # liquid level, L (float)
     PROCESS_PRESSURE = "process_pressure"  # gauge pressure, Pa (float)
+    POWER = "power"                      # electrical supply (1.0 = energized)
 
 
 # How multiple wires landing on one input combine, per kind.
@@ -53,10 +54,13 @@ class Port:
     object — mirrors the GDScript port, where a back-reference would
     make a component<->port RefCounted cycle and leak the graph."""
 
-    def __init__(self, owner_name: str, name: str, kind: PortKind) -> None:
+    def __init__(
+        self, owner_name: str, name: str, kind: PortKind, spec: str = ""
+    ) -> None:
         self.owner_name = owner_name
         self.name = name
         self.kind = kind
+        self.spec = spec  # e.g. voltage class "480VAC" / "24VDC" for POWER
         self.value: Value = _default_for(kind)
 
     @property
@@ -65,8 +69,10 @@ class Port:
 
 
 class InputPort(Port):
-    def __init__(self, owner_name: str, name: str, kind: PortKind) -> None:
-        super().__init__(owner_name, name, kind)
+    def __init__(
+        self, owner_name: str, name: str, kind: PortKind, spec: str = ""
+    ) -> None:
+        super().__init__(owner_name, name, kind, spec)
         self.wire_count = 0
 
     def reset(self) -> None:
@@ -91,6 +97,11 @@ class Wire:
             raise ValueError(
                 f"cannot wire {src.path} ({src.kind.value}) to "
                 f"{dst.path} ({dst.kind.value})"
+            )
+        if src.kind is PortKind.POWER and src.spec != dst.spec:
+            raise ValueError(
+                f"voltage mismatch: {src.path} is {src.spec or '?'}, "
+                f"{dst.path} needs {dst.spec or '?'}"
             )
         if dst.wire_count > 0 and dst.kind not in (_SUMMING_KINDS | _ORING_KINDS):
             raise ValueError(f"{dst.path} ({dst.kind.value}) accepts only one wire")
@@ -119,13 +130,13 @@ class Component:
         self.outputs: dict[str, OutputPort] = {}
         self.observables: dict[str, str] = {}
 
-    def add_input(self, name: str, kind: PortKind) -> InputPort:
-        port = InputPort(self.name, name, kind)
+    def add_input(self, name: str, kind: PortKind, spec: str = "") -> InputPort:
+        port = InputPort(self.name, name, kind, spec)
         self.inputs[name] = port
         return port
 
-    def add_output(self, name: str, kind: PortKind) -> OutputPort:
-        port = OutputPort(self.name, name, kind)
+    def add_output(self, name: str, kind: PortKind, spec: str = "") -> OutputPort:
+        port = OutputPort(self.name, name, kind, spec)
         self.outputs[name] = port
         return port
 

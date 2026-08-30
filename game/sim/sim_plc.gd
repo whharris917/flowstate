@@ -27,6 +27,7 @@ var timer_presets: Array[float] = []
 var program: Array[Dictionary] = []
 var ao_moves: Array[Dictionary] = []
 var scans: int = 0
+var power: SimInputPort
 
 
 func _init(name_: String, di := 8, do := 8, ai := 4, ao := 4,
@@ -51,6 +52,7 @@ func _init(name_: String, di := 8, do := 8, ai := 4, ao := 4,
 		timer_run.append(false)
 		timer_done.append(false)
 		timer_presets.append(1.0)
+	power = add_input("power", SimTypes.PortKind.POWER, "24VDC")
 	add_observable("scans", &"scans")
 
 
@@ -155,6 +157,18 @@ func _read(ref: String) -> bool:
 
 
 func tick(dt: float) -> void:
+	if power.value <= 0.5:
+		# De-energized: outputs drop, timers reset, memory holds
+		# (battery-backed), no scan runs.
+		for port in do_ports:
+			port.value = 0.0
+		for port in ao_ports:
+			port.value = 0.0
+		for i in range(timer_run.size()):
+			timer_run[i] = false
+			timer_acc[i] = 0.0
+			timer_done[i] = false
+		return
 	scans += 1
 	# Outputs no rung drives stay off; timers must be re-driven every
 	# scan or they release (TON semantics).

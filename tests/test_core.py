@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from conftest import wire_power
 from sim.components import FloatSwitch, Pump, Relay, Tank
 from sim.core import Component, PortKind, Simulation
 
@@ -52,6 +53,7 @@ def test_discrete_inputs_or_like_parallel_contacts() -> None:
     relay_a = sim.add(Relay("ra"))
     relay_b = sim.add(Relay("rb"))
     pump = sim.add(Pump("p", rated_lps=1.0))
+    wire_power(sim, pump)
     sim.connect(relay_a, "contact", pump, "run")
     sim.connect(relay_b, "contact", pump, "run")
     relay_a.contact.value = False
@@ -67,6 +69,7 @@ def test_propagation_is_one_scan_per_hop() -> None:
     switch = sim.add(FloatSwitch("s", low_l=10.0, high_l=90.0))
     relay = sim.add(Relay("r"))
     pump = sim.add(Pump("p", rated_lps=1.0))
+    wire_power(sim, pump)
     sim.connect(tank, "level", switch, "level")
     sim.connect(switch, "contact", relay, "coil")
     sim.connect(relay, "contact", pump, "run")
@@ -88,6 +91,7 @@ def test_determinism_two_identical_sims_match_exactly() -> None:
         switch = sim.add(FloatSwitch("s", low_l=40.0, high_l=80.0))
         relay = sim.add(Relay("r"))
         pump = sim.add(Pump("p", rated_lps=4.0))
+        wire_power(sim, pump)
         sim.connect(tank, "level", switch, "level")
         sim.connect(switch, "contact", relay, "coil")
         sim.connect(relay, "contact", pump, "run")

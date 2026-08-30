@@ -13,6 +13,7 @@ var running: bool = false
 var starts: int = 0
 
 var run: SimInputPort
+var power: SimInputPort
 var flow: SimOutputPort
 
 
@@ -22,6 +23,7 @@ func _init(name_: String, rated_lps_: float, mode_: String = "auto") -> void:
 	rated_lps = rated_lps_
 	set_mode(mode_)
 	run = add_input("run", SimTypes.PortKind.SIGNAL_DISCRETE)
+	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
 	flow = add_output("flow", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("starts", &"starts")
 
@@ -45,6 +47,8 @@ func tick(_dt: float) -> void:
 		should_run = false
 	else:
 		should_run = run.value > 0.5
+	# No 480 V at the starter, no motor — hand mode included.
+	should_run = should_run and power.value > 0.5
 	if should_run and not running:
 		starts += 1
 	running = should_run

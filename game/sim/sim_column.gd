@@ -26,6 +26,7 @@ var duty_kw: float = 0.0
 var boilup_kgps: float = 0.0
 var p_top_pa: float = 0.0
 
+var power: SimInputPort
 var p_top: SimOutputPort
 
 
@@ -37,6 +38,7 @@ func _init(name_: String, charge_l_: float = 60.0, max_duty_kw_: float = 100.0,
 	charge_l = charge_l_
 	max_duty_kw = max_duty_kw_
 	temp_c = temp_c_
+	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
 	p_top = add_output("p_top", SimTypes.PortKind.PROCESS_PRESSURE)
 	add_observable("temp_c", &"temp_c")
 	add_observable("duty_kw", &"duty_kw")
@@ -54,7 +56,7 @@ func step_duty() -> void:
 
 
 func tick(dt: float) -> void:
-	duty_kw = duty_frac * max_duty_kw
+	duty_kw = duty_frac * max_duty_kw if power.value > 0.5 else 0.0
 	var mass_kg := charge_l  # aqueous charge, ~1 kg/L
 	if duty_kw > 0.0 and temp_c < BOIL_C:
 		temp_c = minf(BOIL_C, temp_c + duty_kw / (mass_kg * CP_KJ_PER_KG_K) * dt)

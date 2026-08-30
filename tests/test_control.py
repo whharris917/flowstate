@@ -11,6 +11,7 @@ from sim.core import Simulation
 def _plc() -> tuple[Simulation, PLC]:
     sim = Simulation(dt=0.05)
     plc = sim.add(PLC("plc"))
+    plc.power.value = 1.0  # direct-tick tests: energize the rack
     return sim, plc
 
 

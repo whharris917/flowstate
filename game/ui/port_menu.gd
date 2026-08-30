@@ -62,25 +62,25 @@ func open(plant: Plant, title: String, records: Array, pick: Callable) -> void:
 			continue
 		for port_name: String in record.outputs:
 			var port: SimOutputPort = record.outputs[port_name]
-			_list.add_child(_row(record_name, port_name, port.kind, false,
+			_list.add_child(_row(record_name, port_name, port.kind, port.spec, false,
 				"%.2f" % port.value, true))
 		for port_name: String in record.inputs:
 			var port: SimInputPort = record.inputs[port_name]
 			var free := port.wire_count == 0 or SimTypes.allows_multiple_sources(port.kind)
-			_list.add_child(_row(record_name, port_name, port.kind, true,
+			_list.add_child(_row(record_name, port_name, port.kind, port.spec, true,
 				"wired" if port.wire_count > 0 else "open", free))
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _row(record_name: String, port_name: String, kind: SimTypes.PortKind,
-		is_input: bool, state: String, enabled: bool) -> Button:
+		spec: String, is_input: bool, state: String, enabled: bool) -> Button:
 	var button := Button.new()
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.custom_minimum_size = Vector2(360, 0)
+	var kind_text := SimTypes.kind_name(kind) + ((" " + spec) if spec != "" else "")
 	button.text = "%s  %s.%s   [%s]   %s" % [
-		"◦ IN " if is_input else "▸ OUT", record_name, port_name,
-		SimTypes.kind_name(kind), state]
+		"◦ IN " if is_input else "▸ OUT", record_name, port_name, kind_text, state]
 	button.add_theme_font_size_override("font_size", 13)
 	button.add_theme_color_override("font_color", PlantFactory.KIND_COLORS[kind].lightened(0.3))
 	button.disabled = not enabled

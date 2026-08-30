@@ -91,7 +91,7 @@ func _set_service_color(color: Color) -> void:
 func apply_service(color: Color, label_text: String) -> void:
 	_set_service_color(color)
 	service_label = label_text
-	_was_hot = not _was_hot  # force a material refresh next frame
+	_repaint()
 	for old in _label_nodes:
 		old.queue_free()
 	_label_nodes.clear()
@@ -228,7 +228,7 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 		old.queue_free()
 	_brackets.clear()
 	_unsupported = unsupported
-	_was_hot = not _was_hot  # force a material refresh next frame
+	_repaint()
 	var mat := ViewUtil.flat(Color(0.22, 0.23, 0.26))
 	for bracket: Dictionary in brackets:
 		var from: Vector3 = bracket["from"]
@@ -269,9 +269,14 @@ func describe() -> String:
 
 func _process(_delta: float) -> void:
 	var hot: bool = _getter.call() > 0.5
-	if hot == _was_hot and not _meshes.is_empty() and _meshes[0].material_override != null:
+	if hot == _was_hot:
 		return
-	_was_hot = hot
-	var mat := _bad if _unsupported else (_hot if hot else _cold)
+	_repaint()
+
+
+func _repaint() -> void:
+	_was_hot = _getter.call() > 0.5
+	var mat := _bad if _unsupported else (_hot if _was_hot else _cold)
 	for inst in _meshes:
-		inst.material_override = mat
+		if is_instance_valid(inst):
+			inst.material_override = mat

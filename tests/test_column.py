@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from conftest import wire_power
 from sim.components import Column, Gauge
 from sim.core import Simulation
 
@@ -10,6 +11,7 @@ from sim.core import Simulation
 def _column_sim() -> tuple[Simulation, Column]:
     sim = Simulation(dt=0.05)
     column = sim.add(Column("still"))
+    wire_power(sim, column)
     return sim, column
 
 
@@ -67,6 +69,7 @@ class TestPressureGauge:
     def test_press_kpa_reads_pascals_as_kilopascals(self) -> None:
         sim = Simulation(dt=0.05)
         column = sim.add(Column("still"))
+        wire_power(sim, column)
         gauge = sim.add(Gauge("pi_top", "press_kpa"))
         sim.connect(column, "p_top", gauge, "process")
         column.set_duty(1.0)

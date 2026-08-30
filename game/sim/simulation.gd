@@ -48,6 +48,10 @@ func connect_ports(src: SimComponent, out_name: String, dst: SimComponent, in_na
 			out_port.path(), SimTypes.kind_name(out_port.kind),
 			in_port.path(), SimTypes.kind_name(in_port.kind)])
 		return false
+	if out_port.kind == SimTypes.PortKind.POWER and out_port.spec != in_port.spec:
+		push_error("voltage mismatch: %s is %s, %s needs %s" % [
+			out_port.path(), out_port.spec, in_port.path(), in_port.spec])
+		return false
 	if in_port.wire_count > 0 and not SimTypes.allows_multiple_sources(in_port.kind):
 		push_error("%s (%s) accepts only one wire" % [in_port.path(), SimTypes.kind_name(in_port.kind)])
 		return false

@@ -119,6 +119,36 @@ class Gauge(Component):
         self.signal.value = self.reading
 
 
+class MainsFeed(Component):
+    """The plant's electrical feeder: one always-energized POWER output
+    at its voltage class. Load accounting and breakers arrive with the
+    power-monitoring tier; for now this is the honest root of every
+    power circuit — nothing runs without a cable back to a feed.
+    """
+
+    def __init__(self, name: str, spec: str = "480VAC") -> None:
+        super().__init__(name)
+        self.spec = spec
+        self.power = self.add_output("power", PortKind.POWER, spec)
+        self.power.value = 1.0
+
+    def tick(self, dt: float) -> None:
+        self.power.value = 1.0
+
+
+class PowerSupply(Component):
+    """Control power supply: 480VAC in, 24VDC out. The cabinet's PSU —
+    controllers ride on it, and it dies with its feeder."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.ac_in = self.add_input("ac_in", PortKind.POWER, "480VAC")
+        self.dc_out = self.add_output("dc_out", PortKind.POWER, "24VDC")
+
+    def tick(self, dt: float) -> None:
+        self.dc_out.value = 1.0 if float(self.ac_in.value) > 0.5 else 0.0
+
+
 class ControlValve(Component):
     """Air-actuated control valve: 0-100 % analog command, first-order
     positioner lag, flow = position/100 * cv_lps. Draws from an
@@ -209,6 +239,7 @@ class Column(Component):
         self.duty_kw = 0.0
         self.boilup_kgps = 0.0
         self.p_top_pa = 0.0
+        self.power = self.add_input("power", PortKind.POWER, "480VAC")
         self.p_top = self.add_output("p_top", PortKind.PROCESS_PRESSURE)
         self.add_observable("temp_c", "temp_c")
         self.add_observable("duty_kw", "duty_kw")
@@ -220,7 +251,8 @@ class Column(Component):
         self.duty_frac = frac
 
     def tick(self, dt: float) -> None:
-        self.duty_kw = self.duty_frac * self.max_duty_kw
+        powered = float(self.power.value) > 0.5
+        self.duty_kw = self.duty_frac * self.max_duty_kw if powered else 0.0
         mass_kg = self.charge_l  # aqueous charge, ~1 kg/L
         if self.duty_kw > 0.0 and self.temp_c < self.BOIL_C:
             rise = self.duty_kw / (mass_kg * self.CP_KJ_PER_KG_K) * dt
@@ -402,6 +434,7 @@ class Pump(Component):
         self.running = False
         self.starts = 0
         self.run = self.add_input("run", PortKind.SIGNAL_DISCRETE)
+        self.power = self.add_input("power", PortKind.POWER, "480VAC")
         self.flow = self.add_output("flow", PortKind.PROCESS_FLOW)
         self.add_observable("starts", "starts")
 
@@ -417,6 +450,8 @@ class Pump(Component):
             run = False
         else:
             run = bool(self.run.value)
+        # No 480 V at the starter, no motor — hand mode included.
+        run = run and float(self.power.value) > 0.5
         if run and not self.running:
             self.starts += 1
         self.running = run

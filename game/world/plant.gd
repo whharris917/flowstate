@@ -81,6 +81,8 @@ func _exercise_build_api() -> void:
 	else:
 		if connect_equipment(col.comp_name, "p_top", pi_top.comp_name, "process") != "":
 			problems.append("pressure gauge connect refused")
+		if connect_equipment("plant_mains", "power", col.comp_name, "power") != "":
+			problems.append("column power feed refused")
 		col.set_duty(1.0)
 		for _i in 2400:
 			sim.tick()
@@ -149,6 +151,13 @@ func _exercise_build_api() -> void:
 		if connect_equipment(cab_plc.comp_name, "do_0", cab + "_td2", "in", [], false) != "":
 			problems.append("internal PLC->terminal wire refused")
 		switch.set_band(150.0, 150.0)  # level < 150: contact closed for sure
+		for _i in 10:
+			sim.tick()
+		# The rack has no 480 V feed yet: the PLC must be dead.
+		if (sim.get_component(cab + "_td2") as SimTerminal).t_out.value > 0.5:
+			problems.append("unpowered PLC drove an output")
+		if connect_equipment("plant_mains", "power", cab + "_psu", "ac_in") != "":
+			problems.append("mains to cabinet PSU refused")
 		for _i in 10:
 			sim.tick()
 		if (sim.get_component(cab + "_td2") as SimTerminal).t_out.value < 0.5:
@@ -241,6 +250,10 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as ControlValveView).setup(record as SimControlValve)
 		"controller":
 			(view as PIDView).setup(record as SimPID)
+		"mains":
+			(view as MainsView).setup(record as SimMainsFeed)
+		"psu":
+			(view as PsuView).setup(record as SimPowerSupply)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
 	PlantFactory.attach_port_markers(view, record, type_id)
@@ -286,12 +299,24 @@ func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> SimCompon
 			"%s_ta%d" % [name_, i + 1], {"kind": "analog"})
 		sim.register_with_historian(term)
 		terms.append(term.comp_name)
+	# Integral PSU: 24VDC for the rack, fed by a 480VAC field cable
+	# landed on the flank. The PSU->PLC hookup is factory wiring — a
+	# pure kernel wire, not listed in the schematic.
+	var psu := PlantFactory.make_record(sim, "psu", name_ + "_psu", {}) as SimPowerSupply
+	sim.register_with_historian(psu)
+	sim.connect_ports(psu, "dc_out", plc, "power")
 	var view := CabinetView.new()
 	view.position = to_local(world_pos)
 	view.rotation.y = rot_y
 	add_child(view)
 	view.setup(plc, name_)
 	view.config_cb = _configure_cabinet
+	PlantFactory.attach_port_markers(view, psu, "psu",
+		{"ac_in": Vector3(-0.72, 0.30, 0.12), "dc_out": Vector3(0.72, 0.30, 0.12)})
+	views[psu.comp_name] = view
+	equip_types[psu.comp_name] = "psu"
+	protected[psu.comp_name] = true
+	member_of[psu.comp_name] = name_
 	# Terminal markers on the flanks: field wires land on the left
 	# (in), leave on the right (out). Discrete strip above analog.
 	for i in range(terms.size()):
@@ -307,7 +332,8 @@ func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> SimCompon
 	equip_types[plc.comp_name] = "plc"
 	protected[plc.comp_name] = true
 	member_of[plc.comp_name] = name_
-	cabinets[name_] = {"node": view, "plc": plc.comp_name, "terminals": terms}
+	cabinets[name_] = {"node": view, "plc": plc.comp_name, "terminals": terms,
+		"psu": psu.comp_name}
 	_revalidate_in = 3
 	return plc
 
@@ -318,6 +344,8 @@ func remove_cabinet(name_: String) -> bool:
 	var entry: Dictionary = cabinets[name_]
 	var members: Array[String] = []
 	members.append(str(entry["plc"]))
+	if entry.has("psu"):
+		members.append(str(entry["psu"]))
 	for term: String in entry["terminals"]:
 		members.append(term)
 	for member in members:
@@ -620,6 +648,10 @@ func _build_initial_plant() -> void:
 		0.0, true) as SimRelay
 	pump = place("pump", "fill_pump", {"rated_lps": 4.0},
 		_world(Vector3(-0.5, 0, -2.6)), 0.0, true) as SimPump
+	place("mains", "plant_mains", {}, _world(Vector3(-4.4, 0, -1.2)), 0.0, true)
+	# Power first — nothing runs without a cable back to the feeder.
+	connect_equipment("plant_mains", "power", "fill_pump", "power",
+		[Vector3(-3.6, 0.3, -1.6), Vector3(-1.0, 0.3, -2.9)])
 	# Signal runs drop to the floor and run along it — the support rule
 	# applies to the commissioned loop too.
 	connect_equipment("supply_tank", "level", "level_switch", "level")
@@ -664,6 +696,8 @@ func _self_check() -> void:
 	var c_switch := check.add(SimFloatSwitch.new("s", 40.0, 80.0)) as SimFloatSwitch
 	var c_relay := check.add(SimRelay.new("r")) as SimRelay
 	var c_pump := check.add(SimPump.new("p", 4.0)) as SimPump
+	var c_mains := check.add(SimMainsFeed.new("m")) as SimMainsFeed
+	check.connect_ports(c_mains, "power", c_pump, "power")
 	check.connect_ports(c_tank, "level", c_switch, "level")
 	check.connect_ports(c_switch, "contact", c_relay, "coil")
 	check.connect_ports(c_relay, "contact", c_pump, "run")
@@ -696,6 +730,7 @@ func _control_self_check() -> void:
 	var level_kpa := tank_.level_l / 45.45 * SimGauge.WATER_KPA_PER_M
 
 	var plc := SimPLC.new("plc")
+	plc.power.value = 1.0  # direct-tick check: energize the rack
 	var err := plc.set_program([
 		{"coil": "m_0", "logic": [
 			[{"ref": "di_0"}, {"ref": "di_1", "nc": true}],

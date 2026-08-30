@@ -19,6 +19,8 @@ const CATALOG_CONTROL: Array[Dictionary] = [
 	{"type": "valve", "label": "Control valve"},
 	{"type": "controller", "label": "PID controller"},
 	{"type": "cabinet", "label": "Control cabinet"},
+	{"type": "mains", "label": "Mains feeder 480VAC"},
+	{"type": "psu", "label": "Power supply 24VDC"},
 ]
 
 # Ghost/collision footprint (x, y, z) and the view's y-offset when the
@@ -36,6 +38,8 @@ const FOOTPRINTS := {
 	"valve": Vector3(0.7, 1.3, 0.55),
 	"controller": Vector3(0.5, 1.9, 0.5),
 	"cabinet": Vector3(1.4, 2.1, 0.75),
+	"mains": Vector3(0.85, 1.85, 0.65),
+	"psu": Vector3(0.65, 1.6, 0.45),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
@@ -43,12 +47,14 @@ const Y_OFFSETS := {
 	"gauge_press": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
 	"valve": 0.0, "controller": 0.0, "cabinet": 0.0,
+	"mains": 0.0, "psu": 0.0,
 }
 
 # Where each port's marker sits in the view's local space.
 const PORT_ANCHORS := {
 	"tank": {"in_flow": Vector3(0, 2.35, 0), "level": Vector3(0.95, 1.1, 0)},
-	"pump": {"run": Vector3(-0.3, 0.55, 0.25), "flow": Vector3(0.42, 0.42, 0)},
+	"pump": {"run": Vector3(-0.3, 0.55, 0.25), "power": Vector3(-0.3, 0.25, -0.25),
+		"flow": Vector3(0.42, 0.42, 0)},
 	"relay": {"coil": Vector3(-0.18, -0.22, 0.14), "contact": Vector3(0.18, -0.22, 0.14)},
 	"float_switch": {"level": Vector3(0, -0.22, 0.12), "contact": Vector3(0.14, 0.2, 0.1)},
 	"gauge_level": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
@@ -58,8 +64,11 @@ const PORT_ANCHORS := {
 	"gauge_press": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
 	"valve": {"cmd": Vector3(-0.28, 0.85, 0.12), "flow": Vector3(0.36, 0.32, 0)},
 	"controller": {"pv": Vector3(-0.16, 1.05, 0.12), "out": Vector3(0.16, 1.05, 0.12)},
-	# Overhead tap on the vapor line above the dished head.
-	"column": {"p_top": Vector3(0, 10.75, 0.5)},
+	"mains": {"power": Vector3(0.5, 1.1, 0)},
+	"psu": {"ac_in": Vector3(-0.32, 1.2, 0.1), "dc_out": Vector3(0.32, 1.2, 0.1)},
+	# Overhead tap on the vapor line above the dished head; power lands
+	# at the reboiler band.
+	"column": {"p_top": Vector3(0, 10.75, 0.5), "power": Vector3(0.7, 1.15, 0)},
 	# Pressure taps sit on the suite's walls, near the ceiling.
 	"air_cascade": {
 		"p_al1": Vector3(-23.5, 2.5, -4.35),
@@ -76,6 +85,7 @@ const KIND_COLORS := {
 	SimTypes.PortKind.PROCESS_FLOW: Color(0.16, 0.47, 0.84),
 	SimTypes.PortKind.PROCESS_LEVEL: Color(0.15, 0.65, 0.80),
 	SimTypes.PortKind.PROCESS_PRESSURE: Color(0.58, 0.40, 0.85),
+	SimTypes.PortKind.POWER: Color(0.55, 0.15, 0.12),
 }
 
 
@@ -126,6 +136,10 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimPLC.new(name_))
 		"terminal":
 			return sim.add(SimTerminal.new(name_, params.get("kind", "discrete")))
+		"mains":
+			return sim.add(SimMainsFeed.new(name_, params.get("spec", "480VAC")))
+		"psu":
+			return sim.add(SimPowerSupply.new(name_))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -150,6 +164,10 @@ static func make_view(type_id: String, record: SimComponent,
 			view = ControlValveView.new()
 		"controller":
 			view = PIDView.new()
+		"mains":
+			view = MainsView.new()
+		"psu":
+			view = PsuView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
 	if view == null:
