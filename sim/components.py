@@ -57,6 +57,52 @@ class Tank(Component):
         self.level.value = self.level_l
 
 
+class Gauge(Component):
+    """Local indicator plus analog transmitter output.
+
+    Two kinds, both honest derivations of existing process state:
+      - "level_kpa": hydrostatic head at a vessel bottom. The process
+        level (liters) becomes height via liters_per_meter, and
+        P = rho*g*h (water) in kPa.
+      - "flow": inline flow indication, L/s, read directly.
+
+    The reading is mirrored on an analog signal output so it can later
+    feed controllers — a gauge today, a transmitter when wired.
+    """
+
+    KINDS = {
+        "level_kpa": PortKind.PROCESS_LEVEL,
+        "flow": PortKind.PROCESS_FLOW,
+    }
+    WATER_KPA_PER_M = 9.81
+
+    def __init__(
+        self, name: str, kind: str, liters_per_meter: float = 45.45
+    ) -> None:
+        super().__init__(name)
+        if kind not in self.KINDS:
+            raise ValueError(f"kind must be one of {sorted(self.KINDS)}")
+        if liters_per_meter <= 0.0:
+            raise ValueError("liters_per_meter must be positive")
+        self.kind = kind
+        self.liters_per_meter = liters_per_meter
+        self.reading = 0.0
+        self.process = self.add_input("process", self.KINDS[kind])
+        self.signal = self.add_output("signal", PortKind.SIGNAL_ANALOG)
+        self.add_observable("reading", "reading")
+
+    def units(self) -> str:
+        return "kPa" if self.kind == "level_kpa" else "L/s"
+
+    def tick(self, dt: float) -> None:
+        value = float(self.process.value)
+        if self.kind == "level_kpa":
+            self.reading = value / self.liters_per_meter * self.WATER_KPA_PER_M
+        else:
+            self.reading = value
+        self.signal.value = self.reading
+
+
 class FloatSwitch(Component):
     """Level switch with mechanical hysteresis, wired to call for fill.
 

@@ -6,6 +6,7 @@ extends Control
 var _look_label: Label
 var _readout_label: Label
 var _toast_label: Label
+var _mode_label: Label
 var _toast_tween: Tween
 
 
@@ -27,6 +28,11 @@ func _ready() -> void:
 	_toast_label.position.y += 40.0
 	_toast_label.grow_horizontal = GROW_DIRECTION_BOTH
 	_toast_label.modulate.a = 0.0
+
+	_mode_label = _make_label(HORIZONTAL_ALIGNMENT_LEFT)
+	_mode_label.set_anchors_preset(PRESET_BOTTOM_LEFT)
+	_mode_label.grow_vertical = GROW_DIRECTION_BEGIN
+	_mode_label.position = Vector2(12, -12)
 
 
 func _make_label(align: HorizontalAlignment) -> Label:
@@ -53,6 +59,10 @@ func set_look_text(text: String) -> void:
 
 func set_readout_text(text: String) -> void:
 	_readout_label.text = text
+
+
+func set_mode_text(text: String) -> void:
+	_mode_label.text = text
 
 
 func toast(text: String) -> void:

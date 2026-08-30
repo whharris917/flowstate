@@ -47,7 +47,10 @@ func _ready() -> void:
 	add_child(layer)
 	hud = Hud.new()
 	layer.add_child(hud)
-	hud.toast("WASD move · mouse look · E use · F5 save · F9 load · Esc mouse")
+	var builder := BuildController.new()
+	add_child(builder)
+	builder.setup(player, plant, hud)
+	hud.toast("WASD move · E use · B build · C connect · X remove · F5/F9 save/load")
 
 
 func _process(_delta: float) -> void:

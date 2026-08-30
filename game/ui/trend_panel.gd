@@ -47,8 +47,7 @@ func _draw() -> void:
 		size.x - MARGIN_L - MARGIN_R, size.y - MARGIN_T - MARGIN_B)
 	var times := historian.time
 	var levels := historian.series(_level_tag)
-	if levels.size() != times.size():
-		return  # tag missing or mid-registration; never draw mismatched data
+	var offset := historian.start_index(_level_tag)
 	var t1 := times[times.size() - 1]
 	var t0 := maxf(times[0], t1 - WINDOW_S)
 	var y_max := tank.capacity_l
@@ -69,11 +68,14 @@ func _draw() -> void:
 		start -= 1
 	var count := times.size() - start
 	var stride := maxi(1, ceili(count / (plot.size.x * 2.0)))
-	var i := start
+	var i := maxi(start, offset)
 	while i < times.size():
+		var local := i - offset
+		if local >= levels.size():
+			break
 		points.append(Vector2(
 			plot.position.x + plot.size.x * (times[i] - t0) / (t1 - t0 + 0.001),
-			plot.position.y + plot.size.y * (1.0 - clampf(levels[i] / y_max, 0.0, 1.0))))
+			plot.position.y + plot.size.y * (1.0 - clampf(levels[local] / y_max, 0.0, 1.0))))
 		i += stride
 	if points.size() >= 2:
 		draw_polyline(points, COL_SERIES, 2.0, true)

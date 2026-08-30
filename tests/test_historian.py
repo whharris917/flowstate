@@ -72,16 +72,53 @@ def test_discrete_tags_recorded_as_zero_one() -> None:
     assert contact[-1] == 1.0
 
 
-def test_register_after_sampling_rejected() -> None:
-    hist = Historian()
-    hist.register("a", lambda: 1.0)
-    hist.sample(0.0)
-    with pytest.raises(ValueError):
-        hist.register("b", lambda: 2.0)
+def test_duplicate_tag_rejected() -> None:
     dup = Historian()
     dup.register("a", lambda: 1.0)
     with pytest.raises(ValueError):
         dup.register("a", lambda: 1.0)
+
+
+def test_late_registration_starts_mid_run() -> None:
+    """Equipment installed mid-run: its record starts now, aligned to
+    the shared time axis by start index."""
+    hist = Historian()
+    hist.register("a", lambda: 1.0)
+    hist.sample(0.0)
+    hist.sample(1.0)
+    hist.register("b", lambda: 2.0)
+    hist.sample(2.0)
+    assert hist.start_index("b") == 2
+    assert hist.series("b") == [2.0]
+    assert hist.value_at("b", 1) is None
+    assert hist.value_at("b", 2) == 2.0
+    assert hist.value_at("a", 2) == 1.0
+
+
+def test_retire_keeps_history_but_stops_growth() -> None:
+    hist = Historian()
+    hist.register("a", lambda: 1.0)
+    hist.sample(0.0)
+    hist.retire("a")
+    hist.sample(1.0)
+    assert hist.series("a") == [1.0]
+    assert "a" in hist.tags
+    assert "a" not in hist.active_tags
+    with pytest.raises(ValueError):
+        hist.retire("a")
+
+
+def test_csv_leaves_honest_gaps() -> None:
+    hist = Historian()
+    hist.register("a", lambda: 1.0)
+    hist.sample(0.0)
+    hist.register("b", lambda: 2.0)
+    hist.retire("a")
+    hist.sample(1.0)
+    lines = hist.to_csv_text().strip().split("\n")
+    assert lines[0] == "time_s,a,b"
+    assert lines[1] == "0,1,"     # b did not exist yet
+    assert lines[2] == "1,,2"     # a was retired
 
 
 def test_csv_round_trips_header_and_rows() -> None:

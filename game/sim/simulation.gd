@@ -56,20 +56,63 @@ func connect_ports(src: SimComponent, out_name: String, dst: SimComponent, in_na
 
 
 ## Register every output port and observable as a tag, then take the
-## t=0 baseline sample. Attach after the graph is built.
+## t=0 baseline sample. Attach after the graph is built; equipment
+## placed later registers via register_with_historian.
 func attach_historian(historian_: SimHistorian) -> SimHistorian:
-	for component in components:
-		for port_name: String in component.outputs:
-			var port: SimOutputPort = component.outputs[port_name]
-			historian_.register(port.path(), func() -> float: return port.value)
-		for obs_name: String in component.observables:
-			var comp := component
-			var prop: StringName = component.observables[obs_name]
-			historian_.register(component.comp_name + "." + obs_name,
-				func() -> float: return float(comp.get(prop)))
 	historian = historian_
+	for component in components:
+		register_with_historian(component)
 	historian_.sample(time)
 	return historian_
+
+
+## Register one component's tags — for equipment added mid-run.
+func register_with_historian(component: SimComponent) -> void:
+	if historian == null:
+		return
+	for port_name: String in component.outputs:
+		var port: SimOutputPort = component.outputs[port_name]
+		historian.register(port.path(), func() -> float: return port.value)
+	for obs_name: String in component.observables:
+		var comp := component
+		var prop: StringName = component.observables[obs_name]
+		historian.register(component.comp_name + "." + obs_name,
+			func() -> float: return float(comp.get(prop)))
+
+
+func unique_name(prefix: String) -> String:
+	var index := 1
+	while _by_name.has("%s_%d" % [prefix, index]):
+		index += 1
+	return "%s_%d" % [prefix, index]
+
+
+## Remove a component and every wire touching it. Its historian tags
+## are retired (history kept) — pulling real equipment stops the
+## record, it doesn't erase it.
+func remove_component(name_: String) -> bool:
+	var component: SimComponent = _by_name.get(name_)
+	if component == null:
+		return false
+	var kept: Array[SimWire] = []
+	for wire in wires:
+		if wire.src.owner_name == name_ or wire.dst.owner_name == name_:
+			wire.dst.wire_count -= 1
+		else:
+			kept.append(wire)
+	wires = kept
+	components.erase(component)
+	_by_name.erase(name_)
+	if historian != null:
+		for port_name: String in component.outputs:
+			var tag: String = (component.outputs[port_name] as SimOutputPort).path()
+			if historian.active_tags().has(tag):
+				historian.retire(tag)
+		for obs_name: String in component.observables:
+			var tag := name_ + "." + obs_name
+			if historian.active_tags().has(tag):
+				historian.retire(tag)
+	return true
 
 
 func tick() -> void:

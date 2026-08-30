@@ -12,7 +12,7 @@ var switch: SimFloatSwitch
 var _fill: MeshInstance3D
 
 
-func setup(tank_: SimTank, switch_: SimFloatSwitch) -> void:
+func setup(tank_: SimTank, switch_: SimFloatSwitch = null) -> void:
 	tank = tank_
 	switch = switch_
 	var shell_mat := ViewUtil.flat(Color(0.72, 0.75, 0.78, 0.30))
@@ -22,9 +22,10 @@ func setup(tank_: SimTank, switch_: SimFloatSwitch) -> void:
 	ViewUtil.cylinder(self, RADIUS, HEIGHT, Vector3(0, HEIGHT / 2.0, 0), shell_mat)
 	_fill = ViewUtil.cylinder(self, RADIUS * 0.9, 1.0, Vector3.ZERO,
 		ViewUtil.flat(Color(0.16, 0.47, 0.84)))
-	for trip_l: float in [switch.low_l, switch.high_l]:
-		ViewUtil.cylinder(self, RADIUS + 0.03, 0.02,
-			Vector3(0, _y_for_level(trip_l), 0), ViewUtil.flat(Color(0.54, 0.53, 0.51)))
+	if switch != null:
+		for trip_l: float in [switch.low_l, switch.high_l]:
+			ViewUtil.cylinder(self, RADIUS + 0.03, 0.02,
+				Vector3(0, _y_for_level(trip_l), 0), ViewUtil.flat(Color(0.54, 0.53, 0.51)))
 	ViewUtil.label(self, tank.comp_name, Vector3(0, HEIGHT + 0.45, 0))
 	ViewUtil.interact_body(self, Vector3(RADIUS * 2.2, HEIGHT, RADIUS * 2.2),
 		Vector3(0, HEIGHT / 2.0, 0))
@@ -41,9 +42,11 @@ func _process(_delta: float) -> void:
 
 
 func describe() -> String:
-	return "%s — %.1f / %.0f L\ndrain %.1f L/s · trips %.0f/%.0f L\noverflowed %.1f L · ran dry %.1f s" % [
+	var trips := "trips %.0f/%.0f L · " % [switch.low_l, switch.high_l] \
+		if switch != null else ""
+	return "%s — %.1f / %.0f L\ndrain %.1f L/s · %soverflowed %.1f L · ran dry %.1f s" % [
 		tank.comp_name, tank.level_l, tank.capacity_l, tank.drain_lps,
-		switch.low_l, switch.high_l, tank.overflowed_l, tank.ran_dry_ticks * 0.05]
+		trips, tank.overflowed_l, tank.ran_dry_ticks * 0.05]
 
 
 func use() -> void:

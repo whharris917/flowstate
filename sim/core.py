@@ -165,6 +165,54 @@ class Simulation:
         self.wires.append(wire)
         return wire
 
+    def get_component(self, name: str) -> Optional[Component]:
+        return next((c for c in self.components if c.name == name), None)
+
+    def unique_name(self, prefix: str) -> str:
+        index = 1
+        while f"{prefix}_{index}" in self._names:
+            index += 1
+        return f"{prefix}_{index}"
+
+    def remove_component(self, name: str) -> bool:
+        """Remove a component and every wire touching it. Its historian
+        tags are retired (history kept), matching pulling real
+        equipment: the record stops, it doesn't vanish."""
+        component = next((c for c in self.components if c.name == name), None)
+        if component is None:
+            return False
+        kept = []
+        for wire in self.wires:
+            if wire.src.owner_name == name or wire.dst.owner_name == name:
+                wire.dst.wire_count -= 1
+            else:
+                kept.append(wire)
+        self.wires = kept
+        self.components.remove(component)
+        self._names.discard(name)
+        if self.historian is not None:
+            for port in component.outputs.values():
+                if port.path in self.historian.active_tags:
+                    self.historian.retire(port.path)
+            for obs_name in component.observables:
+                tag = f"{name}.{obs_name}"
+                if tag in self.historian.active_tags:
+                    self.historian.retire(tag)
+        return True
+
+    def register_with_historian(self, component: Component) -> None:
+        """Register one component's tags (for equipment added after the
+        historian was attached — mid-run placement)."""
+        if self.historian is None:
+            return
+        for port in component.outputs.values():
+            self.historian.register(port.path, lambda p=port: float(p.value))
+        for obs_name, attr in component.observables.items():
+            self.historian.register(
+                f"{component.name}.{obs_name}",
+                lambda c=component, a=attr: float(getattr(c, a)),
+            )
+
     def attach_historian(self, historian: Historian) -> Historian:
         """Register every output port and observable as a tag, then take
         the t=0 baseline sample. Attach after the graph is built."""
