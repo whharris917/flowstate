@@ -31,14 +31,15 @@ func _ready() -> void:
 
 	_mode_label = _make_label(HORIZONTAL_ALIGNMENT_LEFT)
 	_mode_label.set_anchors_preset(PRESET_BOTTOM_LEFT)
-	_mode_label.grow_vertical = GROW_DIRECTION_BEGIN
-	# Pin the BOTTOM edge 12 px above the screen edge (zero height) and
-	# let the label grow upward from there — setting position instead
-	# pins the top edge, leaving the text body hanging off-screen.
+	# A fixed region tucked 12 px inside the corner, tall enough for the
+	# build catalog list; bottom-aligned text reads as growing upward.
+	# Fixed rect + alignment beats relying on min-size auto-grow, which
+	# extends downward off-screen regardless of grow direction.
 	_mode_label.offset_left = 12.0
-	_mode_label.offset_right = 12.0
-	_mode_label.offset_top = -12.0
+	_mode_label.offset_right = 560.0
+	_mode_label.offset_top = -300.0
 	_mode_label.offset_bottom = -12.0
+	_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 
 
 func _make_label(align: HorizontalAlignment) -> Label:
