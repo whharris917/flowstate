@@ -85,8 +85,9 @@ func _set_mode(new_mode: Mode) -> void:
 	_pending_marker = null
 	_waypoints.clear()
 	(_preview.mesh as ImmediateMesh).clear_surfaces()
-	# Connect mode lets the interact ray see port markers (layer 2).
-	player.ray.collision_mask = 3 if mode == Mode.CONNECT else 1
+	# Connect mode lets the interact ray see port markers (layer 2)
+	# alongside the world (1) and interact volumes (4).
+	player.ray.collision_mask = (1 | 2 | 4) if mode == Mode.CONNECT else (1 | 4)
 	_update_hud()
 
 
@@ -175,7 +176,9 @@ func _update_ghost() -> void:
 	overlap.shape = shape
 	overlap.transform = Transform3D(Basis.from_euler(Vector3(0, rot_y, 0)),
 		_ghost_pos + Vector3(0, footprint.y / 2.0 + 0.06, 0))
-	overlap.collision_mask = 1
+	# World geometry (1) plus interact volumes (4), which stand in for
+	# the space equipment occupies.
+	overlap.collision_mask = 1 | 4
 	overlap.exclude = [player.get_rid()]
 	_ghost_valid = space.intersect_shape(overlap, 1).is_empty()
 	(_ghost.material_override as StandardMaterial3D).albedo_color = \

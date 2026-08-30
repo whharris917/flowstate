@@ -44,8 +44,12 @@ static func cylinder(parent: Node3D, radius: float, height: float, pos: Vector3,
 
 ## Invisible box collider that routes interaction back to a view node.
 ## The raycast hits this and follows the "view" meta to describe()/use().
+## Lives on layer 4: rays probe it, but the player walks through it —
+## otherwise a door's interact volume would block its own doorway.
 static func interact_body(view: Node3D, size: Vector3, pos: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()
+	body.collision_layer = 4
+	body.collision_mask = 0
 	var shape := CollisionShape3D.new()
 	var box_shape := BoxShape3D.new()
 	box_shape.size = size

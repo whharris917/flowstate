@@ -22,6 +22,8 @@ var _fall_speed: float = 0.0
 
 func _ready() -> void:
 	ray.add_exception(self)
+	# World (1) + interact volumes (4); connect mode adds port markers (2).
+	ray.collision_mask = 1 | 4
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_build_body()
 	for i in range(1, 5):
