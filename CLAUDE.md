@@ -50,4 +50,4 @@ flowstate/
 - When delivering a build, end with: what changed, how to test it in Godot, and what to look for.
 
 ## Current phase
-See "Build order" in `docs/GDD.md`. Start at step 1 (Python kernel prototype) unless the director says otherwise.
+See "Build order" in `docs/GDD.md`. Step 1 (Python kernel + live GUI demo) is done. Step 2 (Godot engine foundations) is in progress: first playable exists — FPS controller, look-and-interact, the step-1 plant in 3D on the GDScript kernel port, in-world HMI trend, save/load (F5/F9). Still to come in step 2: grid placement, player-made connections, panel UI. Engine choice was re-confirmed with the director on 2026-08-29 (Unity considered, Godot chosen).
