@@ -10,6 +10,7 @@ const SAVE_VERSION := 4  # v4 adds structures; v3 saves still load
 
 var save_path: String = "user://save.json"
 var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox doesn't
+var config_panel: RunConfigPanel = null   # injected by the world after _ready
 
 var sim: Simulation
 var historian: SimHistorian
@@ -273,7 +274,9 @@ func place_structure(type_id: String, name_: String, base_pos: Vector3, rot_y: f
 	add_child(node)
 	node.global_position = base_pos + Vector3(0, (StructureFactory.SIZES[type_id] as Vector3).y / 2.0, 0)
 	node.rotation.y = rot_y
-	structures[name_] = {"type": type_id, "node": node, "length": length}
+	if type_id == "s_sign":
+		node.config_cb = _configure_sign
+	structures[name_] = {"type": type_id, "node": node, "length": length, "text": ""}
 	_revalidate_in = 3
 	return true
 
@@ -310,9 +313,52 @@ func place_run(kind: String, name_: String, sparse_local: Array) -> bool:
 	add_child(view)
 	view.setup(PipeRoute.orthogonalize(sparse_local), func() -> float: return 0.0,
 		spec["color"], spec["radius"], name_, spec["style"], 1)
-	runs[name_] = {"kind": kind, "node": view, "points": sparse_local}
+	view.config_cb = _configure_run
+	runs[name_] = {"kind": kind, "node": view, "points": sparse_local,
+		"color": "", "label": ""}
 	_revalidate_in = 3
 	return true
+
+
+## E on a run: open the color/label editor and store what it applies.
+func _configure_run(view: PipeView) -> void:
+	if config_panel == null:
+		return
+	config_panel.open_for_run(view.service_color(), view.service_label,
+		func(color: Color, label_: String) -> void: set_run_service(view, color, label_))
+
+
+func set_run_service(view: PipeView, color: Color, label_: String) -> void:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			visual["color"] = color.to_html(false)
+			visual["label"] = label_
+			view.apply_service(color, label_)
+			return
+	for name_: String in runs:
+		var entry: Dictionary = runs[name_]
+		if entry["node"] == view:
+			entry["color"] = color.to_html(false)
+			entry["label"] = label_
+			view.apply_service(color, label_)
+			return
+
+
+## E on a sign: open the text editor and persist the result.
+func _configure_sign(view: StructureView) -> void:
+	if config_panel == null:
+		return
+	var entry: Dictionary = structures.get(view.struct_name, {})
+	config_panel.open_for_sign(str(entry.get("text", "")),
+		func(text: String) -> void: set_sign_text(view.struct_name, text))
+
+
+func set_sign_text(name_: String, text: String) -> void:
+	if not structures.has(name_):
+		return
+	var entry: Dictionary = structures[name_]
+	entry["text"] = text
+	(entry["node"] as StructureView).set_text(text if text != "" else "SIGN")
 
 
 func remove_placed_run(view: PipeView) -> bool:
@@ -385,9 +431,11 @@ func _wire_visual(src_name: String, src_port: String,
 	pipe.setup(PipeRoute.orthogonalize(sparse), func() -> float: return port.value,
 		color, 0.07 if is_process else 0.025,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
+	pipe.config_cb = _configure_run
 	_wire_visuals.append({
 		"node": pipe, "a": src_name, "a_port": src_port,
 		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
+		"color": "", "label": "",
 	})
 	_revalidate_in = 3
 
@@ -573,6 +621,7 @@ func save_game() -> bool:
 			"src": visual["a"], "src_port": visual["a_port"],
 			"dst": visual["b"], "dst_port": visual["b_port"],
 			"waypoints": path_out,
+			"color": visual.get("color", ""), "label": visual.get("label", ""),
 		})
 	var struct_list: Array = []
 	for name_: String in structures:
@@ -583,7 +632,7 @@ func save_game() -> bool:
 		struct_list.append({
 			"type": entry["type"], "name": name_,
 			"pos": [base.x, base.y, base.z], "rot_y": node.rotation.y,
-			"length": entry.get("length", -1.0),
+			"length": entry.get("length", -1.0), "text": entry.get("text", ""),
 		})
 	var run_list: Array = []
 	for name_: String in runs:
@@ -591,7 +640,8 @@ func save_game() -> bool:
 		var pts: Array = []
 		for point: Vector3 in entry["points"]:
 			pts.append([point.x, point.y, point.z])
-		run_list.append({"kind": entry["kind"], "name": name_, "points": pts})
+		run_list.append({"kind": entry["kind"], "name": name_, "points": pts,
+			"color": entry.get("color", ""), "label": entry.get("label", "")})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time,
 		"components": comps, "wires": wire_list, "structures": struct_list,
@@ -652,12 +702,17 @@ func load_game() -> bool:
 		for point: Array in entry["points"]:
 			pts.append(Vector3(point[0], point[1], point[2]))
 		place_run(entry["kind"], entry["name"], pts)
+		if str(entry.get("color", "")) != "":
+			set_run_service((runs[entry["name"]] as Dictionary)["node"] as PipeView,
+				Color.html(str(entry["color"])), str(entry.get("label", "")))
 
 	for entry: Dictionary in payload.get("structures", []):
 		var pos_arr: Array = entry["pos"]
 		place_structure(entry["type"], entry["name"],
 			Vector3(pos_arr[0], pos_arr[1], pos_arr[2]), float(entry.get("rot_y", 0.0)),
 			float(entry.get("length", -1.0)))
+		if str(entry.get("text", "")) != "":
+			set_sign_text(entry["name"], str(entry["text"]))
 
 	for entry: Dictionary in payload["components"]:
 		var pos_arr: Array = entry["pos"]
@@ -670,8 +725,11 @@ func load_game() -> bool:
 		var waypoints: Array = []
 		for point: Array in wire_entry.get("waypoints", []):
 			waypoints.append(Vector3(point[0], point[1], point[2]))
-		connect_equipment(wire_entry["src"], wire_entry["src_port"],
+		var error := connect_equipment(wire_entry["src"], wire_entry["src_port"],
 			wire_entry["dst"], wire_entry["dst_port"], waypoints)
+		if error == "" and str(wire_entry.get("color", "")) != "":
+			set_run_service((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
+				Color.html(str(wire_entry["color"])), str(wire_entry.get("label", "")))
 	sim.time = float(payload.get("time", 0.0))
 
 	tank = sim.get_component("supply_tank") as SimTank

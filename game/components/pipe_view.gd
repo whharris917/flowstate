@@ -12,13 +12,20 @@ extends Node3D
 
 const ALARM := Color(0.9, 0.2, 0.15)
 
+var config_cb: Callable = Callable()
+var service_label := ""
+
 var _getter: Callable
 var _desc: String
+var _radius := 0.07
+var _style := "pipe"
+var _path: Array[Vector3] = []
 var _hot: StandardMaterial3D
 var _cold: StandardMaterial3D
 var _bad: StandardMaterial3D
 var _meshes: Array[MeshInstance3D] = []
 var _brackets: Array[Node3D] = []
+var _label_nodes: Array[Label3D] = []
 var _collider_rids: Array[RID] = []
 var _was_hot := false
 var _unsupported := false
@@ -28,9 +35,10 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 		desc: String = "", style: String = "pipe", collider_layer: int = 8) -> void:
 	_getter = getter
 	_desc = desc
-	_hot = ViewUtil.glow(color, 1.1)
-	_cold = ViewUtil.flat(color.lerp(Color(0.35, 0.35, 0.37), 0.55)) if style == "pipe" \
-		else ViewUtil.flat(color)
+	_radius = radius
+	_style = style
+	_path = path
+	_set_service_color(color)
 	_bad = ViewUtil.glow(ALARM, 1.3)
 	for i in range(path.size() - 1):
 		var from := path[i]
@@ -47,6 +55,74 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 			if joint != null:
 				add_child(joint)
 				_collect_meshes(joint)
+	if style == "pipe" and path.size() >= 2:
+		_end_fitting(path[0], path[1])
+		_end_fitting(path[path.size() - 1], path[path.size() - 2])
+
+
+## Flange disc where the run terminates — pipes bolt on, they don't
+## just touch.
+func _end_fitting(at: Vector3, toward: Vector3) -> void:
+	var direction := (toward - at).normalized()
+	var disc := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = _radius * 1.8
+	mesh.bottom_radius = _radius * 1.8
+	mesh.height = 0.045
+	disc.mesh = mesh
+	disc.material_override = _cold
+	disc.position = at + direction * 0.03
+	disc.basis = _segment_basis(direction) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
+	add_child(disc)
+	_meshes.append(disc)
+
+
+func service_color() -> Color:
+	return _hot.albedo_color
+
+
+func _set_service_color(color: Color) -> void:
+	_hot = ViewUtil.glow(color, 1.1)
+	_cold = ViewUtil.flat(color.lerp(Color(0.35, 0.35, 0.37), 0.55)) if _style == "pipe" \
+		else ViewUtil.flat(color)
+
+
+## Repaint the run in a service color and hang line labels along it.
+func apply_service(color: Color, label_text: String) -> void:
+	_set_service_color(color)
+	service_label = label_text
+	_was_hot = not _was_hot  # force a material refresh next frame
+	for old in _label_nodes:
+		old.queue_free()
+	_label_nodes.clear()
+	if label_text == "":
+		return
+	var placed := false
+	for i in range(_path.size() - 1):
+		if _path[i].distance_to(_path[i + 1]) < 2.5:
+			continue
+		_label_nodes.append(_line_label(label_text, (_path[i] + _path[i + 1]) / 2.0))
+		placed = true
+	if not placed and _path.size() >= 2:
+		_label_nodes.append(_line_label(label_text, _path[_path.size() / 2]))
+
+
+func _line_label(text: String, at: Vector3) -> Label3D:
+	var label := Label3D.new()
+	label.text = text
+	label.position = at + Vector3(0, _radius + 0.22, 0)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.font_size = 34
+	label.pixel_size = 0.0035
+	label.outline_size = 8
+	label.modulate = Color(0.95, 0.95, 0.90)
+	add_child(label)
+	return label
+
+
+func use() -> void:
+	if config_cb.is_valid():
+		config_cb.call(self)
 
 
 ## One oriented segment: a cylinder for pipe/conduit, a channel with
@@ -187,7 +263,8 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 
 func describe() -> String:
 	var state := "UNSUPPORTED SPAN — add structure" if _unsupported else "supported"
-	return "%s\n%s (X removes the run)" % [_desc, state]
+	var tag := "" if service_label == "" else " · %s" % service_label
+	return "%s%s\n%s (E color/label · X removes)" % [_desc, tag, state]
 
 
 func _process(_delta: float) -> void:

@@ -75,7 +75,8 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	icons = AssetIcons.new()
 	add_child(icons)
 	var all_types: Array = []
-	for entry: Dictionary in PlantFactory.CATALOG + StructureFactory.CATALOG:
+	for entry: Dictionary in PlantFactory.CATALOG + StructureFactory.CATALOG \
+			+ StructureFactory.CATALOG_ROUTING:
 		all_types.append(entry["type"])
 	icons.generate(all_types)  # fire and forget; cards fill in as renders land
 	menu = BuildMenu.new()
@@ -92,16 +93,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_cancel"):
 		_set_mode(Mode.NORMAL)
 	elif event.is_action_pressed("catalog_page") and mode == Mode.PLACE:
-		page = (page + 1) % 2
+		page = (page + 1) % 3
 		catalog_index = 0
 		_beam_anchor = Vector3.INF
 		_run_points.clear()
+		_clear_route()
 		_update_hud()
 	elif event.is_action_pressed("interact") and mode == Mode.PLACE and _is_run():
 		_finish_run()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("rotate_item") and mode == Mode.PLACE:
-		if _is_beam() and _beam_anchor != Vector3.INF:
+		if _is_stretch() and _beam_anchor != Vector3.INF:
 			_beam_anchor = Vector3.INF
 			_update_hud()
 		elif _is_run() and not _run_points.is_empty():
@@ -156,13 +158,14 @@ func _update_hud() -> void:
 			menu.visible = false
 			hud.set_mode_text("B build · C connect · X remove")
 		Mode.PLACE:
-			var page_name := "EQUIPMENT — Tab for structure" if page == 0 \
-				else "STRUCTURE — Tab for equipment"
-			menu.show_page(page_name, _catalog(), icons, catalog_index)
-			if _is_beam():
+			var page_names: Array[String] = ["EQUIPMENT", "STRUCTURE", "ROUTING & SIGNS"]
+			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 3]],
+				_catalog(), icons, catalog_index)
+			if _is_stretch():
+				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
 				var step := "click a supported START point" if _beam_anchor == Vector3.INF \
-					else "click the END point (max %.0f m) · R restart" % StructureFactory.BEAM_MAX
-				hud.set_mode_text("BEAM — %s · B/Esc exit" % step)
+					else "click the END point (max %.0f m) · R restart" % float(spec["max"])
+				hud.set_mode_text("STRETCH — %s · B/Esc exit" % step)
 			elif _is_run():
 				var support := "" if _run_points.size() < 2 else \
 					("\nsupport OK (span %.1f m)" % _route_span if _route_ok
@@ -318,12 +321,12 @@ func _refresh_ghost_asset() -> void:
 	_ghost_type = type_id
 
 
-func _is_beam() -> bool:
-	return page == 1 and _current_type() == "s_beam"
+func _is_stretch() -> bool:
+	return StructureFactory.STRETCH.has(_current_type())
 
 
 func _is_run() -> bool:
-	return page == 1 and StructureFactory.RUNS.has(_current_type())
+	return StructureFactory.RUNS.has(_current_type())
 
 
 ## The world point the placement ray lands on, or empty. Aiming at a
@@ -338,12 +341,12 @@ func _place_hit() -> Dictionary:
 
 
 func _update_ghost() -> void:
-	if _is_beam() or _is_run():
+	if _is_stretch() or _is_run():
 		if _ghost != null:
 			_ghost.visible = false
 		(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
-		if _is_beam():
-			_update_beam_ghost()
+		if _is_stretch():
+			_update_stretch_ghost()
 		else:
 			_beam_ghost.visible = false
 			_update_run_preview()
@@ -380,7 +383,7 @@ func _update_ghost() -> void:
 	overlap.collision_mask = 1 | 4
 	overlap.exclude = [player.get_rid()]
 	_ghost_valid = space.intersect_shape(overlap, 1).is_empty()
-	if _ghost_valid and page == 1:
+	if _ghost_valid and page >= 1:
 		_ghost_valid = StructureFactory.placement_ok(type_id, _ghost_pos, rot_y, space) == ""
 	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
 		else Color(0.9, 0.25, 0.2, 0.45)
@@ -437,9 +440,11 @@ func _draw_guides(pos: Vector3) -> void:
 	im.surface_end()
 
 
-## Beam stretch flow: first click anchors a supported start, the ghost
-## then spans level from the anchor to the aim, up to BEAM_MAX.
-func _update_beam_ghost() -> void:
+## Stretch flow (beams, railings): first click anchors a supported
+## start, the ghost then spans level from the anchor to the aim.
+func _update_stretch_ghost() -> void:
+	var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
+	var size_y := float(spec["size_y"])
 	var space := player.camera.get_world_3d().direct_space_state
 	var aim := _beam_aim(space)
 	if aim == Vector3.INF:
@@ -448,8 +453,8 @@ func _update_beam_ghost() -> void:
 		return
 	var mesh := _beam_ghost.mesh as BoxMesh
 	if _beam_anchor == Vector3.INF:
-		mesh.size = Vector3(0.6, 0.35, 0.3)
-		_beam_ghost.global_position = aim + Vector3(0, 0.195, 0)
+		mesh.size = Vector3(0.6, size_y, float(spec["size_z"]))
+		_beam_ghost.global_position = aim + Vector3(0, size_y / 2.0 + 0.02, 0)
 		_beam_ghost.rotation.y = 0.0
 		_ghost_valid = StructureFactory.bears_point(aim, space)
 	else:
@@ -457,13 +462,12 @@ func _update_beam_ghost() -> void:
 		_beam_len = _beam_anchor.distance_to(_beam_end)
 		var direction := _beam_end - _beam_anchor
 		var yaw := atan2(-direction.z, direction.x) if direction.length() > 0.01 else 0.0
-		mesh.size = Vector3(maxf(_beam_len, 0.3), 0.35, 0.3)
+		mesh.size = Vector3(maxf(_beam_len, 0.3), size_y, float(spec["size_z"]))
 		var mid := (_beam_anchor + _beam_end) / 2.0
-		_beam_ghost.global_position = mid + Vector3(0, 0.195, 0)
+		_beam_ghost.global_position = mid + Vector3(0, size_y / 2.0 + 0.02, 0)
 		_beam_ghost.rotation.y = yaw
-		_ghost_valid = _beam_len >= StructureFactory.BEAM_MIN \
-			and _beam_len <= StructureFactory.BEAM_MAX \
-			and StructureFactory.placement_ok("s_beam", mid, yaw, space, _beam_len) == ""
+		_ghost_valid = _beam_len >= float(spec["min"]) and _beam_len <= float(spec["max"]) \
+			and StructureFactory.placement_ok(_current_type(), mid, yaw, space, _beam_len) == ""
 	_beam_ghost.visible = true
 	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
 		else Color(0.9, 0.25, 0.2, 0.45)
@@ -487,7 +491,10 @@ func _beam_aim(_space: PhysicsDirectSpaceState3D) -> Vector3:
 
 
 func _catalog() -> Array[Dictionary]:
-	return PlantFactory.CATALOG if page == 0 else StructureFactory.CATALOG
+	match page:
+		0: return PlantFactory.CATALOG
+		1: return StructureFactory.CATALOG
+	return StructureFactory.CATALOG_ROUTING
 
 
 func _current_type() -> String:
@@ -502,8 +509,8 @@ func _current_footprint() -> Vector3:
 ## ---- actions -------------------------------------------------------------
 
 func _try_place() -> void:
-	if _is_beam():
-		_try_place_beam()
+	if _is_stretch():
+		_try_place_stretch()
 		return
 	if _is_run():
 		var aim := _aim_point()
@@ -515,14 +522,14 @@ func _try_place() -> void:
 		return
 	if _ghost == null or not _ghost.visible or not _ghost_valid:
 		var reason := "can't place here"
-		if page == 1 and _ghost != null and _ghost.visible:
+		if page >= 1 and _ghost != null and _ghost.visible:
 			var bearing := StructureFactory.placement_ok(_current_type(), _ghost_pos, rot_y,
 				player.camera.get_world_3d().direct_space_state)
 			if bearing != "":
 				reason = bearing
 		hud.toast(reason)
 		return
-	if page == 1:
+	if page >= 1:
 		var name_ := plant.unique_struct_name(_current_type())
 		if plant.place_structure(_current_type(), name_, _ghost_pos, rot_y):
 			hud.toast("placed %s" % name_)
@@ -532,7 +539,9 @@ func _try_place() -> void:
 		hud.toast("placed %s" % record.comp_name)
 
 
-func _try_place_beam() -> void:
+func _try_place_stretch() -> void:
+	var type_id := _current_type()
+	var spec: Dictionary = StructureFactory.STRETCH[type_id]
 	var space := player.camera.get_world_3d().direct_space_state
 	var aim := _beam_aim(space)
 	if aim == Vector3.INF:
@@ -547,13 +556,13 @@ func _try_place_beam() -> void:
 		return
 	if not _ghost_valid:
 		hud.toast("span %.1f m — needs support at both ends, max %.0f m"
-			% [_beam_len, StructureFactory.BEAM_MAX])
+			% [_beam_len, float(spec["max"])])
 		return
 	var mid := (_beam_anchor + _beam_end) / 2.0
 	var direction := _beam_end - _beam_anchor
 	var yaw := atan2(-direction.z, direction.x)
-	var name_ := plant.unique_struct_name("s_beam")
-	if plant.place_structure("s_beam", name_, mid, yaw, _beam_len):
+	var name_ := plant.unique_struct_name(type_id)
+	if plant.place_structure(type_id, name_, mid, yaw, _beam_len):
 		hud.toast("placed %s — %.1f m" % [name_, _beam_len])
 	_beam_anchor = Vector3.INF
 	_update_hud()
