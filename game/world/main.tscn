@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://bi6v5kwvlv3mf"]
+
+[ext_resource type="Script" path="res://world/main.gd" id="1"]
+[ext_resource type="PackedScene" path="res://player/player.tscn" id="2"]
+
+[node name="Main" type="Node3D" unique_id=988014845]
+script = ExtResource("1")
+
+[node name="Player" parent="." unique_id=9976735 instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 9)

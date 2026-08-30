@@ -154,7 +154,7 @@ func _update_ghost() -> void:
 	var camera := player.camera
 	var space := camera.get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(camera.global_position,
-		camera.global_position - camera.global_basis.z * REACH, 1)
+		camera.global_position - camera.global_basis.z * (REACH + player.zoom_offset()), 1)
 	query.exclude = [player.get_rid()]
 	var hit := space.intersect_ray(query)
 	if hit.is_empty() or (hit["normal"] as Vector3).y < 0.6:

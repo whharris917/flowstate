@@ -152,22 +152,25 @@ def make_hum() -> None:
 
 
 def make_step(path: Path, f0: float, decay: float, noise_amp: float,
-              duration: float = 0.28, level: float = 0.42) -> None:
+              duration: float = 0.28, level: float = 0.30) -> None:
     """A soft sole on concrete: low pitch-swept thump, a whisper of
     lowpassed noise, a gentle attack ramp so there is no click, and
-    quiet normalization. No clipping, no crunch."""
+    quiet normalization. No clipping, no crunch. Tuned dull enough to
+    sit right even fully dry (the outdoor sandbox has almost no
+    reverb to hide behind)."""
     n = int(duration * SR)
     buf = [0.0] * n
     noise = brown_noise(n, leak=0.97, gain=0.3)
-    # One-pole lowpass ~450 Hz takes the abrasive edge off the noise.
-    alpha = 1.0 - math.exp(-2.0 * math.pi * 450.0 / SR)
-    lp = 0.0
-    for i in range(n):
-        lp += alpha * (noise[i] - lp)
-        noise[i] = lp
+    # Two-pole lowpass ~300 Hz: 12 dB/oct leaves only the thud.
+    alpha = 1.0 - math.exp(-2.0 * math.pi * 300.0 / SR)
+    for _pass in range(2):
+        lp = 0.0
+        for i in range(n):
+            lp += alpha * (noise[i] - lp)
+            noise[i] = lp
     for i in range(n):
         t = i / SR
-        attack = min(1.0, t / 0.006)
+        attack = min(1.0, t / 0.012)
         sweep = f0 * math.exp(-t * 5.0) + 38.0
         body = math.sin(2.0 * math.pi * sweep * t) * math.exp(-t * decay)
         soft = noise[i] * math.exp(-t * decay * 1.4) * noise_amp
@@ -184,7 +187,7 @@ def main() -> None:
             [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):
         make_step(OUT_DIR / f"step_{idx}.wav", f0, decay, noise_amp)
-    make_step(OUT_DIR / "land.wav", 46.0, 7.0, 0.50, duration=0.55, level=0.55)
+    make_step(OUT_DIR / "land.wav", 46.0, 7.0, 0.50, duration=0.55, level=0.42)
     print("done")
 
 
