@@ -13,6 +13,7 @@ var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox 
 var config_panel: RunConfigPanel = null   # injected by the world after _ready
 var cabinet_editor: CabinetEditor = null  # injected by the world after _ready
 var ladder_panel: LadderPanel = null      # injected by the world after _ready
+var tank_panel: TankConfigPanel = null    # injected by the world after _ready
 
 var sim: Simulation
 var historian: SimHistorian
@@ -304,7 +305,10 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as DrainView).setup(record as SimDrain)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
-	PlantFactory.attach_port_markers(view, record, type_id)
+	if type_id == "tank":
+		(view as TankView).config_cb = _configure_tank  # nozzles are its own
+	else:
+		PlantFactory.attach_port_markers(view, record, type_id)
 	views[record.comp_name] = view
 	equip_types[record.comp_name] = type_id
 	if is_protected:
@@ -607,11 +611,44 @@ func _configure_cabinet(view: CabinetView) -> void:
 
 ## Drop one internal (hidden) wire — the schematic panel's remove.
 func remove_internal_wire(visual: Dictionary) -> void:
-	var src := sim.get_component(str(visual["a"]))
-	var dst := sim.get_component(str(visual["b"]))
-	if src != null and dst != null:
-		sim.disconnect_ports(src, str(visual["a_port"]), dst, str(visual["b_port"]))
+	_disconnect_visual(visual)
 	_wire_visuals.erase(visual)
+
+
+## ---- tank configuration ---------------------------------------------------
+
+func _configure_tank(view: TankView) -> void:
+	if tank_panel != null:
+		tank_panel.open(self, view.tank.comp_name)
+
+
+func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
+	var record := sim.get_component(name_) as SimTank
+	var view := views.get(name_) as TankView
+	if record == null or view == null:
+		return
+	record.set_size(height_m, diameter_m)
+	view.rebuild()
+	refresh_wires_of(name_)
+	_revalidate_in = 3
+
+
+## Rebuild the pipe visuals touching one record — after its nozzles
+## moved or its vessel was resized.
+func refresh_wires_of(name_: String) -> void:
+	for visual in _wire_visuals:
+		if visual["node"] == null:
+			continue
+		if str(visual["a"]) != name_ and str(visual["b"]) != name_:
+			continue
+		(visual["node"] as Node).queue_free()
+		var pipe := _build_pipe(str(visual["a"]), str(visual["a_port"]),
+			str(visual["b"]), str(visual["b_port"]), visual["waypoints"],
+			bool(visual.get("pair", false)))
+		visual["node"] = pipe
+		if str(visual.get("color", "")) != "":
+			pipe.apply_service(Color.html(str(visual["color"])), str(visual.get("label", "")))
+	_revalidate_in = 3
 
 
 func remove_equipment(name_: String) -> bool:
@@ -644,6 +681,30 @@ func connect_equipment(src_name: String, src_port: String,
 	var dst := sim.get_component(dst_name)
 	if src == null or dst == null:
 		return "component missing"
+	# Facade flow pairing: one player pipe from an outlet to an inlet
+	# becomes the availability wire plus the metered-draw wire.
+	var out_spec := PlantFactory.flow_outlet_spec(equip_types.get(src_name, ""), src_port)
+	var in_spec := PlantFactory.flow_inlet_spec(equip_types.get(dst_name, ""), dst_port)
+	if not out_spec.is_empty() and not in_spec.is_empty():
+		var avail_in: SimInputPort = dst.inputs.get(str(in_spec["avail_in"]))
+		if avail_in != null and avail_in.wire_count > 0:
+			return "%s.%s is already piped up" % [dst_name, dst_port]
+		if not sim.connect_ports(src, str(out_spec["avail"]), dst, str(in_spec["avail_in"])):
+			return "connection refused"
+		if not sim.connect_ports(dst, str(in_spec["draw_out"]), src, str(out_spec["draw_in"])):
+			sim.disconnect_ports(src, str(out_spec["avail"]), dst, str(in_spec["avail_in"]))
+			return "connection refused"
+		if visible:
+			_wire_visual(src_name, src_port, dst_name, dst_port, waypoints, true)
+		else:
+			_wire_visuals.append({"node": null, "a": src_name, "a_port": src_port,
+				"b": dst_name, "b_port": dst_port, "waypoints": [],
+				"color": "", "label": "", "hidden": true, "pair": true})
+		return ""
+	if not out_spec.is_empty():
+		return "an outlet connects to a pump, valve, or drain inlet"
+	if not in_spec.is_empty():
+		return "%s.%s connects to a tank or supply outlet" % [dst_name, dst_port]
 	var out_port: SimOutputPort = src.outputs.get(src_port)
 	var in_port: SimInputPort = dst.inputs.get(dst_port)
 	if out_port == null or in_port == null:
@@ -791,14 +852,30 @@ func remove_placed_run(view: PipeView) -> bool:
 func remove_run(view: PipeView) -> bool:
 	for visual in _wire_visuals:
 		if visual["node"] == view:
-			var src := sim.get_component(visual["a"])
-			var dst := sim.get_component(visual["b"])
-			if src != null and dst != null:
-				sim.disconnect_ports(src, str(visual["a_port"]), dst, str(visual["b_port"]))
+			_disconnect_visual(visual)
 			(visual["node"] as Node).queue_free()
 			_wire_visuals.erase(visual)
 			return true
 	return false
+
+
+## Drop the kernel wire(s) behind a visual entry — both halves for a
+## facade pair.
+func _disconnect_visual(visual: Dictionary) -> void:
+	var src := sim.get_component(str(visual["a"]))
+	var dst := sim.get_component(str(visual["b"]))
+	if src == null or dst == null:
+		return
+	if bool(visual.get("pair", false)):
+		var out_spec := PlantFactory.flow_outlet_spec(
+			equip_types.get(str(visual["a"]), ""), str(visual["a_port"]))
+		var in_spec := PlantFactory.flow_inlet_spec(
+			equip_types.get(str(visual["b"]), ""), str(visual["b_port"]))
+		if not out_spec.is_empty() and not in_spec.is_empty():
+			sim.disconnect_ports(src, str(out_spec["avail"]), dst, str(in_spec["avail_in"]))
+			sim.disconnect_ports(dst, str(in_spec["draw_out"]), src, str(out_spec["draw_in"]))
+		return
+	sim.disconnect_ports(src, str(visual["a_port"]), dst, str(visual["b_port"]))
 
 
 ## Re-run the support rule over every routed run — wires and standalone
@@ -832,29 +909,44 @@ func _apply_support(view: PipeView, sparse_local: Array, space: PhysicsDirectSpa
 
 
 func _wire_visual(src_name: String, src_port: String,
-		dst_name: String, dst_port: String, waypoints: Array) -> void:
+		dst_name: String, dst_port: String, waypoints: Array, pair := false) -> void:
+	var pipe := _build_pipe(src_name, src_port, dst_name, dst_port, waypoints, pair)
+	_wire_visuals.append({
+		"node": pipe, "a": src_name, "a_port": src_port,
+		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
+		"color": "", "label": "", "pair": pair,
+	})
+	_revalidate_in = 3
+
+
+func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		waypoints: Array, pair: bool) -> PipeView:
 	var from := _marker_pos(src_name, src_port)
 	var to := _marker_pos(dst_name, dst_port)
-	var record := sim.get_component(src_name)
-	var port: SimOutputPort = record.outputs[src_port]
-	var is_process := port.kind == SimTypes.PortKind.PROCESS_FLOW \
-		or port.kind == SimTypes.PortKind.PROCESS_LEVEL
-	var color: Color = PlantFactory.KIND_COLORS[port.kind]
+	var kind := SimTypes.PortKind.PROCESS_FLOW
+	var getter: Callable
+	if pair:
+		# The honest live value of a supply pipe is the flow being
+		# drawn through it by the consumer.
+		var spec := PlantFactory.flow_inlet_spec(equip_types.get(dst_name, ""), dst_port)
+		var draw_port: SimOutputPort = sim.get_component(dst_name).outputs[str(spec["draw_out"])]
+		getter = func() -> float: return draw_port.value
+	else:
+		var port: SimOutputPort = sim.get_component(src_name).outputs[src_port]
+		kind = port.kind
+		getter = func() -> float: return port.value
+	var is_process := kind == SimTypes.PortKind.PROCESS_FLOW \
+		or kind == SimTypes.PortKind.PROCESS_LEVEL
 	var sparse: Array = [from]
 	sparse.append_array(waypoints)
 	sparse.append(to)
 	var pipe := PipeView.new()
 	add_child(pipe)
-	pipe.setup(PipeRoute.orthogonalize(sparse), func() -> float: return port.value,
-		color, 0.07 if is_process else 0.025,
+	pipe.setup(PipeRoute.orthogonalize(sparse), getter,
+		PlantFactory.KIND_COLORS[kind], 0.07 if is_process else 0.025,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	pipe.config_cb = _configure_run
-	_wire_visuals.append({
-		"node": pipe, "a": src_name, "a_port": src_port,
-		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
-		"color": "", "label": "",
-	})
-	_revalidate_in = 3
+	return pipe
 
 
 func _marker_pos(record_name: String, port_name: String) -> Vector3:
@@ -871,7 +963,7 @@ func _marker_pos(record_name: String, port_name: String) -> Vector3:
 func _build_initial_plant() -> void:
 	# Switch first: the tank view draws its trip rings from it.
 	switch = place("float_switch", "level_switch", {"low_l": 40.0, "high_l": 80.0},
-		_world(Vector3(1.55, 1.32, -2.0)), 0.0, true) as SimFloatSwitch
+		_world(Vector3(1.55, 0.45, -2.0)), 0.0, true) as SimFloatSwitch
 	tank = place("tank", "supply_tank",
 		{"capacity_l": 100.0, "level_l": 70.0},
 		_world(Vector3(2.5, 0, -2.0)), 0.0, true) as SimTank
@@ -886,14 +978,12 @@ func _build_initial_plant() -> void:
 	# Power first — nothing runs without a cable back to the feeder.
 	connect_equipment("plant_mains", "power", "fill_pump", "power",
 		[Vector3(-3.6, 0.3, -1.6), Vector3(-1.0, 0.3, -2.9)])
-	# The flow path is honest end to end: the pump pulls raw water from
-	# the battery limit, and the tank's consumption is a real drain.
-	connect_equipment("raw_water", "supply", "fill_pump", "suction",
+	# The flow path is honest end to end: the pump pulls from the
+	# supply header, and the tank's consumption is a real drain. One
+	# pipe per connection — the facade meters the draw underneath.
+	connect_equipment("raw_water", "outlet", "fill_pump", "inlet",
 		[Vector3(-5.6, 0.3, -3.1), Vector3(-1.2, 0.3, -3.1)])
-	connect_equipment("fill_pump", "draw", "raw_water", "draw",
-		[Vector3(-1.4, 0.3, -3.3), Vector3(-5.8, 0.3, -3.3)])
-	connect_equipment("supply_tank", "level", "du_100", "level")
-	connect_equipment("du_100", "draw", "supply_tank", "out_flow")
+	connect_equipment("supply_tank", "outlet", "du_100", "inlet")
 	# Signal runs drop to the floor and run along it — the support rule
 	# applies to the commissioned loop too.
 	connect_equipment("supply_tank", "level", "level_switch", "level")
@@ -901,7 +991,7 @@ func _build_initial_plant() -> void:
 		[Vector3(1.7, 0.3, -3.4), Vector3(-2.7, 0.3, -4.3)])
 	connect_equipment("pump_relay", "contact", "fill_pump", "run",
 		[Vector3(-2.3, 0.3, -3.6), Vector3(-0.8, 0.3, -2.7)])
-	connect_equipment("fill_pump", "flow", "supply_tank", "in_flow")
+	connect_equipment("fill_pump", "outlet", "supply_tank", "inlet")
 	if build_suite:
 		_build_aseptic_suite()
 
@@ -942,14 +1032,14 @@ func _self_check() -> void:
 	var c_src := check.add(SimSource.new("bl")) as SimSource
 	var c_drn := check.add(SimDrain.new("d", 1.5)) as SimDrain
 	check.connect_ports(c_mains, "power", c_pump, "power")
-	check.connect_ports(c_src, "supply", c_pump, "suction")
+	check.connect_ports(c_src, "supply", c_pump, "inlet")
 	check.connect_ports(c_pump, "draw", c_src, "draw")
-	check.connect_ports(c_tank, "level", c_drn, "level")
-	check.connect_ports(c_drn, "draw", c_tank, "out_flow")
+	check.connect_ports(c_tank, "level", c_drn, "inlet")
+	check.connect_ports(c_drn, "draw", c_tank, "draw")
 	check.connect_ports(c_tank, "level", c_switch, "level")
 	check.connect_ports(c_switch, "contact", c_relay, "coil")
 	check.connect_ports(c_relay, "contact", c_pump, "run")
-	check.connect_ports(c_pump, "flow", c_tank, "in_flow")
+	check.connect_ports(c_pump, "outlet", c_tank, "inlet")
 	check.run_for(600.0)
 	var ok := c_tank.level_l >= 38.0 and c_tank.level_l <= 82.0 \
 		and c_tank.overflowed_l == 0.0 and c_relay.cycles < 15
@@ -971,12 +1061,12 @@ func _control_self_check() -> void:
 	var lic := check.add(SimPID.new("lic", 8.0, 1.5, 0.0, 15.0)) as SimPID
 	var lv := check.add(SimControlValve.new("lv", 6.0)) as SimControlValve
 	var header := check.add(SimSource.new("uh")) as SimSource
-	check.connect_ports(header, "supply", lv, "supply")
+	check.connect_ports(header, "supply", lv, "inlet")
 	check.connect_ports(lv, "draw", header, "draw")
 	check.connect_ports(tank_, "level", lt, "process")
 	check.connect_ports(lt, "signal", lic, "pv")
 	check.connect_ports(lic, "out", lv, "cmd")
-	check.connect_ports(lv, "flow", tank_, "in_flow")
+	check.connect_ports(lv, "outlet", tank_, "inlet")
 	check.run_for(600.0)
 	var level_kpa := tank_.level_l / 45.45 * SimGauge.WATER_KPA_PER_M
 
@@ -997,13 +1087,13 @@ func _control_self_check() -> void:
 	plc.tick(SIM_DT)
 	var dropped := plc.do_ports[0].value < 0.5
 
-	if absf(level_kpa - 15.0) < 0.3 and absf(lv.flow.value - 2.0) < 0.15 \
+	if absf(level_kpa - 15.0) < 0.3 and absf(lv.outlet.value - 2.0) < 0.15 \
 			and err == "" and sealed and dropped:
 		print("[flowstate] control self-check OK — PID holds %.1f kPa, ladder seals and drops"
 			% level_kpa)
 	else:
 		push_warning("[flowstate] control self-check FAILED — level %.2f kPa, flow %.2f, err '%s', sealed %s, dropped %s"
-			% [level_kpa, lv.flow.value, err, sealed, dropped])
+			% [level_kpa, lv.outlet.value, err, sealed, dropped])
 
 
 ## Headless support-rule exercise. Physics space queries see nothing
@@ -1088,7 +1178,7 @@ func save_game() -> bool:
 			continue  # cabinet members are saved with their cabinet
 		var record := sim.get_component(name_)
 		var view: Node3D = views[name_]
-		comps.append({
+		var comp_entry := {
 			"type": equip_types[name_],
 			"name": name_,
 			"state": record.state_dict(),
@@ -1097,7 +1187,10 @@ func save_game() -> bool:
 				- PlantFactory.Y_OFFSETS.get(equip_types[name_], 0.0), view.global_position.z],
 			"rot_y": view.rotation.y,
 			"protected": protected.has(name_),
-		})
+		}
+		if view is TankView:
+			comp_entry["nozzles"] = (view as TankView).get_nozzles()
+		comps.append(comp_entry)
 	var wire_list: Array = []
 	for visual in _wire_visuals:
 		var path_out: Array = []
@@ -1165,7 +1258,8 @@ func save_game() -> bool:
 
 func _params_for(record: SimComponent) -> Dictionary:
 	if record is SimTank:
-		return {"capacity_l": (record as SimTank).capacity_l}
+		var tank_rec := record as SimTank
+		return {"height_m": tank_rec.height_m, "diameter_m": tank_rec.diameter_m}
 	if record is SimPump:
 		return {"rated_lps": (record as SimPump).rated_lps}
 	if record is SimFloatSwitch:
@@ -1261,6 +1355,11 @@ func load_game() -> bool:
 			float(entry.get("rot_y", 0.0)), bool(entry.get("protected", false)))
 		if record != null:
 			record.apply_state(entry.get("state", {}))
+			var loaded_view: Node3D = views.get(entry["name"])
+			if loaded_view is TankView:
+				(loaded_view as TankView).rebuild()  # sized by restored state
+				if entry.has("nozzles"):
+					(loaded_view as TankView).apply_nozzles(entry["nozzles"])
 	for wire_entry: Dictionary in payload["wires"]:
 		var waypoints: Array = []
 		for point: Array in wire_entry.get("waypoints", []):

@@ -9,7 +9,7 @@ var rate_lps: float
 var is_open: bool = true
 var total_l: float = 0.0
 
-var level: SimInputPort
+var inlet: SimInputPort
 var draw: SimOutputPort
 
 
@@ -17,15 +17,15 @@ func _init(name_: String, rate_lps_ := 1.0) -> void:
 	super(name_)
 	assert(rate_lps_ > 0.0, "rate_lps must be positive")
 	rate_lps = rate_lps_
-	level = add_input("level", SimTypes.PortKind.PROCESS_LEVEL)
+	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_LEVEL)
 	draw = add_output("draw", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("total_l", &"total_l")
 
 
 func tick(dt: float) -> void:
-	var rate := rate_lps if (is_open and level.value > 0.0) else 0.0
+	var rate := rate_lps if (is_open and inlet.value > 0.0) else 0.0
 	if dt > 0.0:
-		rate = minf(rate, level.value / dt)
+		rate = minf(rate, inlet.value / dt)
 	draw.value = rate
 	total_l += rate * dt
 

@@ -47,6 +47,7 @@ var _route_mat: StandardMaterial3D
 var _last_route: Array[Vector3] = []
 var _route_ok := true
 var _route_span := 0.0
+var _nozzle_grab: Dictionary = {}   # {view, port, was: {frac, angle}}
 
 
 func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
@@ -119,6 +120,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not _waypoints.is_empty():
 			_waypoints.pop_back()
 			_update_hud()
+	elif event.is_action_pressed("move_port") and mode == Mode.CONNECT:
+		_toggle_nozzle_grab()
+	elif mode == Mode.CONNECT and not _nozzle_grab.is_empty() \
+			and event.is_action_pressed("place"):
+		_commit_nozzle_grab()
 	elif event.is_action_pressed("port_menu"):
 		_open_port_menu()
 	elif event.is_action_pressed("delete_item"):
@@ -148,6 +154,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _set_mode(new_mode: Mode) -> void:
+	if not _nozzle_grab.is_empty():
+		_toggle_nozzle_grab()  # cancel and restore
 	mode = new_mode
 	_clear_ghost()
 	_beam_anchor = Vector3.INF
@@ -191,8 +199,8 @@ func _update_hud() -> void:
 				hud.set_mode_text("BUILD — click place · R rotate · B/Esc exit")
 		Mode.CONNECT:
 			menu.visible = false
-			var step := "click an OUTPUT port (cube)" if _pending_marker == null \
-				else "lay the run: click surfaces for waypoints (%d), finish on an INPUT port (sphere) · R undo point" \
+			var step := "click an OUTLET (cube) · G moves a vessel nozzle" if _pending_marker == null \
+				else "lay the run: click surfaces for waypoints (%d), finish on an INLET (sphere) · R undo point" \
 				% _waypoints.size()
 			var support := "" if _pending_marker == null else \
 				("\nsupport OK (span %.1f m)" % _route_span if _route_ok
@@ -202,12 +210,63 @@ func _update_hud() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if not _nozzle_grab.is_empty():
+		_update_nozzle_grab()
+		return
 	if mode == Mode.PLACE:
 		_update_ghost()
 	elif mode == Mode.CONNECT and _pending_marker != null:
 		_update_route_preview()
 	else:
 		_clear_route()
+
+
+## ---- nozzle relocation (G in connect mode) --------------------------------
+
+func _toggle_nozzle_grab() -> void:
+	if not _nozzle_grab.is_empty():
+		# Cancel: restore the original spot.
+		var view := _nozzle_grab["view"] as TankView
+		var was: Dictionary = _nozzle_grab["was"]
+		view.set_nozzle(str(_nozzle_grab["port"]), float(was["frac"]), float(was["angle"]))
+		_nozzle_grab = {}
+		hud.toast("nozzle move cancelled")
+		return
+	if not player.ray.is_colliding():
+		return
+	var collider := player.ray.get_collider() as Node
+	if collider == null or not collider.has_meta("movable"):
+		hud.toast("aim at a vessel nozzle to move it")
+		return
+	var view := collider.get_meta("owner_view") as TankView
+	var port := str(collider.get_meta("port_name"))
+	_nozzle_grab = {"view": view, "port": port,
+		"was": (view.nozzles[port] as Dictionary).duplicate()}
+	hud.toast("moving %s — aim on the shell, click to weld, G cancels" % port)
+
+
+func _update_nozzle_grab() -> void:
+	var view := _nozzle_grab["view"] as TankView
+	if not player.ray.is_colliding():
+		return
+	var collider := player.ray.get_collider() as Node
+	# Only spots on this vessel count: its interact volume stands in
+	# for the shell.
+	if collider == null or collider.get_meta("view", null) != view:
+		return
+	var local: Vector3 = view.to_local(player.ray.get_collision_point())
+	var angle := atan2(local.z, local.x)
+	var frac := clampf(local.y / view.tank.height_m, 0.04, 0.97)
+	view.set_nozzle(str(_nozzle_grab["port"]), frac, angle)
+
+
+func _commit_nozzle_grab() -> void:
+	var view := _nozzle_grab["view"] as TankView
+	var record_name := view.tank.comp_name
+	var port := str(_nozzle_grab["port"])
+	_nozzle_grab = {}
+	plant.refresh_wires_of(record_name)
+	hud.toast("welded %s in place" % port)
 
 
 ## ---- route preview -------------------------------------------------------

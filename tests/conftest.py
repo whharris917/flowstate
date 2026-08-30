@@ -19,7 +19,7 @@ def wire_supply(sim: Simulation, *components: Component) -> Source:
     suction/supply wired in, draw metered back."""
     source = sim.add(Source(sim.unique_name("source")))
     for component in components:
-        inlet = "suction" if "suction" in component.inputs else "supply"
+        inlet = "inlet"
         sim.connect(source, "supply", component, inlet)
         sim.connect(component, "draw", source, "draw")
     return source

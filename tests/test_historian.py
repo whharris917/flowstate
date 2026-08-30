@@ -17,7 +17,7 @@ def _build_plant(low_l: float = 40.0, high_l: float = 80.0) -> tuple[Simulation,
     sim.connect(tank, "level", switch, "level")
     sim.connect(switch, "contact", relay, "coil")
     sim.connect(relay, "contact", pump, "run")
-    sim.connect(pump, "flow", tank, "in_flow")
+    sim.connect(pump, "outlet", tank, "inlet")
     return sim, tank
 
 
@@ -31,7 +31,7 @@ def test_registers_ports_and_observables_as_tags() -> None:
         "switch.contact",
         "relay.contact",
         "relay.cycles",
-        "pump.flow",
+        "pump.outlet",
         "pump.draw",
         "pump.starts",
         "pump.dry_run_s",

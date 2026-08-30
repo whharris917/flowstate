@@ -36,7 +36,7 @@ func describe() -> String:
 	return "%s [%s] — %s\nflow %.2f L/s (rated %.1f) · %d starts\n[E] selector: hand / off / auto" % [
 		pump.comp_name, pump.mode.to_upper(),
 		"RUNNING" if pump.running else "STOPPED",
-		pump.flow.value, pump.rated_lps, pump.starts]
+		pump.outlet.value, pump.rated_lps, pump.starts]
 
 
 func use() -> void:

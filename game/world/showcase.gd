@@ -59,20 +59,20 @@ static func _unit_100(plant: Plant) -> void:
 	# valve. Settles at SP 15 kPa, with every liter metered.
 	plant.place("source", "supply_101", {}, Vector3(11.0, 0.0, -5.6), 0.0, false)
 	plant.place("valve", "lv_101", {"cv_lps": 6.0}, Vector3(13.8, 0.0, -3.5), 0.0, false)
-	plant.place("tank", "ft_100", {"capacity_l": 200.0, "level_l": 40.0},
+	# A real vessel: 2.4 m x 1.1 m dia -> 2281 L; the transmitter is
+	# ranged to its geometry (950 L per meter of head).
+	plant.place("tank", "ft_100", {"height_m": 2.4, "diameter_m": 1.1, "level_l": 1100.0},
 		Vector3(17.0, 0.0, -3.5), 0.0, false)
 	plant.place("drain", "du_101", {"rate_lps": 2.5}, Vector3(17.0, 0.0, -6.1), 0.0, false)
-	plant.place("gauge_level", "lt_101", {}, Vector3(18.9, 0.0, -2.6), 0.0, false)
+	plant.place("gauge_level", "lt_101", {"liters_per_meter": 950.4},
+		Vector3(18.9, 0.0, -2.6), 0.0, false)
 	plant.place("controller", "lic_101", {"kp": 8.0, "ki": 1.5, "sp": 15.0},
 		Vector3(13.2, 0.0, -5.8), 0.0, false)
-	plant.connect_equipment("supply_101", "supply", "lv_101", "supply",
+	plant.connect_equipment("supply_101", "outlet", "lv_101", "inlet",
 		[plant.to_local(Vector3(12.0, 0.3, -4.4))])
-	plant.connect_equipment("lv_101", "draw", "supply_101", "draw",
-		[plant.to_local(Vector3(12.2, 0.3, -4.6))])
-	plant.connect_equipment("lv_101", "flow", "ft_100", "in_flow",
+	plant.connect_equipment("lv_101", "outlet", "ft_100", "inlet",
 		[plant.to_local(Vector3(15.4, 0.3, -3.5))])
-	plant.connect_equipment("ft_100", "level", "du_101", "level")
-	plant.connect_equipment("du_101", "draw", "ft_100", "out_flow")
+	plant.connect_equipment("ft_100", "outlet", "du_101", "inlet")
 	plant.connect_equipment("ft_100", "level", "lt_101", "process")
 	plant.connect_equipment("lt_101", "signal", "lic_101", "pv",
 		[plant.to_local(Vector3(18.9, 0.3, -5.4)), plant.to_local(Vector3(14.6, 0.3, -5.8))])
@@ -124,27 +124,25 @@ static func _mcc_and_batch(plant: Plant) -> void:
 	# The batch tank and its feed pump, run from the cabinet, drawing
 	# from a dedicated supply header and draining for real.
 	plant.place("source", "supply_201", {}, Vector3(13.4, 0.0, 9.8), 0.0, false)
-	plant.place("tank", "bt_200", {"capacity_l": 150.0, "level_l": 30.0},
+	# 2.0 m x 1.0 m dia -> 1571 L, trips at 500/1100 L.
+	plant.place("tank", "bt_200", {"height_m": 2.0, "diameter_m": 1.0, "level_l": 480.0},
 		Vector3(19.0, 0.0, 8.2), 0.0, false)
 	plant.place("drain", "du_201", {"rate_lps": 1.2}, Vector3(20.8, 0.0, 9.4), 0.0, false)
-	plant.place("float_switch", "ls_201", {"low_l": 40.0, "high_l": 110.0},
-		Vector3(17.6, 1.32, 8.2), 0.0, false)
+	plant.place("float_switch", "ls_201", {"low_l": 500.0, "high_l": 1100.0},
+		Vector3(17.6, 1.1, 8.2), 0.0, false)
 	plant.place("pump", "feed_pump", {"rated_lps": 3.0}, Vector3(15.4, 0.0, 8.4), 0.0, false)
 	plant.place("gauge_flow", "fi_201", {}, Vector3(16.6, 0.0, 9.6), 0.0, false)
-	plant.connect_equipment("supply_201", "supply", "feed_pump", "suction",
+	plant.connect_equipment("supply_201", "outlet", "feed_pump", "inlet",
 		[plant.to_local(Vector3(14.2, 0.3, 9.2))])
-	plant.connect_equipment("feed_pump", "draw", "supply_201", "draw",
-		[plant.to_local(Vector3(14.4, 0.3, 9.4))])
-	plant.connect_equipment("bt_200", "level", "du_201", "level")
-	plant.connect_equipment("du_201", "draw", "bt_200", "out_flow")
+	plant.connect_equipment("bt_200", "outlet", "du_201", "inlet")
 	plant.connect_equipment("bt_200", "level", "ls_201", "level")
 	plant.connect_equipment("ls_201", "contact", t + "1", "in",
 		[plant.to_local(Vector3(17.3, 0.3, 7.2)), plant.to_local(Vector3(15.2, 0.3, 6.8))])
 	plant.connect_equipment(t + "2", "out", "feed_pump", "run",
 		[plant.to_local(Vector3(15.3, 0.3, 7.4))])
-	plant.connect_equipment("feed_pump", "flow", "bt_200", "in_flow",
+	plant.connect_equipment("feed_pump", "outlet", "bt_200", "inlet",
 		[plant.to_local(Vector3(17.2, 0.3, 8.6))])
-	plant.connect_equipment("feed_pump", "flow", "fi_201", "process")
+	plant.connect_equipment("feed_pump", "outlet", "fi_201", "process")
 	_service_wire(plant, "feed_pump", "bt_200", Color(0.15, 0.35, 0.75), "PW-201")
 
 	# Power: 480 V from the plant feeder, through the doorway, to the

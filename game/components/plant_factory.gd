@@ -59,10 +59,9 @@ const Y_OFFSETS := {
 
 # Where each port's marker sits in the view's local space.
 const PORT_ANCHORS := {
-	"tank": {"in_flow": Vector3(0, 2.35, 0), "level": Vector3(0.95, 1.1, 0)},
+	# Tank anchors are unused — TankView builds its own movable nozzles.
 	"pump": {"run": Vector3(-0.3, 0.55, 0.25), "power": Vector3(-0.3, 0.25, -0.25),
-		"suction": Vector3(-0.42, 0.42, 0), "draw": Vector3(-0.42, 0.2, 0),
-		"flow": Vector3(0.42, 0.42, 0)},
+		"inlet": Vector3(-0.42, 0.42, 0), "outlet": Vector3(0.42, 0.42, 0)},
 	"relay": {"coil": Vector3(-0.18, -0.22, 0.14), "contact": Vector3(0.18, -0.22, 0.14)},
 	"float_switch": {"level": Vector3(0, -0.22, 0.12), "contact": Vector3(0.14, 0.2, 0.1)},
 	"gauge_level": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
@@ -70,10 +69,10 @@ const PORT_ANCHORS := {
 	"gauge_dp": {"process_a": Vector3(-0.12, 0.25, 0.1), "process_b": Vector3(0.12, 0.25, 0.1),
 		"signal": Vector3(0.2, 1.32, 0)},
 	"gauge_press": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
-	"valve": {"cmd": Vector3(-0.28, 0.85, 0.12), "supply": Vector3(-0.38, 0.32, 0),
-		"draw": Vector3(-0.38, 0.15, 0), "flow": Vector3(0.36, 0.32, 0)},
-	"source": {"supply": Vector3(0.5, 1.55, 0), "draw": Vector3(0.32, 1.3, 0)},
-	"drain": {"level": Vector3(0.45, 0.5, 0.2), "draw": Vector3(0.45, 0.3, -0.2)},
+	"valve": {"cmd": Vector3(-0.28, 0.85, 0.12), "inlet": Vector3(-0.38, 0.32, 0),
+		"outlet": Vector3(0.36, 0.32, 0)},
+	"source": {"outlet": Vector3(0.5, 1.55, 0)},
+	"drain": {"inlet": Vector3(0.45, 0.4, 0)},
 	"controller": {"pv": Vector3(-0.16, 1.05, 0.12), "out": Vector3(0.16, 1.05, 0.12)},
 	"mains": {"power": Vector3(0.5, 1.1, 0)},
 	"psu": {"ac_in": Vector3(-0.32, 1.2, 0.1), "dc_out": Vector3(0.32, 1.2, 0.1)},
@@ -89,6 +88,28 @@ const PORT_ANCHORS := {
 		"p_iso": Vector3(-35.3, 2.3, -5.6),
 	},
 }
+
+# Facade flow ports: one player-visible pipe connection ("outlet" to
+# "inlet") that the plant expands into the availability + metered-draw
+# kernel wire pair. The player never touches "draw" directly.
+const FLOW_OUTLETS := {
+	"tank": {"outlet": {"avail": "level", "draw_in": "draw"}},
+	"source": {"outlet": {"avail": "supply", "draw_in": "draw"}},
+}
+const FLOW_INLETS := {
+	"pump": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
+	"valve": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
+	"drain": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
+}
+
+
+static func flow_outlet_spec(type_id: String, port: String) -> Dictionary:
+	return (FLOW_OUTLETS.get(type_id, {}) as Dictionary).get(port, {})
+
+
+static func flow_inlet_spec(type_id: String, port: String) -> Dictionary:
+	return (FLOW_INLETS.get(type_id, {}) as Dictionary).get(port, {})
+
 
 const KIND_COLORS := {
 	SimTypes.PortKind.SIGNAL_DISCRETE: Color(0.11, 0.69, 0.48),
@@ -113,8 +134,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 		"tank":
 			return sim.add(SimTank.new(name_,
 				params.get("capacity_l", 100.0),
-				params.get("level_l", 0.0),
-				params.get("drain_lps", 0.0)))
+				params.get("level_l", 0.0), params.get("drain_lps", 0.0),
+				params.get("height_m", 0.0), params.get("diameter_m", 0.0)))
 		"pump":
 			return sim.add(SimPump.new(name_, params.get("rated_lps", 4.0)))
 		"relay":
@@ -209,21 +230,38 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 	var anchors: Dictionary = PORT_ANCHORS.get(type_id, {})
 	var markers: Dictionary = view.get_meta("port_markers", {})
 	for port_name: String in record.inputs:
+		if port_name == "draw":
+			continue  # the facade wires draw automatically
+		var kind: SimTypes.PortKind = (record.inputs[port_name] as SimInputPort).kind
+		if not flow_inlet_spec(type_id, port_name).is_empty():
+			kind = SimTypes.PortKind.PROCESS_FLOW  # it's a pipe stub, draw it blue
 		var anchor: Vector3 = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
-			_marker(view, record, record.inputs[port_name], anchor, true)
+			make_marker(view, record.comp_name, port_name, kind, anchor, true)
 	for port_name: String in record.outputs:
+		if port_name == "draw":
+			continue
 		var anchor: Vector3 = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.8, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
-			_marker(view, record, record.outputs[port_name], anchor, false)
+			make_marker(view, record.comp_name, port_name,
+				(record.outputs[port_name] as SimOutputPort).kind, anchor, false)
+	# Facade outlets (tank/source) are not kernel ports; give them a
+	# marker of their own unless the view builds custom nozzles.
+	for ui_port: String in FLOW_OUTLETS.get(type_id, {}):
+		if not anchors.has(ui_port) and not anchors_override.has(ui_port):
+			continue
+		var anchor: Vector3 = anchors_override.get(ui_port, anchors.get(ui_port))
+		markers["%s:%s" % [record.comp_name, ui_port]] = \
+			make_marker(view, record.comp_name, ui_port,
+				SimTypes.PortKind.PROCESS_FLOW, anchor, false)
 	view.set_meta("port_markers", markers)
 
 
-static func _marker(view: Node3D, record: SimComponent, port: SimPort,
-		local_pos: Vector3, is_input: bool) -> StaticBody3D:
-	var color: Color = KIND_COLORS[port.kind]
+static func make_marker(view: Node3D, record_name: String, port_name: String,
+		kind: SimTypes.PortKind, local_pos: Vector3, is_input: bool) -> StaticBody3D:
+	var color: Color = KIND_COLORS[kind]
 	var body := StaticBody3D.new()
 	body.position = local_pos
 	body.collision_layer = 2
@@ -246,16 +284,16 @@ static func _marker(view: Node3D, record: SimComponent, port: SimPort,
 	mesh_inst.material_override = ViewUtil.glow(color, 1.0)
 	body.add_child(mesh_inst)
 	var tag := Label3D.new()
-	tag.text = port.port_name
+	tag.text = port_name
 	tag.position = Vector3(0, 0.14, 0)
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	tag.font_size = 26
 	tag.pixel_size = 0.003
 	body.add_child(tag)
-	body.set_meta("record_name", record.comp_name)
-	body.set_meta("port_name", port.port_name)
+	body.set_meta("record_name", record_name)
+	body.set_meta("port_name", port_name)
 	body.set_meta("is_input", is_input)
-	body.set_meta("kind", port.kind)
+	body.set_meta("kind", kind)
 	body.set_meta("owner_view", view)
 	view.add_child(body)
 	return body

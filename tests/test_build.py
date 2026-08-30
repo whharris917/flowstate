@@ -29,7 +29,7 @@ class TestGauge:
         wire_power(sim, pump)
         wire_supply(sim, pump)
         gauge = sim.add(Gauge("fi_1", "flow"))
-        sim.connect(pump, "flow", gauge, "process")
+        sim.connect(pump, "outlet", gauge, "process")
         sim.tick()
         sim.tick()
         assert gauge.reading == pytest.approx(4.0)
@@ -64,7 +64,7 @@ class TestRemoval:
         wire_power(sim, pump)
         wire_supply(sim, pump)
         tank = sim.add(Tank("tank", capacity_l=100.0))
-        sim.connect(pump, "flow", tank, "in_flow")
+        sim.connect(pump, "outlet", tank, "inlet")
         hist = sim.attach_historian(Historian())
         return sim, hist
 
@@ -74,8 +74,8 @@ class TestRemoval:
         assert sim.remove_component("pump") is True
         assert sim.remove_component("pump") is False
         assert len(sim.wires) == 0
-        assert "pump.flow" not in hist.active_tags
-        assert "pump.flow" in hist.tags  # history preserved
+        assert "pump.outlet" not in hist.active_tags
+        assert "pump.outlet" in hist.tags  # history preserved
         sim.run(2.0)  # keeps ticking without the pump
         tank = sim.get_component("tank")
         assert tank is not None
@@ -88,7 +88,7 @@ class TestRemoval:
         wire_power(sim, pump2)
         wire_supply(sim, pump2)
         tank = sim.get_component("tank")
-        sim.connect(pump2, "flow", tank, "in_flow")
+        sim.connect(pump2, "outlet", tank, "inlet")
         sim.run(2.0)
         assert tank.level_l > 0.0
 

@@ -18,11 +18,11 @@ class TestFlowNetwork:
         tank = sim.add(Tank("t", capacity_l=500.0, level_l=0.0))
         drain = sim.add(Drain("d", rate_lps=1.0))
         wire_power(sim, pump)
-        sim.connect(source, "supply", pump, "suction")
+        sim.connect(source, "supply", pump, "inlet")
         sim.connect(pump, "draw", source, "draw")
-        sim.connect(pump, "flow", tank, "in_flow")
-        sim.connect(tank, "level", drain, "level")
-        sim.connect(drain, "draw", tank, "out_flow")
+        sim.connect(pump, "outlet", tank, "inlet")
+        sim.connect(tank, "level", drain, "inlet")
+        sim.connect(drain, "draw", tank, "draw")
         sim.run(120.0)
         gained = tank.level_l
         assert source.total_l > 300.0
@@ -36,9 +36,9 @@ class TestFlowNetwork:
         pump = sim.add(Pump("p", rated_lps=3.0, mode="hand"))
         full = sim.add(Tank("f", capacity_l=100.0, level_l=0.0))
         wire_power(sim, pump)
-        sim.connect(empty, "level", pump, "suction")
-        sim.connect(pump, "draw", empty, "out_flow")
-        sim.connect(pump, "flow", full, "in_flow")
+        sim.connect(empty, "level", pump, "inlet")
+        sim.connect(pump, "draw", empty, "draw")
+        sim.connect(pump, "outlet", full, "inlet")
         sim.run(10.0)
         assert pump.running                 # the motor spins...
         assert full.level_l == 0.0          # ...but nothing moves
@@ -50,9 +50,9 @@ class TestFlowNetwork:
         pump = sim.add(Pump("p", rated_lps=2.0, mode="hand"))
         tank_b = sim.add(Tank("b", capacity_l=100.0, level_l=0.0))
         wire_power(sim, pump)
-        sim.connect(tank_a, "level", pump, "suction")
-        sim.connect(pump, "draw", tank_a, "out_flow")
-        sim.connect(pump, "flow", tank_b, "in_flow")
+        sim.connect(tank_a, "level", pump, "inlet")
+        sim.connect(pump, "draw", tank_a, "draw")
+        sim.connect(pump, "outlet", tank_b, "inlet")
         sim.run(20.0)
         assert tank_a.level_l == pytest.approx(20.0, abs=0.5)
         assert tank_b.level_l == pytest.approx(40.0, abs=0.5)
@@ -64,14 +64,14 @@ class TestFlowNetwork:
         for _ in range(200):                # 10 s of direct scans
             valve.tick(0.05)
         assert valve.position > 95.0        # positioner obeys the command
-        assert valve.flow.value == 0.0      # but an empty header flows nothing
+        assert valve.outlet.value == 0.0      # but an empty header flows nothing
 
     def test_drain_stops_at_empty_and_closes(self) -> None:
         sim = Simulation(dt=0.05)
         tank = sim.add(Tank("t", capacity_l=100.0, level_l=5.0))
         drain = sim.add(Drain("d", rate_lps=2.0))
-        sim.connect(tank, "level", drain, "level")
-        sim.connect(drain, "draw", tank, "out_flow")
+        sim.connect(tank, "level", drain, "inlet")
+        sim.connect(drain, "draw", tank, "draw")
         sim.run(10.0)
         assert tank.level_l == pytest.approx(0.0, abs=0.2)
         assert drain.total_l == pytest.approx(5.0, abs=0.2)

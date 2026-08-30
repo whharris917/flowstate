@@ -8,6 +8,8 @@ equal and it chatters (watch the relay's cycle counter climb).
 """
 from __future__ import annotations
 
+import math
+
 from sim.core import Component, PortKind
 
 
@@ -25,29 +27,58 @@ class Tank(Component):
         capacity_l: float,
         level_l: float = 0.0,
         drain_lps: float = 0.0,
+        height_m: float = 0.0,
+        diameter_m: float = 0.0,
     ) -> None:
         super().__init__(name)
         if capacity_l <= 0.0:
             raise ValueError("capacity_l must be positive")
-        if not 0.0 <= level_l <= capacity_l:
-            raise ValueError("level_l must be within [0, capacity_l]")
+        if level_l < 0.0:
+            raise ValueError("level_l must be non-negative")
         self.capacity_l = capacity_l
         self.level_l = level_l
         self.drain_lps = drain_lps
+        if height_m > 0.0 and diameter_m > 0.0:
+            # Geometry given: capacity follows it honestly.
+            self.height_m = height_m
+            self.diameter_m = diameter_m
+            self.capacity_l = math.pi * (diameter_m / 2.0) ** 2 * height_m * 1000.0
+            self.level_l = min(self.level_l, self.capacity_l)
+        elif height_m > 0.0:
+            self.height_m = height_m
+            self.diameter_m = 2.0 * math.sqrt(
+                capacity_l / 1000.0 / (math.pi * height_m))
+        else:
+            # Capacity only: drum-like proportions (h = 1.4 d).
+            self.diameter_m = (4.0 * capacity_l / 1000.0 / (1.4 * math.pi)) ** (1.0 / 3.0)
+            self.height_m = 1.4 * self.diameter_m
+        if self.level_l > self.capacity_l:
+            raise ValueError("level_l must be within [0, capacity_l]")
         self.overflowed_l = 0.0
         self.ran_dry_ticks = 0
-        self.in_flow = self.add_input("in_flow", PortKind.PROCESS_FLOW)
-        self.out_flow = self.add_input("out_flow", PortKind.PROCESS_FLOW)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_FLOW)
+        self.draw = self.add_input("draw", PortKind.PROCESS_FLOW)
         self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
         self.level.value = level_l
         self.add_observable("overflowed_l", "overflowed_l")
         self.add_observable("ran_dry_ticks", "ran_dry_ticks")
 
+    def set_size(self, height_m: float, diameter_m: float) -> None:
+        """Resize the vessel; capacity follows the geometry honestly
+        and the inventory is clamped to what still fits."""
+        if height_m <= 0.0 or diameter_m <= 0.0:
+            raise ValueError("height and diameter must be positive")
+        self.height_m = height_m
+        self.diameter_m = diameter_m
+        self.capacity_l = math.pi * (diameter_m / 2.0) ** 2 * height_m * 1000.0
+        self.level_l = min(self.level_l, self.capacity_l)
+
     def tick(self, dt: float) -> None:
-        inflow = float(self.in_flow.value)
-        # Demand: equipment drawing out (pumps, drains) plus the legacy
-        # constant-drain parameter. Can't remove more than it holds.
-        demand = self.drain_lps + float(self.out_flow.value)
+        inflow = float(self.inlet.value)
+        # Demand: equipment drawing from the outlet (pumps, drains)
+        # plus the legacy constant-drain parameter. Can't remove more
+        # than it holds.
+        demand = self.drain_lps + float(self.draw.value)
         available = self.level_l + inflow * dt
         drained = min(demand * dt, available)
         if drained < demand * dt - 1e-9:
@@ -160,12 +191,12 @@ class Drain(Component):
         self.rate_lps = rate_lps
         self.is_open = True
         self.total_l = 0.0
-        self.level = self.add_input("level", PortKind.PROCESS_LEVEL)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_LEVEL)
         self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("total_l", "total_l")
 
     def tick(self, dt: float) -> None:
-        lvl = float(self.level.value)
+        lvl = float(self.inlet.value)
         rate = self.rate_lps if (self.is_open and lvl > 0.0) else 0.0
         rate = min(rate, lvl / dt) if dt > 0.0 else rate
         self.draw.value = rate
@@ -219,17 +250,17 @@ class ControlValve(Component):
         self.tau_s = tau_s
         self.position = 0.0  # percent, follows the command with a lag
         self.cmd = self.add_input("cmd", PortKind.SIGNAL_ANALOG)
-        self.supply = self.add_input("supply", PortKind.PROCESS_LEVEL)
-        self.flow = self.add_output("flow", PortKind.PROCESS_FLOW)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_LEVEL)
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_FLOW)
         self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("position", "position")
 
     def tick(self, dt: float) -> None:
         target = max(0.0, min(100.0, float(self.cmd.value)))
         self.position += (target - self.position) * dt / self.tau_s
-        wet = float(self.supply.value) > 0.05
+        wet = float(self.inlet.value) > 0.05
         delivered = self.position / 100.0 * self.cv_lps if wet else 0.0
-        self.flow.value = delivered
+        self.outlet.value = delivered
         self.draw.value = delivered
 
 
@@ -495,8 +526,8 @@ class Pump(Component):
         self.dry_run_s = 0.0
         self.run = self.add_input("run", PortKind.SIGNAL_DISCRETE)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.suction = self.add_input("suction", PortKind.PROCESS_LEVEL)
-        self.flow = self.add_output("flow", PortKind.PROCESS_FLOW)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_LEVEL)
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_FLOW)
         self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("starts", "starts")
         self.add_observable("dry_run_s", "dry_run_s")
@@ -518,11 +549,11 @@ class Pump(Component):
         if run and not self.running:
             self.starts += 1
         self.running = run
-        # The motor can spin against an empty suction, but nothing
-        # moves and the seal wears.
-        wet = float(self.suction.value) > 0.05
+        # The motor can spin against an empty inlet, but nothing moves
+        # and the seal wears.
+        wet = float(self.inlet.value) > 0.05
         if self.running and not wet:
             self.dry_run_s += dt
         delivered = self.rated_lps if (self.running and wet) else 0.0
-        self.flow.value = delivered
+        self.outlet.value = delivered
         self.draw.value = delivered

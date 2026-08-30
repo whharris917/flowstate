@@ -11,8 +11,8 @@ var tau_s: float
 var position: float = 0.0   # percent, follows the command with a lag
 
 var cmd: SimInputPort
-var supply: SimInputPort
-var flow: SimOutputPort
+var inlet: SimInputPort
+var outlet: SimOutputPort
 var draw: SimOutputPort
 
 
@@ -23,8 +23,8 @@ func _init(name_: String, cv_lps_ := 6.0, tau_s_ := 1.0) -> void:
 	cv_lps = cv_lps_
 	tau_s = tau_s_
 	cmd = add_input("cmd", SimTypes.PortKind.SIGNAL_ANALOG)
-	supply = add_input("supply", SimTypes.PortKind.PROCESS_LEVEL)
-	flow = add_output("flow", SimTypes.PortKind.PROCESS_FLOW)
+	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_LEVEL)
+	outlet = add_output("outlet", SimTypes.PortKind.PROCESS_FLOW)
 	draw = add_output("draw", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("position", &"position")
 
@@ -32,8 +32,8 @@ func _init(name_: String, cv_lps_ := 6.0, tau_s_ := 1.0) -> void:
 func tick(dt: float) -> void:
 	var target := clampf(cmd.value, 0.0, 100.0)
 	position += (target - position) * dt / tau_s
-	var delivered := position / 100.0 * cv_lps if supply.value > 0.05 else 0.0
-	flow.value = delivered
+	var delivered := position / 100.0 * cv_lps if inlet.value > 0.05 else 0.0
+	outlet.value = delivered
 	draw.value = delivered
 
 

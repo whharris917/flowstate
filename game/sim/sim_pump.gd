@@ -15,8 +15,8 @@ var dry_run_s: float = 0.0
 
 var run: SimInputPort
 var power: SimInputPort
-var suction: SimInputPort
-var flow: SimOutputPort
+var inlet: SimInputPort
+var outlet: SimOutputPort
 var draw: SimOutputPort
 
 
@@ -27,8 +27,8 @@ func _init(name_: String, rated_lps_: float, mode_: String = "auto") -> void:
 	set_mode(mode_)
 	run = add_input("run", SimTypes.PortKind.SIGNAL_DISCRETE)
 	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
-	suction = add_input("suction", SimTypes.PortKind.PROCESS_LEVEL)
-	flow = add_output("flow", SimTypes.PortKind.PROCESS_FLOW)
+	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_LEVEL)
+	outlet = add_output("outlet", SimTypes.PortKind.PROCESS_FLOW)
 	draw = add_output("draw", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("starts", &"starts")
 	add_observable("dry_run_s", &"dry_run_s")
@@ -58,13 +58,13 @@ func tick(dt: float) -> void:
 	if should_run and not running:
 		starts += 1
 	running = should_run
-	# The motor can spin against an empty suction, but nothing moves
-	# and the seal wears.
-	var wet := suction.value > 0.05
+	# The motor can spin against an empty inlet, but nothing moves and
+	# the seal wears.
+	var wet := inlet.value > 0.05
 	if running and not wet:
 		dry_run_s += dt
 	var delivered := rated_lps if (running and wet) else 0.0
-	flow.value = delivered
+	outlet.value = delivered
 	draw.value = delivered
 
 

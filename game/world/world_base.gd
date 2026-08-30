@@ -42,6 +42,9 @@ func _ready() -> void:
 	var ladder_panel := LadderPanel.new()
 	layer.add_child(ladder_panel)
 	plant.ladder_panel = ladder_panel
+	var tank_panel := TankConfigPanel.new()
+	layer.add_child(tank_panel)
+	plant.tank_panel = tank_panel
 	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)

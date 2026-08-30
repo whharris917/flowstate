@@ -136,7 +136,7 @@ class TestPIDLoop:
         sim.connect(tank, "level", gauge, "process")
         sim.connect(gauge, "signal", pid, "pv")
         sim.connect(pid, "out", valve, "cmd")
-        sim.connect(valve, "flow", tank, "in_flow")
+        sim.connect(valve, "outlet", tank, "inlet")
         return sim, tank, pid, valve
 
     def test_pi_reaches_setpoint_without_offset(self) -> None:
@@ -145,7 +145,7 @@ class TestPIDLoop:
         level_kpa = tank.level_l / 45.45 * Gauge.WATER_KPA_PER_M
         assert level_kpa == pytest.approx(15.0, abs=0.2)
         # Steady state: inflow matches the 2 L/s drain.
-        assert valve.flow.value == pytest.approx(2.0, abs=0.1)
+        assert valve.outlet.value == pytest.approx(2.0, abs=0.1)
 
     def test_manual_mode_holds_output(self) -> None:
         sim, tank, pid, valve = self._loop()
@@ -166,7 +166,7 @@ class TestValveAndTerminal:
     def test_positioner_lag(self) -> None:
         sim = Simulation(dt=0.05)
         valve = sim.add(ControlValve("cv", cv_lps=10.0, tau_s=1.0))
-        valve.supply.value = 1.0e9
+        valve.inlet.value = 1.0e9
         valve.cmd.value = 100.0
         for _ in range(20):  # 1.0 s in scan steps: ~63 % of the way
             valve.tick(0.05)

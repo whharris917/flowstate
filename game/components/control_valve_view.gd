@@ -49,7 +49,7 @@ func _process(_delta: float) -> void:
 
 func describe() -> String:
 	return "%s — control valve\ncmd %.1f %% · position %.1f %% · flow %.2f L/s" % [
-		valve.comp_name, valve.cmd.value, valve.position, valve.flow.value]
+		valve.comp_name, valve.cmd.value, valve.position, valve.outlet.value]
 
 
 func use() -> void:

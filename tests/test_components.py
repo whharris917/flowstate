@@ -15,7 +15,7 @@ class TestTank:
         pump = sim.add(Pump("p", rated_lps=2.0, mode="hand"))
         wire_power(sim, pump)
         wire_supply(sim, pump)
-        sim.connect(pump, "flow", tank, "in_flow")
+        sim.connect(pump, "outlet", tank, "inlet")
         sim.run(10.0)
         # Pump flow reaches the tank one scan late; 9.9 s of flow landed.
         assert tank.level_l == pytest.approx(10.0 + 2.0 * 9.9, abs=0.2)
@@ -30,7 +30,7 @@ class TestTank:
     def test_overflow_is_tracked_and_level_clamped(self) -> None:
         sim = Simulation(dt=1.0)
         tank = sim.add(Tank("t", capacity_l=10.0, level_l=10.0))
-        tank.in_flow.value = 5.0
+        tank.inlet.value = 5.0
         tank.tick(1.0)
         assert tank.level_l == 10.0
         assert tank.overflowed_l == pytest.approx(5.0)
@@ -87,13 +87,13 @@ class TestPump:
     def test_flow_follows_run_in_auto_and_counts_starts(self) -> None:
         pump = Pump("p", rated_lps=4.0)
         pump.power.value = 1.0
-        pump.suction.value = 1.0e9
+        pump.inlet.value = 1.0e9
         pump.run.value = True
         pump.tick(0.05)
-        assert pump.flow.value == 4.0
+        assert pump.outlet.value == 4.0
         pump.run.value = False
         pump.tick(0.05)
-        assert pump.flow.value == 0.0
+        assert pump.outlet.value == 0.0
         pump.run.value = True
         pump.tick(0.05)
         assert pump.starts == 2
@@ -130,7 +130,7 @@ class TestClosedLoop:
         sim.connect(tank, "level", switch, "level")
         sim.connect(switch, "contact", relay, "coil")
         sim.connect(relay, "contact", pump, "run")
-        sim.connect(pump, "flow", tank, "in_flow")
+        sim.connect(pump, "outlet", tank, "inlet")
         return sim, tank, relay
 
     def test_hysteresis_holds_level_in_band(self) -> None:

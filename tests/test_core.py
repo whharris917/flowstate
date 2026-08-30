@@ -42,8 +42,8 @@ def test_single_source_kinds_reject_second_wire() -> None:
 def test_flow_inputs_sum() -> None:
     sim = Simulation(dt=1.0)
     tank = sim.add(Tank("t", capacity_l=100.0))
-    sim.connect(sim.add(ConstantFlow("fa", 2.0)), "flow", tank, "in_flow")
-    sim.connect(sim.add(ConstantFlow("fb", 3.0)), "flow", tank, "in_flow")
+    sim.connect(sim.add(ConstantFlow("fa", 2.0)), "flow", tank, "inlet")
+    sim.connect(sim.add(ConstantFlow("fb", 3.0)), "flow", tank, "inlet")
     sim.run(2.0)
     assert tank.level_l == pytest.approx(10.0)
 
@@ -95,7 +95,7 @@ def test_determinism_two_identical_sims_match_exactly() -> None:
         sim.connect(tank, "level", switch, "level")
         sim.connect(switch, "contact", relay, "coil")
         sim.connect(relay, "contact", pump, "run")
-        sim.connect(pump, "flow", tank, "in_flow")
+        sim.connect(pump, "outlet", tank, "inlet")
         return sim, tank, relay
 
     sim_a, tank_a, relay_a = build()

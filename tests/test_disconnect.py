@@ -16,7 +16,7 @@ def _loop() -> tuple[Simulation, Tank, FloatSwitch, Relay, Pump]:
     sim.connect(tank, "level", switch, "level")
     sim.connect(switch, "contact", relay, "coil")
     sim.connect(relay, "contact", pump, "run")
-    sim.connect(pump, "flow", tank, "in_flow")
+    sim.connect(pump, "outlet", tank, "inlet")
     return sim, tank, switch, relay, pump
 
 
