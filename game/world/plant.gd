@@ -462,6 +462,11 @@ func _exercise_supports() -> void:
 		problems.append("beam across two columns was refused")
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space, 5.8) != "":
 		problems.append("stretched 5.8 m beam across columns was refused")
+	# The interactive flow seats beams center-to-center: length equals
+	# the column spacing exactly. Must bear (regression: the 0.2 m end
+	# inset used to miss the 0.35 m column with a hairline ray).
+	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space, 5.6) != "":
+		problems.append("center-to-center beam across columns was refused")
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 8), 0.0, space) == "":
 		problems.append("floating beam was accepted")
 	for chk in ["chk_col_1", "chk_col_2", "chk_col_3", "chk_col_4"]:

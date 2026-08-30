@@ -102,8 +102,16 @@ static func placement_ok(type_id: String, base_pos: Vector3, rot_y: float,
 	return ""
 
 
+## Is there something to bear on at/below this point? A small box
+## query, not a hairline ray: real seats have width, and a beam whose
+## end lands 2 cm past a column's face still bears on it.
 static func bears_point(point: Vector3, space: PhysicsDirectSpaceState3D,
 		depth: float = 1.0) -> bool:
-	var query := PhysicsRayQueryParameters3D.create(point + Vector3(0, 0.2, 0),
-		point + Vector3(0, -depth, 0), 1)
-	return not space.intersect_ray(query).is_empty()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(0.3, depth, 0.3)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.collision_mask = 1
+	query.transform = Transform3D(Basis.IDENTITY,
+		point + Vector3(0, 0.05 - depth / 2.0, 0))
+	return not space.intersect_shape(query, 1).is_empty()
