@@ -39,6 +39,10 @@ static func build(type_id: String) -> Node3D:
 				(node as GaugeView).setup(record as SimGauge)
 			"column":
 				(node as ColumnView).setup(record as SimColumn)
+			"valve":
+				(node as ControlValveView).setup(record as SimControlValve)
+			"controller":
+				(node as PIDView).setup(record as SimPID)
 		node.set_meta("scratch_sim", scratch)
 	if node == null:
 		return null

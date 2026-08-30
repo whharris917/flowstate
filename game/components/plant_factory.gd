@@ -15,6 +15,11 @@ const CATALOG: Array[Dictionary] = [
 	{"type": "column", "label": "Distillation column"},
 ]
 
+const CATALOG_CONTROL: Array[Dictionary] = [
+	{"type": "valve", "label": "Control valve"},
+	{"type": "controller", "label": "PID controller"},
+]
+
 # Ghost/collision footprint (x, y, z) and the view's y-offset when the
 # placement point is on the floor.
 const FOOTPRINTS := {
@@ -27,12 +32,15 @@ const FOOTPRINTS := {
 	"gauge_press": Vector3(0.5, 1.8, 0.5),
 	"column": Vector3(1.7, 11.2, 1.7),
 	"float_switch": Vector3(0.25, 0.6, 0.25),
+	"valve": Vector3(0.7, 1.3, 0.55),
+	"controller": Vector3(0.5, 1.9, 0.5),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
 	"gauge_level": 0.0, "gauge_flow": 0.0, "gauge_dp": 0.0,
 	"gauge_press": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
+	"valve": 0.0, "controller": 0.0,
 }
 
 # Where each port's marker sits in the view's local space.
@@ -46,6 +54,8 @@ const PORT_ANCHORS := {
 	"gauge_dp": {"process_a": Vector3(-0.12, 0.25, 0.1), "process_b": Vector3(0.12, 0.25, 0.1),
 		"signal": Vector3(0.2, 1.32, 0)},
 	"gauge_press": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
+	"valve": {"cmd": Vector3(-0.28, 0.85, 0.12), "flow": Vector3(0.36, 0.32, 0)},
+	"controller": {"pv": Vector3(-0.16, 1.05, 0.12), "out": Vector3(0.16, 1.05, 0.12)},
 	# Overhead tap on the vapor line above the dished head.
 	"column": {"p_top": Vector3(0, 10.75, 0.5)},
 	# Pressure taps sit on the suite's walls, near the ceiling.
@@ -103,6 +113,17 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 				params.get("charge_l", 60.0), params.get("max_duty_kw", 100.0)))
 		"air_cascade":
 			return sim.add(SimAirCascade.new(name_, AsepticSuite.ROOMS, AsepticSuite.DOORS))
+		"valve":
+			return sim.add(SimControlValve.new(name_,
+				params.get("cv_lps", 6.0), params.get("tau_s", 1.0)))
+		"controller":
+			return sim.add(SimPID.new(name_,
+				params.get("kp", 8.0), params.get("ki", 1.5), params.get("kd", 0.0),
+				params.get("sp", 15.0)))
+		"plc":
+			return sim.add(SimPLC.new(name_))
+		"terminal":
+			return sim.add(SimTerminal.new(name_, params.get("kind", "discrete")))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -123,6 +144,10 @@ static func make_view(type_id: String, record: SimComponent,
 			view = GaugeView.new()
 		"column":
 			view = ColumnView.new()
+		"valve":
+			view = ControlValveView.new()
+		"controller":
+			view = PIDView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
 	if view == null:

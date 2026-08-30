@@ -76,7 +76,7 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	add_child(icons)
 	var all_types: Array = []
 	for entry: Dictionary in PlantFactory.CATALOG + StructureFactory.CATALOG \
-			+ StructureFactory.CATALOG_ROUTING:
+			+ StructureFactory.CATALOG_ROUTING + PlantFactory.CATALOG_CONTROL:
 		all_types.append(entry["type"])
 	icons.generate(all_types)  # fire and forget; cards fill in as renders land
 	menu = BuildMenu.new()
@@ -93,7 +93,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_cancel"):
 		_set_mode(Mode.NORMAL)
 	elif event.is_action_pressed("catalog_page") and mode == Mode.PLACE:
-		page = (page + 1) % 3
+		page = (page + 1) % 4
 		catalog_index = 0
 		_beam_anchor = Vector3.INF
 		_run_points.clear()
@@ -158,8 +158,8 @@ func _update_hud() -> void:
 			menu.visible = false
 			hud.set_mode_text("B build · C connect · X remove")
 		Mode.PLACE:
-			var page_names: Array[String] = ["EQUIPMENT", "STRUCTURE", "ROUTING & SIGNS"]
-			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 3]],
+			var page_names: Array[String] = ["EQUIPMENT", "STRUCTURE", "ROUTING & SIGNS", "CONTROL"]
+			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 4]],
 				_catalog(), icons, catalog_index)
 			if _is_stretch():
 				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
@@ -383,7 +383,7 @@ func _update_ghost() -> void:
 	overlap.collision_mask = 1 | 4
 	overlap.exclude = [player.get_rid()]
 	_ghost_valid = space.intersect_shape(overlap, 1).is_empty()
-	if _ghost_valid and page >= 1:
+	if _ghost_valid and not _is_equipment_page():
 		_ghost_valid = StructureFactory.placement_ok(type_id, _ghost_pos, rot_y, space) == ""
 	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
 		else Color(0.9, 0.25, 0.2, 0.45)
@@ -494,7 +494,13 @@ func _catalog() -> Array[Dictionary]:
 	match page:
 		0: return PlantFactory.CATALOG
 		1: return StructureFactory.CATALOG
-	return StructureFactory.CATALOG_ROUTING
+		2: return StructureFactory.CATALOG_ROUTING
+	return PlantFactory.CATALOG_CONTROL
+
+
+## Pages 0 and 3 place sim equipment; 1 and 2 place structure.
+func _is_equipment_page() -> bool:
+	return page == 0 or page == 3
 
 
 func _current_type() -> String:
@@ -502,7 +508,7 @@ func _current_type() -> String:
 
 
 func _current_footprint() -> Vector3:
-	return PlantFactory.FOOTPRINTS[_current_type()] if page == 0 \
+	return PlantFactory.FOOTPRINTS[_current_type()] if _is_equipment_page() \
 		else StructureFactory.SIZES[_current_type()]
 
 
@@ -522,14 +528,14 @@ func _try_place() -> void:
 		return
 	if _ghost == null or not _ghost.visible or not _ghost_valid:
 		var reason := "can't place here"
-		if page >= 1 and _ghost != null and _ghost.visible:
+		if not _is_equipment_page() and _ghost != null and _ghost.visible:
 			var bearing := StructureFactory.placement_ok(_current_type(), _ghost_pos, rot_y,
 				player.camera.get_world_3d().direct_space_state)
 			if bearing != "":
 				reason = bearing
 		hud.toast(reason)
 		return
-	if page >= 1:
+	if not _is_equipment_page():
 		var name_ := plant.unique_struct_name(_current_type())
 		if plant.place_structure(_current_type(), name_, _ghost_pos, rot_y):
 			hud.toast("placed %s" % name_)

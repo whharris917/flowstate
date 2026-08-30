@@ -196,6 +196,10 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as GaugeView).setup(record as SimGauge)
 		"column":
 			(view as ColumnView).setup(record as SimColumn)
+		"valve":
+			(view as ControlValveView).setup(record as SimControlValve)
+		"controller":
+			(view as PIDView).setup(record as SimPID)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
 	PlantFactory.attach_port_markers(view, record, type_id)
@@ -520,6 +524,47 @@ func _self_check() -> void:
 	else:
 		push_warning("[flowstate] kernel self-check FAILED — level %.1f L, overflow %.1f L, %d cycles"
 			% [c_tank.level_l, c_tank.overflowed_l, c_relay.cycles])
+	_control_self_check()
+
+
+## Mirrors the Python control tests: a PID level loop must settle on
+## setpoint, and a ladder seal-in must latch and drop.
+func _control_self_check() -> void:
+	var check := Simulation.new(SIM_DT)
+	var tank_ := check.add(SimTank.new("t", 200.0, 50.0, 2.0)) as SimTank
+	var lt := check.add(SimGauge.new("lt", "level_kpa")) as SimGauge
+	var lic := check.add(SimPID.new("lic", 8.0, 1.5, 0.0, 15.0)) as SimPID
+	var lv := check.add(SimControlValve.new("lv", 6.0)) as SimControlValve
+	check.connect_ports(tank_, "level", lt, "process")
+	check.connect_ports(lt, "signal", lic, "pv")
+	check.connect_ports(lic, "out", lv, "cmd")
+	check.connect_ports(lv, "flow", tank_, "in_flow")
+	check.run_for(600.0)
+	var level_kpa := tank_.level_l / 45.45 * SimGauge.WATER_KPA_PER_M
+
+	var plc := SimPLC.new("plc")
+	var err := plc.set_program([
+		{"coil": "m_0", "logic": [
+			[{"ref": "di_0"}, {"ref": "di_1", "nc": true}],
+			[{"ref": "m_0"}, {"ref": "di_1", "nc": true}]]},
+		{"coil": "do_0", "logic": [[{"ref": "m_0"}]]},
+	])
+	plc.di_ports[0].value = 1.0
+	plc.tick(SIM_DT)
+	plc.di_ports[0].value = 0.0
+	plc.tick(SIM_DT)
+	var sealed := plc.do_ports[0].value > 0.5
+	plc.di_ports[1].value = 1.0
+	plc.tick(SIM_DT)
+	var dropped := plc.do_ports[0].value < 0.5
+
+	if absf(level_kpa - 15.0) < 0.3 and absf(lv.flow.value - 2.0) < 0.15 \
+			and err == "" and sealed and dropped:
+		print("[flowstate] control self-check OK — PID holds %.1f kPa, ladder seals and drops"
+			% level_kpa)
+	else:
+		push_warning("[flowstate] control self-check FAILED — level %.2f kPa, flow %.2f, err '%s', sealed %s, dropped %s"
+			% [level_kpa, lv.flow.value, err, sealed, dropped])
 
 
 ## Headless support-rule exercise. Physics space queries see nothing
@@ -667,6 +712,14 @@ func _params_for(record: SimComponent) -> Dictionary:
 	if record is SimColumn:
 		var col := record as SimColumn
 		return {"charge_l": col.charge_l, "max_duty_kw": col.max_duty_kw}
+	if record is SimControlValve:
+		var cvalve := record as SimControlValve
+		return {"cv_lps": cvalve.cv_lps, "tau_s": cvalve.tau_s}
+	if record is SimPID:
+		var pid := record as SimPID
+		return {"kp": pid.kp, "ki": pid.ki, "kd": pid.kd, "sp": pid.sp}
+	if record is SimTerminal:
+		return {"kind": (record as SimTerminal).kind}
 	return {}
 
 
