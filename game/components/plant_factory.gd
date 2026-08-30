@@ -9,7 +9,7 @@ const CATALOG: Array[Dictionary] = [
 	{"type": "pump", "label": "Pump 4 L/s"},
 	{"type": "relay", "label": "Relay cabinet"},
 	{"type": "column", "label": "Distillation column"},
-	{"type": "source", "label": "Supply (battery limit)"},
+	{"type": "source", "label": "Supply header"},
 	{"type": "drain", "label": "Drain / sewer"},
 ]
 
@@ -72,7 +72,7 @@ const PORT_ANCHORS := {
 	"gauge_press": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
 	"valve": {"cmd": Vector3(-0.28, 0.85, 0.12), "supply": Vector3(-0.38, 0.32, 0),
 		"draw": Vector3(-0.38, 0.15, 0), "flow": Vector3(0.36, 0.32, 0)},
-	"source": {"level": Vector3(0.5, 1.55, 0), "draw": Vector3(0.32, 1.3, 0)},
+	"source": {"supply": Vector3(0.5, 1.55, 0), "draw": Vector3(0.32, 1.3, 0)},
 	"drain": {"level": Vector3(0.45, 0.5, 0.2), "draw": Vector3(0.45, 0.3, -0.2)},
 	"controller": {"pv": Vector3(-0.16, 1.05, 0.12), "out": Vector3(0.16, 1.05, 0.12)},
 	"mains": {"power": Vector3(0.5, 1.1, 0)},

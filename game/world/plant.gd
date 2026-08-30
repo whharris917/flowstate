@@ -888,7 +888,7 @@ func _build_initial_plant() -> void:
 		[Vector3(-3.6, 0.3, -1.6), Vector3(-1.0, 0.3, -2.9)])
 	# The flow path is honest end to end: the pump pulls raw water from
 	# the battery limit, and the tank's consumption is a real drain.
-	connect_equipment("raw_water", "level", "fill_pump", "suction",
+	connect_equipment("raw_water", "supply", "fill_pump", "suction",
 		[Vector3(-5.6, 0.3, -3.1), Vector3(-1.2, 0.3, -3.1)])
 	connect_equipment("fill_pump", "draw", "raw_water", "draw",
 		[Vector3(-1.4, 0.3, -3.3), Vector3(-5.8, 0.3, -3.3)])
@@ -942,7 +942,7 @@ func _self_check() -> void:
 	var c_src := check.add(SimSource.new("bl")) as SimSource
 	var c_drn := check.add(SimDrain.new("d", 1.5)) as SimDrain
 	check.connect_ports(c_mains, "power", c_pump, "power")
-	check.connect_ports(c_src, "level", c_pump, "suction")
+	check.connect_ports(c_src, "supply", c_pump, "suction")
 	check.connect_ports(c_pump, "draw", c_src, "draw")
 	check.connect_ports(c_tank, "level", c_drn, "level")
 	check.connect_ports(c_drn, "draw", c_tank, "out_flow")
@@ -970,9 +970,9 @@ func _control_self_check() -> void:
 	var lt := check.add(SimGauge.new("lt", "level_kpa")) as SimGauge
 	var lic := check.add(SimPID.new("lic", 8.0, 1.5, 0.0, 15.0)) as SimPID
 	var lv := check.add(SimControlValve.new("lv", 6.0)) as SimControlValve
-	var supply := check.add(SimSource.new("bl")) as SimSource
-	check.connect_ports(supply, "level", lv, "supply")
-	check.connect_ports(lv, "draw", supply, "draw")
+	var header := check.add(SimSource.new("uh")) as SimSource
+	check.connect_ports(header, "supply", lv, "supply")
+	check.connect_ports(lv, "draw", header, "draw")
 	check.connect_ports(tank_, "level", lt, "process")
 	check.connect_ports(lt, "signal", lic, "pv")
 	check.connect_ports(lic, "out", lv, "cmd")

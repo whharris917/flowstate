@@ -18,7 +18,7 @@ class TestFlowNetwork:
         tank = sim.add(Tank("t", capacity_l=500.0, level_l=0.0))
         drain = sim.add(Drain("d", rate_lps=1.0))
         wire_power(sim, pump)
-        sim.connect(source, "level", pump, "suction")
+        sim.connect(source, "supply", pump, "suction")
         sim.connect(pump, "draw", source, "draw")
         sim.connect(pump, "flow", tank, "in_flow")
         sim.connect(tank, "level", drain, "level")

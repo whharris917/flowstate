@@ -123,11 +123,12 @@ class Gauge(Component):
 
 
 class Source(Component):
-    """Battery-limit utility connection: the honest root of every flow
-    path, the way MainsFeed is for power. Availability is unlimited —
-    the wider utility system is off-plot — but everything drawn
-    through it is metered (``total_l``). Pumps and valves wire their
-    suction to ``level`` and their ``draw`` back here.
+    """Supply header: a utility tie-in at the edge of the modeled
+    plant — the honest root of every flow path, the way MainsFeed is
+    for power. Availability is unlimited (the wider utility system is
+    off-plot), but everything drawn through it is metered
+    (``total_l``). Pumps and valves wire their suction to ``supply``
+    ("always wet") and their ``draw`` back here for the meter.
     """
 
     AVAILABLE_L = 1.0e9
@@ -136,13 +137,13 @@ class Source(Component):
         super().__init__(name)
         self.total_l = 0.0
         self.draw = self.add_input("draw", PortKind.PROCESS_FLOW)
-        self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
-        self.level.value = self.AVAILABLE_L
+        self.supply = self.add_output("supply", PortKind.PROCESS_LEVEL)
+        self.supply.value = self.AVAILABLE_L
         self.add_observable("total_l", "total_l")
 
     def tick(self, dt: float) -> None:
         self.total_l += float(self.draw.value) * dt
-        self.level.value = self.AVAILABLE_L
+        self.supply.value = self.AVAILABLE_L
 
 
 class Drain(Component):

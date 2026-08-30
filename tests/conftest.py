@@ -15,11 +15,11 @@ def wire_power(sim: Simulation, *components: Component) -> MainsFeed:
 
 
 def wire_supply(sim: Simulation, *components: Component) -> Source:
-    """Give each pump or valve a battery-limit source to pull from —
+    """Give each pump or valve a supply header to pull from —
     suction/supply wired in, draw metered back."""
     source = sim.add(Source(sim.unique_name("source")))
     for component in components:
         inlet = "suction" if "suction" in component.inputs else "supply"
-        sim.connect(source, "level", component, inlet)
+        sim.connect(source, "supply", component, inlet)
         sim.connect(component, "draw", source, "draw")
     return source

@@ -28,11 +28,11 @@ func setup(source_: SimSource) -> void:
 	wheel.position = Vector3(0, 0.85, 0.14)
 	wheel.rotation_degrees = Vector3(90, 0, 0)
 	add_child(wheel)
-	ViewUtil.box(self, Vector3(0.36, 0.22, 0.04), Vector3(0, 1.15, 0.12),
+	ViewUtil.box(self, Vector3(0.52, 0.22, 0.04), Vector3(0, 1.15, 0.12),
 		ViewUtil.flat(Color(0.10, 0.32, 0.52)))
-	var plate := ViewUtil.label(self, "B.L.", Vector3(0, 1.15, 0.15))
+	var plate := ViewUtil.label(self, "SUPPLY", Vector3(0, 1.15, 0.15))
 	plate.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	plate.font_size = 30
+	plate.font_size = 26
 	_total = ViewUtil.label(self, "", Vector3(0, 1.95, 0))
 	_total.font_size = 28
 	ViewUtil.label(self, source.comp_name, Vector3(0, 2.14, 0))
@@ -44,7 +44,7 @@ func _process(_delta: float) -> void:
 
 
 func describe() -> String:
-	return "%s — battery-limit supply\nunlimited · drawing %.2f L/s · total %.1f L" % [
+	return "%s — supply header (utility tie-in)\nunlimited · drawing %.2f L/s · total %.1f L" % [
 		source.comp_name, source.draw.value, source.total_l]
 
 

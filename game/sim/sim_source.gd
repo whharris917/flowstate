@@ -1,29 +1,31 @@
 class_name SimSource
 extends SimComponent
-## Battery-limit utility connection: the honest root of every flow
-## path, the way the mains feeder is for power. Availability is
-## unlimited — the wider utility system is off-plot — but everything
-## drawn through it is metered. Mirrors sim/components.py Source.
+## Supply header: a utility tie-in at the edge of the modeled plant —
+## the honest root of every flow path, the way the mains feeder is
+## for power. Availability is unlimited (the wider utility system is
+## off-plot), but everything drawn through it is metered. Suctions
+## wire to "supply" (always wet); pumps and valves return their
+## "draw" here for the meter. Mirrors sim/components.py Source.
 
 const AVAILABLE_L := 1.0e9
 
 var total_l: float = 0.0
 
 var draw: SimInputPort
-var level: SimOutputPort
+var supply: SimOutputPort
 
 
 func _init(name_: String) -> void:
 	super(name_)
 	draw = add_input("draw", SimTypes.PortKind.PROCESS_FLOW)
-	level = add_output("level", SimTypes.PortKind.PROCESS_LEVEL)
-	level.value = AVAILABLE_L
+	supply = add_output("supply", SimTypes.PortKind.PROCESS_LEVEL)
+	supply.value = AVAILABLE_L
 	add_observable("total_l", &"total_l")
 
 
 func tick(dt: float) -> void:
 	total_l += draw.value * dt
-	level.value = AVAILABLE_L
+	supply.value = AVAILABLE_L
 
 
 func state_dict() -> Dictionary:
