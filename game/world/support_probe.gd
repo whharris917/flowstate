@@ -18,7 +18,7 @@ func _run(world: Node) -> void:
 
 	plant.place_structure("s_column", "probe_col_1", Vector3(5.0, 0.08, -0.5), 0.0)
 	plant.place_structure("s_column", "probe_col_2", Vector3(9.0, 0.08, -0.5), 0.0)
-	plant.place_structure("s_beam", "probe_beam", Vector3(7.0, 6.08, -0.5), 0.0)
+	plant.place_structure("s_beam", "probe_beam", Vector3(7.0, 6.08, -0.5), 0.0, 4.35)
 	plant.place_structure("s_wall", "probe_wall", Vector3(-6.0, 0.08, 3.0), 0.0)
 
 	var low := plant.place_new("gauge_level", Vector3(12.0, 0.08, -2.0), 0.0)

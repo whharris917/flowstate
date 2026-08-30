@@ -6,10 +6,14 @@ class_name StructureFactory
 
 const CATALOG: Array[Dictionary] = [
 	{"type": "s_column", "label": "Steel column 6 m"},
-	{"type": "s_beam", "label": "Beam 6 m"},
+	{"type": "s_beam", "label": "Beam — stretch to fit"},
 	{"type": "s_wall", "label": "Wall panel 4 m"},
 	{"type": "s_deck", "label": "Deck / ceiling 4 m"},
 ]
+
+# Beams stretch between two supported points, up to a maximum span.
+const BEAM_MIN := 1.0
+const BEAM_MAX := 8.0
 
 const SIZES := {
 	"s_column": Vector3(0.35, 6.0, 0.35),
@@ -26,11 +30,17 @@ const COLORS := {
 }
 
 
-static func make_view(type_id: String, name_: String) -> StructureView:
+static func beam_size(length: float) -> Vector3:
+	return Vector3(clampf(length, BEAM_MIN, BEAM_MAX), 0.35, 0.3)
+
+
+static func make_view(type_id: String, name_: String, length: float = -1.0) -> StructureView:
 	if not SIZES.has(type_id):
 		push_error("unknown structure type '%s'" % type_id)
 		return null
 	var size: Vector3 = SIZES[type_id]
+	if type_id == "s_beam" and length > 0.0:
+		size = beam_size(length)
 	var body := StructureView.new()
 	body.type_id = type_id
 	body.struct_name = name_
@@ -64,19 +74,20 @@ static func make_view(type_id: String, name_: String) -> StructureView:
 ## "" when the element can bear where the ghost sits, else the refusal
 ## reason. base_pos is the placement point (bottom center), world space.
 static func placement_ok(type_id: String, base_pos: Vector3, rot_y: float,
-		space: PhysicsDirectSpaceState3D) -> String:
+		space: PhysicsDirectSpaceState3D, length: float = -1.0) -> String:
 	var basis := Basis.from_euler(Vector3(0, rot_y, 0))
 	match type_id:
 		"s_column":
-			if not _bears(base_pos, 0.6, space):
+			if not bears_point(base_pos, space, 0.6):
 				return "column needs bearing below"
 		"s_wall":
-			if not _bears(base_pos, 0.6, space):
+			if not bears_point(base_pos, space, 0.6):
 				return "wall needs bearing below"
 		"s_beam":
-			var half: float = (SIZES[type_id] as Vector3).x / 2.0 - 0.2
+			var size := beam_size(length) if length > 0.0 else SIZES[type_id] as Vector3
+			var half: float = size.x / 2.0 - 0.2
 			for side: float in [-1.0, 1.0]:
-				if not _bears(base_pos + basis * Vector3(half * side, 0, 0), 1.0, space):
+				if not bears_point(base_pos + basis * Vector3(half * side, 0, 0), space, 1.0):
 					return "beam needs support at both ends"
 		"s_deck":
 			var size: Vector3 = SIZES[type_id]
@@ -84,14 +95,15 @@ static func placement_ok(type_id: String, base_pos: Vector3, rot_y: float,
 			for corner: Vector2 in [Vector2(-1, -1), Vector2(-1, 1), Vector2(1, -1), Vector2(1, 1)]:
 				var offset := basis * Vector3(corner.x * (size.x / 2.0 - 0.3), 0,
 					corner.y * (size.z / 2.0 - 0.3))
-				if _bears(base_pos + offset, 1.0, space):
+				if bears_point(base_pos + offset, space, 1.0):
 					found += 1
 			if found < 2:
 				return "deck needs at least two supports under it"
 	return ""
 
 
-static func _bears(point: Vector3, depth: float, space: PhysicsDirectSpaceState3D) -> bool:
+static func bears_point(point: Vector3, space: PhysicsDirectSpaceState3D,
+		depth: float = 1.0) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(point + Vector3(0, 0.2, 0),
 		point + Vector3(0, -depth, 0), 1)
 	return not space.intersect_ray(query).is_empty()

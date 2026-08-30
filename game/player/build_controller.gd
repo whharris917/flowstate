@@ -13,6 +13,8 @@ enum Mode { NORMAL, PLACE, CONNECT }
 
 const GRID := 0.5
 const REACH := 7.0
+const ALIGN_SNAP := 0.35     # pull-in distance onto a neighbor's axis
+const ALIGN_RANGE := 24.0    # how far away an alignment partner may be
 
 var mode: Mode = Mode.NORMAL
 var page: int = 0             # 0 = equipment, 1 = structure
@@ -30,6 +32,12 @@ var _ghost_type := ""
 var _ghost_mat: StandardMaterial3D
 var _ghost_valid := false
 var _ghost_pos := Vector3.ZERO
+var _guide_mesh: MeshInstance3D
+var _align_targets: Array[Vector3] = []
+var _beam_ghost: MeshInstance3D
+var _beam_anchor := Vector3.INF
+var _beam_end := Vector3.INF
+var _beam_len := 0.0
 var _pending_marker: StaticBody3D = null
 var _waypoints: Array[Vector3] = []   # global space while routing
 var _route_node: Node3D
@@ -46,6 +54,18 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	_ghost_mat = StandardMaterial3D.new()
 	_ghost_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_ghost_mat.albedo_color = Color(0.2, 0.8, 0.3, 0.45)
+	_beam_ghost = MeshInstance3D.new()
+	_beam_ghost.mesh = BoxMesh.new()
+	_beam_ghost.material_override = _ghost_mat
+	_beam_ghost.visible = false
+	add_child(_beam_ghost)
+	_guide_mesh = MeshInstance3D.new()
+	_guide_mesh.mesh = ImmediateMesh.new()
+	var guide_mat := StandardMaterial3D.new()
+	guide_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	guide_mat.albedo_color = Color(0.35, 0.9, 0.95, 0.9)
+	_guide_mesh.material_override = guide_mat
+	add_child(_guide_mesh)
 	_route_node = Node3D.new()
 	add_child(_route_node)
 	_route_mat = StandardMaterial3D.new()
@@ -73,9 +93,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("catalog_page") and mode == Mode.PLACE:
 		page = (page + 1) % 2
 		catalog_index = 0
+		_beam_anchor = Vector3.INF
 		_update_hud()
 	elif event.is_action_pressed("rotate_item") and mode == Mode.PLACE:
-		rot_y = wrapf(rot_y + PI / 2.0, 0.0, TAU)
+		if _is_beam() and _beam_anchor != Vector3.INF:
+			_beam_anchor = Vector3.INF
+			_update_hud()
+		else:
+			rot_y = wrapf(rot_y + PI / 2.0, 0.0, TAU)
 	elif event.is_action_pressed("rotate_item") and mode == Mode.CONNECT:
 		if not _waypoints.is_empty():
 			_waypoints.pop_back()
@@ -90,6 +115,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		for i in range(_catalog().size()):
 			if event.is_action_pressed("catalog_%d" % (i + 1)):
 				catalog_index = i
+				_beam_anchor = Vector3.INF
 				if mode != Mode.PLACE:
 					_set_mode(Mode.PLACE)
 				_update_hud()
@@ -99,6 +125,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _set_mode(new_mode: Mode) -> void:
 	mode = new_mode
 	_clear_ghost()
+	_beam_anchor = Vector3.INF
+	_beam_ghost.visible = false
+	(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
 	_pending_marker = null
 	_waypoints.clear()
 	_clear_route()
@@ -119,7 +148,12 @@ func _update_hud() -> void:
 			var page_name := "EQUIPMENT — Tab for structure" if page == 0 \
 				else "STRUCTURE — Tab for equipment"
 			menu.show_page(page_name, _catalog(), icons, catalog_index)
-			hud.set_mode_text("BUILD — click place · R rotate · B/Esc exit")
+			if _is_beam():
+				var step := "click a supported START point" if _beam_anchor == Vector3.INF \
+					else "click the END point (max %.0f m) · R restart" % StructureFactory.BEAM_MAX
+				hud.set_mode_text("BEAM — %s · B/Esc exit" % step)
+			else:
+				hud.set_mode_text("BUILD — click place · R rotate · B/Esc exit")
 		Mode.CONNECT:
 			menu.visible = false
 			var step := "click an OUTPUT port (cube)" if _pending_marker == null \
@@ -255,24 +289,44 @@ func _refresh_ghost_asset() -> void:
 	_ghost_type = type_id
 
 
-func _update_ghost() -> void:
-	_refresh_ghost_asset()
-	if _ghost == null:
-		return
+func _is_beam() -> bool:
+	return page == 1 and _current_type() == "s_beam"
+
+
+## The world point the placement ray lands on, or empty. Aiming at a
+## column magnetizes to its top center — the natural beam seat.
+func _place_hit() -> Dictionary:
 	var camera := player.camera
 	var space := camera.get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(camera.global_position,
 		camera.global_position - camera.global_basis.z * (REACH + player.zoom_offset()), 1)
 	query.exclude = [player.get_rid()]
-	var hit := space.intersect_ray(query)
+	return space.intersect_ray(query)
+
+
+func _update_ghost() -> void:
+	if _is_beam():
+		if _ghost != null:
+			_ghost.visible = false
+		(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
+		_update_beam_ghost()
+		return
+	_beam_ghost.visible = false
+	_refresh_ghost_asset()
+	if _ghost == null:
+		return
+	var space := player.camera.get_world_3d().direct_space_state
+	var hit := _place_hit()
 	if hit.is_empty() or (hit["normal"] as Vector3).y < 0.6:
 		_ghost.visible = false
 		_ghost_valid = false
+		(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
 		return
 	var type_id := _current_type()
 	var footprint := _current_footprint()
 	var point := hit["position"] as Vector3
 	_ghost_pos = Vector3(snappedf(point.x, GRID), point.y, snappedf(point.z, GRID))
+	_ghost_pos = _apply_alignment(_ghost_pos)
 	_ghost.global_position = _ghost_pos + Vector3(0, AssetPreview.base_offset(type_id), 0)
 	_ghost.rotation.y = rot_y
 	_ghost.visible = true
@@ -294,6 +348,106 @@ func _update_ghost() -> void:
 		else Color(0.9, 0.25, 0.2, 0.45)
 
 
+## Pull the ghost onto a neighbor's x or z axis when close, and draw
+## cyan guide lines to whatever it aligned with.
+func _apply_alignment(pos: Vector3) -> Vector3:
+	_align_targets.clear()
+	var best_x := ALIGN_SNAP
+	var best_z := ALIGN_SNAP
+	var x_target := Vector3.INF
+	var z_target := Vector3.INF
+	for cand in _alignment_candidates():
+		var planar := Vector2(cand.x - pos.x, cand.z - pos.z).length()
+		if planar < 0.6 or planar > ALIGN_RANGE:
+			continue
+		if absf(cand.x - pos.x) < best_x:
+			best_x = absf(cand.x - pos.x)
+			x_target = cand
+		if absf(cand.z - pos.z) < best_z:
+			best_z = absf(cand.z - pos.z)
+			z_target = cand
+	if x_target != Vector3.INF:
+		pos.x = x_target.x
+		_align_targets.append(x_target)
+	if z_target != Vector3.INF:
+		pos.z = z_target.z
+		_align_targets.append(z_target)
+	_draw_guides(pos)
+	return pos
+
+
+func _alignment_candidates() -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for name_: String in plant.views:
+		if plant.equip_types.get(name_) == "air_cascade":
+			continue
+		out.append((plant.views[name_] as Node3D).global_position)
+	for entry_name: String in plant.structures:
+		out.append(((plant.structures[entry_name] as Dictionary)["node"] as Node3D).global_position)
+	return out
+
+
+func _draw_guides(pos: Vector3) -> void:
+	var im := _guide_mesh.mesh as ImmediateMesh
+	im.clear_surfaces()
+	if _align_targets.is_empty():
+		return
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for target in _align_targets:
+		im.surface_add_vertex(pos + Vector3(0, 0.06, 0))
+		im.surface_add_vertex(Vector3(target.x, pos.y + 0.06, target.z))
+	im.surface_end()
+
+
+## Beam stretch flow: first click anchors a supported start, the ghost
+## then spans level from the anchor to the aim, up to BEAM_MAX.
+func _update_beam_ghost() -> void:
+	var space := player.camera.get_world_3d().direct_space_state
+	var aim := _beam_aim(space)
+	if aim == Vector3.INF:
+		_beam_ghost.visible = false
+		_ghost_valid = false
+		return
+	var mesh := _beam_ghost.mesh as BoxMesh
+	if _beam_anchor == Vector3.INF:
+		mesh.size = Vector3(0.6, 0.35, 0.3)
+		_beam_ghost.global_position = aim + Vector3(0, 0.195, 0)
+		_beam_ghost.rotation.y = 0.0
+		_ghost_valid = StructureFactory.bears_point(aim, space)
+	else:
+		_beam_end = Vector3(aim.x, _beam_anchor.y, aim.z)
+		_beam_len = _beam_anchor.distance_to(_beam_end)
+		var direction := _beam_end - _beam_anchor
+		var yaw := atan2(-direction.z, direction.x) if direction.length() > 0.01 else 0.0
+		mesh.size = Vector3(maxf(_beam_len, 0.3), 0.35, 0.3)
+		var mid := (_beam_anchor + _beam_end) / 2.0
+		_beam_ghost.global_position = mid + Vector3(0, 0.195, 0)
+		_beam_ghost.rotation.y = yaw
+		_ghost_valid = _beam_len >= StructureFactory.BEAM_MIN \
+			and _beam_len <= StructureFactory.BEAM_MAX \
+			and StructureFactory.placement_ok("s_beam", mid, yaw, space, _beam_len) == ""
+	_beam_ghost.visible = true
+	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
+		else Color(0.9, 0.25, 0.2, 0.45)
+
+
+## Where a beam endpoint would land: column tops magnetize to their
+## center; other upward surfaces snap to the fine grid.
+func _beam_aim(_space: PhysicsDirectSpaceState3D) -> Vector3:
+	var hit := _place_hit()
+	if hit.is_empty():
+		return Vector3.INF
+	var collider := hit["collider"] as Node
+	if collider is StructureView and (collider as StructureView).type_id == "s_column":
+		var column := collider as StructureView
+		var size: Vector3 = StructureFactory.SIZES["s_column"]
+		return column.global_position + Vector3(0, size.y / 2.0, 0)
+	if (hit["normal"] as Vector3).y < 0.6:
+		return Vector3.INF
+	var point := hit["position"] as Vector3
+	return Vector3(snappedf(point.x, 0.25), point.y, snappedf(point.z, 0.25))
+
+
 func _catalog() -> Array[Dictionary]:
 	return PlantFactory.CATALOG if page == 0 else StructureFactory.CATALOG
 
@@ -310,6 +464,9 @@ func _current_footprint() -> Vector3:
 ## ---- actions -------------------------------------------------------------
 
 func _try_place() -> void:
+	if _is_beam():
+		_try_place_beam()
+		return
 	if _ghost == null or not _ghost.visible or not _ghost_valid:
 		var reason := "can't place here"
 		if page == 1 and _ghost != null and _ghost.visible:
@@ -327,6 +484,33 @@ func _try_place() -> void:
 	var record := plant.place_new(_current_type(), _ghost_pos, rot_y)
 	if record != null:
 		hud.toast("placed %s" % record.comp_name)
+
+
+func _try_place_beam() -> void:
+	var space := player.camera.get_world_3d().direct_space_state
+	var aim := _beam_aim(space)
+	if aim == Vector3.INF:
+		hud.toast("aim at a surface")
+		return
+	if _beam_anchor == Vector3.INF:
+		if not StructureFactory.bears_point(aim, space):
+			hud.toast("start point needs support below")
+			return
+		_beam_anchor = aim
+		_update_hud()
+		return
+	if not _ghost_valid:
+		hud.toast("span %.1f m — needs support at both ends, max %.0f m"
+			% [_beam_len, StructureFactory.BEAM_MAX])
+		return
+	var mid := (_beam_anchor + _beam_end) / 2.0
+	var direction := _beam_end - _beam_anchor
+	var yaw := atan2(-direction.z, direction.x)
+	var name_ := plant.unique_struct_name("s_beam")
+	if plant.place_structure("s_beam", name_, mid, yaw, _beam_len):
+		hud.toast("placed %s — %.1f m" % [name_, _beam_len])
+	_beam_anchor = Vector3.INF
+	_update_hud()
 
 
 func _try_pick_port() -> void:

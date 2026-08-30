@@ -262,16 +262,17 @@ func unique_struct_name(prefix: String) -> String:
 ## base_pos is the bottom-center placement point in world space.
 ## Bearing rules are the caller's job (StructureFactory.placement_ok);
 ## the loader and headless exercises place directly.
-func place_structure(type_id: String, name_: String, base_pos: Vector3, rot_y: float) -> bool:
+func place_structure(type_id: String, name_: String, base_pos: Vector3, rot_y: float,
+		length: float = -1.0) -> bool:
 	if structures.has(name_):
 		return false
-	var node := StructureFactory.make_view(type_id, name_)
+	var node := StructureFactory.make_view(type_id, name_, length)
 	if node == null:
 		return false
 	add_child(node)
 	node.global_position = base_pos + Vector3(0, (StructureFactory.SIZES[type_id] as Vector3).y / 2.0, 0)
 	node.rotation.y = rot_y
-	structures[name_] = {"type": type_id, "node": node}
+	structures[name_] = {"type": type_id, "node": node, "length": length}
 	_revalidate_in = 3
 	return true
 
@@ -459,6 +460,8 @@ func _exercise_supports() -> void:
 		problems.append("braced span still failed (max span %.2f)" % float(braced_check["max_span"]))
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space) != "":
 		problems.append("beam across two columns was refused")
+	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space, 5.8) != "":
+		problems.append("stretched 5.8 m beam across columns was refused")
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 8), 0.0, space) == "":
 		problems.append("floating beam was accepted")
 	for chk in ["chk_col_1", "chk_col_2", "chk_col_3", "chk_col_4"]:
@@ -508,6 +511,7 @@ func save_game() -> bool:
 		struct_list.append({
 			"type": entry["type"], "name": name_,
 			"pos": [base.x, base.y, base.z], "rot_y": node.rotation.y,
+			"length": entry.get("length", -1.0),
 		})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time,
@@ -563,7 +567,8 @@ func load_game() -> bool:
 	for entry: Dictionary in payload.get("structures", []):
 		var pos_arr: Array = entry["pos"]
 		place_structure(entry["type"], entry["name"],
-			Vector3(pos_arr[0], pos_arr[1], pos_arr[2]), float(entry.get("rot_y", 0.0)))
+			Vector3(pos_arr[0], pos_arr[1], pos_arr[2]), float(entry.get("rot_y", 0.0)),
+			float(entry.get("length", -1.0)))
 
 	for entry: Dictionary in payload["components"]:
 		var pos_arr: Array = entry["pos"]
