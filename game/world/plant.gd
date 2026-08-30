@@ -6,7 +6,7 @@ extends Node3D
 ## the entire graph from a file.
 
 const SIM_DT := 0.05  # 20 Hz, decoupled from frame rate
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 
 var save_path: String = "user://save.json"
 
@@ -44,7 +44,8 @@ func _exercise_build_api() -> void:
 	var gauge := place_new("gauge_level", _world(Vector3(5.0, 0.0, -1.0)), 0.0)
 	if gauge == null:
 		problems.append("place gauge failed")
-	elif connect_equipment("supply_tank", "level", gauge.comp_name, "process") != "":
+	elif connect_equipment("supply_tank", "level", gauge.comp_name, "process",
+			[Vector3(4.0, 0.35, -1.5)]) != "":
 		problems.append("gauge connect refused")
 	if connect_equipment(gauge.comp_name, "signal", "fill_pump", "run") == "":
 		problems.append("kind mismatch was NOT refused")
@@ -68,6 +69,13 @@ func _exercise_build_api() -> void:
 		problems.append("placed gauge missing after load")
 	elif tank == null or pump == null:
 		problems.append("commissioned refs missing after load")
+	else:
+		var routed := false
+		for visual in _wire_visuals:
+			if (visual["waypoints"] as Array).size() > 0:
+				routed = true
+		if not routed:
+			problems.append("routed waypoints lost in save/load round-trip")
 	if problems.is_empty():
 		print("[flowstate] build-api exercise OK — gauge %.1f kPa, %d components, %d wires"
 			% [reading, sim.components.size(), sim.wires.size()])
@@ -140,10 +148,11 @@ func remove_equipment(name_: String) -> bool:
 	return true
 
 
-## Connect two ports (by record/port name). Returns "" on success or a
+## Connect two ports (by record/port name), optionally routed through
+## player-laid waypoints (plant-local). Returns "" on success or a
 ## human-readable refusal — the kernel's wiring rules, surfaced.
 func connect_equipment(src_name: String, src_port: String,
-		dst_name: String, dst_port: String) -> String:
+		dst_name: String, dst_port: String, waypoints: Array = []) -> String:
 	var src := sim.get_component(src_name)
 	var dst := sim.get_component(dst_name)
 	if src == null or dst == null:
@@ -160,12 +169,12 @@ func connect_equipment(src_name: String, src_port: String,
 		return "%s already has a wire" % in_port.path()
 	if not sim.connect_ports(src, src_port, dst, dst_port):
 		return "connection refused"
-	_wire_visual(src_name, src_port, dst_name, dst_port)
+	_wire_visual(src_name, src_port, dst_name, dst_port, waypoints)
 	return ""
 
 
 func _wire_visual(src_name: String, src_port: String,
-		dst_name: String, dst_port: String) -> void:
+		dst_name: String, dst_port: String, waypoints: Array) -> void:
 	var from := _marker_pos(src_name, src_port)
 	var to := _marker_pos(dst_name, dst_port)
 	var record := sim.get_component(src_name)
@@ -173,11 +182,17 @@ func _wire_visual(src_name: String, src_port: String,
 	var is_process := port.kind == SimTypes.PortKind.PROCESS_FLOW \
 		or port.kind == SimTypes.PortKind.PROCESS_LEVEL
 	var color: Color = PlantFactory.KIND_COLORS[port.kind]
-	var wire := WireView.new()
-	add_child(wire)
-	wire.setup(from, to, func() -> float: return port.value,
-		color, 0.09 if is_process else 0.03)
-	_wire_visuals.append({"node": wire, "a": src_name, "b": dst_name})
+	var sparse: Array = [from]
+	sparse.append_array(waypoints)
+	sparse.append(to)
+	var pipe := PipeView.new()
+	add_child(pipe)
+	pipe.setup(PipeRoute.orthogonalize(sparse), func() -> float: return port.value,
+		color, 0.07 if is_process else 0.025)
+	_wire_visuals.append({
+		"node": pipe, "a": src_name, "a_port": src_port,
+		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
+	})
 
 
 func _marker_pos(record_name: String, port_name: String) -> Vector3:
@@ -259,9 +274,15 @@ func save_game() -> bool:
 			"protected": protected.has(name_),
 		})
 	var wire_list: Array = []
-	for wire in sim.wires:
-		wire_list.append([wire.src.owner_name, wire.src.port_name,
-			wire.dst.owner_name, wire.dst.port_name])
+	for visual in _wire_visuals:
+		var path_out: Array = []
+		for point: Vector3 in visual["waypoints"]:
+			path_out.append([point.x, point.y, point.z])
+		wire_list.append({
+			"src": visual["a"], "src_port": visual["a_port"],
+			"dst": visual["b"], "dst_port": visual["b_port"],
+			"waypoints": path_out,
+		})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time,
 		"components": comps, "wires": wire_list,
@@ -314,8 +335,12 @@ func load_game() -> bool:
 			float(entry.get("rot_y", 0.0)), bool(entry.get("protected", false)))
 		if record != null:
 			record.apply_state(entry.get("state", {}))
-	for wire_entry: Array in payload["wires"]:
-		connect_equipment(wire_entry[0], wire_entry[1], wire_entry[2], wire_entry[3])
+	for wire_entry: Dictionary in payload["wires"]:
+		var waypoints: Array = []
+		for point: Array in wire_entry.get("waypoints", []):
+			waypoints.append(Vector3(point[0], point[1], point[2]))
+		connect_equipment(wire_entry["src"], wire_entry["src_port"],
+			wire_entry["dst"], wire_entry["dst_port"], waypoints)
 	sim.time = float(payload.get("time", 0.0))
 
 	tank = sim.get_component("supply_tank") as SimTank

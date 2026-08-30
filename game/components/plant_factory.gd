@@ -146,6 +146,7 @@ static func _marker(view: Node3D, record: SimComponent, port: SimPort,
 	body.set_meta("record_name", record.comp_name)
 	body.set_meta("port_name", port.port_name)
 	body.set_meta("is_input", is_input)
+	body.set_meta("kind", port.kind)
 	body.set_meta("owner_view", view)
 	view.add_child(body)
 	return body

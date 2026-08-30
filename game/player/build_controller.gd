@@ -23,6 +23,9 @@ var _ghost: MeshInstance3D
 var _ghost_valid := false
 var _ghost_pos := Vector3.ZERO
 var _pending_marker: StaticBody3D = null
+var _waypoints: Array[Vector3] = []   # global space while routing
+var _preview: MeshInstance3D
+var _preview_mat: StandardMaterial3D
 
 
 func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
@@ -38,6 +41,12 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	mat.albedo_color = Color(0.2, 0.8, 0.3, 0.35)
 	_ghost.material_override = mat
 	add_child(_ghost)
+	_preview = MeshInstance3D.new()
+	_preview.mesh = ImmediateMesh.new()
+	_preview_mat = StandardMaterial3D.new()
+	_preview_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_preview.material_override = _preview_mat
+	add_child(_preview)
 	_update_hud()
 
 
@@ -50,6 +59,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_mode(Mode.NORMAL)
 	elif event.is_action_pressed("rotate_item") and mode == Mode.PLACE:
 		rot_y = wrapf(rot_y + PI / 2.0, 0.0, TAU)
+	elif event.is_action_pressed("rotate_item") and mode == Mode.CONNECT:
+		if not _waypoints.is_empty():
+			_waypoints.pop_back()
+			_update_hud()
 	elif event.is_action_pressed("delete_item"):
 		_try_delete()
 	elif mode == Mode.PLACE and event.is_action_pressed("place"):
@@ -70,6 +83,8 @@ func _set_mode(new_mode: Mode) -> void:
 	mode = new_mode
 	_ghost.visible = false
 	_pending_marker = null
+	_waypoints.clear()
+	(_preview.mesh as ImmediateMesh).clear_surfaces()
 	# Connect mode lets the interact ray see port markers (layer 2).
 	player.ray.collision_mask = 3 if mode == Mode.CONNECT else 1
 	_update_hud()
@@ -88,13 +103,50 @@ func _update_hud() -> void:
 			hud.set_mode_text("BUILD — click place · R rotate · B/Esc exit\n" + "\n".join(lines))
 		Mode.CONNECT:
 			var step := "click an OUTPUT port (cube)" if _pending_marker == null \
-				else "now click an INPUT port (sphere)"
+				else "lay the run: click surfaces for waypoints (%d), finish on an INPUT port (sphere) · R undo point" \
+				% _waypoints.size()
 			hud.set_mode_text("CONNECT — %s · C/Esc exit" % step)
 
 
 func _physics_process(_delta: float) -> void:
 	if mode == Mode.PLACE:
 		_update_ghost()
+	elif mode == Mode.CONNECT and _pending_marker != null:
+		_update_route_preview()
+	else:
+		(_preview.mesh as ImmediateMesh).clear_surfaces()
+
+
+func _update_route_preview() -> void:
+	var im := _preview.mesh as ImmediateMesh
+	im.clear_surfaces()
+	var aim := _aim_point()
+	var sparse: Array = [_pending_marker.global_position]
+	sparse.append_array(_waypoints)
+	if aim != Vector3.INF:
+		sparse.append(aim)
+	if sparse.size() < 2:
+		return
+	var path := PipeRoute.orthogonalize(sparse)
+	if path.size() < 2:
+		return
+	im.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	for point in path:
+		im.surface_add_vertex(point)
+	im.surface_end()
+
+
+## Where a clicked waypoint would land: the aimed surface, pushed out
+## along its normal, grid-snapped. INF when aiming at nothing.
+func _aim_point() -> Vector3:
+	if not player.ray.is_colliding():
+		return Vector3.INF
+	var collider := player.ray.get_collider() as Node
+	if collider.has_meta("port_name"):
+		return (collider as Node3D).global_position
+	var normal := player.ray.get_collision_normal()
+	var point := player.ray.get_collision_point() + normal * 0.09
+	return Vector3(snappedf(point.x, 0.25), snappedf(point.y, 0.25), snappedf(point.z, 0.25))
 
 
 func _update_ghost() -> void:
@@ -145,7 +197,16 @@ func _try_place() -> void:
 
 func _try_pick_port() -> void:
 	var collider := player.ray.get_collider() if player.ray.is_colliding() else null
-	if collider == null or not (collider as Node).has_meta("port_name"):
+	if collider == null:
+		return
+	var node := collider as Node
+	if not node.has_meta("port_name"):
+		# A surface click while routing lays a waypoint.
+		if _pending_marker != null:
+			var aim := _aim_point()
+			if aim != Vector3.INF:
+				_waypoints.append(aim)
+				_update_hud()
 		return
 	var marker := collider as StaticBody3D
 	if _pending_marker == null:
@@ -153,16 +214,23 @@ func _try_pick_port() -> void:
 			hud.toast("start from an OUTPUT port (cube)")
 			return
 		_pending_marker = marker
+		var kind: SimTypes.PortKind = marker.get_meta("kind")
+		_preview_mat.albedo_color = PlantFactory.KIND_COLORS[kind]
 		_update_hud()
 		return
 	if not bool(marker.get_meta("is_input")):
 		hud.toast("finish on an INPUT port (sphere)")
 		return
+	var local_points: Array = []
+	for point in _waypoints:
+		local_points.append(plant.to_local(point))
 	var error := plant.connect_equipment(
 		str(_pending_marker.get_meta("record_name")), str(_pending_marker.get_meta("port_name")),
-		str(marker.get_meta("record_name")), str(marker.get_meta("port_name")))
+		str(marker.get_meta("record_name")), str(marker.get_meta("port_name")),
+		local_points)
 	hud.toast("connected" if error == "" else error)
 	_pending_marker = null
+	_waypoints.clear()
 	_update_hud()
 
 
