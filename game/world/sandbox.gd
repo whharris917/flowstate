@@ -97,6 +97,9 @@ func _after_plant() -> void:
 	# The reboiler is a 480 V load like any other: cable from the feeder.
 	plant.connect_equipment("plant_mains", "power", "still_column", "power",
 		[Vector3(-3.8, 0.3, -0.4), Vector3(7.7, 0.3, -3.5)])
+	# The full unit-area showcase: pipe rack, Unit 100 PID loop, MCC
+	# room with a PLC-run batch tank, signage.
+	Showcase.build(plant)
 
 
 func _process(delta: float) -> void:
