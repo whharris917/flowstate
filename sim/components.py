@@ -119,6 +119,51 @@ class Gauge(Component):
         self.signal.value = self.reading
 
 
+class ControlValve(Component):
+    """Air-actuated control valve: 0-100 % analog command, first-order
+    positioner lag, flow = position/100 * cv_lps. Draws from an
+    unlimited supply main for now, like Pump; suction-side modelling
+    arrives when the process layer grows real sources.
+    """
+
+    def __init__(self, name: str, cv_lps: float = 6.0, tau_s: float = 1.0) -> None:
+        super().__init__(name)
+        if cv_lps <= 0.0:
+            raise ValueError("cv_lps must be positive")
+        if tau_s <= 0.0:
+            raise ValueError("tau_s must be positive")
+        self.cv_lps = cv_lps
+        self.tau_s = tau_s
+        self.position = 0.0  # percent, follows the command with a lag
+        self.cmd = self.add_input("cmd", PortKind.SIGNAL_ANALOG)
+        self.flow = self.add_output("flow", PortKind.PROCESS_FLOW)
+        self.add_observable("position", "position")
+
+    def tick(self, dt: float) -> None:
+        target = max(0.0, min(100.0, float(self.cmd.value)))
+        self.position += (target - self.position) * dt / self.tau_s
+        self.flow.value = self.position / 100.0 * self.cv_lps
+
+
+class Terminal(Component):
+    """One terminal block: in to out, one scan late — the honest cost
+    of landing a wire on a strip. kind is "discrete" or "analog".
+    """
+
+    KINDS = {"discrete": PortKind.SIGNAL_DISCRETE, "analog": PortKind.SIGNAL_ANALOG}
+
+    def __init__(self, name: str, kind: str = "discrete") -> None:
+        super().__init__(name)
+        if kind not in self.KINDS:
+            raise ValueError(f"kind must be one of {sorted(self.KINDS)}")
+        self.kind = kind
+        self.t_in = self.add_input("in", self.KINDS[kind])
+        self.t_out = self.add_output("out", self.KINDS[kind])
+
+    def tick(self, dt: float) -> None:
+        self.t_out.value = self.t_in.value
+
+
 class Column(Component):
     """Batch distillation column at total reflux.
 
