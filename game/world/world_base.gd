@@ -38,6 +38,9 @@ func _ready() -> void:
 	var cabinet_panel := CabinetPanel.new()
 	layer.add_child(cabinet_panel)
 	plant.cabinet_panel = cabinet_panel
+	var ladder_panel := LadderPanel.new()
+	layer.add_child(ladder_panel)
+	plant.ladder_panel = ladder_panel
 	var builder := BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)

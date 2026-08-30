@@ -12,6 +12,7 @@ var save_path: String = "user://save.json"
 var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox doesn't
 var config_panel: RunConfigPanel = null   # injected by the world after _ready
 var cabinet_panel: CabinetPanel = null    # injected by the world after _ready
+var ladder_panel: LadderPanel = null      # injected by the world after _ready
 
 var sim: Simulation
 var historian: SimHistorian

@@ -69,11 +69,21 @@ func _ready() -> void:
 	_wires_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_wires_box)
 
+	var foot := HBoxContainer.new()
+	foot.alignment = BoxContainer.ALIGNMENT_CENTER
+	foot.add_theme_constant_override("separation", 12)
+	var ladder := Button.new()
+	ladder.text = "  Ladder editor →  "
+	ladder.pressed.connect(func() -> void:
+		var plant := _plant
+		var cab := _cab
+		visible = false
+		if plant != null and plant.ladder_panel != null:
+			plant.ladder_panel.open(plant, cab))
+	foot.add_child(ladder)
 	var close := Button.new()
 	close.text = "  Close (Esc)  "
 	close.pressed.connect(close_panel)
-	var foot := HBoxContainer.new()
-	foot.alignment = BoxContainer.ALIGNMENT_CENTER
 	foot.add_child(close)
 	column.add_child(foot)
 

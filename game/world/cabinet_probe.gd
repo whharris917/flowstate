@@ -22,7 +22,16 @@ func _run(world: Node) -> void:
 		[plant.to_local(Vector3(3.0, 0.3, 0.5))])
 	plant.connect_equipment(cab + "_td1", "out", plc.comp_name, "di_0", [], false)
 	plant.connect_equipment(plc.comp_name, "do_0", cab + "_td2", "in", [], false)
-	plc.set_program([{"coil": "do_0", "logic": [[{"ref": "di_0"}]]}])
+	plc.set_program([
+		{"coil": "m_0", "logic": [
+			[{"ref": "di_0"}, {"ref": "di_1", "nc": true}],
+			[{"ref": "m_0"}, {"ref": "di_1", "nc": true}]]},
+		{"coil": "t_0", "logic": [[{"ref": "m_0"}]]},
+		{"coil": "do_0", "logic": [[{"ref": "t_0"}]]},
+	])
+	plc.set_timer_preset(0, 5.0)
+	# Force the field contact closed so power flow lights up.
+	(plant.sim.get_component("level_switch") as SimFloatSwitch).set_band(150.0, 150.0)
 
 	# Swing the door open and stand where the interior is visible.
 	var cab_view := (plant.cabinets[cab] as Dictionary)["node"] as CabinetView
@@ -37,6 +46,10 @@ func _run(world: Node) -> void:
 	plant.cabinet_panel.open(plant, cab)
 	await get_tree().create_timer(0.4).timeout
 	await _shot("user://probe_cabinet_panel.png")
+	plant.cabinet_panel.visible = false
+	plant.ladder_panel.open(plant, cab)
+	await get_tree().create_timer(0.6).timeout
+	await _shot("user://probe_ladder.png")
 	print("[probe] cabinet screenshots written to user://")
 	get_tree().quit()
 
