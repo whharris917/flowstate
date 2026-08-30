@@ -50,6 +50,11 @@ func _run(world: Node) -> void:
 	plant.ladder_panel.open(plant, cab)
 	await get_tree().create_timer(0.6).timeout
 	await _shot("user://probe_ladder.png")
+	plant.ladder_panel.visible = false
+	(world as WorldBase).builder.port_menu.open(plant, "fill_pump — I/O",
+		["fill_pump"], Callable())
+	await get_tree().create_timer(0.3).timeout
+	await _shot("user://probe_portmenu.png")
 	print("[probe] cabinet screenshots written to user://")
 	get_tree().quit()
 

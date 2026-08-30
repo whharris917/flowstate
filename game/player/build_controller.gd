@@ -26,6 +26,7 @@ var plant: Plant
 var hud: Hud
 var menu: BuildMenu
 var icons: AssetIcons
+var port_menu: PortMenu
 
 var _ghost: Node3D = null
 var _ghost_type := ""
@@ -82,6 +83,8 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	menu = BuildMenu.new()
 	menu.visible = false
 	hud.add_child(menu)
+	port_menu = PortMenu.new()
+	hud.add_child(port_menu)
 	_update_hud()
 
 
@@ -115,6 +118,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not _waypoints.is_empty():
 			_waypoints.pop_back()
 			_update_hud()
+	elif event.is_action_pressed("port_menu"):
+		_open_port_menu()
 	elif event.is_action_pressed("delete_item"):
 		_try_delete()
 	elif mode == Mode.PLACE and event.is_action_pressed("place"):
@@ -620,11 +625,17 @@ func _try_pick_port() -> void:
 	if not bool(marker.get_meta("is_input")):
 		hud.toast("finish on an INPUT port (sphere)")
 		return
-	# The support rule gets its veto before the kernel does. Routing
-	# state is kept so the run can be fixed with more waypoints.
+	_complete_connection(str(marker.get_meta("record_name")),
+		str(marker.get_meta("port_name")), marker.global_position)
+
+
+## Land the pending routed connection on an input port. The support
+## rule gets its veto before the kernel does; routing state is kept on
+## refusal so the run can be fixed with more waypoints.
+func _complete_connection(dst_name: String, dst_port: String, dst_pos: Vector3) -> void:
 	var final_sparse: Array = [_pending_marker.global_position]
 	final_sparse.append_array(_waypoints)
-	final_sparse.append((marker as Node3D).global_position)
+	final_sparse.append(dst_pos)
 	var check := SupportCheck.evaluate(PipeRoute.orthogonalize(final_sparse),
 		player.camera.get_world_3d().direct_space_state)
 	if not bool(check["ok"]):
@@ -636,13 +647,58 @@ func _try_pick_port() -> void:
 		local_points.append(plant.to_local(point))
 	var error := plant.connect_equipment(
 		str(_pending_marker.get_meta("record_name")), str(_pending_marker.get_meta("port_name")),
-		str(marker.get_meta("record_name")), str(marker.get_meta("port_name")),
-		local_points)
+		dst_name, dst_port, local_points)
 	hud.toast("connected" if error == "" else error)
 	_pending_marker = null
 	_waypoints.clear()
 	_clear_route()
 	_update_hud()
+
+
+## ---- right-click port picker ---------------------------------------------
+
+func _open_port_menu() -> void:
+	var view := player.look_view()
+	if view == null:
+		return
+	var records: Array = []
+	var title := ""
+	if view is CabinetView:
+		var cab := (view as CabinetView).cabinet_name
+		title = "%s — terminal strip" % cab
+		for term: String in (plant.cabinets[cab] as Dictionary)["terminals"]:
+			records.append(term)
+	elif view.has_meta("record_name"):
+		var record_name := str(view.get_meta("record_name"))
+		title = "%s — I/O" % record_name
+		records.append(record_name)
+	else:
+		hud.toast("no ports here")
+		return
+	port_menu.open(plant, title, records, _port_picked)
+
+
+func _port_picked(record_name: String, port_name: String, is_input: bool) -> void:
+	var view: Node3D = plant.views.get(record_name)
+	if view == null:
+		return
+	var markers: Dictionary = view.get_meta("port_markers", {})
+	var marker: StaticBody3D = markers.get("%s:%s" % [record_name, port_name])
+	if marker == null:
+		hud.toast("that port has no field connection point")
+		return
+	if is_input:
+		if _pending_marker == null:
+			hud.toast("right-click a SOURCE and pick an output first")
+			return
+		_complete_connection(record_name, port_name, marker.global_position)
+		return
+	if mode != Mode.CONNECT:
+		_set_mode(Mode.CONNECT)
+	_pending_marker = marker
+	_update_hud()
+	hud.toast("routing from %s.%s — lay waypoints, finish on an input (click or right-click the target)"
+		% [record_name, port_name])
 
 
 func _try_delete() -> void:

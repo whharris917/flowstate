@@ -8,6 +8,7 @@ extends Node3D
 
 var plant: Plant
 var hud: Hud
+var builder: BuildController
 
 # Knobs a world sets in _init(), before _ready runs.
 var plant_height := 0.0
@@ -41,7 +42,7 @@ func _ready() -> void:
 	var ladder_panel := LadderPanel.new()
 	layer.add_child(ladder_panel)
 	plant.ladder_panel = ladder_panel
-	var builder := BuildController.new()
+	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)
 	_after_plant()
