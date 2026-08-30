@@ -654,6 +654,11 @@ func _try_delete() -> void:
 		var gone := plant.remove_run(pipe) or plant.remove_placed_run(pipe)
 		hud.toast("removed run" if gone else "can't remove that run")
 		return
+	if view is CabinetView:
+		var cab_name := (view as CabinetView).cabinet_name
+		if plant.remove_cabinet(cab_name):
+			hud.toast("removed %s and its internal wiring" % cab_name)
+		return
 	if view.has_meta("structure_name"):
 		var struct_name := str(view.get_meta("structure_name"))
 		if plant.remove_structure(struct_name):

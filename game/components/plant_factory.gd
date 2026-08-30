@@ -18,6 +18,7 @@ const CATALOG: Array[Dictionary] = [
 const CATALOG_CONTROL: Array[Dictionary] = [
 	{"type": "valve", "label": "Control valve"},
 	{"type": "controller", "label": "PID controller"},
+	{"type": "cabinet", "label": "Control cabinet"},
 ]
 
 # Ghost/collision footprint (x, y, z) and the view's y-offset when the
@@ -34,13 +35,14 @@ const FOOTPRINTS := {
 	"float_switch": Vector3(0.25, 0.6, 0.25),
 	"valve": Vector3(0.7, 1.3, 0.55),
 	"controller": Vector3(0.5, 1.9, 0.5),
+	"cabinet": Vector3(1.4, 2.1, 0.75),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
 	"gauge_level": 0.0, "gauge_flow": 0.0, "gauge_dp": 0.0,
 	"gauge_press": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
-	"valve": 0.0, "controller": 0.0,
+	"valve": 0.0, "controller": 0.0, "cabinet": 0.0,
 }
 
 # Where each port's marker sits in the view's local space.
@@ -159,16 +161,24 @@ static func make_view(type_id: String, record: SimComponent,
 
 
 ## Call after the view is in the tree and set up: builds the typed port
-## markers connect mode clicks on (collision layer 2).
-static func attach_port_markers(view: Node3D, record: SimComponent, type_id: String) -> void:
+## markers connect mode clicks on (collision layer 2). Markers are
+## keyed "record:port" and MERGED into the view's existing set, so one
+## view (a cabinet) can carry markers for several records (its
+## terminals). anchors_override positions ports the type table can't.
+static func attach_port_markers(view: Node3D, record: SimComponent, type_id: String,
+		anchors_override: Dictionary = {}) -> void:
 	var anchors: Dictionary = PORT_ANCHORS.get(type_id, {})
-	var markers := {}
+	var markers: Dictionary = view.get_meta("port_markers", {})
 	for port_name: String in record.inputs:
-		var anchor: Vector3 = anchors.get(port_name, Vector3(0, 0.5, 0))
-		markers[port_name] = _marker(view, record, record.inputs[port_name], anchor, true)
+		var anchor: Vector3 = anchors_override.get(port_name,
+			anchors.get(port_name, Vector3(0, 0.5, 0)))
+		markers["%s:%s" % [record.comp_name, port_name]] = \
+			_marker(view, record, record.inputs[port_name], anchor, true)
 	for port_name: String in record.outputs:
-		var anchor: Vector3 = anchors.get(port_name, Vector3(0, 0.8, 0))
-		markers[port_name] = _marker(view, record, record.outputs[port_name], anchor, false)
+		var anchor: Vector3 = anchors_override.get(port_name,
+			anchors.get(port_name, Vector3(0, 0.8, 0)))
+		markers["%s:%s" % [record.comp_name, port_name]] = \
+			_marker(view, record, record.outputs[port_name], anchor, false)
 	view.set_meta("port_markers", markers)
 
 

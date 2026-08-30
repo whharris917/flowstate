@@ -11,6 +11,7 @@ const SAVE_VERSION := 4  # v4 adds structures; v3 saves still load
 var save_path: String = "user://save.json"
 var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox doesn't
 var config_panel: RunConfigPanel = null   # injected by the world after _ready
+var cabinet_panel: CabinetPanel = null    # injected by the world after _ready
 
 var sim: Simulation
 var historian: SimHistorian
@@ -25,6 +26,8 @@ var pump: SimPump
 var views: Dictionary = {}         # record name -> Node3D view
 var equip_types: Dictionary = {}   # record name -> type_id
 var protected: Dictionary = {}     # record name -> true (not deletable)
+var cabinets: Dictionary = {}      # name -> {node, plc, terminals}
+var member_of: Dictionary = {}     # record name -> cabinet name
 var structures: Dictionary = {}    # name -> {type, node}
 var runs: Dictionary = {}          # name -> {kind, node, points (plant-local)}
 var _wire_visuals: Array[Dictionary] = []   # {node, a, b}
@@ -126,6 +129,30 @@ func _exercise_build_api() -> void:
 		if connect_equipment("supply_tank", "level", gauge.comp_name, "process",
 				[Vector3(4.0, 0.35, -1.5)]) != "":
 			problems.append("rewire after disconnect refused")
+	# Cabinet: a field signal lands on a terminal, an internal wire
+	# carries it to the PLC, one rung mirrors it to an output channel,
+	# and another internal wire brings it back out — field to panel to
+	# field, the way a real cabinet earns its keep.
+	var cab := ""
+	var cab_plc := place_new("cabinet", _world(Vector3(3.0, 0.0, 6.5)), 0.0) as SimPLC
+	if cab_plc == null:
+		problems.append("place cabinet failed")
+	else:
+		cab = cab_plc.comp_name.trim_suffix("_plc")
+		if connect_equipment("level_switch", "contact", cab + "_td1", "in") != "":
+			problems.append("field wire to cabinet terminal refused")
+		if connect_equipment(cab + "_td1", "out", cab_plc.comp_name, "di_0", [], false) != "":
+			problems.append("internal terminal->PLC wire refused")
+		if cab_plc.set_program([{"coil": "do_0", "logic": [[{"ref": "di_0"}]]}]) != "":
+			problems.append("PLC refused a mirror rung")
+		if connect_equipment(cab_plc.comp_name, "do_0", cab + "_td2", "in", [], false) != "":
+			problems.append("internal PLC->terminal wire refused")
+		switch.set_band(150.0, 150.0)  # level < 150: contact closed for sure
+		for _i in 10:
+			sim.tick()
+		if (sim.get_component(cab + "_td2") as SimTerminal).t_out.value < 0.5:
+			problems.append("signal failed to traverse terminal -> PLC -> terminal")
+		switch.set_band(40.0, 80.0)
 	var real_path := save_path
 	save_path = "user://selfcheck_save.json"
 	var roundtrip := save_game() and load_game()
@@ -143,6 +170,19 @@ func _exercise_build_api() -> void:
 				routed = true
 		if not routed:
 			problems.append("routed waypoints lost in save/load round-trip")
+	if cab != "" and roundtrip:
+		var plc_after := sim.get_component(cab + "_plc") as SimPLC
+		if plc_after == null or plc_after.program.size() != 1:
+			problems.append("cabinet PLC program lost in save/load")
+		else:
+			(sim.get_component("level_switch") as SimFloatSwitch).set_band(150.0, 150.0)
+			for _i in 10:
+				sim.tick()
+			if (sim.get_component(cab + "_td2") as SimTerminal).t_out.value < 0.5:
+				problems.append("cabinet loop dead after save/load")
+			(sim.get_component("level_switch") as SimFloatSwitch).set_band(40.0, 80.0)
+		if not remove_cabinet(cab):
+			problems.append("cabinet removal failed")
 	if problems.is_empty():
 		print("[flowstate] build-api exercise OK — gauge %.1f kPa, %d components, %d wires"
 			% [reading, sim.components.size(), sim.wires.size()])
@@ -211,7 +251,106 @@ func place(type_id: String, name_: String, params: Dictionary,
 
 
 func place_new(type_id: String, world_pos: Vector3, rot_y: float) -> SimComponent:
+	if type_id == "cabinet":
+		var index := 1
+		while cabinets.has("cabinet_%d" % index):
+			index += 1
+		return place_cabinet("cabinet_%d" % index, world_pos, rot_y)
 	return place(type_id, sim.unique_name(type_id), {}, world_pos, rot_y, false)
+
+
+## ---- control cabinets -----------------------------------------------------
+## A cabinet is a composite: one PLC plus pre-provisioned terminal
+## strips (6 discrete, 4 analog), all real kernel components sharing
+## the enclosure view. Field wires land on the terminal markers on the
+## flanks; the internal hookup (terminal <-> PLC channel) is made in
+## the cabinet's schematic panel as hidden wires.
+
+const CAB_D_TERMS := 6
+const CAB_A_TERMS := 4
+
+func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> SimComponent:
+	if cabinets.has(name_):
+		return null
+	var plc := PlantFactory.make_record(sim, "plc", name_ + "_plc", {}) as SimPLC
+	sim.register_with_historian(plc)
+	var terms: Array[String] = []
+	for i in range(CAB_D_TERMS):
+		var term := PlantFactory.make_record(sim, "terminal",
+			"%s_td%d" % [name_, i + 1], {"kind": "discrete"})
+		sim.register_with_historian(term)
+		terms.append(term.comp_name)
+	for i in range(CAB_A_TERMS):
+		var term := PlantFactory.make_record(sim, "terminal",
+			"%s_ta%d" % [name_, i + 1], {"kind": "analog"})
+		sim.register_with_historian(term)
+		terms.append(term.comp_name)
+	var view := CabinetView.new()
+	view.position = to_local(world_pos)
+	view.rotation.y = rot_y
+	add_child(view)
+	view.setup(plc, name_)
+	view.config_cb = _configure_cabinet
+	# Terminal markers on the flanks: field wires land on the left
+	# (in), leave on the right (out). Discrete strip above analog.
+	for i in range(terms.size()):
+		var record := sim.get_component(terms[i])
+		var y := 1.72 - 0.13 * i
+		PlantFactory.attach_port_markers(view, record, "terminal",
+			{"in": Vector3(-0.72, y, 0.12), "out": Vector3(0.72, y, 0.12)})
+		views[terms[i]] = view
+		equip_types[terms[i]] = "terminal"
+		protected[terms[i]] = true
+		member_of[terms[i]] = name_
+	views[plc.comp_name] = view
+	equip_types[plc.comp_name] = "plc"
+	protected[plc.comp_name] = true
+	member_of[plc.comp_name] = name_
+	cabinets[name_] = {"node": view, "plc": plc.comp_name, "terminals": terms}
+	_revalidate_in = 3
+	return plc
+
+
+func remove_cabinet(name_: String) -> bool:
+	if not cabinets.has(name_):
+		return false
+	var entry: Dictionary = cabinets[name_]
+	var members: Array[String] = []
+	members.append(str(entry["plc"]))
+	for term: String in entry["terminals"]:
+		members.append(term)
+	for member in members:
+		sim.remove_component(member)
+		var keep: Array[Dictionary] = []
+		for visual in _wire_visuals:
+			if visual["a"] == member or visual["b"] == member:
+				if visual["node"] != null:
+					(visual["node"] as Node).queue_free()
+			else:
+				keep.append(visual)
+		_wire_visuals = keep
+		views.erase(member)
+		equip_types.erase(member)
+		protected.erase(member)
+		member_of.erase(member)
+	(entry["node"] as Node).queue_free()
+	cabinets.erase(name_)
+	_revalidate_in = 3
+	return true
+
+
+func _configure_cabinet(view: CabinetView) -> void:
+	if cabinet_panel != null:
+		cabinet_panel.open(self, view.cabinet_name)
+
+
+## Drop one internal (hidden) wire — the schematic panel's remove.
+func remove_internal_wire(visual: Dictionary) -> void:
+	var src := sim.get_component(str(visual["a"]))
+	var dst := sim.get_component(str(visual["b"]))
+	if src != null and dst != null:
+		sim.disconnect_ports(src, str(visual["a_port"]), dst, str(visual["b_port"]))
+	_wire_visuals.erase(visual)
 
 
 func remove_equipment(name_: String) -> bool:
@@ -221,7 +360,8 @@ func remove_equipment(name_: String) -> bool:
 	var keep: Array[Dictionary] = []
 	for visual in _wire_visuals:
 		if visual["a"] == name_ or visual["b"] == name_:
-			(visual["node"] as Node).queue_free()
+			if visual["node"] != null:
+				(visual["node"] as Node).queue_free()
 		else:
 			keep.append(visual)
 	_wire_visuals = keep
@@ -234,8 +374,11 @@ func remove_equipment(name_: String) -> bool:
 ## Connect two ports (by record/port name), optionally routed through
 ## player-laid waypoints (plant-local). Returns "" on success or a
 ## human-readable refusal — the kernel's wiring rules, surfaced.
+## visible=false makes an internal wire (cabinet hookup): a real
+## kernel wire with no 3D run behind it.
 func connect_equipment(src_name: String, src_port: String,
-		dst_name: String, dst_port: String, waypoints: Array = []) -> String:
+		dst_name: String, dst_port: String, waypoints: Array = [],
+		visible: bool = true) -> String:
 	var src := sim.get_component(src_name)
 	var dst := sim.get_component(dst_name)
 	if src == null or dst == null:
@@ -252,7 +395,14 @@ func connect_equipment(src_name: String, src_port: String,
 		return "%s already has a wire" % in_port.path()
 	if not sim.connect_ports(src, src_port, dst, dst_port):
 		return "connection refused"
-	_wire_visual(src_name, src_port, dst_name, dst_port, waypoints)
+	if visible:
+		_wire_visual(src_name, src_port, dst_name, dst_port, waypoints)
+	else:
+		_wire_visuals.append({
+			"node": null, "a": src_name, "a_port": src_port,
+			"b": dst_name, "b_port": dst_port, "waypoints": [],
+			"color": "", "label": "", "hidden": true,
+		})
 	return ""
 
 
@@ -397,6 +547,8 @@ func remove_run(view: PipeView) -> bool:
 func _revalidate_supports() -> void:
 	var space := get_world_3d().direct_space_state
 	for visual in _wire_visuals:
+		if visual["node"] == null:
+			continue  # internal cabinet wire, nothing physical to carry
 		var sparse: Array = [_marker_pos(str(visual["a"]), str(visual["a_port"]))]
 		sparse.append_array(visual["waypoints"])
 		sparse.append(_marker_pos(str(visual["b"]), str(visual["b_port"])))
@@ -449,7 +601,7 @@ func _marker_pos(record_name: String, port_name: String) -> Vector3:
 	if view == null:
 		return Vector3.ZERO
 	var markers: Dictionary = view.get_meta("port_markers", {})
-	var marker: Node3D = markers.get(port_name)
+	var marker: Node3D = markers.get("%s:%s" % [record_name, port_name])
 	return to_local(marker.global_position) if marker != null else view.position
 
 
@@ -645,6 +797,8 @@ func _exercise_supports() -> void:
 func save_game() -> bool:
 	var comps: Array[Dictionary] = []
 	for name_: String in views:
+		if member_of.has(name_):
+			continue  # cabinet members are saved with their cabinet
 		var record := sim.get_component(name_)
 		var view: Node3D = views[name_]
 		comps.append({
@@ -667,6 +821,7 @@ func save_game() -> bool:
 			"dst": visual["b"], "dst_port": visual["b_port"],
 			"waypoints": path_out,
 			"color": visual.get("color", ""), "label": visual.get("label", ""),
+			"hidden": visual.get("hidden", false),
 		})
 	var struct_list: Array = []
 	for name_: String in structures:
@@ -687,10 +842,21 @@ func save_game() -> bool:
 			pts.append([point.x, point.y, point.z])
 		run_list.append({"kind": entry["kind"], "name": name_, "points": pts,
 			"color": entry.get("color", ""), "label": entry.get("label", "")})
+	var cab_list: Array = []
+	for name_: String in cabinets:
+		var entry: Dictionary = cabinets[name_]
+		var node := entry["node"] as Node3D
+		var plc := sim.get_component(str(entry["plc"]))
+		cab_list.append({
+			"name": name_,
+			"pos": [node.global_position.x, node.global_position.y, node.global_position.z],
+			"rot_y": node.rotation.y,
+			"plc_state": plc.state_dict() if plc != null else {},
+		})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time,
 		"components": comps, "wires": wire_list, "structures": struct_list,
-		"runs": run_list,
+		"runs": run_list, "cabinets": cab_list,
 	}
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
@@ -735,20 +901,34 @@ func load_game() -> bool:
 	var payload := parsed as Dictionary
 
 	for name_: String in views:
-		(views[name_] as Node).queue_free()
+		if not member_of.has(name_):  # members share the cabinet node
+			(views[name_] as Node).queue_free()
 	for visual in _wire_visuals:
-		(visual["node"] as Node).queue_free()
+		if visual["node"] != null:
+			(visual["node"] as Node).queue_free()
 	for name_: String in structures:
 		((structures[name_] as Dictionary)["node"] as Node).queue_free()
 	for name_: String in runs:
 		((runs[name_] as Dictionary)["node"] as Node).queue_free()
+	for name_: String in cabinets:
+		((cabinets[name_] as Dictionary)["node"] as Node).queue_free()
 	views.clear()
 	equip_types.clear()
 	protected.clear()
 	structures.clear()
 	runs.clear()
+	cabinets.clear()
+	member_of.clear()
 	_wire_visuals.clear()
 	_new_graph()
+
+	for entry: Dictionary in payload.get("cabinets", []):
+		var pos_arr: Array = entry["pos"]
+		var plc := place_cabinet(entry["name"],
+			Vector3(pos_arr[0], pos_arr[1], pos_arr[2]),
+			float(entry.get("rot_y", 0.0)))
+		if plc != null:
+			plc.apply_state(entry.get("plc_state", {}))
 
 	for entry: Dictionary in payload.get("runs", []):
 		var pts: Array = []
@@ -779,7 +959,8 @@ func load_game() -> bool:
 		for point: Array in wire_entry.get("waypoints", []):
 			waypoints.append(Vector3(point[0], point[1], point[2]))
 		var error := connect_equipment(wire_entry["src"], wire_entry["src_port"],
-			wire_entry["dst"], wire_entry["dst_port"], waypoints)
+			wire_entry["dst"], wire_entry["dst_port"], waypoints,
+			not bool(wire_entry.get("hidden", false)))
 		if error == "" and str(wire_entry.get("color", "")) != "":
 			set_run_service((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
 				Color.html(str(wire_entry["color"])), str(wire_entry.get("label", "")))
