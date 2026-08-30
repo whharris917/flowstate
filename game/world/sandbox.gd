@@ -85,6 +85,16 @@ func _build_environment() -> void:
 	add_child(sun)
 
 
+## A commissioned still gives the sandbox something tall with real
+## detail on top: overhead pressure gauge on the platform, wired to the
+## vapor-line tap. E at the base (or the platform) cycles the reboiler.
+func _after_plant() -> void:
+	plant.place("column", "still_column", {}, Vector3(7.0, 0.08, -4.0), 0.0, true)
+	plant.place("gauge_press", "pi_still_top", {}, Vector3(7.5, 9.72, -3.4), PI, true)
+	plant.connect_equipment("still_column", "p_top", "pi_still_top", "process",
+		[Vector3(7.5, 10.9, -3.3)])
+
+
 func _process(delta: float) -> void:
 	super._process(delta)
 	_ground.position = Vector3(snappedf(player.global_position.x, 2.0), 0.0,

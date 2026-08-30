@@ -35,11 +35,18 @@ func _ready() -> void:
 	var builder := BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)
+	_after_plant()
 	hud.toast("WASD move · E use · B build · C connect · X remove · F5/F9 save/load")
 
 
 ## Environment, geometry, lighting. Override in each world.
 func _build_world() -> void:
+	pass
+
+
+## Commissioned equipment specific to one world, placed through the
+## plant's build API once it exists. Override where needed.
+func _after_plant() -> void:
 	pass
 
 

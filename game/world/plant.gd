@@ -58,6 +58,23 @@ func _exercise_build_api() -> void:
 	var pump2 := place_new("pump", _world(Vector3(6.0, 0.0, -1.0)), 0.0)
 	if pump2 == null or not remove_equipment(pump2.comp_name):
 		problems.append("place/remove pump failed")
+	# Column: full duty from hot standby should settle the overhead near
+	# 40 kPa within a couple of minutes, read honestly by a press gauge.
+	var col := place_new("column", _world(Vector3(10.0, 0.0, 2.0)), 0.0) as SimColumn
+	var pi_top := place_new("gauge_press", _world(Vector3(11.5, 0.0, 2.0)), 0.0)
+	if col == null or pi_top == null:
+		problems.append("place column/gauge failed")
+	else:
+		if connect_equipment(col.comp_name, "p_top", pi_top.comp_name, "process") != "":
+			problems.append("pressure gauge connect refused")
+		col.set_duty(1.0)
+		for _i in 2400:
+			sim.tick()
+		var kpa := (pi_top as SimGauge).reading
+		if kpa < 30.0 or kpa > 50.0:
+			problems.append("column overhead %.1f kPa outside expected range" % kpa)
+		if not remove_equipment(pi_top.comp_name) or not remove_equipment(col.comp_name):
+			problems.append("column cleanup failed")
 	# Air-cascade checks only where the aseptic suite exists (the hall).
 	var cascade := sim.get_component("suite_hvac") as SimAirCascade
 	if cascade != null:
@@ -140,8 +157,10 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as RelayView).setup(record as SimRelay)
 		"float_switch":
 			(view as FloatSwitchView).setup(record as SimFloatSwitch)
-		"gauge_level", "gauge_flow", "gauge_dp":
+		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press":
 			(view as GaugeView).setup(record as SimGauge)
+		"column":
+			(view as ColumnView).setup(record as SimColumn)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
 	PlantFactory.attach_port_markers(view, record, type_id)
@@ -346,6 +365,9 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"low_l": fs.low_l, "high_l": fs.high_l}
 	if record is SimGauge:
 		return {"liters_per_meter": (record as SimGauge).liters_per_meter}
+	if record is SimColumn:
+		var col := record as SimColumn
+		return {"charge_l": col.charge_l, "max_duty_kw": col.max_duty_kw}
 	return {}
 
 

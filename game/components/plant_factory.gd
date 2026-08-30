@@ -8,9 +8,11 @@ const CATALOG: Array[Dictionary] = [
 	{"type": "tank", "label": "Tank 100 L"},
 	{"type": "pump", "label": "Pump 4 L/s"},
 	{"type": "relay", "label": "Relay cabinet"},
-	{"type": "gauge_level", "label": "Pressure gauge"},
+	{"type": "gauge_level", "label": "Level gauge"},
 	{"type": "gauge_flow", "label": "Flow gauge"},
 	{"type": "gauge_dp", "label": "DP gauge"},
+	{"type": "gauge_press", "label": "Pressure gauge"},
+	{"type": "column", "label": "Distillation column"},
 ]
 
 # Ghost/collision footprint (x, y, z) and the view's y-offset when the
@@ -22,11 +24,14 @@ const FOOTPRINTS := {
 	"gauge_level": Vector3(0.5, 1.8, 0.5),
 	"gauge_flow": Vector3(0.5, 1.8, 0.5),
 	"gauge_dp": Vector3(0.5, 1.8, 0.5),
+	"gauge_press": Vector3(0.5, 1.8, 0.5),
+	"column": Vector3(1.7, 11.2, 1.7),
 	"float_switch": Vector3(0.25, 0.6, 0.25),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
 	"gauge_level": 0.0, "gauge_flow": 0.0, "gauge_dp": 0.0,
+	"gauge_press": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
 }
 
@@ -40,6 +45,9 @@ const PORT_ANCHORS := {
 	"gauge_flow": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
 	"gauge_dp": {"process_a": Vector3(-0.12, 0.25, 0.1), "process_b": Vector3(0.12, 0.25, 0.1),
 		"signal": Vector3(0.2, 1.32, 0)},
+	"gauge_press": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
+	# Overhead tap on the vapor line above the dished head.
+	"column": {"p_top": Vector3(0, 10.75, 0.5)},
 	# Pressure taps sit on the suite's walls, near the ceiling.
 	"air_cascade": {
 		"p_al1": Vector3(-23.5, 2.5, -4.35),
@@ -88,6 +96,11 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimGauge.new(name_, "flow"))
 		"gauge_dp":
 			return sim.add(SimGauge.new(name_, "dp_pa"))
+		"gauge_press":
+			return sim.add(SimGauge.new(name_, "press_kpa"))
+		"column":
+			return sim.add(SimColumn.new(name_,
+				params.get("charge_l", 60.0), params.get("max_duty_kw", 100.0)))
 		"air_cascade":
 			return sim.add(SimAirCascade.new(name_, AsepticSuite.ROOMS, AsepticSuite.DOORS))
 	push_error("unknown equipment type '%s'" % type_id)
@@ -106,8 +119,10 @@ static func make_view(type_id: String, record: SimComponent,
 			view = RelayView.new()
 		"float_switch":
 			view = FloatSwitchView.new()
-		"gauge_level", "gauge_flow", "gauge_dp":
+		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press":
 			view = GaugeView.new()
+		"column":
+			view = ColumnView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
 	if view == null:

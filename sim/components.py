@@ -60,13 +60,15 @@ class Tank(Component):
 class Gauge(Component):
     """Local indicator plus analog transmitter output.
 
-    Three kinds, all honest derivations of existing process state:
+    Four kinds, all honest derivations of existing process state:
       - "level_kpa": hydrostatic head at a vessel bottom. The process
         level (liters) becomes height via liters_per_meter, and
         P = rho*g*h (water) in kPa.
       - "flow": inline flow indication, L/s, read directly.
       - "dp_pa": differential pressure between two pressure taps
         (process_a - process_b), Pa — the cleanroom Magnehelic.
+      - "press_kpa": a single pressure tap. PROCESS_PRESSURE ports
+        carry Pa everywhere; this dial is scaled in kPa.
 
     The reading is mirrored on an analog signal output so it can later
     feed controllers — a gauge today, a transmitter when wired.
@@ -76,8 +78,9 @@ class Gauge(Component):
         "level_kpa": PortKind.PROCESS_LEVEL,
         "flow": PortKind.PROCESS_FLOW,
         "dp_pa": PortKind.PROCESS_PRESSURE,
+        "press_kpa": PortKind.PROCESS_PRESSURE,
     }
-    UNITS = {"level_kpa": "kPa", "flow": "L/s", "dp_pa": "Pa"}
+    UNITS = {"level_kpa": "kPa", "flow": "L/s", "dp_pa": "Pa", "press_kpa": "kPa"}
     WATER_KPA_PER_M = 9.81
 
     def __init__(
@@ -109,9 +112,84 @@ class Gauge(Component):
             self.reading = (
                 float(self.process.value) / self.liters_per_meter * self.WATER_KPA_PER_M
             )
+        elif self.kind == "press_kpa":
+            self.reading = float(self.process.value) / 1000.0
         else:
             self.reading = float(self.process.value)
         self.signal.value = self.reading
+
+
+class Column(Component):
+    """Batch distillation column at total reflux.
+
+    The sump charge heats under the reboiler duty; at the boiling point
+    the surplus duty becomes boilup, and vapor arriving faster than the
+    condenser vent passes it raises the overhead pressure — a
+    first-order lag that settles where boilup equals vent flow. Total
+    reflux for now: the condenser returns everything, so the charge is
+    conserved and the column is a pure temperature/pressure machine.
+    Product draws arrive with composition modelling in a later tier.
+
+    ``p_top`` is gauge pressure in Pa (PROCESS_PRESSURE ports carry Pa
+    everywhere). At full duty the overhead settles near 40 kPa in a few
+    pressure time constants; the sump ships in hot standby so the
+    response is watchable within seconds of raising the duty.
+    """
+
+    DUTY_STEPS = (0.0, 0.5, 1.0)
+    BOIL_C = 78.0
+    AMBIENT_C = 20.0
+    CP_KJ_PER_KG_K = 4.0
+    LATENT_KJ_PER_KG = 850.0
+    VENT_KG_PER_S_PA = 2.94e-6  # condenser/vent conductance
+    PRESSURE_TAU_S = 30.0       # overhead pressure first-order lag
+    COOL_TAU_S = 1800.0         # passive cooling with the duty off
+
+    def __init__(
+        self,
+        name: str,
+        charge_l: float = 60.0,
+        max_duty_kw: float = 100.0,
+        temp_c: float = 74.0,
+    ) -> None:
+        super().__init__(name)
+        if charge_l <= 0.0:
+            raise ValueError("charge_l must be positive")
+        if max_duty_kw <= 0.0:
+            raise ValueError("max_duty_kw must be positive")
+        self.charge_l = charge_l
+        self.max_duty_kw = max_duty_kw
+        self.temp_c = temp_c
+        self.duty_frac = 0.0
+        self.duty_kw = 0.0
+        self.boilup_kgps = 0.0
+        self.p_top_pa = 0.0
+        self.p_top = self.add_output("p_top", PortKind.PROCESS_PRESSURE)
+        self.add_observable("temp_c", "temp_c")
+        self.add_observable("duty_kw", "duty_kw")
+        self.add_observable("boilup_kgps", "boilup_kgps")
+
+    def set_duty(self, frac: float) -> None:
+        if not 0.0 <= frac <= 1.0:
+            raise ValueError("duty fraction must be within [0, 1]")
+        self.duty_frac = frac
+
+    def tick(self, dt: float) -> None:
+        self.duty_kw = self.duty_frac * self.max_duty_kw
+        mass_kg = self.charge_l  # aqueous charge, ~1 kg/L
+        if self.duty_kw > 0.0 and self.temp_c < self.BOIL_C:
+            rise = self.duty_kw / (mass_kg * self.CP_KJ_PER_KG_K) * dt
+            self.temp_c = min(self.BOIL_C, self.temp_c + rise)
+            self.boilup_kgps = 0.0
+        elif self.duty_kw > 0.0:
+            self.boilup_kgps = self.duty_kw / self.LATENT_KJ_PER_KG
+        else:
+            self.temp_c += (self.AMBIENT_C - self.temp_c) * dt / self.COOL_TAU_S
+            self.boilup_kgps = 0.0
+        self.p_top_pa += (
+            self.boilup_kgps / self.VENT_KG_PER_S_PA - self.p_top_pa
+        ) / self.PRESSURE_TAU_S * dt
+        self.p_top.value = self.p_top_pa
 
 
 class AirCascade(Component):

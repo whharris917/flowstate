@@ -1,6 +1,6 @@
 class_name BuildController
 extends Node
-## Build and connect modes. B toggles build (1-5 pick equipment, R
+## Build and connect modes. B toggles build (1-8 pick equipment, R
 ## rotates, click places), C toggles connect (click an output port,
 ## then an input port — the kernel's wiring rules decide), X removes
 ## player-placed equipment. The ghost is grid-snapped and colored by
