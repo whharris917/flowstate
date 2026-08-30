@@ -84,13 +84,15 @@ func _build_views() -> void:
 	add_child(pump_view)
 	pump_view.setup(pump)
 
+	# Wall face is at z=-4.85; keep every wall-mounted box fully proud of
+	# it or coplanar surfaces z-fight and flicker.
 	var relay_view := RelayView.new()
-	relay_view.position = Vector3(-2.5, 1.5, -4.78)
+	relay_view.position = Vector3(-2.5, 1.5, -4.74)
 	add_child(relay_view)
 	relay_view.setup(relay)
 
 	var hmi_view := HmiView.new()
-	hmi_view.position = Vector3(-4.6, 1.6, -4.85)
+	hmi_view.position = Vector3(-4.6, 1.6, -4.75)
 	add_child(hmi_view)
 	hmi_view.setup(historian, tank, switch, relay, pump)
 
