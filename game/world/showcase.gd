@@ -54,16 +54,25 @@ static func _unit_100(plant: Plant) -> void:
 	plant.place_structure("s_railing", "u100_rail_w", Vector3(14.05, 3.33, -3.9), PI / 2.0, 3.8)
 	plant.place_structure("s_stairs", "u100_stairs", Vector3(20.1, 0.0, -3.9), PI / 2.0)
 
-	# The loop: LV-101 fills FT-100 against a constant drain; LT-101
-	# reads the head, LIC-101 drives the valve. Settles at SP 15 kPa.
+	# The loop: LV-101 fills FT-100 from the battery-limit station
+	# against a real drain; LT-101 reads the head, LIC-101 drives the
+	# valve. Settles at SP 15 kPa, with every liter metered.
+	plant.place("source", "bl_101", {}, Vector3(11.0, 0.0, -5.6), 0.0, false)
 	plant.place("valve", "lv_101", {"cv_lps": 6.0}, Vector3(13.8, 0.0, -3.5), 0.0, false)
-	plant.place("tank", "ft_100", {"capacity_l": 200.0, "level_l": 40.0, "drain_lps": 2.5},
+	plant.place("tank", "ft_100", {"capacity_l": 200.0, "level_l": 40.0},
 		Vector3(17.0, 0.0, -3.5), 0.0, false)
+	plant.place("drain", "du_101", {"rate_lps": 2.5}, Vector3(17.0, 0.0, -6.1), 0.0, false)
 	plant.place("gauge_level", "lt_101", {}, Vector3(18.9, 0.0, -2.6), 0.0, false)
 	plant.place("controller", "lic_101", {"kp": 8.0, "ki": 1.5, "sp": 15.0},
 		Vector3(13.2, 0.0, -5.8), 0.0, false)
+	plant.connect_equipment("bl_101", "level", "lv_101", "supply",
+		[plant.to_local(Vector3(12.0, 0.3, -4.4))])
+	plant.connect_equipment("lv_101", "draw", "bl_101", "draw",
+		[plant.to_local(Vector3(12.2, 0.3, -4.6))])
 	plant.connect_equipment("lv_101", "flow", "ft_100", "in_flow",
 		[plant.to_local(Vector3(15.4, 0.3, -3.5))])
+	plant.connect_equipment("ft_100", "level", "du_101", "level")
+	plant.connect_equipment("du_101", "draw", "ft_100", "out_flow")
 	plant.connect_equipment("ft_100", "level", "lt_101", "process")
 	plant.connect_equipment("lt_101", "signal", "lic_101", "pv",
 		[plant.to_local(Vector3(18.9, 0.3, -5.4)), plant.to_local(Vector3(14.6, 0.3, -5.8))])
@@ -112,13 +121,22 @@ static func _mcc_and_batch(plant: Plant) -> void:
 	])
 	plc.set_timer_preset(0, 2.0)
 
-	# The batch tank and its feed pump, run from the cabinet.
-	plant.place("tank", "bt_200", {"capacity_l": 150.0, "level_l": 30.0, "drain_lps": 1.2},
+	# The batch tank and its feed pump, run from the cabinet, drawing
+	# from a dedicated battery-limit station and draining for real.
+	plant.place("source", "bl_201", {}, Vector3(13.4, 0.0, 9.8), 0.0, false)
+	plant.place("tank", "bt_200", {"capacity_l": 150.0, "level_l": 30.0},
 		Vector3(19.0, 0.0, 8.2), 0.0, false)
+	plant.place("drain", "du_201", {"rate_lps": 1.2}, Vector3(20.8, 0.0, 9.4), 0.0, false)
 	plant.place("float_switch", "ls_201", {"low_l": 40.0, "high_l": 110.0},
 		Vector3(17.6, 1.32, 8.2), 0.0, false)
 	plant.place("pump", "feed_pump", {"rated_lps": 3.0}, Vector3(15.4, 0.0, 8.4), 0.0, false)
 	plant.place("gauge_flow", "fi_201", {}, Vector3(16.6, 0.0, 9.6), 0.0, false)
+	plant.connect_equipment("bl_201", "level", "feed_pump", "suction",
+		[plant.to_local(Vector3(14.2, 0.3, 9.2))])
+	plant.connect_equipment("feed_pump", "draw", "bl_201", "draw",
+		[plant.to_local(Vector3(14.4, 0.3, 9.4))])
+	plant.connect_equipment("bt_200", "level", "du_201", "level")
+	plant.connect_equipment("du_201", "draw", "bt_200", "out_flow")
 	plant.connect_equipment("bt_200", "level", "ls_201", "level")
 	plant.connect_equipment("ls_201", "contact", t + "1", "in",
 		[plant.to_local(Vector3(17.3, 0.3, 7.2)), plant.to_local(Vector3(15.2, 0.3, 6.8))])

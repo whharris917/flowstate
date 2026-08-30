@@ -11,10 +11,13 @@ var rated_lps: float
 var mode: String = "auto"
 var running: bool = false
 var starts: int = 0
+var dry_run_s: float = 0.0
 
 var run: SimInputPort
 var power: SimInputPort
+var suction: SimInputPort
 var flow: SimOutputPort
+var draw: SimOutputPort
 
 
 func _init(name_: String, rated_lps_: float, mode_: String = "auto") -> void:
@@ -24,8 +27,11 @@ func _init(name_: String, rated_lps_: float, mode_: String = "auto") -> void:
 	set_mode(mode_)
 	run = add_input("run", SimTypes.PortKind.SIGNAL_DISCRETE)
 	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
+	suction = add_input("suction", SimTypes.PortKind.PROCESS_LEVEL)
 	flow = add_output("flow", SimTypes.PortKind.PROCESS_FLOW)
+	draw = add_output("draw", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("starts", &"starts")
+	add_observable("dry_run_s", &"dry_run_s")
 
 
 func set_mode(mode_: String) -> void:
@@ -39,7 +45,7 @@ func next_mode() -> void:
 	set_mode(MODES[(MODES.find(mode) + 1) % MODES.size()])
 
 
-func tick(_dt: float) -> void:
+func tick(dt: float) -> void:
 	var should_run: bool
 	if mode == "hand":
 		should_run = true
@@ -52,15 +58,22 @@ func tick(_dt: float) -> void:
 	if should_run and not running:
 		starts += 1
 	running = should_run
-	flow.value = rated_lps if running else 0.0
+	# The motor can spin against an empty suction, but nothing moves
+	# and the seal wears.
+	var wet := suction.value > 0.05
+	if running and not wet:
+		dry_run_s += dt
+	var delivered := rated_lps if (running and wet) else 0.0
+	flow.value = delivered
+	draw.value = delivered
 
 
 func state_dict() -> Dictionary:
-	return {"mode": mode, "running": running, "starts": starts}
+	return {"mode": mode, "running": running, "starts": starts, "dry_run_s": dry_run_s}
 
 
 func apply_state(state: Dictionary) -> void:
 	mode = state.get("mode", mode)
 	running = state.get("running", running)
 	starts = int(state.get("starts", starts))
-	flow.value = rated_lps if running else 0.0
+	dry_run_s = state.get("dry_run_s", dry_run_s)

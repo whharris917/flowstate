@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from conftest import wire_supply
 from sim.components import ControlValve, Gauge, Tank, Terminal
 from sim.control import PID, PLC
 from sim.core import Simulation
@@ -131,6 +132,7 @@ class TestPIDLoop:
         gauge = sim.add(Gauge("lt", "level_kpa"))
         pid = sim.add(PID("lic", kp=8.0, ki=1.5, sp=15.0))
         valve = sim.add(ControlValve("lv", cv_lps=6.0))
+        wire_supply(sim, valve)
         sim.connect(tank, "level", gauge, "process")
         sim.connect(gauge, "signal", pid, "pv")
         sim.connect(pid, "out", valve, "cmd")
@@ -164,6 +166,7 @@ class TestValveAndTerminal:
     def test_positioner_lag(self) -> None:
         sim = Simulation(dt=0.05)
         valve = sim.add(ControlValve("cv", cv_lps=10.0, tau_s=1.0))
+        valve.supply.value = 1.0e9
         valve.cmd.value = 100.0
         for _ in range(20):  # 1.0 s in scan steps: ~63 % of the way
             valve.tick(0.05)

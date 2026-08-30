@@ -37,6 +37,7 @@ class Tank(Component):
         self.overflowed_l = 0.0
         self.ran_dry_ticks = 0
         self.in_flow = self.add_input("in_flow", PortKind.PROCESS_FLOW)
+        self.out_flow = self.add_input("out_flow", PortKind.PROCESS_FLOW)
         self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
         self.level.value = level_l
         self.add_observable("overflowed_l", "overflowed_l")
@@ -44,10 +45,12 @@ class Tank(Component):
 
     def tick(self, dt: float) -> None:
         inflow = float(self.in_flow.value)
-        # Can't drain more than the tank holds this tick.
+        # Demand: equipment drawing out (pumps, drains) plus the legacy
+        # constant-drain parameter. Can't remove more than it holds.
+        demand = self.drain_lps + float(self.out_flow.value)
         available = self.level_l + inflow * dt
-        drained = min(self.drain_lps * dt, available)
-        if drained < self.drain_lps * dt:
+        drained = min(demand * dt, available)
+        if drained < demand * dt - 1e-9:
             self.ran_dry_ticks += 1
         new_level = self.level_l + inflow * dt - drained
         if new_level > self.capacity_l:
@@ -119,6 +122,55 @@ class Gauge(Component):
         self.signal.value = self.reading
 
 
+class Source(Component):
+    """Battery-limit utility connection: the honest root of every flow
+    path, the way MainsFeed is for power. Availability is unlimited —
+    the wider utility system is off-plot — but everything drawn
+    through it is metered (``total_l``). Pumps and valves wire their
+    suction to ``level`` and their ``draw`` back here.
+    """
+
+    AVAILABLE_L = 1.0e9
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.total_l = 0.0
+        self.draw = self.add_input("draw", PortKind.PROCESS_FLOW)
+        self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
+        self.level.value = self.AVAILABLE_L
+        self.add_observable("total_l", "total_l")
+
+    def tick(self, dt: float) -> None:
+        self.total_l += float(self.draw.value) * dt
+        self.level.value = self.AVAILABLE_L
+
+
+class Drain(Component):
+    """Gravity drain to sewer or recovery: pulls up to ``rate_lps``
+    whenever the connected vessel holds liquid and the drain is open,
+    and meters everything it swallows. Wire vessel ``level`` in and
+    ``draw`` back to the vessel's ``out_flow``.
+    """
+
+    def __init__(self, name: str, rate_lps: float = 1.0) -> None:
+        super().__init__(name)
+        if rate_lps <= 0.0:
+            raise ValueError("rate_lps must be positive")
+        self.rate_lps = rate_lps
+        self.is_open = True
+        self.total_l = 0.0
+        self.level = self.add_input("level", PortKind.PROCESS_LEVEL)
+        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self.add_observable("total_l", "total_l")
+
+    def tick(self, dt: float) -> None:
+        lvl = float(self.level.value)
+        rate = self.rate_lps if (self.is_open and lvl > 0.0) else 0.0
+        rate = min(rate, lvl / dt) if dt > 0.0 else rate
+        self.draw.value = rate
+        self.total_l += rate * dt
+
+
 class MainsFeed(Component):
     """The plant's electrical feeder: one always-energized POWER output
     at its voltage class. Load accounting and breakers arrive with the
@@ -151,9 +203,9 @@ class PowerSupply(Component):
 
 class ControlValve(Component):
     """Air-actuated control valve: 0-100 % analog command, first-order
-    positioner lag, flow = position/100 * cv_lps. Draws from an
-    unlimited supply main for now, like Pump; suction-side modelling
-    arrives when the process layer grows real sources.
+    positioner lag, flow = position/100 * cv_lps. It passes only what
+    its ``supply`` offers: wire an upstream ``level`` in and ``draw``
+    back — an empty header means no flow no matter the command.
     """
 
     def __init__(self, name: str, cv_lps: float = 6.0, tau_s: float = 1.0) -> None:
@@ -166,13 +218,18 @@ class ControlValve(Component):
         self.tau_s = tau_s
         self.position = 0.0  # percent, follows the command with a lag
         self.cmd = self.add_input("cmd", PortKind.SIGNAL_ANALOG)
+        self.supply = self.add_input("supply", PortKind.PROCESS_LEVEL)
         self.flow = self.add_output("flow", PortKind.PROCESS_FLOW)
+        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("position", "position")
 
     def tick(self, dt: float) -> None:
         target = max(0.0, min(100.0, float(self.cmd.value)))
         self.position += (target - self.position) * dt / self.tau_s
-        self.flow.value = self.position / 100.0 * self.cv_lps
+        wet = float(self.supply.value) > 0.05
+        delivered = self.position / 100.0 * self.cv_lps if wet else 0.0
+        self.flow.value = delivered
+        self.draw.value = delivered
 
 
 class Terminal(Component):
@@ -416,10 +473,11 @@ class Pump(Component):
 
     In ``auto`` the motor follows the ``run`` input; ``hand`` forces it
     on and ``off`` forces it off, exactly like the selector on a real
-    motor starter. Draws from an unlimited supply main for now;
-    suction-side modelling arrives when the process layer grows real
-    sources. ``starts`` is the motor-wear counterpart to the relay's
-    ``cycles``.
+    motor starter. The pump moves only fluid it actually pulls: wire
+    ``suction`` to an upstream vessel's or source's ``level`` and
+    ``draw`` back to its ``out_flow``/``draw`` — running against an
+    empty suction delivers nothing and accrues ``dry_run_s`` wear.
+    ``starts`` is the motor-wear counterpart to the relay's ``cycles``.
     """
 
     MODES = ("hand", "off", "auto")
@@ -433,10 +491,14 @@ class Pump(Component):
         self.set_mode(mode)
         self.running = False
         self.starts = 0
+        self.dry_run_s = 0.0
         self.run = self.add_input("run", PortKind.SIGNAL_DISCRETE)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
+        self.suction = self.add_input("suction", PortKind.PROCESS_LEVEL)
         self.flow = self.add_output("flow", PortKind.PROCESS_FLOW)
+        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("starts", "starts")
+        self.add_observable("dry_run_s", "dry_run_s")
 
     def set_mode(self, mode: str) -> None:
         if mode not in self.MODES:
@@ -455,4 +517,11 @@ class Pump(Component):
         if run and not self.running:
             self.starts += 1
         self.running = run
-        self.flow.value = self.rated_lps if self.running else 0.0
+        # The motor can spin against an empty suction, but nothing
+        # moves and the seal wears.
+        wet = float(self.suction.value) > 0.05
+        if self.running and not wet:
+            self.dry_run_s += dt
+        delivered = self.rated_lps if (self.running and wet) else 0.0
+        self.flow.value = delivered
+        self.draw.value = delivered

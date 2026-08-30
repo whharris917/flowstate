@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import wire_power
+from conftest import wire_power, wire_supply
 from sim.components import FloatSwitch, Pump, Relay, Tank
 from sim.core import Simulation
 
@@ -14,6 +14,7 @@ class TestTank:
         tank = sim.add(Tank("t", capacity_l=100.0, level_l=10.0))
         pump = sim.add(Pump("p", rated_lps=2.0, mode="hand"))
         wire_power(sim, pump)
+        wire_supply(sim, pump)
         sim.connect(pump, "flow", tank, "in_flow")
         sim.run(10.0)
         # Pump flow reaches the tank one scan late; 9.9 s of flow landed.
@@ -86,6 +87,7 @@ class TestPump:
     def test_flow_follows_run_in_auto_and_counts_starts(self) -> None:
         pump = Pump("p", rated_lps=4.0)
         pump.power.value = 1.0
+        pump.suction.value = 1.0e9
         pump.run.value = True
         pump.tick(0.05)
         assert pump.flow.value == 4.0
@@ -124,6 +126,7 @@ class TestClosedLoop:
         relay = sim.add(Relay("r"))
         pump = sim.add(Pump("p", rated_lps=4.0))
         wire_power(sim, pump)
+        wire_supply(sim, pump)
         sim.connect(tank, "level", switch, "level")
         sim.connect(switch, "contact", relay, "coil")
         sim.connect(relay, "contact", pump, "run")

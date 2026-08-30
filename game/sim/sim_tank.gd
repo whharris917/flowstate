@@ -11,6 +11,7 @@ var overflowed_l: float = 0.0
 var ran_dry_ticks: int = 0
 
 var in_flow: SimInputPort
+var out_flow: SimInputPort
 var level: SimOutputPort
 
 
@@ -22,6 +23,7 @@ func _init(name_: String, capacity_l_: float, level_l_: float = 0.0, drain_lps_:
 	level_l = level_l_
 	drain_lps = drain_lps_
 	in_flow = add_input("in_flow", SimTypes.PortKind.PROCESS_FLOW)
+	out_flow = add_input("out_flow", SimTypes.PortKind.PROCESS_FLOW)
 	level = add_output("level", SimTypes.PortKind.PROCESS_LEVEL)
 	level.value = level_l
 	add_observable("overflowed_l", &"overflowed_l")
@@ -30,10 +32,12 @@ func _init(name_: String, capacity_l_: float, level_l_: float = 0.0, drain_lps_:
 
 func tick(dt: float) -> void:
 	var inflow := in_flow.value
-	# Can't drain more than the tank holds this tick.
+	# Demand: equipment drawing out (pumps, drains) plus the legacy
+	# constant-drain parameter. Can't remove more than it holds.
+	var demand := drain_lps + out_flow.value
 	var available := level_l + inflow * dt
-	var drained := minf(drain_lps * dt, available)
-	if drained < drain_lps * dt:
+	var drained := minf(demand * dt, available)
+	if drained < demand * dt - 1e-9:
 		ran_dry_ticks += 1
 	var new_level := level_l + inflow * dt - drained
 	if new_level > capacity_l:

@@ -8,16 +8,21 @@ const CATALOG: Array[Dictionary] = [
 	{"type": "tank", "label": "Tank 100 L"},
 	{"type": "pump", "label": "Pump 4 L/s"},
 	{"type": "relay", "label": "Relay cabinet"},
+	{"type": "column", "label": "Distillation column"},
+	{"type": "source", "label": "Supply (battery limit)"},
+	{"type": "drain", "label": "Drain / sewer"},
+]
+
+const CATALOG_INSTRUMENTS: Array[Dictionary] = [
 	{"type": "gauge_level", "label": "Level gauge"},
 	{"type": "gauge_flow", "label": "Flow gauge"},
 	{"type": "gauge_dp", "label": "DP gauge"},
 	{"type": "gauge_press", "label": "Pressure gauge"},
-	{"type": "column", "label": "Distillation column"},
+	{"type": "controller", "label": "PID controller"},
 ]
 
 const CATALOG_CONTROL: Array[Dictionary] = [
 	{"type": "valve", "label": "Control valve"},
-	{"type": "controller", "label": "PID controller"},
 	{"type": "cabinet", "label": "Control cabinet"},
 	{"type": "mains", "label": "Mains feeder 480VAC"},
 	{"type": "psu", "label": "Power supply 24VDC"},
@@ -40,6 +45,8 @@ const FOOTPRINTS := {
 	"cabinet": Vector3(1.4, 2.1, 0.75),
 	"mains": Vector3(0.85, 1.85, 0.65),
 	"psu": Vector3(0.65, 1.6, 0.45),
+	"source": Vector3(0.75, 1.9, 0.75),
+	"drain": Vector3(0.95, 0.5, 0.95),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
@@ -47,13 +54,14 @@ const Y_OFFSETS := {
 	"gauge_press": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
 	"valve": 0.0, "controller": 0.0, "cabinet": 0.0,
-	"mains": 0.0, "psu": 0.0,
+	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
 }
 
 # Where each port's marker sits in the view's local space.
 const PORT_ANCHORS := {
 	"tank": {"in_flow": Vector3(0, 2.35, 0), "level": Vector3(0.95, 1.1, 0)},
 	"pump": {"run": Vector3(-0.3, 0.55, 0.25), "power": Vector3(-0.3, 0.25, -0.25),
+		"suction": Vector3(-0.42, 0.42, 0), "draw": Vector3(-0.42, 0.2, 0),
 		"flow": Vector3(0.42, 0.42, 0)},
 	"relay": {"coil": Vector3(-0.18, -0.22, 0.14), "contact": Vector3(0.18, -0.22, 0.14)},
 	"float_switch": {"level": Vector3(0, -0.22, 0.12), "contact": Vector3(0.14, 0.2, 0.1)},
@@ -62,7 +70,10 @@ const PORT_ANCHORS := {
 	"gauge_dp": {"process_a": Vector3(-0.12, 0.25, 0.1), "process_b": Vector3(0.12, 0.25, 0.1),
 		"signal": Vector3(0.2, 1.32, 0)},
 	"gauge_press": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
-	"valve": {"cmd": Vector3(-0.28, 0.85, 0.12), "flow": Vector3(0.36, 0.32, 0)},
+	"valve": {"cmd": Vector3(-0.28, 0.85, 0.12), "supply": Vector3(-0.38, 0.32, 0),
+		"draw": Vector3(-0.38, 0.15, 0), "flow": Vector3(0.36, 0.32, 0)},
+	"source": {"level": Vector3(0.5, 1.55, 0), "draw": Vector3(0.32, 1.3, 0)},
+	"drain": {"level": Vector3(0.45, 0.5, 0.2), "draw": Vector3(0.45, 0.3, -0.2)},
 	"controller": {"pv": Vector3(-0.16, 1.05, 0.12), "out": Vector3(0.16, 1.05, 0.12)},
 	"mains": {"power": Vector3(0.5, 1.1, 0)},
 	"psu": {"ac_in": Vector3(-0.32, 1.2, 0.1), "dc_out": Vector3(0.32, 1.2, 0.1)},
@@ -142,6 +153,10 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimMainsFeed.new(name_, params.get("spec", "480VAC")))
 		"psu":
 			return sim.add(SimPowerSupply.new(name_))
+		"source":
+			return sim.add(SimSource.new(name_))
+		"drain":
+			return sim.add(SimDrain.new(name_, params.get("rate_lps", 1.0)))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -170,6 +185,10 @@ static func make_view(type_id: String, record: SimComponent,
 			view = MainsView.new()
 		"psu":
 			view = PsuView.new()
+		"source":
+			view = SourceView.new()
+		"drain":
+			view = DrainView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
 	if view == null:

@@ -32,7 +32,9 @@ def test_registers_ports_and_observables_as_tags() -> None:
         "relay.contact",
         "relay.cycles",
         "pump.flow",
+        "pump.draw",
         "pump.starts",
+        "pump.dry_run_s",
     }
 
 

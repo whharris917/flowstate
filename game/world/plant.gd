@@ -72,6 +72,12 @@ func _exercise_build_api() -> void:
 	var pump2 := place_new("pump", _world(Vector3(6.0, 0.0, -1.0)), 0.0)
 	if pump2 == null or not remove_equipment(pump2.comp_name):
 		problems.append("place/remove pump failed")
+	var src_t := place_new("source", _world(Vector3(7.5, 0.0, 0.5)), 0.0)
+	var drn_t := place_new("drain", _world(Vector3(8.6, 0.0, 0.5)), 0.0)
+	if src_t == null or drn_t == null:
+		problems.append("place source/drain failed")
+	elif not remove_equipment(drn_t.comp_name) or not remove_equipment(src_t.comp_name):
+		problems.append("source/drain removal failed")
 	# Column: full duty from hot standby should settle the overhead near
 	# 40 kPa within a couple of minutes, read honestly by a press gauge.
 	var col := place_new("column", _world(Vector3(10.0, 0.0, 2.0)), 0.0) as SimColumn
@@ -292,6 +298,10 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as MainsView).setup(record as SimMainsFeed)
 		"psu":
 			(view as PsuView).setup(record as SimPowerSupply)
+		"source":
+			(view as SourceView).setup(record as SimSource)
+		"drain":
+			(view as DrainView).setup(record as SimDrain)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
 	PlantFactory.attach_port_markers(view, record, type_id)
@@ -863,7 +873,7 @@ func _build_initial_plant() -> void:
 	switch = place("float_switch", "level_switch", {"low_l": 40.0, "high_l": 80.0},
 		_world(Vector3(1.55, 1.32, -2.0)), 0.0, true) as SimFloatSwitch
 	tank = place("tank", "supply_tank",
-		{"capacity_l": 100.0, "level_l": 70.0, "drain_lps": 1.5},
+		{"capacity_l": 100.0, "level_l": 70.0},
 		_world(Vector3(2.5, 0, -2.0)), 0.0, true) as SimTank
 	relay = place("relay", "pump_relay", {},
 		_world(Vector3(-2.5, 1.5, -4.74)) - Vector3(0, PlantFactory.Y_OFFSETS["relay"], 0),
@@ -871,9 +881,19 @@ func _build_initial_plant() -> void:
 	pump = place("pump", "fill_pump", {"rated_lps": 4.0},
 		_world(Vector3(-0.5, 0, -2.6)), 0.0, true) as SimPump
 	place("mains", "plant_mains", {}, _world(Vector3(-4.4, 0, -1.2)), 0.0, true)
+	place("source", "raw_water", {}, _world(Vector3(-6.4, 0, -2.9)), 0.0, true)
+	place("drain", "du_100", {"rate_lps": 1.5}, _world(Vector3(4.7, 0, -1.4)), 0.0, true)
 	# Power first — nothing runs without a cable back to the feeder.
 	connect_equipment("plant_mains", "power", "fill_pump", "power",
 		[Vector3(-3.6, 0.3, -1.6), Vector3(-1.0, 0.3, -2.9)])
+	# The flow path is honest end to end: the pump pulls raw water from
+	# the battery limit, and the tank's consumption is a real drain.
+	connect_equipment("raw_water", "level", "fill_pump", "suction",
+		[Vector3(-5.6, 0.3, -3.1), Vector3(-1.2, 0.3, -3.1)])
+	connect_equipment("fill_pump", "draw", "raw_water", "draw",
+		[Vector3(-1.4, 0.3, -3.3), Vector3(-5.8, 0.3, -3.3)])
+	connect_equipment("supply_tank", "level", "du_100", "level")
+	connect_equipment("du_100", "draw", "supply_tank", "out_flow")
 	# Signal runs drop to the floor and run along it — the support rule
 	# applies to the commissioned loop too.
 	connect_equipment("supply_tank", "level", "level_switch", "level")
@@ -914,12 +934,18 @@ func _build_hmi() -> void:
 
 func _self_check() -> void:
 	var check := Simulation.new(SIM_DT)
-	var c_tank := check.add(SimTank.new("t", 100.0, 70.0, 1.5)) as SimTank
+	var c_tank := check.add(SimTank.new("t", 100.0, 70.0)) as SimTank
 	var c_switch := check.add(SimFloatSwitch.new("s", 40.0, 80.0)) as SimFloatSwitch
 	var c_relay := check.add(SimRelay.new("r")) as SimRelay
 	var c_pump := check.add(SimPump.new("p", 4.0)) as SimPump
 	var c_mains := check.add(SimMainsFeed.new("m")) as SimMainsFeed
+	var c_src := check.add(SimSource.new("bl")) as SimSource
+	var c_drn := check.add(SimDrain.new("d", 1.5)) as SimDrain
 	check.connect_ports(c_mains, "power", c_pump, "power")
+	check.connect_ports(c_src, "level", c_pump, "suction")
+	check.connect_ports(c_pump, "draw", c_src, "draw")
+	check.connect_ports(c_tank, "level", c_drn, "level")
+	check.connect_ports(c_drn, "draw", c_tank, "out_flow")
 	check.connect_ports(c_tank, "level", c_switch, "level")
 	check.connect_ports(c_switch, "contact", c_relay, "coil")
 	check.connect_ports(c_relay, "contact", c_pump, "run")
@@ -944,6 +970,9 @@ func _control_self_check() -> void:
 	var lt := check.add(SimGauge.new("lt", "level_kpa")) as SimGauge
 	var lic := check.add(SimPID.new("lic", 8.0, 1.5, 0.0, 15.0)) as SimPID
 	var lv := check.add(SimControlValve.new("lv", 6.0)) as SimControlValve
+	var supply := check.add(SimSource.new("bl")) as SimSource
+	check.connect_ports(supply, "level", lv, "supply")
+	check.connect_ports(lv, "draw", supply, "draw")
 	check.connect_ports(tank_, "level", lt, "process")
 	check.connect_ports(lt, "signal", lic, "pv")
 	check.connect_ports(lic, "out", lv, "cmd")
@@ -1155,6 +1184,8 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"kp": pid.kp, "ki": pid.ki, "kd": pid.kd, "sp": pid.sp}
 	if record is SimTerminal:
 		return {"kind": (record as SimTerminal).kind}
+	if record is SimDrain:
+		return {"rate_lps": (record as SimDrain).rate_lps}
 	return {}
 
 

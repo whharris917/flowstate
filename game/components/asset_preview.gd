@@ -47,6 +47,14 @@ static func build(type_id: String) -> Node3D:
 				(node as ControlValveView).setup(record as SimControlValve)
 			"controller":
 				(node as PIDView).setup(record as SimPID)
+			"mains":
+				(node as MainsView).setup(record as SimMainsFeed)
+			"psu":
+				(node as PsuView).setup(record as SimPowerSupply)
+			"source":
+				(node as SourceView).setup(record as SimSource)
+			"drain":
+				(node as DrainView).setup(record as SimDrain)
 		node.set_meta("scratch_sim", scratch)
 	if node == null:
 		return null

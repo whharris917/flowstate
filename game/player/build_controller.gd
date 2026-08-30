@@ -76,8 +76,9 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	icons = AssetIcons.new()
 	add_child(icons)
 	var all_types: Array = []
-	for entry: Dictionary in PlantFactory.CATALOG + StructureFactory.CATALOG \
-			+ StructureFactory.CATALOG_ROUTING + PlantFactory.CATALOG_CONTROL:
+	for entry: Dictionary in PlantFactory.CATALOG + PlantFactory.CATALOG_INSTRUMENTS \
+			+ StructureFactory.CATALOG + StructureFactory.CATALOG_ROUTING \
+			+ PlantFactory.CATALOG_CONTROL:
 		all_types.append(entry["type"])
 	icons.generate(all_types)  # fire and forget; cards fill in as renders land
 	menu = BuildMenu.new()
@@ -96,7 +97,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_cancel"):
 		_set_mode(Mode.NORMAL)
 	elif event.is_action_pressed("catalog_page") and mode == Mode.PLACE:
-		page = (page + 1) % 4
+		page = (page + 1) % 5
 		catalog_index = 0
 		_beam_anchor = Vector3.INF
 		_run_points.clear()
@@ -170,8 +171,9 @@ func _update_hud() -> void:
 			menu.visible = false
 			hud.set_mode_text("B build · C connect · X remove")
 		Mode.PLACE:
-			var page_names: Array[String] = ["EQUIPMENT", "STRUCTURE", "ROUTING & SIGNS", "CONTROL"]
-			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 4]],
+			var page_names: Array[String] = ["EQUIPMENT", "INSTRUMENTS", "STRUCTURE",
+				"ROUTING & SIGNS", "CONTROL"]
+			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 5]],
 				_catalog(), icons, catalog_index)
 			if _is_stretch():
 				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
@@ -505,14 +507,15 @@ func _beam_aim(_space: PhysicsDirectSpaceState3D) -> Vector3:
 func _catalog() -> Array[Dictionary]:
 	match page:
 		0: return PlantFactory.CATALOG
-		1: return StructureFactory.CATALOG
-		2: return StructureFactory.CATALOG_ROUTING
+		1: return PlantFactory.CATALOG_INSTRUMENTS
+		2: return StructureFactory.CATALOG
+		3: return StructureFactory.CATALOG_ROUTING
 	return PlantFactory.CATALOG_CONTROL
 
 
-## Pages 0 and 3 place sim equipment; 1 and 2 place structure.
+## Pages 0, 1, and 4 place sim equipment; 2 and 3 place structure.
 func _is_equipment_page() -> bool:
-	return page == 0 or page == 3
+	return page in [0, 1, 4]
 
 
 func _current_type() -> String:
