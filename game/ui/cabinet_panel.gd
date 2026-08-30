@@ -97,6 +97,8 @@ func open(plant: Plant, cab_name: String) -> void:
 		return
 	_members.clear()
 	_members[str(entry["plc"])] = true
+	for relay_name: String in entry.get("relays", []):
+		_members[relay_name] = true
 	for term: String in entry["terminals"]:
 		_members[term] = true
 	_title.text = "%s — internal wiring" % cab_name
@@ -177,6 +179,18 @@ func _rebuild() -> void:
 		grid.add_child(_node_button(plc_name, "ai_%d" % i, false))
 	for i in range(plc.n_ao):
 		grid.add_child(_node_button(plc_name, "ao_%d" % i, true))
+	right.add_child(_header("RELAYS"))
+	for relay_name: String in entry.get("relays", []):
+		var relay_row := HBoxContainer.new()
+		relay_row.add_theme_constant_override("separation", 4)
+		var relay_tag := Label.new()
+		relay_tag.text = relay_name.trim_prefix(_cab + "_").to_upper()
+		relay_tag.custom_minimum_size = Vector2(32, 0)
+		relay_tag.add_theme_font_size_override("font_size", 13)
+		relay_row.add_child(relay_tag)
+		relay_row.add_child(_node_button(relay_name, "coil", false))
+		relay_row.add_child(_node_button(relay_name, "contact", true))
+		right.add_child(relay_row)
 
 	for visual: Dictionary in _internal_wires():
 		var row := HBoxContainer.new()

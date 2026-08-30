@@ -162,6 +162,16 @@ func _exercise_build_api() -> void:
 			sim.tick()
 		if (sim.get_component(cab + "_td2") as SimTerminal).t_out.value < 0.5:
 			problems.append("signal failed to traverse terminal -> PLC -> terminal")
+		# And through an interposing relay: td1 -> R1 coil, R1 contact
+		# -> td3 — the classic panel path.
+		if connect_equipment(cab + "_td1", "out", cab + "_r1", "coil", [], false) != "":
+			problems.append("terminal -> relay coil wire refused")
+		if connect_equipment(cab + "_r1", "contact", cab + "_td3", "in", [], false) != "":
+			problems.append("relay contact -> terminal wire refused")
+		for _i in 10:
+			sim.tick()
+		if (sim.get_component(cab + "_td3") as SimTerminal).t_out.value < 0.5:
+			problems.append("signal failed to traverse the interposing relay")
 		switch.set_band(40.0, 80.0)
 	var real_path := save_path
 	save_path = "user://selfcheck_save.json"
@@ -305,6 +315,13 @@ func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> SimCompon
 	var psu := PlantFactory.make_record(sim, "psu", name_ + "_psu", {}) as SimPowerSupply
 	sim.register_with_historian(psu)
 	sim.connect_ports(psu, "dc_out", plc, "power")
+	# Interposing relays on the second DIN rail: real kernel relays,
+	# wired up in the schematic panel like everything else inside.
+	var relays: Array[String] = []
+	for i in range(4):
+		var relay := PlantFactory.make_record(sim, "relay", "%s_r%d" % [name_, i + 1], {})
+		sim.register_with_historian(relay)
+		relays.append(relay.comp_name)
 	var view := CabinetView.new()
 	view.position = to_local(world_pos)
 	view.rotation.y = rot_y
@@ -332,8 +349,13 @@ func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> SimCompon
 	equip_types[plc.comp_name] = "plc"
 	protected[plc.comp_name] = true
 	member_of[plc.comp_name] = name_
+	for relay_name in relays:
+		views[relay_name] = view
+		equip_types[relay_name] = "relay"
+		protected[relay_name] = true
+		member_of[relay_name] = name_
 	cabinets[name_] = {"node": view, "plc": plc.comp_name, "terminals": terms,
-		"psu": psu.comp_name}
+		"psu": psu.comp_name, "relays": relays}
 	_revalidate_in = 3
 	return plc
 
@@ -346,6 +368,8 @@ func remove_cabinet(name_: String) -> bool:
 	members.append(str(entry["plc"]))
 	if entry.has("psu"):
 		members.append(str(entry["psu"]))
+	for relay_name: String in entry.get("relays", []):
+		members.append(relay_name)
 	for term: String in entry["terminals"]:
 		members.append(term)
 	for member in members:
@@ -883,11 +907,17 @@ func save_game() -> bool:
 		var entry: Dictionary = cabinets[name_]
 		var node := entry["node"] as Node3D
 		var plc := sim.get_component(str(entry["plc"]))
+		var relay_states := {}
+		for relay_name: String in entry.get("relays", []):
+			var relay := sim.get_component(relay_name)
+			if relay != null:
+				relay_states[relay_name] = relay.state_dict()
 		cab_list.append({
 			"name": name_,
 			"pos": [node.global_position.x, node.global_position.y, node.global_position.z],
 			"rot_y": node.rotation.y,
 			"plc_state": plc.state_dict() if plc != null else {},
+			"relay_states": relay_states,
 		})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time,
@@ -965,6 +995,11 @@ func load_game() -> bool:
 			float(entry.get("rot_y", 0.0)))
 		if plc != null:
 			plc.apply_state(entry.get("plc_state", {}))
+			var relay_states: Dictionary = entry.get("relay_states", {})
+			for relay_name: String in relay_states:
+				var relay := sim.get_component(relay_name)
+				if relay != null:
+					relay.apply_state(relay_states[relay_name])
 
 	for entry: Dictionary in payload.get("runs", []):
 		var pts: Array = []
