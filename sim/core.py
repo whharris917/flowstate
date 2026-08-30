@@ -166,6 +166,23 @@ class Simulation:
         self.wires.append(wire)
         return wire
 
+    def disconnect(
+        self, src: Component, out_name: str, dst: Component, in_name: str
+    ) -> bool:
+        """Remove one wire between two ports (the physical act of
+        pulling a run). Frees the input's single-source slot; the input
+        reverts to its default on the next scan. False if no such wire."""
+        out_port = src.outputs.get(out_name)
+        in_port = dst.inputs.get(in_name)
+        if out_port is None or in_port is None:
+            return False
+        for wire in self.wires:
+            if wire.src is out_port and wire.dst is in_port:
+                self.wires.remove(wire)
+                in_port.wire_count -= 1
+                return True
+        return False
+
     def get_component(self, name: str) -> Optional[Component]:
         return next((c for c in self.components if c.name == name), None)
 

@@ -6,7 +6,7 @@ extends Node3D
 ## the entire graph from a file.
 
 const SIM_DT := 0.05  # 20 Hz, decoupled from frame rate
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4  # v4 adds structures; v3 saves still load
 
 var save_path: String = "user://save.json"
 var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox doesn't
@@ -24,9 +24,15 @@ var pump: SimPump
 var views: Dictionary = {}         # record name -> Node3D view
 var equip_types: Dictionary = {}   # record name -> type_id
 var protected: Dictionary = {}     # record name -> true (not deletable)
+var structures: Dictionary = {}    # name -> {type, node}
 var _wire_visuals: Array[Dictionary] = []   # {node, a, b}
 
 var _accumulator: float = 0.0
+# Support re-validation runs a few physics frames after geometry
+# changes, once new/freed colliders have actually reached the space.
+var _revalidate_in: int = 0
+var _support_exercise_phase: int = 0
+var _support_exercise_wait: int = 0
 
 
 func _ready() -> void:
@@ -36,6 +42,8 @@ func _ready() -> void:
 	_build_hmi()
 	if DisplayServer.get_name() == "headless":
 		_exercise_build_api()
+		_support_exercise_phase = 1
+		_support_exercise_wait = 4
 
 
 ## Headless smoke runs can't press B/C/X, so exercise the build API
@@ -99,6 +107,23 @@ func _exercise_build_api() -> void:
 		cascade.set_door("al2_core", false)
 	if remove_equipment("supply_tank"):
 		problems.append("protected equipment was removable")
+	# Disconnect: pull the gauge's run, then wire it again — the
+	# single-source slot must free up.
+	if not sim.disconnect_ports(sim.get_component("supply_tank"), "level",
+			sim.get_component(gauge.comp_name), "process"):
+		problems.append("disconnect refused")
+	else:
+		var stale: PipeView = null
+		for visual in _wire_visuals:
+			if visual["b"] == gauge.comp_name:
+				stale = visual["node"] as PipeView
+		if stale == null or not remove_run(stale):
+			# remove_run also disconnects; here the wire is already gone,
+			# so only the visual bookkeeping path is exercised.
+			pass
+		if connect_equipment("supply_tank", "level", gauge.comp_name, "process",
+				[Vector3(4.0, 0.35, -1.5)]) != "":
+			problems.append("rewire after disconnect refused")
 	var real_path := save_path
 	save_path = "user://selfcheck_save.json"
 	var roundtrip := save_game() and load_game()
@@ -128,6 +153,14 @@ func _physics_process(delta: float) -> void:
 	while _accumulator >= SIM_DT:
 		sim.tick()
 		_accumulator -= SIM_DT
+	if _revalidate_in > 0:
+		_revalidate_in -= 1
+		if _revalidate_in == 0:
+			_revalidate_supports()
+	if _support_exercise_phase > 0:
+		_support_exercise_wait -= 1
+		if _support_exercise_wait <= 0:
+			_exercise_supports()
 
 
 func _new_graph() -> void:
@@ -217,6 +250,77 @@ func connect_equipment(src_name: String, src_port: String,
 	return ""
 
 
+## ---- structure ----------------------------------------------------------
+
+func unique_struct_name(prefix: String) -> String:
+	var index := 1
+	while structures.has("%s_%d" % [prefix, index]):
+		index += 1
+	return "%s_%d" % [prefix, index]
+
+
+## base_pos is the bottom-center placement point in world space.
+## Bearing rules are the caller's job (StructureFactory.placement_ok);
+## the loader and headless exercises place directly.
+func place_structure(type_id: String, name_: String, base_pos: Vector3, rot_y: float) -> bool:
+	if structures.has(name_):
+		return false
+	var node := StructureFactory.make_view(type_id, name_)
+	if node == null:
+		return false
+	add_child(node)
+	node.global_position = base_pos + Vector3(0, (StructureFactory.SIZES[type_id] as Vector3).y / 2.0, 0)
+	node.rotation.y = rot_y
+	structures[name_] = {"type": type_id, "node": node}
+	_revalidate_in = 3
+	return true
+
+
+## Removing structure re-checks every run: whatever it was carrying
+## turns alarm-red rather than quietly staying up.
+func remove_structure(name_: String) -> bool:
+	if not structures.has(name_):
+		return false
+	((structures[name_] as Dictionary)["node"] as Node).queue_free()
+	structures.erase(name_)
+	_revalidate_in = 3
+	return true
+
+
+## Remove one routed run by its view (X while aiming at it): the wire
+## leaves the kernel, the input reverts next scan, the visual goes.
+func remove_run(view: PipeView) -> bool:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			var src := sim.get_component(visual["a"])
+			var dst := sim.get_component(visual["b"])
+			if src != null and dst != null:
+				sim.disconnect_ports(src, str(visual["a_port"]), dst, str(visual["b_port"]))
+			(visual["node"] as Node).queue_free()
+			_wire_visuals.erase(visual)
+			return true
+	return false
+
+
+## Re-run the support rule over every routed run and update brackets
+## and alarm state. Called a few frames after geometry changes.
+func _revalidate_supports() -> void:
+	var space := get_world_3d().direct_space_state
+	for visual in _wire_visuals:
+		var sparse: Array = [_marker_pos(str(visual["a"]), str(visual["a_port"]))]
+		sparse.append_array(visual["waypoints"])
+		sparse.append(_marker_pos(str(visual["b"]), str(visual["b_port"])))
+		var path := PipeRoute.orthogonalize(sparse)
+		var global_path: Array[Vector3] = []
+		for point in path:
+			global_path.append(to_global(point))
+		var result := SupportCheck.evaluate(global_path, space)
+		var local_brackets: Array[Dictionary] = []
+		for bracket: Dictionary in result["brackets"]:
+			local_brackets.append({"from": to_local(bracket["from"]), "to": to_local(bracket["to"])})
+		(visual["node"] as PipeView).set_supports(local_brackets, not bool(result["ok"]))
+
+
 func _wire_visual(src_name: String, src_port: String,
 		dst_name: String, dst_port: String, waypoints: Array) -> void:
 	var from := _marker_pos(src_name, src_port)
@@ -232,11 +336,13 @@ func _wire_visual(src_name: String, src_port: String,
 	var pipe := PipeView.new()
 	add_child(pipe)
 	pipe.setup(PipeRoute.orthogonalize(sparse), func() -> float: return port.value,
-		color, 0.07 if is_process else 0.025)
+		color, 0.07 if is_process else 0.025,
+		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	_wire_visuals.append({
 		"node": pipe, "a": src_name, "a_port": src_port,
 		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
 	})
+	_revalidate_in = 3
 
 
 func _marker_pos(record_name: String, port_name: String) -> Vector3:
@@ -262,9 +368,13 @@ func _build_initial_plant() -> void:
 		0.0, true) as SimRelay
 	pump = place("pump", "fill_pump", {"rated_lps": 4.0},
 		_world(Vector3(-0.5, 0, -2.6)), 0.0, true) as SimPump
+	# Signal runs drop to the floor and run along it — the support rule
+	# applies to the commissioned loop too.
 	connect_equipment("supply_tank", "level", "level_switch", "level")
-	connect_equipment("level_switch", "contact", "pump_relay", "coil")
-	connect_equipment("pump_relay", "contact", "fill_pump", "run")
+	connect_equipment("level_switch", "contact", "pump_relay", "coil",
+		[Vector3(1.7, 0.3, -3.4), Vector3(-2.7, 0.3, -4.3)])
+	connect_equipment("pump_relay", "contact", "fill_pump", "run",
+		[Vector3(-2.3, 0.3, -3.6), Vector3(-0.8, 0.3, -2.7)])
 	connect_equipment("fill_pump", "flow", "supply_tank", "in_flow")
 	if build_suite:
 		_build_aseptic_suite()
@@ -317,6 +427,51 @@ func _self_check() -> void:
 			% [c_tank.level_l, c_tank.overflowed_l, c_relay.cycles])
 
 
+## Headless support-rule exercise. Physics space queries see nothing
+## during _ready (colliders land in the space a frame later), so this
+## runs in two phases from _physics_process: phase 1 checks an open
+## span and places test structure; phase 2 checks the braced span and
+## the structure bearing rules, then cleans up.
+func _exercise_supports() -> void:
+	var space := get_world_3d().direct_space_state
+	# A lane clear of incidental support in both worlds: sandbox pad is
+	# bare there, and the hall's column grid (x/z multiples of 8) and
+	# mezzanine posts all miss the z=4 line within x in [-4, 4].
+	var origin := to_global(Vector3(0.0, -0.08, 4.0))
+	var run: Array[Vector3] = [origin + Vector3(-4, 2, 0), origin + Vector3(4, 2, 0)]
+	if _support_exercise_phase == 1:
+		var open_check := SupportCheck.evaluate(run, space)
+		if bool(open_check["ok"]):
+			push_warning("[flowstate] support exercise FAILED: 8 m air span passed (max span %.2f)"
+				% float(open_check["max_span"]))
+			_support_exercise_phase = 0
+			return
+		place_structure("s_column", "chk_col_1", origin + Vector3(-1.4, 0, 0), 0.0)
+		place_structure("s_column", "chk_col_2", origin + Vector3(1.4, 0, 0), 0.0)
+		place_structure("s_column", "chk_col_3", origin + Vector3(-2.8, 0, 4), 0.0)
+		place_structure("s_column", "chk_col_4", origin + Vector3(2.8, 0, 4), 0.0)
+		_support_exercise_phase = 2
+		_support_exercise_wait = 4
+		return
+	var problems: Array[String] = []
+	var braced_check := SupportCheck.evaluate(run, space)
+	if not bool(braced_check["ok"]):
+		problems.append("braced span still failed (max span %.2f)" % float(braced_check["max_span"]))
+	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space) != "":
+		problems.append("beam across two columns was refused")
+	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 8), 0.0, space) == "":
+		problems.append("floating beam was accepted")
+	for chk in ["chk_col_1", "chk_col_2", "chk_col_3", "chk_col_4"]:
+		if not remove_structure(chk):
+			problems.append("structure cleanup failed")
+	_support_exercise_phase = 0
+	if problems.is_empty():
+		print("[flowstate] support exercise OK — open span refused, braced span %.1f m passed"
+			% float(braced_check["max_span"]))
+	else:
+		push_warning("[flowstate] support exercise FAILED: " + "; ".join(problems))
+
+
 ## ---- save / load ---------------------------------------------------------
 
 func save_game() -> bool:
@@ -344,9 +499,19 @@ func save_game() -> bool:
 			"dst": visual["b"], "dst_port": visual["b_port"],
 			"waypoints": path_out,
 		})
+	var struct_list: Array = []
+	for name_: String in structures:
+		var entry: Dictionary = structures[name_]
+		var node := entry["node"] as Node3D
+		var size: Vector3 = StructureFactory.SIZES[entry["type"]]
+		var base := node.global_position - Vector3(0, size.y / 2.0, 0)
+		struct_list.append({
+			"type": entry["type"], "name": name_,
+			"pos": [base.x, base.y, base.z], "rot_y": node.rotation.y,
+		})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time,
-		"components": comps, "wires": wire_list,
+		"components": comps, "wires": wire_list, "structures": struct_list,
 	}
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
@@ -378,7 +543,7 @@ func load_game() -> bool:
 	if file == null:
 		return false
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if not parsed is Dictionary or int((parsed as Dictionary).get("version", 0)) != SAVE_VERSION:
+	if not parsed is Dictionary or not int((parsed as Dictionary).get("version", 0)) in [3, SAVE_VERSION]:
 		return false
 	var payload := parsed as Dictionary
 
@@ -386,11 +551,19 @@ func load_game() -> bool:
 		(views[name_] as Node).queue_free()
 	for visual in _wire_visuals:
 		(visual["node"] as Node).queue_free()
+	for name_: String in structures:
+		((structures[name_] as Dictionary)["node"] as Node).queue_free()
 	views.clear()
 	equip_types.clear()
 	protected.clear()
+	structures.clear()
 	_wire_visuals.clear()
 	_new_graph()
+
+	for entry: Dictionary in payload.get("structures", []):
+		var pos_arr: Array = entry["pos"]
+		place_structure(entry["type"], entry["name"],
+			Vector3(pos_arr[0], pos_arr[1], pos_arr[2]), float(entry.get("rot_y", 0.0)))
 
 	for entry: Dictionary in payload["components"]:
 		var pos_arr: Array = entry["pos"]

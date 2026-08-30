@@ -55,6 +55,22 @@ func connect_ports(src: SimComponent, out_name: String, dst: SimComponent, in_na
 	return true
 
 
+## Remove one wire between two ports (the physical act of pulling a
+## run). Frees the input's single-source slot; the input reverts to
+## its default on the next scan. False if no such wire exists.
+func disconnect_ports(src: SimComponent, out_name: String, dst: SimComponent, in_name: String) -> bool:
+	var out_port: SimOutputPort = src.outputs.get(out_name)
+	var in_port: SimInputPort = dst.inputs.get(in_name)
+	if out_port == null or in_port == null:
+		return false
+	for wire in wires:
+		if wire.src == out_port and wire.dst == in_port:
+			wires.erase(wire)
+			in_port.wire_count -= 1
+			return true
+	return false
+
+
 ## Register every output port and observable as a tag, then take the
 ## t=0 baseline sample. Attach after the graph is built; equipment
 ## placed later registers via register_with_historian.
