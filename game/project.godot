@@ -1,0 +1,13 @@
+; Engine configuration file.
+; Placeholder until build-order step 2 (engine foundations).
+
+config_version=5
+
+[application]
+
+config/name="flowstate"
+config/features=PackedStringArray("4.3")
+
+[physics]
+
+common/physics_ticks_per_second=60

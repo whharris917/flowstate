@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flowstate — supply tank loop</title>
+<style>
+  :root { color-scheme: light dark; }
+  .viz-root {
+    color-scheme: light;
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;  /* level */
+    --series-2:       #eb6834;  /* flow */
+    --series-3:       #1baf7a;  /* run signal */
+    --series-7:       #4a3aa7;  /* cycles */
+    --status-good:    #0ca30c;
+    --status-critical:#d03b3b;
+    --water:          rgba(42,120,214,0.30);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --series-7:       #9085e9;
+      --status-good:    #0ca30c;
+      --status-critical:#d03b3b;
+      --water:          rgba(57,135,229,0.30);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--page); }
+  .viz-root {
+    min-height: 100vh; background: var(--page); color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 20px; max-width: 1180px; margin: 0 auto;
+  }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+  header h1 { font-size: 19px; font-weight: 650; }
+  header .sub { color: var(--text-secondary); }
+  .clock { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  .clock strong { color: var(--text-primary); font-weight: 650; }
+  .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px;
+    border: 1px solid var(--border); color: var(--text-secondary);
+  }
+  .badge.run  { color: var(--status-good); border-color: currentColor; }
+  .badge.stop { color: var(--status-critical); border-color: currentColor; }
+
+  .controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 0 14px; border-bottom: 1px solid var(--grid); margin-bottom: 16px;
+  }
+  .controls label { color: var(--text-secondary); font-size: 12.5px; display: flex; align-items: center; gap: 5px; }
+  .controls input[type=number], .controls select {
+    width: 74px; padding: 4px 6px; border: 1px solid var(--baseline); border-radius: 6px;
+    background: var(--surface-1); color: var(--text-primary); font: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+  .controls select { width: auto; }
+  button {
+    padding: 5px 12px; border: 1px solid var(--baseline); border-radius: 6px;
+    background: var(--surface-1); color: var(--text-primary); font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: var(--text-muted); }
+  .seg { display: inline-flex; border: 1px solid var(--baseline); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; }
+  .seg button + button { border-left: 1px solid var(--baseline); }
+  .seg button.on { background: var(--text-primary); color: var(--surface-1); }
+  #msg { color: var(--status-critical); font-size: 12.5px; min-height: 1em; width: 100%; }
+
+  .grid { display: grid; grid-template-columns: 470px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .card h2 { font-size: 13px; font-weight: 650; color: var(--text-secondary); margin-bottom: 6px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+  @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .tile .lbl { font-size: 12px; color: var(--text-secondary); }
+  .tile .val { font-size: 24px; font-weight: 600; margin-top: 2px; }
+  .tile .val.bad { color: var(--status-critical); }
+
+  .pane { margin-bottom: 14px; }
+  .pane-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+  .pane-head .t { font-size: 13px; font-weight: 650; color: var(--text-secondary); }
+  .pane-head .key { width: 16px; height: 3px; border-radius: 2px; align-self: center; }
+  .pane-head .ro { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 650; }
+  .pane-head .ro small { color: var(--text-muted); font-weight: 400; }
+  .pane svg { display: block; width: 100%; height: 168px; }
+  #panes:focus { outline: 2px solid var(--series-1); outline-offset: 2px; border-radius: 6px; }
+  .hint { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+  footer { margin-top: 18px; color: var(--text-muted); font-size: 12.5px; display: flex; gap: 16px; flex-wrap: wrap; }
+  footer a { color: var(--text-secondary); }
+
+  svg text { font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  svg .glabel { font-size: 12px; fill: var(--text-secondary); }
+  svg .gvalue { font-size: 13px; font-weight: 650; fill: var(--text-primary); }
+  svg .halo { paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <header>
+    <h1>flowstate — supply tank loop</h1>
+    <span class="sub">tank · float switch · relay · pump</span>
+    <span class="clock">sim time <strong id="clock">0:00</strong> <span id="runbadge" class="badge run">RUNNING</span></span>
+  </header>
+
+  <div class="controls">
+    <button id="btnPause">Pause</button>
+    <button id="btnReset" title="Rebuild the plant with current settings; clears history">Reset</button>
+    <label>speed
+      <select id="selSpeed">
+        <option value="1">1×</option><option value="4">4×</option>
+        <option value="16">16×</option><option value="64">64×</option>
+      </select></label>
+    <label>trend window
+      <select id="selWindow">
+        <option value="60">60 s</option><option value="300" selected>5 min</option>
+        <option value="1800">30 min</option><option value="0">all</option>
+      </select></label>
+    <label>low trip (L) <input id="inLow" type="number" step="1" min="0" max="100"></label>
+    <label>high trip (L) <input id="inHigh" type="number" step="1" min="0" max="100"></label>
+    <label>drain (L/s) <input id="inDrain" type="number" step="0.1" min="0" max="10"></label>
+    <label>pump
+      <span class="seg" id="segMode">
+        <button data-mode="hand">Hand</button><button data-mode="off">Off</button><button data-mode="auto">Auto</button>
+      </span></label>
+    <div id="msg" role="status"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Operator graphic</h2>
+      <svg id="graphic" viewBox="0 0 460 320" aria-label="Plant schematic"></svg>
+    </div>
+    <div>
+      <div class="tiles" id="tiles"></div>
+      <div class="card">
+        <h2>Trends — historized data, one sample per scan (20 Hz sim time)</h2>
+        <div id="panes" tabindex="0" aria-label="Trend panes; use arrow keys to move the cursor"></div>
+        <div class="hint">Hover for the cursor readout; ← → keys step it (Shift for ×20), Esc returns to live.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <a href="/export.csv" download>Download full history (CSV)</a>
+    <span>Every value on this page is served from the simulation kernel and its historian — nothing is generated client-side.</span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ---------- state ---------- */
+const buf = { epoch: -1, time: [], tags: {} };
+let config = null, live = null;
+let cursorIdx = null;          // null = live (follow latest)
+let connected = true;
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(parent, name, attrs) {
+  const node = document.createElementNS(SVGNS, name);
+  for (const key in attrs) node.setAttribute(key, attrs[key]);
+  parent.appendChild(node);
+  return node;
+}
+function fmtClock(s) {
+  s = Math.floor(s);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+}
+function niceTicks(lo, hi, n) {
+  const span = hi - lo || 1, raw = span / n;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => x >= raw);
+  const ticks = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step)
+    ticks.push(Math.round(v * 1e6) / 1e6);
+  return ticks;
+}
+function bisect(arr, x) {           // index of sample nearest to x
+  let lo = 0, hi = arr.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (arr[mid] < x) lo = mid + 1; else hi = mid; }
+  return lo > 0 && Math.abs(arr[lo - 1] - x) < Math.abs(arr[lo] - x) ? lo - 1 : lo;
+}
+
+/* ---------- trend panes ---------- */
+const PANES = [
+  { id: "level",  title: "Tank level",  unit: "L",   tag: "tank.level",    slot: 1, step: false,
+    fmt: v => v.toFixed(1), yDom: () => [0, config.capacity_l],
+    refs: () => config.low_l === config.high_l
+      ? [{ v: config.low_l, lbl: "trip " + config.low_l }]
+      : [{ v: config.low_l,  lbl: "low "  + config.low_l },
+         { v: config.high_l, lbl: "high " + config.high_l }] },
+  { id: "flow",   title: "Pump flow",   unit: "L/s", tag: "pump.flow",     slot: 2, step: true,
+    fmt: v => v.toFixed(2), yDom: () => [0, config.rated_lps * 1.25], refs: () => [] },
+  { id: "run",    title: "Pump run signal (relay contact)", unit: "", tag: "relay.contact", slot: 3, step: true,
+    fmt: v => v > 0.5 ? "ON" : "OFF", yDom: () => [-0.15, 1.15], ticks: [0, 1], refs: () => [] },
+  { id: "cycles", title: "Relay cycles", unit: "",   tag: "relay.cycles",  slot: 7, step: true,
+    fmt: v => String(Math.round(v)), yDom: () => {
+      const s = buf.tags["relay.cycles"];
+      const top = s && s.length ? Math.max(10, s[s.length - 1]) : 10;
+      return [0, Math.ceil(top * 1.15)];
+    }, refs: () => [] },
+];
+const MARGIN = { l: 56, r: 10, t: 8, b: 22 }, PANE_H = 168;
+
+function buildPanes() {
+  const host = $("panes");
+  for (const pane of PANES) {
+    const div = document.createElement("div");
+    div.className = "pane";
+    const head = document.createElement("div");
+    head.className = "pane-head";
+    const key = document.createElement("span");
+    key.className = "key";
+    key.style.background = `var(--series-${pane.slot})`;
+    const title = document.createElement("span");
+    title.className = "t";
+    title.textContent = pane.title + (pane.unit ? ` (${pane.unit})` : "");
+    const readout = document.createElement("span");
+    readout.className = "ro";
+    head.append(key, title, readout);
+    const svg = document.createElementNS(SVGNS, "svg");
+    svg.addEventListener("pointermove", evt => paneHover(pane, evt));
+    svg.addEventListener("pointerleave", () => { cursorIdx = null; drawAll(); });
+    div.append(head, svg);
+    host.appendChild(div);
+    pane.svg = svg; pane.readout = readout;
+  }
+  host.addEventListener("keydown", evt => {
+    if (!buf.time.length) return;
+    const stride = evt.shiftKey ? 20 : 1;
+    if (evt.key === "ArrowLeft" || evt.key === "ArrowRight") {
+      const base = cursorIdx === null ? buf.time.length - 1 : cursorIdx;
+      cursorIdx = Math.max(0, Math.min(buf.time.length - 1,
+        base + (evt.key === "ArrowRight" ? stride : -stride)));
+      evt.preventDefault(); drawAll();
+    } else if (evt.key === "Escape") { cursorIdx = null; drawAll(); }
+  });
+}
+
+function paneHover(pane, evt) {
+  if (!buf.time.length || !pane.x0 && pane.x0 !== 0) return;
+  const rect = pane.svg.getBoundingClientRect();
+  const x = evt.clientX - rect.left;
+  const t = pane.t0 + (x - MARGIN.l) / pane.xScale;
+  cursorIdx = bisect(buf.time, Math.max(pane.t0, Math.min(pane.t1, t)));
+  drawAll();
+}
+
+function visibleRange() {
+  const n = buf.time.length;
+  if (!n) return [0, 0];
+  const windowS = Number($("selWindow").value);
+  const tMax = buf.time[n - 1];
+  const tMin = windowS > 0 ? Math.max(buf.time[0], tMax - windowS) : buf.time[0];
+  return [bisect(buf.time, tMin), n - 1];
+}
+
+/* min/max bucket decimation: an honest envelope of real samples */
+function decimate(i0, i1, maxPts) {
+  const idx = [];
+  const n = i1 - i0 + 1;
+  if (n <= maxPts) { for (let i = i0; i <= i1; i++) idx.push(i); return idx; }
+  const buckets = Math.floor(maxPts / 2);
+  const per = n / buckets;
+  for (let b = 0; b < buckets; b++) {
+    const s = i0 + Math.floor(b * per), e = Math.min(i1, i0 + Math.floor((b + 1) * per) - 1);
+    let iMin = s, iMax = s;
+    for (let i = s; i <= e; i++) {
+      if (buf.tags._cur[i] < buf.tags._cur[iMin]) iMin = i;
+      if (buf.tags._cur[i] > buf.tags._cur[iMax]) iMax = i;
+    }
+    idx.push(Math.min(iMin, iMax));
+    if (iMax !== iMin) idx.push(Math.max(iMin, iMax));
+  }
+  return idx;
+}
+
+function drawPane(pane) {
+  const svg = pane.svg;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const width = svg.clientWidth || 600;
+  svg.setAttribute("viewBox", `0 0 ${width} ${PANE_H}`);
+  const plotW = width - MARGIN.l - MARGIN.r, plotH = PANE_H - MARGIN.t - MARGIN.b;
+  const series = buf.tags[pane.tag];
+  const [i0, i1] = visibleRange();
+  if (!series || i1 <= 0) return;
+
+  const t0 = buf.time[i0], t1 = Math.max(buf.time[i1], t0 + 1);
+  const [y0, y1] = pane.yDom();
+  const xS = plotW / (t1 - t0), yS = plotH / (y1 - y0);
+  const X = t => MARGIN.l + (t - t0) * xS;
+  const Y = v => MARGIN.t + plotH - (v - y0) * yS;
+  pane.t0 = t0; pane.t1 = t1; pane.xScale = xS; pane.x0 = MARGIN.l;
+
+  const yTicks = pane.ticks || niceTicks(y0, y1, 4);
+  for (const tick of yTicks) {
+    el(svg, "line", { x1: MARGIN.l, x2: width - MARGIN.r, y1: Y(tick), y2: Y(tick),
+      stroke: "var(--grid)", "stroke-width": 1 });
+    el(svg, "text", { x: MARGIN.l - 6, y: Y(tick) + 3.5, "text-anchor": "end" })
+      .textContent = String(tick);
+  }
+  for (const tick of niceTicks(t0, t1, 6)) {
+    el(svg, "text", { x: X(tick), y: PANE_H - 6, "text-anchor": "middle" })
+      .textContent = fmtClock(tick);
+  }
+  el(svg, "line", { x1: MARGIN.l, x2: width - MARGIN.r, y1: Y(y0), y2: Y(y0),
+    stroke: "var(--baseline)", "stroke-width": 1 });
+
+  for (const ref of pane.refs()) {
+    if (ref.v < y0 || ref.v > y1) continue;
+    el(svg, "line", { x1: MARGIN.l, x2: width - MARGIN.r, y1: Y(ref.v), y2: Y(ref.v),
+      stroke: "var(--text-muted)", "stroke-width": 1, opacity: 0.8 });
+    el(svg, "text", { x: width - MARGIN.r - 4, y: Y(ref.v) - 3, "text-anchor": "end",
+      class: "halo" }).textContent = ref.lbl;
+  }
+
+  buf.tags._cur = series;
+  const idx = decimate(i0, i1, Math.max(600, plotW * 2));
+  let path = "";
+  let prevY = null;
+  for (const i of idx) {
+    const px = X(buf.time[i]).toFixed(1), py = Y(series[i]).toFixed(1);
+    if (path === "") path = `M${px},${py}`;
+    else if (pane.step && prevY !== null) path += `L${px},${prevY}L${px},${py}`;
+    else path += `L${px},${py}`;
+    prevY = py;
+  }
+  el(svg, "path", { d: path, fill: "none", stroke: `var(--series-${pane.slot})`,
+    "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" });
+
+  const at = cursorIdx === null ? i1 : Math.max(i0, Math.min(cursorIdx, i1));
+  if (cursorIdx !== null) {
+    el(svg, "line", { x1: X(buf.time[at]), x2: X(buf.time[at]), y1: MARGIN.t, y2: MARGIN.t + plotH,
+      stroke: "var(--text-muted)", "stroke-width": 1 });
+    el(svg, "circle", { cx: X(buf.time[at]), cy: Y(series[at]), r: 4,
+      fill: `var(--series-${pane.slot})`, stroke: "var(--surface-1)", "stroke-width": 2 });
+  }
+  pane.readout.textContent = "";
+  const strong = document.createElement("span");
+  strong.textContent = pane.fmt(series[at]) + (pane.unit ? " " + pane.unit : "");
+  const when = document.createElement("small");
+  when.textContent = (cursorIdx === null ? "  live" : "  @ " + fmtClock(buf.time[at]));
+  pane.readout.append(strong, when);
+}
+
+function drawAll() { for (const pane of PANES) drawPane(pane); }
+
+/* ---------- stat tiles ---------- */
+const TILES = [
+  { lbl: "Relay cycles",   get: () => String(live.relay_cycles), bad: () => false },
+  { lbl: "Pump starts",    get: () => String(live.pump_starts),  bad: () => false },
+  { lbl: "Overflowed",     get: () => live.overflowed_l.toFixed(1) + " L", bad: () => live.overflowed_l > 0 },
+  { lbl: "Ran dry",        get: () => live.ran_dry_s.toFixed(1) + " s",   bad: () => live.ran_dry_s > 0 },
+];
+function buildTiles() {
+  for (const tile of TILES) {
+    const div = document.createElement("div");
+    div.className = "tile";
+    const lbl = document.createElement("div");
+    lbl.className = "lbl"; lbl.textContent = tile.lbl;
+    const val = document.createElement("div");
+    val.className = "val"; val.textContent = "—";
+    div.append(lbl, val);
+    $("tiles").appendChild(div);
+    tile.el = val;
+  }
+}
+function drawTiles() {
+  if (!live) return;
+  for (const tile of TILES) {
+    tile.el.textContent = (tile.bad() ? "⚠ " : "") + tile.get();
+    tile.el.className = "val" + (tile.bad() ? " bad" : "");
+  }
+}
+
+/* ---------- operator graphic ---------- */
+const G = {};
+function buildGraphic() {
+  const svg = $("graphic");
+  const tankX = 200, tankY = 42, tankW = 150, tankH = 220;
+  el(svg, "rect", { x: 60, y: 240, width: 44, height: 34, rx: 4, fill: "none",
+    stroke: "var(--baseline)" });                                   // pump base
+  G.pumpBody = el(svg, "circle", { cx: 82, cy: 236, r: 22, fill: "var(--surface-1)",
+    stroke: "var(--baseline)", "stroke-width": 2 });
+  el(svg, "path", { d: "M72,226 L96,236 L72,246 Z", fill: "var(--text-muted)" });
+  G.pumpState = el(svg, "text", { x: 82, y: 292, "text-anchor": "middle", class: "glabel" });
+  G.pumpMode = el(svg, "text", { x: 82, y: 306, "text-anchor": "middle" });
+  el(svg, "path", { d: `M104,236 L150,236 L150,60 L${tankX},60`, fill: "none",
+    stroke: "var(--baseline)", "stroke-width": 3 });                // suction->tank pipe
+
+  el(svg, "rect", { x: tankX, y: tankY, width: tankW, height: tankH, rx: 6, fill: "none",
+    stroke: "var(--text-secondary)", "stroke-width": 2 });          // tank shell
+  G.water = el(svg, "rect", { x: tankX + 2, y: tankY + tankH - 2, width: tankW - 4, height: 0,
+    fill: "var(--water)" });
+  G.levelLbl = el(svg, "text", { x: tankX + tankW / 2, y: tankY + tankH / 2, "text-anchor": "middle",
+    class: "gvalue" });
+  G.lowLine = el(svg, "line", { x1: tankX, x2: tankX + tankW, stroke: "var(--text-muted)" });
+  G.highLine = el(svg, "line", { x1: tankX, x2: tankX + tankW, stroke: "var(--text-muted)" });
+  G.lowLbl = el(svg, "text", { x: tankX + tankW + 6, y: 0 });
+  G.highLbl = el(svg, "text", { x: tankX + tankW + 6, y: 0 });
+  el(svg, "path", { d: `M${tankX + tankW - 30},${tankY + tankH} L${tankX + tankW - 30},290 L${tankX + tankW + 10},290`,
+    fill: "none", stroke: "var(--baseline)", "stroke-width": 3 });  // drain pipe
+  el(svg, "path", { d: `M${tankX + tankW + 10},284 L${tankX + tankW + 22},290 L${tankX + tankW + 10},296 Z`,
+    fill: "var(--text-muted)" });
+  G.drainLbl = el(svg, "text", { x: tankX + tankW - 24, y: 306 });
+
+  el(svg, "rect", { x: 30, y: 60, width: 96, height: 58, rx: 6, fill: "none",
+    stroke: "var(--baseline)" });                                   // relay box
+  el(svg, "text", { x: 78, y: 76, "text-anchor": "middle", class: "glabel" }).textContent = "relay";
+  G.relayLed = el(svg, "circle", { cx: 48, cy: 96, r: 6, fill: "var(--baseline)" });
+  G.relayLbl = el(svg, "text", { x: 60, y: 100 });
+  G.switchLbl = el(svg, "text", { x: 30, y: 140 });
+  G.tankMeta = el(svg, "text", { x: tankX + tankW / 2, y: 30, "text-anchor": "middle", class: "glabel" });
+  Object.assign(G, { tankX, tankY, tankW, tankH });
+}
+function drawGraphic() {
+  if (!live || !config) return;
+  const { tankX, tankY, tankW, tankH } = G;
+  const frac = Math.max(0, Math.min(1, live.level_l / config.capacity_l));
+  const h = (tankH - 4) * frac;
+  G.water.setAttribute("height", h);
+  G.water.setAttribute("y", tankY + tankH - 2 - h);
+  G.levelLbl.textContent = live.level_l.toFixed(1) + " L";
+  G.tankMeta.textContent = "supply tank — " + config.capacity_l + " L";
+  const yFor = v => tankY + tankH - 2 - (tankH - 4) * (v / config.capacity_l);
+  const oneTrip = config.low_l === config.high_l;
+  for (const [line, lbl, val, name] of [
+    [G.lowLine, G.lowLbl, config.low_l, oneTrip ? "trip" : "low"],
+    [G.highLine, G.highLbl, config.high_l, "high"]]) {
+    const y = yFor(val);
+    line.setAttribute("y1", y); line.setAttribute("y2", y);
+    lbl.setAttribute("y", y + 4);
+    lbl.textContent = oneTrip && name === "high" ? "" : name + " " + val;
+  }
+  G.pumpBody.setAttribute("stroke", live.pump_running ? "var(--status-good)" : "var(--baseline)");
+  G.pumpState.textContent = (live.pump_running ? "● RUNNING · " : "○ STOPPED · ")
+    + live.pump_flow_lps.toFixed(2) + " L/s";
+  G.pumpState.style.fill = live.pump_running ? "var(--status-good)" : "var(--text-muted)";
+  G.pumpMode.textContent = config.mode.toUpperCase() + " · " + config.rated_lps + " L/s rated";
+  G.relayLed.setAttribute("fill", live.relay_energized ? "var(--status-good)" : "var(--baseline)");
+  G.relayLbl.textContent = (live.relay_energized ? "energized" : "dropped") + " · " + live.relay_cycles + " cyc";
+  G.switchLbl.textContent = "switch " + (live.switch_closed ? "CLOSED" : "OPEN");
+  G.drainLbl.textContent = "drain " + config.drain_lps.toFixed(1) + " L/s";
+}
+
+/* ---------- server I/O ---------- */
+async function command(name, value) {
+  try {
+    const res = await (await fetch(`/api/command?name=${name}&value=${encodeURIComponent(value ?? "")}`)).json();
+    $("msg").textContent = res.ok ? "" : res.error;
+  } catch { $("msg").textContent = "server unreachable"; }
+}
+function syncControls() {
+  if (!config) return;
+  if (document.activeElement !== $("inLow")) $("inLow").value = config.low_l;
+  if (document.activeElement !== $("inHigh")) $("inHigh").value = config.high_l;
+  if (document.activeElement !== $("inDrain")) $("inDrain").value = config.drain_lps;
+  $("selSpeed").value = String(config.speed);
+  $("btnPause").textContent = config.paused ? "Resume" : "Pause";
+  const badge = $("runbadge");
+  badge.textContent = connected ? (config.paused ? "PAUSED" : "RUNNING") : "DISCONNECTED";
+  badge.className = "badge " + (connected && !config.paused ? "run" : "stop");
+  for (const btn of $("segMode").children)
+    btn.className = btn.dataset.mode === config.mode ? "on" : "";
+}
+async function poll() {
+  try {
+    const state = await (await fetch(`/api/state?since=${buf.epoch === -1 ? 0 : buf.time.length}`)).json();
+    connected = true;
+    if (state.epoch !== buf.epoch) {
+      buf.epoch = state.epoch; buf.time = []; buf.tags = {}; cursorIdx = null;
+      const again = await (await fetch("/api/state?since=0")).json();
+      Object.assign(state, again);
+    }
+    buf.time.push(...state.time);
+    for (const tag in state.tags) {
+      if (!buf.tags[tag]) buf.tags[tag] = [];
+      buf.tags[tag].push(...state.tags[tag]);
+    }
+    config = state.config; live = state.live;
+    $("clock").textContent = fmtClock(live.sim_time);
+    syncControls(); drawTiles(); drawGraphic(); drawAll();
+  } catch {
+    connected = false;
+    if (config) syncControls();
+  } finally {
+    setTimeout(poll, 200);
+  }
+}
+
+/* ---------- wire up controls ---------- */
+$("btnPause").addEventListener("click", () => command(config && config.paused ? "resume" : "pause"));
+$("btnReset").addEventListener("click", () => command("reset"));
+$("selSpeed").addEventListener("change", evt => command("speed", evt.target.value));
+$("selWindow").addEventListener("change", drawAll);
+$("inLow").addEventListener("change", evt => command("low", evt.target.value));
+$("inHigh").addEventListener("change", evt => command("high", evt.target.value));
+$("inDrain").addEventListener("change", evt => command("drain", evt.target.value));
+for (const btn of $("segMode").children)
+  btn.addEventListener("click", () => command("mode", btn.dataset.mode));
+window.addEventListener("resize", drawAll);
+
+buildPanes(); buildTiles(); buildGraphic(); poll();
+</script>
+</body>
+</html>
