@@ -9,6 +9,7 @@ const SIM_DT := 0.05  # 20 Hz, decoupled from frame rate
 const SAVE_VERSION := 3
 
 var save_path: String = "user://save.json"
+var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox doesn't
 
 var sim: Simulation
 var historian: SimHistorian
@@ -57,26 +58,28 @@ func _exercise_build_api() -> void:
 	var pump2 := place_new("pump", _world(Vector3(6.0, 0.0, -1.0)), 0.0)
 	if pump2 == null or not remove_equipment(pump2.comp_name):
 		problems.append("place/remove pump failed")
-	# Let the air cascade settle, then verify ordering and the DP gauge.
-	for _i in 2400:
-		sim.tick()
+	# Air-cascade checks only where the aseptic suite exists (the hall).
 	var cascade := sim.get_component("suite_hvac") as SimAirCascade
-	var p: Dictionary = cascade.pressures
-	if not (0.0 < float(p["al1"]) and float(p["al1"]) < float(p["gown"])
-			and float(p["gown"]) < float(p["al2"]) and float(p["al2"]) < float(p["core"])
-			and float(p["core"]) < float(p["iso"])):
-		problems.append("cascade ordering wrong: %s" % str(p))
-	var pdi := sim.get_component("pdi_iso") as SimGauge
-	if absf(pdi.reading - (float(p["iso"]) - float(p["core"]))) > 0.5:
-		problems.append("dp gauge disagrees with cascade")
-	cascade.set_door("gown_al2", true)
-	cascade.set_door("al2_core", true)
-	for _i in 600:
-		sim.tick()
-	if float(cascade.pressures["core"]) - float(cascade.pressures["gown"]) > 5.0:
-		problems.append("open airlock failed to collapse the step")
-	cascade.set_door("gown_al2", false)
-	cascade.set_door("al2_core", false)
+	if cascade != null:
+		# Let the cascade settle, then verify ordering and the DP gauge.
+		for _i in 2400:
+			sim.tick()
+		var p: Dictionary = cascade.pressures
+		if not (0.0 < float(p["al1"]) and float(p["al1"]) < float(p["gown"])
+				and float(p["gown"]) < float(p["al2"]) and float(p["al2"]) < float(p["core"])
+				and float(p["core"]) < float(p["iso"])):
+			problems.append("cascade ordering wrong: %s" % str(p))
+		var pdi := sim.get_component("pdi_iso") as SimGauge
+		if absf(pdi.reading - (float(p["iso"]) - float(p["core"]))) > 0.5:
+			problems.append("dp gauge disagrees with cascade")
+		cascade.set_door("gown_al2", true)
+		cascade.set_door("al2_core", true)
+		for _i in 600:
+			sim.tick()
+		if float(cascade.pressures["core"]) - float(cascade.pressures["gown"]) > 5.0:
+			problems.append("open airlock failed to collapse the step")
+		cascade.set_door("gown_al2", false)
+		cascade.set_door("al2_core", false)
 	if remove_equipment("supply_tank"):
 		problems.append("protected equipment was removable")
 	var real_path := save_path
@@ -244,7 +247,8 @@ func _build_initial_plant() -> void:
 	connect_equipment("level_switch", "contact", "pump_relay", "coil")
 	connect_equipment("pump_relay", "contact", "fill_pump", "run")
 	connect_equipment("fill_pump", "flow", "supply_tank", "in_flow")
-	_build_aseptic_suite()
+	if build_suite:
+		_build_aseptic_suite()
 
 
 func _build_aseptic_suite() -> void:

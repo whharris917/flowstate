@@ -1,10 +1,9 @@
-extends Node3D
-## Bootstraps the first playable: a very large clean-industrial hall —
-## 44 x 26 m, 12 m to the roof, skylight bands, clerestory glazing,
-## mezzanines on two levels with stairs and railings, color-coded pipe
-## runs — plus ambience (music, hum, room reverb) and the plant.
-## Everything is procedural placeholder geometry; design intent lives
-## in proportion, light, and color.
+extends WorldBase
+## The manufacturing hall — 44 x 26 m, 12 m to the roof, skylight
+## bands, clerestory glazing, mezzanines on two levels with stairs and
+## railings, color-coded pipe runs, and the aseptic annex off the west
+## wall. Parked while the sandbox is the daily driver; open this scene
+## and Play Current Scene to walk it.
 
 const ROOM_W := 44.0   # x
 const ROOM_D := 26.0   # z
@@ -25,56 +24,23 @@ const COL_PIPE_GRAY := Color(0.55, 0.56, 0.58)
 const COL_PIPE_STEEL := Color(0.70, 0.72, 0.74)
 const COL_PIPE_YELLOW := Color(0.85, 0.70, 0.10)
 
-@onready var player: Player = $Player
 
-var plant: Plant
-var hud: Hud
-var _loop_players: Array[AudioStreamPlayer] = []
+func _init() -> void:
+	plant_height = 0.08
+	plant_save_path = "user://save_hall.json"
+	with_suite = true
+	with_hum = true
+	reverb_room_size = 0.85
+	reverb_wet = 0.25
 
 
-func _ready() -> void:
+func _build_world() -> void:
 	_build_environment()
 	_build_shell()
 	_build_mezzanines()
 	_build_pipes()
 	_build_fixtures()
 	_build_markings()
-	_build_audio()
-	plant = Plant.new()
-	plant.position.y = 0.08
-	add_child(plant)
-	var layer := CanvasLayer.new()
-	add_child(layer)
-	hud = Hud.new()
-	layer.add_child(hud)
-	var builder := BuildController.new()
-	add_child(builder)
-	builder.setup(player, plant, hud)
-	hud.toast("WASD move · E use · B build · C connect · X remove · F5/F9 save/load")
-
-
-func _process(_delta: float) -> void:
-	var view := player.look_view()
-	if view != null and view.has_method("describe"):
-		hud.set_look_text(str(view.call("describe")))
-	else:
-		hud.set_look_text("")
-	hud.set_readout_text("t %s   level %.1f L   relay %d cyc   pump %s" % [
-		_fmt_time(plant.sim.time), plant.tank.level_l, plant.relay.cycles,
-		"RUN" if plant.pump.running else "stop"])
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("quicksave"):
-		hud.toast("saved" if plant.save_game() else "save FAILED")
-	elif event.is_action_pressed("quickload"):
-		hud.toast("loaded" if plant.load_game() else "no save found")
-
-
-func _fmt_time(seconds: float) -> String:
-	var total := int(seconds)
-	@warning_ignore("integer_division")
-	return "%d:%02d" % [total / 60, total % 60]
 
 
 func _build_environment() -> void:
@@ -343,43 +309,6 @@ func _marking(size: Vector3, pos: Vector3) -> void:
 		.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
-func _build_audio() -> void:
-	var bus := AudioServer.bus_count
-	AudioServer.add_bus(bus)
-	AudioServer.set_bus_name(bus, "Room")
-	AudioServer.set_bus_send(bus, "Master")
-	var reverb := AudioEffectReverb.new()
-	reverb.room_size = 0.85
-	reverb.wet = 0.25
-	reverb.damping = 0.55
-	AudioServer.add_bus_effect(bus, reverb)
-
-	_looping_player("res://audio/music_loop.wav", -16.0, "Master")
-	_looping_player("res://audio/hum_loop.wav", -18.0, "Room")
-
-
-func _looping_player(path: String, volume_db: float, bus: String) -> void:
-	var stream := load(path) as AudioStreamWAV
-	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	stream.loop_begin = 0
-	stream.loop_end = int(stream.get_length() * stream.mix_rate)
-	var audio_player := AudioStreamPlayer.new()
-	audio_player.stream = stream
-	audio_player.volume_db = volume_db
-	audio_player.bus = bus
-	# Playing streams leak their playback objects in a teardown race at
-	# process exit; harmless in real play but noise in headless smoke
-	# runs, so only start them when a real audio driver exists.
-	audio_player.autoplay = DisplayServer.get_name() != "headless"
-	add_child(audio_player)
-	_loop_players.append(audio_player)
-
-
-func _exit_tree() -> void:
-	for audio_player in _loop_players:
-		audio_player.stop()
-
-
 func _glass(size: Vector3, pos: Vector3) -> void:
 	var mat := ViewUtil.flat(COL_GLASS)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -387,20 +316,3 @@ func _glass(size: Vector3, pos: Vector3) -> void:
 	mat.roughness = 0.05
 	var pane := ViewUtil.box(self, size, pos, mat)
 	pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-
-
-func _static_box(size: Vector3, pos: Vector3, color: Color) -> void:
-	var body := StaticBody3D.new()
-	body.position = pos
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = size
-	shape.shape = box
-	body.add_child(shape)
-	var mesh := MeshInstance3D.new()
-	var box_mesh := BoxMesh.new()
-	box_mesh.size = size
-	mesh.mesh = box_mesh
-	mesh.material_override = ViewUtil.flat(color)
-	body.add_child(mesh)
-	add_child(body)
