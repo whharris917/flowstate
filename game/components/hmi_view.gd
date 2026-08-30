@@ -38,6 +38,13 @@ func setup(historian: SimHistorian, tank: SimTank, switch: SimFloatSwitch,
 
 	ViewUtil.label(self, "HMI", Vector3(0, SCREEN_H / 2.0 + 0.25, 0))
 	ViewUtil.interact_body(self, Vector3(SCREEN_W + 0.15, SCREEN_H + 0.15, 0.2), Vector3.ZERO)
+	# Freestanding stand: the hall wall is far away now. This node sits
+	# at ~y 1.68 world, so local -1.68 is the floor.
+	ViewUtil.box(self, Vector3(SCREEN_W + 0.3, SCREEN_H + 0.3, 0.08), Vector3(0, 0, -0.10),
+		ViewUtil.flat(Color(0.16, 0.17, 0.19)))
+	for post_x: float in [-SCREEN_W / 2.0, SCREEN_W / 2.0]:
+		ViewUtil.box(self, Vector3(0.12, 2.45, 0.12), Vector3(post_x, -0.46, -0.10),
+			ViewUtil.flat(Color(0.16, 0.17, 0.19)))
 
 
 func describe() -> String:

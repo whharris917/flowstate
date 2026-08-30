@@ -17,6 +17,12 @@ func setup(relay_: SimRelay) -> void:
 	_lamp = ViewUtil.box(self, Vector3(0.08, 0.08, 0.05), Vector3(0, 0.14, 0.10), _lamp_off)
 	ViewUtil.label(self, relay.comp_name, Vector3(0, 0.55, 0))
 	ViewUtil.interact_body(self, Vector3(0.5, 0.65, 0.25), Vector3.ZERO)
+	# Freestanding rack (node sits at ~y 1.58 world; local -1.58 is floor).
+	ViewUtil.box(self, Vector3(0.9, 0.9, 0.06), Vector3(0, 0, -0.13),
+		ViewUtil.flat(Color(0.16, 0.17, 0.19)))
+	for post_x: float in [-0.35, 0.35]:
+		ViewUtil.box(self, Vector3(0.1, 2.15, 0.1), Vector3(post_x, -0.5, -0.13),
+			ViewUtil.flat(Color(0.16, 0.17, 0.19)))
 
 
 func _process(_delta: float) -> void:

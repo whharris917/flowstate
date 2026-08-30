@@ -30,9 +30,13 @@ OUT_DIR = Path(__file__).resolve().parents[1] / "game" / "audio"
 rng = random.Random(20260829)
 
 
-def write_wav(path: Path, channels: list[list[float]]) -> None:
+def write_wav(path: Path, channels: list[list[float]],
+              normalize_to: float | None = None) -> None:
     peak = max(1e-9, max(abs(sample) for chan in channels for sample in chan))
-    scale = 0.9 / peak if peak > 0.9 else 1.0
+    if normalize_to is not None:
+        scale = normalize_to / peak
+    else:
+        scale = 0.9 / peak if peak > 0.9 else 1.0
     frames = bytearray()
     for i in range(len(channels[0])):
         for chan in channels:
@@ -148,17 +152,27 @@ def make_hum() -> None:
 
 
 def make_step(path: Path, f0: float, decay: float, noise_amp: float,
-              duration: float = 0.25) -> None:
+              duration: float = 0.28, level: float = 0.42) -> None:
+    """A soft sole on concrete: low pitch-swept thump, a whisper of
+    lowpassed noise, a gentle attack ramp so there is no click, and
+    quiet normalization. No clipping, no crunch."""
     n = int(duration * SR)
     buf = [0.0] * n
-    noise = brown_noise(n, leak=0.90, gain=0.5)
+    noise = brown_noise(n, leak=0.97, gain=0.3)
+    # One-pole lowpass ~450 Hz takes the abrasive edge off the noise.
+    alpha = 1.0 - math.exp(-2.0 * math.pi * 450.0 / SR)
+    lp = 0.0
+    for i in range(n):
+        lp += alpha * (noise[i] - lp)
+        noise[i] = lp
     for i in range(n):
         t = i / SR
-        sweep = f0 * math.exp(-t * 6.0) + 40.0
+        attack = min(1.0, t / 0.006)
+        sweep = f0 * math.exp(-t * 5.0) + 38.0
         body = math.sin(2.0 * math.pi * sweep * t) * math.exp(-t * decay)
-        crunch = noise[i] * math.exp(-t * decay * 1.6) * noise_amp
-        buf[i] = math.tanh((body * 0.9 + crunch) * 1.5)
-    write_wav(path, [buf])
+        soft = noise[i] * math.exp(-t * decay * 1.4) * noise_amp
+        buf[i] = (body + soft) * attack
+    write_wav(path, [buf], normalize_to=level)
 
 
 def main() -> None:
@@ -167,10 +181,10 @@ def main() -> None:
     make_music()
     make_hum()
     for idx, (f0, decay, noise_amp) in enumerate(
-            [(88.0, 22.0, 0.40), (96.0, 25.0, 0.34), (80.0, 20.0, 0.46), (103.0, 24.0, 0.30)],
+            [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):
         make_step(OUT_DIR / f"step_{idx}.wav", f0, decay, noise_amp)
-    make_step(OUT_DIR / "land.wav", 55.0, 9.0, 0.55, duration=0.5)
+    make_step(OUT_DIR / "land.wav", 46.0, 7.0, 0.50, duration=0.55, level=0.55)
     print("done")
 
 

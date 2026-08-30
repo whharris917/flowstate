@@ -29,7 +29,7 @@ func _ready() -> void:
 	_land_stream = load("res://audio/land.wav")
 	_steps = AudioStreamPlayer.new()
 	_steps.bus = "Room"
-	_steps.volume_db = -10.0
+	_steps.volume_db = -15.0
 	add_child(_steps)
 
 
