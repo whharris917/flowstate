@@ -126,6 +126,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_try_place()
 	elif mode == Mode.CONNECT and event.is_action_pressed("place"):
 		_try_pick_port()
+	elif mode == Mode.NORMAL and event.is_action_pressed("place"):
+		# Clicking a clickable affordance (the cabinet's EDIT button).
+		var clicked := player.look_view()
+		if clicked != null and clicked.has_method("use") \
+				and player.ray.is_colliding() \
+				and (player.ray.get_collider() as Node).has_meta("clickable"):
+			clicked.call("use")
 	else:
 		for i in range(_catalog().size()):
 			if event.is_action_pressed("catalog_%d" % (i + 1)):
@@ -545,6 +552,11 @@ func _try_place() -> void:
 		if plant.place_structure(_current_type(), name_, _ghost_pos, rot_y):
 			hud.toast("placed %s" % name_)
 		return
+	if _current_type() == "cabinet":
+		var cab_name := plant.unique_cabinet_name()
+		if plant.place_cabinet(cab_name, _ghost_pos, rot_y):
+			hud.toast("placed %s — open it and press EDIT to build the panel" % cab_name)
+		return
 	var record := plant.place_new(_current_type(), _ghost_pos, rot_y)
 	if record != null:
 		hud.toast("placed %s" % record.comp_name)
@@ -665,9 +677,12 @@ func _open_port_menu() -> void:
 	var title := ""
 	if view is CabinetView:
 		var cab := (view as CabinetView).cabinet_name
-		title = "%s — terminal strip" % cab
-		for term: String in (plant.cabinets[cab] as Dictionary)["terminals"]:
-			records.append(term)
+		title = "%s — field terminations" % cab
+		for record_name in plant.cabinet_field_records(cab):
+			records.append(record_name)
+		if records.is_empty():
+			hud.toast("cabinet is empty — open it and press EDIT to mount terminal strips")
+			return
 	elif view.has_meta("record_name"):
 		var record_name := str(view.get_meta("record_name"))
 		title = "%s — I/O" % record_name

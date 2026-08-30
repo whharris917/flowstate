@@ -36,9 +36,9 @@ func _ready() -> void:
 	var run_config := RunConfigPanel.new()
 	layer.add_child(run_config)
 	plant.config_panel = run_config
-	var cabinet_panel := CabinetPanel.new()
-	layer.add_child(cabinet_panel)
-	plant.cabinet_panel = cabinet_panel
+	var cabinet_editor := CabinetEditor.new()
+	layer.add_child(cabinet_editor)
+	plant.cabinet_editor = cabinet_editor
 	var ladder_panel := LadderPanel.new()
 	layer.add_child(ladder_panel)
 	plant.ladder_panel = ladder_panel

@@ -19,11 +19,8 @@ static func build(type_id: String) -> Node3D:
 	elif StructureFactory.SIZES.has(type_id):
 		node = StructureFactory.make_view(type_id, "preview")
 	elif type_id == "cabinet":
-		var cab_scratch := Simulation.new(0.05)
-		var cab_plc := cab_scratch.add(SimPLC.new("preview_plc")) as SimPLC
 		var cab := CabinetView.new()
-		cab.setup(cab_plc, "cabinet")
-		cab.set_meta("scratch_sim", cab_scratch)
+		cab.setup("cabinet")
 		node = cab
 	else:
 		# A scratch sim graph backs the preview records; it is never

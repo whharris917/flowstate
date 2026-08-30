@@ -133,7 +133,9 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 				params.get("kp", 8.0), params.get("ki", 1.5), params.get("kd", 0.0),
 				params.get("sp", 15.0)))
 		"plc":
-			return sim.add(SimPLC.new(name_))
+			return sim.add(SimPLC.new(name_,
+				params.get("di", 8), params.get("do", 8),
+				params.get("ai", 4), params.get("ao", 4)))
 		"terminal":
 			return sim.add(SimTerminal.new(name_, params.get("kind", "discrete")))
 		"mains":

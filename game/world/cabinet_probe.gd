@@ -1,8 +1,10 @@
 extends Node
-## Debug harness: places a control cabinet, lands a field wire on its
-## terminal strip, hooks terminal -> PLC -> terminal internally, loads
-## a mirror rung, then screenshots the open cabinet and its schematic
-## panel. Run windowed: godot --path game res://world/cabinet_probe.tscn
+## Debug harness for the empty-cabinet workflow: place a cabinet,
+## build its panel through the module API (PSU, PLC CPU, I/O cards,
+## relay, terminal strip), wire it internally, feed it, then
+## screenshot the open 3D interior, the cabinet editor, and the
+## ladder editor. Run windowed:
+##   godot --path game res://world/cabinet_probe.tscn
 
 
 func _ready() -> void:
@@ -16,12 +18,30 @@ func _run(world: Node) -> void:
 	var plant: Plant = (world as WorldBase).plant
 	var player: Player = (world as WorldBase).player
 
-	var plc := plant.place_new("cabinet", Vector3(5.5, 0.08, 2.0), 0.0) as SimPLC
-	var cab := plc.comp_name.trim_suffix("_plc")
-	plant.connect_equipment("level_switch", "contact", cab + "_td1", "in",
+	var cab := "cabinet_1"
+	plant.place_cabinet(cab, Vector3(5.5, 0.08, 2.0), 0.0)
+	plant.cabinet_add_module(cab, "psu", 0, 0)
+	plant.cabinet_add_module(cab, "plc", 0, 4)
+	plant.cabinet_add_module(cab, "card_di", 0, 8)
+	plant.cabinet_add_module(cab, "card_do", 0, 10)
+	plant.cabinet_add_module(cab, "relay", 1, 0)
+	plant.cabinet_add_module(cab, "relay", 1, 2)
+	plant.cabinet_add_module(cab, "tb8d", 2, 0)
+	var plc_name := plant.cabinet_plc(cab)
+	var plc := plant.sim.get_component(plc_name) as SimPLC
+	var psu_name := ""
+	for record_name in plant.cabinet_all_records(cab):
+		if plant.equip_types.get(record_name) == "psu":
+			psu_name = record_name
+	var t := "%s_m7_t" % cab  # the strip's terminals
+
+	plant.connect_equipment("level_switch", "contact", t + "1", "in",
 		[plant.to_local(Vector3(3.0, 0.3, 0.5))])
-	plant.connect_equipment(cab + "_td1", "out", plc.comp_name, "di_0", [], false)
-	plant.connect_equipment(plc.comp_name, "do_0", cab + "_td2", "in", [], false)
+	plant.connect_equipment(t + "1", "out", plc_name, "di_0", [], false)
+	plant.connect_equipment(psu_name, "dc_out", plc_name, "power", [], false)
+	plant.connect_equipment(plc_name, "do_0", t + "2", "in", [], false)
+	plant.connect_equipment("plant_mains", "power", psu_name, "ac_in",
+		[plant.to_local(Vector3(0.0, 0.3, 2.5))])
 	plc.set_program([
 		{"coil": "m_0", "logic": [
 			[{"ref": "di_0"}, {"ref": "di_1", "nc": true}],
@@ -30,10 +50,8 @@ func _run(world: Node) -> void:
 		{"coil": "do_0", "logic": [[{"ref": "t_0"}]]},
 	])
 	plc.set_timer_preset(0, 5.0)
-	# Force the field contact closed so power flow lights up.
 	(plant.sim.get_component("level_switch") as SimFloatSwitch).set_band(150.0, 150.0)
 
-	# Swing the door open and stand where the interior is visible.
 	var cab_view := (plant.cabinets[cab] as Dictionary)["node"] as CabinetView
 	cab_view._door_open = true
 	player.global_position = Vector3(5.5, 0.15, 6.5)
@@ -43,18 +61,13 @@ func _run(world: Node) -> void:
 
 	await get_tree().create_timer(1.2).timeout
 	await _shot("user://probe_cabinet.png")
-	plant.cabinet_panel.open(plant, cab)
+	plant.cabinet_editor.open(plant, cab)
 	await get_tree().create_timer(0.4).timeout
-	await _shot("user://probe_cabinet_panel.png")
-	plant.cabinet_panel.visible = false
+	await _shot("user://probe_cabinet_editor.png")
+	plant.cabinet_editor.visible = false
 	plant.ladder_panel.open(plant, cab)
 	await get_tree().create_timer(0.6).timeout
 	await _shot("user://probe_ladder.png")
-	plant.ladder_panel.visible = false
-	(world as WorldBase).builder.port_menu.open(plant, "fill_pump — I/O",
-		["fill_pump"], Callable())
-	await get_tree().create_timer(0.3).timeout
-	await _shot("user://probe_portmenu.png")
 	print("[probe] cabinet screenshots written to user://")
 	get_tree().quit()
 

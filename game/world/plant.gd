@@ -11,7 +11,7 @@ const SAVE_VERSION := 4  # v4 adds structures; v3 saves still load
 var save_path: String = "user://save.json"
 var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox doesn't
 var config_panel: RunConfigPanel = null   # injected by the world after _ready
-var cabinet_panel: CabinetPanel = null    # injected by the world after _ready
+var cabinet_editor: CabinetEditor = null  # injected by the world after _ready
 var ladder_panel: LadderPanel = null      # injected by the world after _ready
 
 var sim: Simulation
@@ -132,45 +132,73 @@ func _exercise_build_api() -> void:
 		if connect_equipment("supply_tank", "level", gauge.comp_name, "process",
 				[Vector3(4.0, 0.35, -1.5)]) != "":
 			problems.append("rewire after disconnect refused")
-	# Cabinet: a field signal lands on a terminal, an internal wire
-	# carries it to the PLC, one rung mirrors it to an output channel,
-	# and another internal wire brings it back out — field to panel to
-	# field, the way a real cabinet earns its keep.
-	var cab := ""
-	var cab_plc := place_new("cabinet", _world(Vector3(3.0, 0.0, 6.5)), 0.0) as SimPLC
-	if cab_plc == null:
+	# Cabinet: starts empty, gets a panel built module by module, then a
+	# field signal traverses terminal -> PLC rung -> terminal, and
+	# through an interposing relay — field to panel to field. The rack
+	# is dead until its PSU gets a 480 V feed.
+	var cab := "chk_cab"
+	if not place_cabinet(cab, _world(Vector3(3.0, 0.0, 6.5)), 0.0):
 		problems.append("place cabinet failed")
+		cab = ""
 	else:
-		cab = cab_plc.comp_name.trim_suffix("_plc")
-		if connect_equipment("level_switch", "contact", cab + "_td1", "in") != "":
+		if cabinet_plc(cab) != "" or not cabinet_all_records(cab).is_empty():
+			problems.append("new cabinet was not empty")
+		if cabinet_add_module(cab, "card_di", 0, 8) == "":
+			problems.append("I/O card accepted without a CPU")
+		if cabinet_add_module(cab, "psu", 0, 0) != "" \
+				or cabinet_add_module(cab, "plc", 0, 4) != "" \
+				or cabinet_add_module(cab, "card_di", 0, 8) != "" \
+				or cabinet_add_module(cab, "card_do", 0, 10) != "" \
+				or cabinet_add_module(cab, "relay", 1, 0) != "" \
+				or cabinet_add_module(cab, "tb8d", 2, 0) != "":
+			problems.append("module placement refused")
+		if cabinet_add_module(cab, "plc", 1, 4) == "":
+			problems.append("second CPU accepted")
+		if cabinet_add_module(cab, "relay", 1, 0) == "":
+			problems.append("overlapping module accepted")
+		var backed: Dictionary = cabinet_backed_channels(cab)
+		if (backed["di"] as Array).size() != 8 or (backed["ai"] as Array).size() != 0:
+			problems.append("card-backed channels wrong: %s" % str(backed))
+		var plc_name := cabinet_plc(cab)
+		var cab_plc := sim.get_component(plc_name) as SimPLC
+		var psu_name := ""
+		var relay_name := ""
+		var t := "%s_m6_t" % cab  # the tb8d strip's terminals
+		for record_name in cabinet_all_records(cab):
+			if equip_types.get(record_name) == "psu":
+				psu_name = record_name
+			elif equip_types.get(record_name) == "relay":
+				relay_name = record_name
+		if connect_equipment("level_switch", "contact", t + "1", "in") != "":
 			problems.append("field wire to cabinet terminal refused")
-		if connect_equipment(cab + "_td1", "out", cab_plc.comp_name, "di_0", [], false) != "":
+		if connect_equipment(t + "1", "out", plc_name, "di_0", [], false) != "":
 			problems.append("internal terminal->PLC wire refused")
+		if connect_equipment(psu_name, "dc_out", plc_name, "power", [], false) != "":
+			problems.append("PSU->PLC power wire refused")
 		if cab_plc.set_program([{"coil": "do_0", "logic": [[{"ref": "di_0"}]]}]) != "":
 			problems.append("PLC refused a mirror rung")
-		if connect_equipment(cab_plc.comp_name, "do_0", cab + "_td2", "in", [], false) != "":
+		if connect_equipment(plc_name, "do_0", t + "2", "in", [], false) != "":
 			problems.append("internal PLC->terminal wire refused")
 		switch.set_band(150.0, 150.0)  # level < 150: contact closed for sure
 		for _i in 10:
 			sim.tick()
-		# The rack has no 480 V feed yet: the PLC must be dead.
-		if (sim.get_component(cab + "_td2") as SimTerminal).t_out.value > 0.5:
+		# The PSU has no 480 V feed yet: the whole rack must be dead.
+		if (sim.get_component(t + "2") as SimTerminal).t_out.value > 0.5:
 			problems.append("unpowered PLC drove an output")
-		if connect_equipment("plant_mains", "power", cab + "_psu", "ac_in") != "":
+		if connect_equipment("plant_mains", "power", psu_name, "ac_in") != "":
 			problems.append("mains to cabinet PSU refused")
 		for _i in 10:
 			sim.tick()
-		if (sim.get_component(cab + "_td2") as SimTerminal).t_out.value < 0.5:
+		if (sim.get_component(t + "2") as SimTerminal).t_out.value < 0.5:
 			problems.append("signal failed to traverse terminal -> PLC -> terminal")
-		# And through an interposing relay: td1 -> R1 coil, R1 contact
-		# -> td3 — the classic panel path.
-		if connect_equipment(cab + "_td1", "out", cab + "_r1", "coil", [], false) != "":
+		# And through the interposing relay.
+		if connect_equipment(t + "1", "out", relay_name, "coil", [], false) != "":
 			problems.append("terminal -> relay coil wire refused")
-		if connect_equipment(cab + "_r1", "contact", cab + "_td3", "in", [], false) != "":
+		if connect_equipment(relay_name, "contact", t + "3", "in", [], false) != "":
 			problems.append("relay contact -> terminal wire refused")
 		for _i in 10:
 			sim.tick()
-		if (sim.get_component(cab + "_td3") as SimTerminal).t_out.value < 0.5:
+		if (sim.get_component(t + "3") as SimTerminal).t_out.value < 0.5:
 			problems.append("signal failed to traverse the interposing relay")
 		switch.set_band(40.0, 80.0)
 	var real_path := save_path
@@ -191,14 +219,14 @@ func _exercise_build_api() -> void:
 		if not routed:
 			problems.append("routed waypoints lost in save/load round-trip")
 	if cab != "" and roundtrip:
-		var plc_after := sim.get_component(cab + "_plc") as SimPLC
+		var plc_after := sim.get_component(cabinet_plc(cab)) as SimPLC
 		if plc_after == null or plc_after.program.size() != 1:
 			problems.append("cabinet PLC program lost in save/load")
 		else:
 			(sim.get_component("level_switch") as SimFloatSwitch).set_band(150.0, 150.0)
 			for _i in 10:
 				sim.tick()
-			if (sim.get_component(cab + "_td2") as SimTerminal).t_out.value < 0.5:
+			if (sim.get_component("%s_m6_t2" % cab) as SimTerminal).t_out.value < 0.5:
 				problems.append("cabinet loop dead after save/load")
 			(sim.get_component("level_switch") as SimFloatSwitch).set_band(40.0, 80.0)
 		if not remove_cabinet(cab):
@@ -275,126 +303,296 @@ func place(type_id: String, name_: String, params: Dictionary,
 
 
 func place_new(type_id: String, world_pos: Vector3, rot_y: float) -> SimComponent:
-	if type_id == "cabinet":
-		var index := 1
-		while cabinets.has("cabinet_%d" % index):
-			index += 1
-		return place_cabinet("cabinet_%d" % index, world_pos, rot_y)
 	return place(type_id, sim.unique_name(type_id), {}, world_pos, rot_y, false)
 
 
 ## ---- control cabinets -----------------------------------------------------
-## A cabinet is a composite: one PLC plus pre-provisioned terminal
-## strips (6 discrete, 4 analog), all real kernel components sharing
-## the enclosure view. Field wires land on the terminal markers on the
-## flanks; the internal hookup (terminal <-> PLC channel) is made in
-## the cabinet's schematic panel as hidden wires.
+## A cabinet starts as an EMPTY enclosure with bare DIN rails. The
+## cabinet editor places modules — PSU, one PLC CPU, I/O cards (which
+## gate usable PLC channels), relays, terminal strips — each backed by
+## real kernel records, and lands internal wires as hidden kernel
+## wires. The 3D interior renders the layout; field wiring uses the
+## flank markers terminal strips and PSUs provide.
 
-const CAB_D_TERMS := 6
-const CAB_A_TERMS := 4
+func unique_cabinet_name() -> String:
+	var index := 1
+	while cabinets.has("cabinet_%d" % index):
+		index += 1
+	return "cabinet_%d" % index
 
-func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> SimComponent:
+
+func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 	if cabinets.has(name_):
-		return null
-	var plc := PlantFactory.make_record(sim, "plc", name_ + "_plc", {}) as SimPLC
-	sim.register_with_historian(plc)
-	var terms: Array[String] = []
-	for i in range(CAB_D_TERMS):
-		var term := PlantFactory.make_record(sim, "terminal",
-			"%s_td%d" % [name_, i + 1], {"kind": "discrete"})
-		sim.register_with_historian(term)
-		terms.append(term.comp_name)
-	for i in range(CAB_A_TERMS):
-		var term := PlantFactory.make_record(sim, "terminal",
-			"%s_ta%d" % [name_, i + 1], {"kind": "analog"})
-		sim.register_with_historian(term)
-		terms.append(term.comp_name)
-	# Integral PSU: 24VDC for the rack, fed by a 480VAC field cable
-	# landed on the flank. The PSU->PLC hookup is factory wiring — a
-	# pure kernel wire, not listed in the schematic.
-	var psu := PlantFactory.make_record(sim, "psu", name_ + "_psu", {}) as SimPowerSupply
-	sim.register_with_historian(psu)
-	sim.connect_ports(psu, "dc_out", plc, "power")
-	# Interposing relays on the second DIN rail: real kernel relays,
-	# wired up in the schematic panel like everything else inside.
-	var relays: Array[String] = []
-	for i in range(4):
-		var relay := PlantFactory.make_record(sim, "relay", "%s_r%d" % [name_, i + 1], {})
-		sim.register_with_historian(relay)
-		relays.append(relay.comp_name)
+		return false
 	var view := CabinetView.new()
 	view.position = to_local(world_pos)
 	view.rotation.y = rot_y
 	add_child(view)
-	view.setup(plc, name_)
+	view.setup(name_)
 	view.config_cb = _configure_cabinet
-	PlantFactory.attach_port_markers(view, psu, "psu",
-		{"ac_in": Vector3(-0.72, 0.30, 0.12), "dc_out": Vector3(0.72, 0.30, 0.12)})
-	views[psu.comp_name] = view
-	equip_types[psu.comp_name] = "psu"
-	protected[psu.comp_name] = true
-	member_of[psu.comp_name] = name_
-	# Terminal markers on the flanks: field wires land on the left
-	# (in), leave on the right (out). Discrete strip above analog.
-	for i in range(terms.size()):
-		var record := sim.get_component(terms[i])
-		var y := 1.72 - 0.13 * i
-		PlantFactory.attach_port_markers(view, record, "terminal",
-			{"in": Vector3(-0.72, y, 0.12), "out": Vector3(0.72, y, 0.12)})
-		views[terms[i]] = view
-		equip_types[terms[i]] = "terminal"
-		protected[terms[i]] = true
-		member_of[terms[i]] = name_
-	views[plc.comp_name] = view
-	equip_types[plc.comp_name] = "plc"
-	protected[plc.comp_name] = true
-	member_of[plc.comp_name] = name_
-	for relay_name in relays:
-		views[relay_name] = view
-		equip_types[relay_name] = "relay"
-		protected[relay_name] = true
-		member_of[relay_name] = name_
-	cabinets[name_] = {"node": view, "plc": plc.comp_name, "terminals": terms,
-		"psu": psu.comp_name, "relays": relays}
-	_revalidate_in = 3
-	return plc
+	cabinets[name_] = {"node": view, "modules": [], "next_id": 1}
+	return true
+
+
+## Add one module to a rail. Returns "" or the refusal reason.
+## forced_id / forced_bank replay a saved layout exactly.
+func cabinet_add_module(cab: String, type_id: String, rail: int, slot: int,
+		forced_id: String = "", forced_bank: int = -1) -> String:
+	if not cabinets.has(cab):
+		return "no such cabinet"
+	if not CabinetSpec.MODULES.has(type_id):
+		return "unknown module type"
+	var entry: Dictionary = cabinets[cab]
+	var modules: Array = entry["modules"]
+	if not CabinetSpec.span_free(modules, rail, slot, CabinetSpec.units_of(type_id)):
+		return "doesn't fit there"
+	if type_id == "plc" and cabinet_plc(cab) != "":
+		return "one CPU per cabinet"
+	var bank := -1
+	if CabinetSpec.CARD_FAMILY.has(type_id):
+		if cabinet_plc(cab) == "":
+			return "place a PLC CPU first"
+		bank = forced_bank if forced_bank >= 0 else _free_bank(cab, type_id)
+		if bank < 0:
+			return "no channel capacity left for that card"
+	var id := forced_id
+	if id == "":
+		id = "m%d" % int(entry["next_id"])
+	entry["next_id"] = maxi(int(entry["next_id"]), int(id.trim_prefix("m")) + 1)
+	var base := "%s_%s" % [cab, id]
+	var records: Array[String] = []
+	match type_id:
+		"psu":
+			records.append(_add_cab_record(cab, "psu", base, {}))
+		"plc":
+			records.append(_add_cab_record(cab, "plc", base,
+				{"di": 16, "do": 16, "ai": 8, "ao": 8}))
+		"relay":
+			records.append(_add_cab_record(cab, "relay", base, {}))
+		"tb8d":
+			for i in range(8):
+				records.append(_add_cab_record(cab, "terminal", "%s_t%d" % [base, i + 1],
+					{"kind": "discrete"}))
+		"tb4a":
+			for i in range(4):
+				records.append(_add_cab_record(cab, "terminal", "%s_t%d" % [base, i + 1],
+					{"kind": "analog"}))
+	modules.append({"id": id, "type": type_id, "rail": rail, "slot": slot,
+		"bank": bank, "records": records})
+	_sync_cabinet(cab)
+	return ""
+
+
+func _add_cab_record(cab: String, type_id: String, name_: String, params: Dictionary) -> String:
+	var record := PlantFactory.make_record(sim, type_id, name_, params)
+	sim.register_with_historian(record)
+	views[name_] = (cabinets[cab] as Dictionary)["node"]
+	equip_types[name_] = type_id
+	protected[name_] = true
+	member_of[name_] = cab
+	return name_
+
+
+## Lowest bank of the card's family not already claimed in this cabinet.
+func _free_bank(cab: String, type_id: String) -> int:
+	var family := str(CabinetSpec.CARD_FAMILY[type_id])
+	var width := int(CabinetSpec.CARD_CHANNELS[type_id])
+	var capacity := {"di": 16, "do": 16, "ai": 8, "ao": 8}[family] as int
+	var taken := {}
+	for module_v: Variant in (cabinets[cab] as Dictionary)["modules"]:
+		var module := module_v as Dictionary
+		if CabinetSpec.CARD_FAMILY.get(str(module["type"])) == family:
+			taken[int(module["bank"])] = true
+	for bank in range(capacity / width):
+		if not taken.has(bank):
+			return bank
+	return -1
+
+
+func cabinet_remove_module(cab: String, module_id: String) -> bool:
+	if not cabinets.has(cab):
+		return false
+	var entry: Dictionary = cabinets[cab]
+	var modules: Array = entry["modules"]
+	for i in range(modules.size()):
+		var module := modules[i] as Dictionary
+		if str(module["id"]) != module_id:
+			continue
+		if CabinetSpec.CARD_FAMILY.has(str(module["type"])):
+			_drop_card_wires(cab, module)
+		for record_name: String in module["records"]:
+			sim.remove_component(record_name)
+			_prune_wires_of(record_name)
+			views.erase(record_name)
+			equip_types.erase(record_name)
+			protected.erase(record_name)
+			member_of.erase(record_name)
+		modules.remove_at(i)
+		_sync_cabinet(cab)
+		return true
+	return false
+
+
+## Removing an I/O card takes its channels' wires with it.
+func _drop_card_wires(cab: String, module: Dictionary) -> void:
+	var plc_name := cabinet_plc(cab)
+	if plc_name == "":
+		return
+	var family := str(CabinetSpec.CARD_FAMILY[str(module["type"])])
+	var width := int(CabinetSpec.CARD_CHANNELS[str(module["type"])])
+	var channels := {}
+	for i in range(width):
+		channels["%s_%d" % [family, int(module["bank"]) * width + i]] = true
+	for visual in _wire_visuals.duplicate():
+		var hits: bool = (str(visual["a"]) == plc_name and channels.has(str(visual["a_port"]))) \
+			or (str(visual["b"]) == plc_name and channels.has(str(visual["b_port"])))
+		if hits:
+			remove_internal_wire(visual)
+
+
+func _prune_wires_of(member: String) -> void:
+	var keep: Array[Dictionary] = []
+	for visual in _wire_visuals:
+		if visual["a"] == member or visual["b"] == member:
+			if visual["node"] != null:
+				(visual["node"] as Node).queue_free()
+		else:
+			keep.append(visual)
+	_wire_visuals = keep
 
 
 func remove_cabinet(name_: String) -> bool:
 	if not cabinets.has(name_):
 		return false
 	var entry: Dictionary = cabinets[name_]
-	var members: Array[String] = []
-	members.append(str(entry["plc"]))
-	if entry.has("psu"):
-		members.append(str(entry["psu"]))
-	for relay_name: String in entry.get("relays", []):
-		members.append(relay_name)
-	for term: String in entry["terminals"]:
-		members.append(term)
-	for member in members:
-		sim.remove_component(member)
-		var keep: Array[Dictionary] = []
-		for visual in _wire_visuals:
-			if visual["a"] == member or visual["b"] == member:
-				if visual["node"] != null:
-					(visual["node"] as Node).queue_free()
-			else:
-				keep.append(visual)
-		_wire_visuals = keep
-		views.erase(member)
-		equip_types.erase(member)
-		protected.erase(member)
-		member_of.erase(member)
+	for module_v: Variant in (entry["modules"] as Array).duplicate():
+		var module := module_v as Dictionary
+		for record_name: String in module["records"]:
+			sim.remove_component(record_name)
+			_prune_wires_of(record_name)
+			views.erase(record_name)
+			equip_types.erase(record_name)
+			protected.erase(record_name)
+			member_of.erase(record_name)
 	(entry["node"] as Node).queue_free()
 	cabinets.erase(name_)
 	_revalidate_in = 3
 	return true
 
 
+## ---- cabinet queries (editor, ladder, port menu) --------------------------
+
+func cabinet_plc(cab: String) -> String:
+	for module_v: Variant in (cabinets.get(cab, {}) as Dictionary).get("modules", []):
+		var module := module_v as Dictionary
+		if str(module["type"]) == "plc":
+			return str((module["records"] as Array)[0])
+	return ""
+
+
+## Channels the placed I/O cards back, per family: {"di": [0,1,...]}.
+func cabinet_backed_channels(cab: String) -> Dictionary:
+	var out := {"di": [], "do": [], "ai": [], "ao": []}
+	for module_v: Variant in (cabinets.get(cab, {}) as Dictionary).get("modules", []):
+		var module := module_v as Dictionary
+		var type_id := str(module["type"])
+		if not CabinetSpec.CARD_FAMILY.has(type_id):
+			continue
+		var family := str(CabinetSpec.CARD_FAMILY[type_id])
+		var width := int(CabinetSpec.CARD_CHANNELS[type_id])
+		for i in range(width):
+			(out[family] as Array).append(int(module["bank"]) * width + i)
+	for family: String in out:
+		(out[family] as Array).sort()
+	return out
+
+
+## Field-wirable member records: terminals and PSUs.
+func cabinet_field_records(cab: String) -> Array[String]:
+	var out: Array[String] = []
+	for module_v: Variant in (cabinets.get(cab, {}) as Dictionary).get("modules", []):
+		var module := module_v as Dictionary
+		if str(module["type"]) in ["tb8d", "tb4a", "psu"]:
+			for record_name: String in module["records"]:
+				out.append(record_name)
+	return out
+
+
+## All member records, for the editor's wiring panel.
+func cabinet_all_records(cab: String) -> Array[String]:
+	var out: Array[String] = []
+	for module_v: Variant in (cabinets.get(cab, {}) as Dictionary).get("modules", []):
+		for record_name: String in (module_v as Dictionary)["records"]:
+			out.append(record_name)
+	return out
+
+
+## ---- cabinet sync: flank markers + 3D interior ----------------------------
+
+func _sync_cabinet(cab: String) -> void:
+	var entry: Dictionary = cabinets[cab]
+	var view := entry["node"] as CabinetView
+	var markers: Dictionary = view.get_meta("port_markers", {})
+	for key: String in markers:
+		var marker := markers[key] as Node
+		if is_instance_valid(marker):
+			marker.queue_free()
+	view.set_meta("port_markers", {})
+	var y := 1.72
+	for module_v: Variant in entry["modules"]:
+		var module := module_v as Dictionary
+		var type_id := str(module["type"])
+		for record_name: String in module["records"]:
+			var record := sim.get_component(record_name)
+			if record is SimTerminal:
+				PlantFactory.attach_port_markers(view, record, "terminal",
+					{"in": Vector3(-0.72, y, 0.12), "out": Vector3(0.72, y, 0.12)})
+				y -= 0.115
+			elif record is SimPowerSupply:
+				PlantFactory.attach_port_markers(view, record, "psu",
+					{"ac_in": Vector3(-0.72, y, 0.12), "dc_out": Vector3(0.72, y, 0.12)})
+				y -= 0.115
+	view.set_layout(entry["modules"], _cabinet_wire_specs(cab))
+	_revalidate_in = 3
+
+
+func _cabinet_wire_specs(cab: String) -> Array:
+	var specs: Array = []
+	var members := {}
+	for record_name in cabinet_all_records(cab):
+		members[record_name] = true
+	for visual in _wire_visuals:
+		if not (members.has(str(visual["a"])) and members.has(str(visual["b"]))):
+			continue
+		var a := _cabinet_port_pos(cab, str(visual["a"]))
+		var b := _cabinet_port_pos(cab, str(visual["b"]))
+		var src := sim.get_component(str(visual["a"]))
+		var port: SimOutputPort = src.outputs.get(str(visual["a_port"])) if src != null else null
+		var color: Color = PlantFactory.KIND_COLORS.get(port.kind, Color.GRAY) if port != null \
+			else Color.GRAY
+		specs.append({"a": a, "b": b, "color": color})
+	return specs
+
+
+func _cabinet_port_pos(cab: String, record_name: String) -> Vector3:
+	for module_v: Variant in (cabinets[cab] as Dictionary)["modules"]:
+		var module := module_v as Dictionary
+		var records: Array = module["records"]
+		var index := records.find(record_name)
+		if index < 0:
+			continue
+		var units := CabinetSpec.units_of(str(module["type"]))
+		var center := CabinetSpec.module_center(int(module["rail"]), int(module["slot"]), units)
+		var width := units * CabinetSpec.UNIT_W - 0.012
+		if records.size() > 1:  # terminal within a strip
+			center.x += -width / 2.0 + (index + 0.5) * width / records.size()
+		return center + Vector3(0, -CabinetSpec.MODULE_H / 2.0, 0)
+	return Vector3.ZERO
+
+
 func _configure_cabinet(view: CabinetView) -> void:
-	if cabinet_panel != null:
-		cabinet_panel.open(self, view.cabinet_name)
+	if cabinet_editor != null:
+		cabinet_editor.open(self, view.cabinet_name)
 
 
 ## Drop one internal (hidden) wire — the schematic panel's remove.
@@ -906,18 +1104,23 @@ func save_game() -> bool:
 	for name_: String in cabinets:
 		var entry: Dictionary = cabinets[name_]
 		var node := entry["node"] as Node3D
-		var plc := sim.get_component(str(entry["plc"]))
-		var relay_states := {}
-		for relay_name: String in entry.get("relays", []):
-			var relay := sim.get_component(relay_name)
-			if relay != null:
-				relay_states[relay_name] = relay.state_dict()
+		var module_list: Array = []
+		var states := {}
+		for module_v: Variant in entry["modules"]:
+			var module := module_v as Dictionary
+			module_list.append({"id": module["id"], "type": module["type"],
+				"rail": module["rail"], "slot": module["slot"], "bank": module["bank"]})
+			for record_name: String in module["records"]:
+				var record := sim.get_component(record_name)
+				if record != null:
+					var state := record.state_dict()
+					if not state.is_empty():
+						states[record_name] = state
 		cab_list.append({
 			"name": name_,
 			"pos": [node.global_position.x, node.global_position.y, node.global_position.z],
 			"rot_y": node.rotation.y,
-			"plc_state": plc.state_dict() if plc != null else {},
-			"relay_states": relay_states,
+			"modules": module_list, "states": states,
 		})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time,
@@ -990,16 +1193,18 @@ func load_game() -> bool:
 
 	for entry: Dictionary in payload.get("cabinets", []):
 		var pos_arr: Array = entry["pos"]
-		var plc := place_cabinet(entry["name"],
-			Vector3(pos_arr[0], pos_arr[1], pos_arr[2]),
-			float(entry.get("rot_y", 0.0)))
-		if plc != null:
-			plc.apply_state(entry.get("plc_state", {}))
-			var relay_states: Dictionary = entry.get("relay_states", {})
-			for relay_name: String in relay_states:
-				var relay := sim.get_component(relay_name)
-				if relay != null:
-					relay.apply_state(relay_states[relay_name])
+		place_cabinet(entry["name"],
+			Vector3(pos_arr[0], pos_arr[1], pos_arr[2]), float(entry.get("rot_y", 0.0)))
+		for module_v: Variant in entry.get("modules", []):
+			var module := module_v as Dictionary
+			cabinet_add_module(entry["name"], str(module["type"]),
+				int(module["rail"]), int(module["slot"]),
+				str(module["id"]), int(module.get("bank", -1)))
+		var states: Dictionary = entry.get("states", {})
+		for record_name: String in states:
+			var record := sim.get_component(record_name)
+			if record != null:
+				record.apply_state(states[record_name])
 
 	for entry: Dictionary in payload.get("runs", []):
 		var pts: Array = []

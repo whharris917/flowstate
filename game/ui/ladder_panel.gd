@@ -74,7 +74,7 @@ func _ready() -> void:
 	var add_rung := Button.new()
 	add_rung.text = "  + rung  "
 	add_rung.pressed.connect(func() -> void:
-		_model.append({"coil": "m_0", "logic": [[{"ref": "di_0", "nc": false}]]})
+		_model.append({"coil": "m_0", "logic": [[{"ref": "m_0", "nc": false}]]})
 		_apply()
 		_rebuild())
 	foot.add_child(add_rung)
@@ -87,12 +87,12 @@ func _ready() -> void:
 func open(plant: Plant, cab_name: String) -> void:
 	_plant = plant
 	_cab = cab_name
-	var entry: Dictionary = plant.cabinets.get(cab_name, {})
-	if entry.is_empty():
+	var plc_name := plant.cabinet_plc(cab_name)
+	if plc_name == "":
 		return
-	_plc = plant.sim.get_component(str(entry["plc"])) as SimPLC
+	_plc = plant.sim.get_component(plc_name) as SimPLC
 	_model = _plc.program.duplicate(true)
-	_title.text = "%s — ladder logic" % str(entry["plc"])
+	_title.text = "%s — ladder logic" % plc_name
 	_status.text = "contacts: pick a reference, NC for normally-closed · rungs scan top to bottom"
 	_rebuild()
 	visible = true
@@ -105,8 +105,8 @@ func close_panel() -> void:
 	var cab := _cab
 	_plant = null
 	_plc = null
-	if plant != null and plant.cabinet_panel != null:
-		plant.cabinet_panel.open(plant, cab)
+	if plant != null and plant.cabinet_editor != null:
+		plant.cabinet_editor.open(plant, cab)
 	else:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -119,11 +119,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## ---- ladder construction --------------------------------------------------
 
+## Only channels backed by mounted I/O cards are offered (memories and
+## timers are always in the CPU).
 func _refs() -> Array[String]:
+	var backed: Dictionary = _plant.cabinet_backed_channels(_cab)
 	var out: Array[String] = []
-	for i in range(_plc.n_di):
+	for i: int in backed["di"]:
 		out.append("di_%d" % i)
-	for i in range(_plc.n_do):
+	for i: int in backed["do"]:
 		out.append("do_%d" % i)
 	for i in range(_plc.mem.size()):
 		out.append("m_%d" % i)
@@ -133,8 +136,9 @@ func _refs() -> Array[String]:
 
 
 func _coils() -> Array[String]:
+	var backed: Dictionary = _plant.cabinet_backed_channels(_cab)
 	var out: Array[String] = []
-	for i in range(_plc.n_do):
+	for i: int in backed["do"]:
 		out.append("do_%d" % i)
 	for i in range(_plc.mem.size()):
 		out.append("m_%d" % i)
@@ -184,7 +188,7 @@ func _rung_row(rung_index: int) -> Control:
 	add_branch.text = "+ parallel branch"
 	add_branch.add_theme_font_size_override("font_size", 11)
 	add_branch.pressed.connect(func() -> void:
-		(_model[rung_index]["logic"] as Array).append([{"ref": "di_0", "nc": false}])
+		(_model[rung_index]["logic"] as Array).append([{"ref": "m_0", "nc": false}])
 		_apply()
 		_rebuild())
 	branches_box.add_child(add_branch)
@@ -223,7 +227,7 @@ func _branch_row(rung_index: int, branch_index: int) -> Control:
 	add.add_theme_font_size_override("font_size", 11)
 	add.pressed.connect(func() -> void:
 		((_model[rung_index]["logic"] as Array)[branch_index] as Array).append(
-			{"ref": "di_0", "nc": false})
+			{"ref": "m_0", "nc": false})
 		_apply()
 		_rebuild())
 	row.add_child(add)
