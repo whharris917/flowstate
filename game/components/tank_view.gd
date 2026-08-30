@@ -15,8 +15,10 @@ var _fill: MeshInstance3D
 func setup(tank_: SimTank, switch_: SimFloatSwitch) -> void:
 	tank = tank_
 	switch = switch_
-	var shell_mat := ViewUtil.flat(Color(0.55, 0.62, 0.70, 0.28))
+	var shell_mat := ViewUtil.flat(Color(0.72, 0.75, 0.78, 0.30))
 	shell_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shell_mat.metallic = 0.7
+	shell_mat.roughness = 0.25
 	ViewUtil.cylinder(self, RADIUS, HEIGHT, Vector3(0, HEIGHT / 2.0, 0), shell_mat)
 	_fill = ViewUtil.cylinder(self, RADIUS * 0.9, 1.0, Vector3.ZERO,
 		ViewUtil.flat(Color(0.16, 0.47, 0.84)))
