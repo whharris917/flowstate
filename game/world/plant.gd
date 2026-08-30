@@ -25,6 +25,7 @@ var views: Dictionary = {}         # record name -> Node3D view
 var equip_types: Dictionary = {}   # record name -> type_id
 var protected: Dictionary = {}     # record name -> true (not deletable)
 var structures: Dictionary = {}    # name -> {type, node}
+var runs: Dictionary = {}          # name -> {kind, node, points (plant-local)}
 var _wire_visuals: Array[Dictionary] = []   # {node, a, b}
 
 var _accumulator: float = 0.0
@@ -288,6 +289,42 @@ func remove_structure(name_: String) -> bool:
 	return true
 
 
+## ---- standalone infrastructure runs --------------------------------------
+
+func unique_run_name(prefix: String) -> String:
+	var index := 1
+	while runs.has("%s_%d" % [prefix, index]):
+		index += 1
+	return "%s_%d" % [prefix, index]
+
+
+## A routed run with no kernel wire behind it: pipe, conduit, or cable
+## tray laid ahead of the equipment it will one day serve. sparse
+## points are plant-local; colliders go on layer 1, so the run is real
+## support for whatever gets routed along it later.
+func place_run(kind: String, name_: String, sparse_local: Array) -> bool:
+	if runs.has(name_) or not StructureFactory.RUNS.has(kind):
+		return false
+	var spec: Dictionary = StructureFactory.RUNS[kind]
+	var view := PipeView.new()
+	add_child(view)
+	view.setup(PipeRoute.orthogonalize(sparse_local), func() -> float: return 0.0,
+		spec["color"], spec["radius"], name_, spec["style"], 1)
+	runs[name_] = {"kind": kind, "node": view, "points": sparse_local}
+	_revalidate_in = 3
+	return true
+
+
+func remove_placed_run(view: PipeView) -> bool:
+	for name_: String in runs:
+		if (runs[name_] as Dictionary)["node"] == view:
+			view.queue_free()
+			runs.erase(name_)
+			_revalidate_in = 3  # whatever it carried re-checks
+			return true
+	return false
+
+
 ## Remove one routed run by its view (X while aiming at it): the wire
 ## leaves the kernel, the input reverts next scan, the visual goes.
 func remove_run(view: PipeView) -> bool:
@@ -303,23 +340,32 @@ func remove_run(view: PipeView) -> bool:
 	return false
 
 
-## Re-run the support rule over every routed run and update brackets
-## and alarm state. Called a few frames after geometry changes.
+## Re-run the support rule over every routed run — wires and standalone
+## infrastructure — updating brackets and alarm state. Called a few
+## frames after geometry changes. A run excludes its own colliders so
+## it can't count as its own support.
 func _revalidate_supports() -> void:
 	var space := get_world_3d().direct_space_state
 	for visual in _wire_visuals:
 		var sparse: Array = [_marker_pos(str(visual["a"]), str(visual["a_port"]))]
 		sparse.append_array(visual["waypoints"])
 		sparse.append(_marker_pos(str(visual["b"]), str(visual["b_port"])))
-		var path := PipeRoute.orthogonalize(sparse)
-		var global_path: Array[Vector3] = []
-		for point in path:
-			global_path.append(to_global(point))
-		var result := SupportCheck.evaluate(global_path, space)
-		var local_brackets: Array[Dictionary] = []
-		for bracket: Dictionary in result["brackets"]:
-			local_brackets.append({"from": to_local(bracket["from"]), "to": to_local(bracket["to"])})
-		(visual["node"] as PipeView).set_supports(local_brackets, not bool(result["ok"]))
+		_apply_support(visual["node"] as PipeView, sparse, space)
+	for name_: String in runs:
+		var entry: Dictionary = runs[name_]
+		_apply_support(entry["node"] as PipeView, entry["points"], space)
+
+
+func _apply_support(view: PipeView, sparse_local: Array, space: PhysicsDirectSpaceState3D) -> void:
+	var path := PipeRoute.orthogonalize(sparse_local)
+	var global_path: Array[Vector3] = []
+	for point in path:
+		global_path.append(to_global(point))
+	var result := SupportCheck.evaluate(global_path, space, view.collider_rids())
+	var local_brackets: Array[Dictionary] = []
+	for bracket: Dictionary in result["brackets"]:
+		local_brackets.append({"from": to_local(bracket["from"]), "to": to_local(bracket["to"])})
+	view.set_supports(local_brackets, not bool(result["ok"]))
 
 
 func _wire_visual(src_name: String, src_port: String,
@@ -469,13 +515,34 @@ func _exercise_supports() -> void:
 		problems.append("center-to-center beam across columns was refused")
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 8), 0.0, space) == "":
 		problems.append("floating beam was accepted")
+	if _support_exercise_phase == 2:
+		if not problems.is_empty():
+			push_warning("[flowstate] support exercise FAILED: " + "; ".join(problems))
+			_support_exercise_phase = 0
+			return
+		# Lay a floor-hugging cable tray; next phase, conduit strung
+		# above it must count the tray as its support.
+		place_run("run_tray", "chk_tray",
+			[to_local(origin + Vector3(-3.6, 0.42, 2)), to_local(origin + Vector3(3.6, 0.42, 2))])
+		_support_exercise_phase = 3
+		_support_exercise_wait = 4
+		return
+	var tray_view := (runs["chk_tray"] as Dictionary)["node"] as PipeView
+	var conduit: Array[Vector3] = [origin + Vector3(-3.5, 0.95, 2), origin + Vector3(3.5, 0.95, 2)]
+	var over_tray := SupportCheck.evaluate(conduit, space)
+	if not bool(over_tray["ok"]):
+		problems.append("conduit over the tray was not supported by it")
+	var without_tray := SupportCheck.evaluate(conduit, space, tray_view.collider_rids())
+	if bool(without_tray["ok"]):
+		problems.append("conduit counted something other than the tray as support")
+	if not remove_placed_run(tray_view):
+		problems.append("tray cleanup failed")
 	for chk in ["chk_col_1", "chk_col_2", "chk_col_3", "chk_col_4"]:
 		if not remove_structure(chk):
 			problems.append("structure cleanup failed")
 	_support_exercise_phase = 0
 	if problems.is_empty():
-		print("[flowstate] support exercise OK — open span refused, braced span %.1f m passed"
-			% float(braced_check["max_span"]))
+		print("[flowstate] support exercise OK — spans, bearings, and tray-as-support all behave")
 	else:
 		push_warning("[flowstate] support exercise FAILED: " + "; ".join(problems))
 
@@ -518,9 +585,17 @@ func save_game() -> bool:
 			"pos": [base.x, base.y, base.z], "rot_y": node.rotation.y,
 			"length": entry.get("length", -1.0),
 		})
+	var run_list: Array = []
+	for name_: String in runs:
+		var entry: Dictionary = runs[name_]
+		var pts: Array = []
+		for point: Vector3 in entry["points"]:
+			pts.append([point.x, point.y, point.z])
+		run_list.append({"kind": entry["kind"], "name": name_, "points": pts})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time,
 		"components": comps, "wires": wire_list, "structures": struct_list,
+		"runs": run_list,
 	}
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
@@ -562,12 +637,21 @@ func load_game() -> bool:
 		(visual["node"] as Node).queue_free()
 	for name_: String in structures:
 		((structures[name_] as Dictionary)["node"] as Node).queue_free()
+	for name_: String in runs:
+		((runs[name_] as Dictionary)["node"] as Node).queue_free()
 	views.clear()
 	equip_types.clear()
 	protected.clear()
 	structures.clear()
+	runs.clear()
 	_wire_visuals.clear()
 	_new_graph()
+
+	for entry: Dictionary in payload.get("runs", []):
+		var pts: Array = []
+		for point: Array in entry["points"]:
+			pts.append(Vector3(point[0], point[1], point[2]))
+		place_run(entry["kind"], entry["name"], pts)
 
 	for entry: Dictionary in payload.get("structures", []):
 		var pos_arr: Array = entry["pos"]

@@ -28,6 +28,13 @@ func _run(world: Node) -> void:
 	plant.connect_equipment("supply_tank", "level", high.comp_name, "process",
 		[plant.to_local(Vector3(7.0, 3.2, 2.5))])
 
+	# Standalone infrastructure: a cable tray on the pad and a conduit
+	# run strung above it, carried by the tray.
+	plant.place_run("run_tray", "probe_tray",
+		[plant.to_local(Vector3(1.0, 0.5, 4.0)), plant.to_local(Vector3(10.0, 0.5, 4.0))])
+	plant.place_run("run_conduit", "probe_conduit",
+		[plant.to_local(Vector3(1.2, 1.0, 4.0)), plant.to_local(Vector3(9.8, 1.0, 4.0))])
+
 	player.global_position = Vector3(7.0, 0.15, 9.0)
 	player.zoom_t = 0.75
 	player._zoom_now = 0.75

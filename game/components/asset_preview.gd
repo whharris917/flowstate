@@ -8,7 +8,15 @@ class_name AssetPreview
 
 static func build(type_id: String) -> Node3D:
 	var node: Node3D = null
-	if StructureFactory.SIZES.has(type_id):
+	if StructureFactory.RUNS.has(type_id):
+		# A short demo elbow of the run, for thumbnails.
+		var spec: Dictionary = StructureFactory.RUNS[type_id]
+		var run := PipeView.new()
+		run.setup([Vector3(-0.7, 0.15, 0), Vector3(0.5, 0.15, 0), Vector3(0.5, 1.0, 0)],
+			func() -> float: return 0.0,
+			spec["color"], spec["radius"], "", spec["style"], 0)
+		node = run
+	elif StructureFactory.SIZES.has(type_id):
 		node = StructureFactory.make_view(type_id, "preview")
 	else:
 		# A scratch sim graph backs the preview records; it is never

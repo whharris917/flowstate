@@ -38,6 +38,7 @@ var _beam_ghost: MeshInstance3D
 var _beam_anchor := Vector3.INF
 var _beam_end := Vector3.INF
 var _beam_len := 0.0
+var _run_points: Array[Vector3] = []   # global space while laying a run
 var _pending_marker: StaticBody3D = null
 var _waypoints: Array[Vector3] = []   # global space while routing
 var _route_node: Node3D
@@ -94,10 +95,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		page = (page + 1) % 2
 		catalog_index = 0
 		_beam_anchor = Vector3.INF
+		_run_points.clear()
 		_update_hud()
+	elif event.is_action_pressed("interact") and mode == Mode.PLACE and _is_run():
+		_finish_run()
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("rotate_item") and mode == Mode.PLACE:
 		if _is_beam() and _beam_anchor != Vector3.INF:
 			_beam_anchor = Vector3.INF
+			_update_hud()
+		elif _is_run() and not _run_points.is_empty():
+			_run_points.pop_back()
 			_update_hud()
 		else:
 			rot_y = wrapf(rot_y + PI / 2.0, 0.0, TAU)
@@ -116,6 +124,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			if event.is_action_pressed("catalog_%d" % (i + 1)):
 				catalog_index = i
 				_beam_anchor = Vector3.INF
+				_run_points.clear()
+				_clear_route()
 				if mode != Mode.PLACE:
 					_set_mode(Mode.PLACE)
 				_update_hud()
@@ -127,6 +137,7 @@ func _set_mode(new_mode: Mode) -> void:
 	_clear_ghost()
 	_beam_anchor = Vector3.INF
 	_beam_ghost.visible = false
+	_run_points.clear()
 	(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
 	_pending_marker = null
 	_waypoints.clear()
@@ -152,6 +163,13 @@ func _update_hud() -> void:
 				var step := "click a supported START point" if _beam_anchor == Vector3.INF \
 					else "click the END point (max %.0f m) · R restart" % StructureFactory.BEAM_MAX
 				hud.set_mode_text("BEAM — %s · B/Esc exit" % step)
+			elif _is_run():
+				var support := "" if _run_points.size() < 2 else \
+					("\nsupport OK (span %.1f m)" % _route_span if _route_ok
+					else "\nUNSUPPORTED — span %.1f m over %.1f m max" \
+					% [_route_span, SupportCheck.MAX_SPAN])
+				hud.set_mode_text("RUN — click surfaces to lay points (%d) · E finish · R undo · B/Esc exit%s"
+					% [_run_points.size(), support])
 			else:
 				hud.set_mode_text("BUILD — click place · R rotate · B/Esc exit")
 		Mode.CONNECT:
@@ -203,45 +221,56 @@ func _update_route_preview() -> void:
 	_route_mat.albedo_color = Color(base_color.r, base_color.g, base_color.b, 0.6)
 	if path != _last_route:
 		_last_route = path
-		_rebuild_route(path, kind)
+		var is_process := kind == SimTypes.PortKind.PROCESS_FLOW \
+			or kind == SimTypes.PortKind.PROCESS_LEVEL
+		_rebuild_route(path, 0.07 if is_process else 0.025, "pipe")
 
 
-## Real translucent pipe as the preview — same radii and elbows the
-## committed run will have.
-func _rebuild_route(path: Array[Vector3], kind: SimTypes.PortKind) -> void:
+## Standalone run laying: the preview is the run itself, stretched to
+## the aim point; clicks pin points, E commits.
+func _update_run_preview() -> void:
+	var aim := _aim_point()
+	var sparse: Array = []
+	sparse.append_array(_run_points)
+	if aim != Vector3.INF and (_run_points.is_empty()
+			or aim.distance_to(_run_points[_run_points.size() - 1]) > 0.01):
+		sparse.append(aim)
+	if sparse.size() < 2:
+		_clear_route()
+		return
+	var path := PipeRoute.orthogonalize(sparse)
+	if path.size() < 2:
+		_clear_route()
+		return
+	var check := SupportCheck.evaluate(path,
+		player.camera.get_world_3d().direct_space_state)
+	var ok := bool(check["ok"])
+	var span := float(check["max_span"])
+	if ok != _route_ok or absf(span - _route_span) > 0.05:
+		_route_ok = ok
+		_route_span = span
+		_update_hud()
+	var spec: Dictionary = StructureFactory.RUNS[_current_type()]
+	var base_color: Color = spec["color"] if ok else Color(0.9, 0.2, 0.15)
+	_route_mat.albedo_color = Color(base_color.r, base_color.g, base_color.b, 0.6)
+	if path != _last_route:
+		_last_route = path
+		_rebuild_route(path, spec["radius"], spec["style"])
+
+
+## Real translucent geometry as the preview — the same segments and
+## fittings the committed run will have.
+func _rebuild_route(path: Array[Vector3], radius: float, style: String) -> void:
 	for old in _route_node.get_children():
 		old.queue_free()
-	var is_process := kind == SimTypes.PortKind.PROCESS_FLOW \
-		or kind == SimTypes.PortKind.PROCESS_LEVEL
-	var radius := 0.07 if is_process else 0.025
 	for i in range(path.size() - 1):
-		var from := path[i]
-		var to := path[i + 1]
-		var length := from.distance_to(to)
-		if length < 0.005:
+		if path[i].distance_to(path[i + 1]) < 0.005:
 			continue
-		var mesh := CylinderMesh.new()
-		mesh.top_radius = radius
-		mesh.bottom_radius = radius
-		mesh.height = length
-		var inst := MeshInstance3D.new()
-		inst.mesh = mesh
-		inst.material_override = _route_mat
-		_route_node.add_child(inst)
-		inst.global_position = (from + to) / 2.0
-		var direction := (to - from).normalized()
-		if absf(direction.y) < 0.99:
-			inst.look_at(to, Vector3.UP)
-			inst.rotate_object_local(Vector3.RIGHT, -PI / 2.0)
+		_route_node.add_child(PipeView.segment_node(path[i], path[i + 1], radius, style, _route_mat))
 		if i > 0:
-			var elbow := SphereMesh.new()
-			elbow.radius = radius * 1.2
-			elbow.height = radius * 2.4
-			var joint := MeshInstance3D.new()
-			joint.mesh = elbow
-			joint.material_override = _route_mat
-			_route_node.add_child(joint)
-			joint.global_position = from
+			var joint := PipeView.joint_node(path[i], radius, style, _route_mat)
+			if joint != null:
+				_route_node.add_child(joint)
 
 
 func _clear_route() -> void:
@@ -293,6 +322,10 @@ func _is_beam() -> bool:
 	return page == 1 and _current_type() == "s_beam"
 
 
+func _is_run() -> bool:
+	return page == 1 and StructureFactory.RUNS.has(_current_type())
+
+
 ## The world point the placement ray lands on, or empty. Aiming at a
 ## column magnetizes to its top center — the natural beam seat.
 func _place_hit() -> Dictionary:
@@ -305,13 +338,18 @@ func _place_hit() -> Dictionary:
 
 
 func _update_ghost() -> void:
-	if _is_beam():
+	if _is_beam() or _is_run():
 		if _ghost != null:
 			_ghost.visible = false
 		(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
-		_update_beam_ghost()
+		if _is_beam():
+			_update_beam_ghost()
+		else:
+			_beam_ghost.visible = false
+			_update_run_preview()
 		return
 	_beam_ghost.visible = false
+	_clear_route()
 	_refresh_ghost_asset()
 	if _ghost == null:
 		return
@@ -467,6 +505,14 @@ func _try_place() -> void:
 	if _is_beam():
 		_try_place_beam()
 		return
+	if _is_run():
+		var aim := _aim_point()
+		if aim == Vector3.INF:
+			hud.toast("aim at a surface")
+			return
+		_run_points.append(aim)
+		_update_hud()
+		return
 	if _ghost == null or not _ghost.visible or not _ghost_valid:
 		var reason := "can't place here"
 		if page == 1 and _ghost != null and _ghost.visible:
@@ -510,6 +556,28 @@ func _try_place_beam() -> void:
 	if plant.place_structure("s_beam", name_, mid, yaw, _beam_len):
 		hud.toast("placed %s — %.1f m" % [name_, _beam_len])
 	_beam_anchor = Vector3.INF
+	_update_hud()
+
+
+func _finish_run() -> void:
+	if _run_points.size() < 2:
+		hud.toast("lay at least two points, then E to finish")
+		return
+	var path := PipeRoute.orthogonalize(_run_points)
+	var check := SupportCheck.evaluate(path,
+		player.camera.get_world_3d().direct_space_state)
+	if not bool(check["ok"]):
+		hud.toast("unsupported span %.1f m (max %.1f) — route along structure"
+			% [float(check["max_span"]), SupportCheck.MAX_SPAN])
+		return
+	var local_points: Array = []
+	for point in _run_points:
+		local_points.append(plant.to_local(point))
+	var name_ := plant.unique_run_name(_current_type())
+	if plant.place_run(_current_type(), name_, local_points):
+		hud.toast("placed %s" % name_)
+	_run_points.clear()
+	_clear_route()
 	_update_hud()
 
 
@@ -567,7 +635,9 @@ func _try_delete() -> void:
 	if view == null:
 		return
 	if view is PipeView:
-		hud.toast("removed run" if plant.remove_run(view as PipeView) else "can't remove that run")
+		var pipe := view as PipeView
+		var gone := plant.remove_run(pipe) or plant.remove_placed_run(pipe)
+		hud.toast("removed run" if gone else "can't remove that run")
 		return
 	if view.has_meta("structure_name"):
 		var struct_name := str(view.get_meta("structure_name"))

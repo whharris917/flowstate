@@ -9,7 +9,19 @@ const CATALOG: Array[Dictionary] = [
 	{"type": "s_beam", "label": "Beam — stretch to fit"},
 	{"type": "s_wall", "label": "Wall panel 4 m"},
 	{"type": "s_deck", "label": "Deck / ceiling 4 m"},
+	{"type": "run_pipe", "label": "Pipe run"},
+	{"type": "run_conduit", "label": "Conduit run"},
+	{"type": "run_tray", "label": "Cable tray"},
 ]
+
+# Standalone routed infrastructure — laid before any equipment exists,
+# no kernel wire behind it. Colliders live on layer 1: a tray or rack
+# pipe is real support the support rule can count.
+const RUNS := {
+	"run_pipe": {"radius": 0.07, "style": "pipe", "color": Color(0.65, 0.67, 0.70)},
+	"run_conduit": {"radius": 0.025, "style": "pipe", "color": Color(0.72, 0.72, 0.75)},
+	"run_tray": {"radius": 0.20, "style": "tray", "color": Color(0.55, 0.57, 0.60)},
+}
 
 # Beams stretch between two supported points, up to a maximum span.
 const BEAM_MIN := 1.0

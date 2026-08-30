@@ -24,9 +24,12 @@ const _RAY_DIRS: Array[Vector3] = [
 ]
 
 
-## path: global-space polyline (an orthogonalized route).
+## path: global-space polyline (an orthogonalized route). exclude
+## lists collider RIDs to ignore — a run re-validating itself must not
+## count as its own support.
 ## Returns {"ok": bool, "max_span": float, "brackets": [{from, to}]}.
-static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D) -> Dictionary:
+static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
+		exclude: Array[RID] = []) -> Dictionary:
 	var samples: Array[Vector3] = []
 	var arcs: Array[float] = []
 	var total := 0.0
@@ -50,6 +53,7 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D) -> 
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = shape
 	query.collision_mask = SUPPORT_MASK
+	query.exclude = exclude
 
 	var supported: Array[bool] = []
 	for i in range(samples.size()):
@@ -78,7 +82,7 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D) -> 
 			continue
 		if arcs[i] <= END_GRACE or arcs[i] >= total - END_GRACE:
 			continue
-		var anchor := _nearest_surface(samples[i], space)
+		var anchor := _nearest_surface(samples[i], space, exclude)
 		if anchor != Vector3.INF:
 			brackets.append({"from": samples[i], "to": anchor})
 			last_bracket = arcs[i]
@@ -86,10 +90,12 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D) -> 
 	return {"ok": max_span <= MAX_SPAN + 0.01, "max_span": max_span, "brackets": brackets}
 
 
-static func _nearest_surface(point: Vector3, space: PhysicsDirectSpaceState3D) -> Vector3:
+static func _nearest_surface(point: Vector3, space: PhysicsDirectSpaceState3D,
+		exclude: Array[RID]) -> Vector3:
 	for dir in _RAY_DIRS:
 		var query := PhysicsRayQueryParameters3D.create(point, point + dir * (REACH + 0.15),
 			SUPPORT_MASK)
+		query.exclude = exclude
 		var hit := space.intersect_ray(query)
 		if not hit.is_empty():
 			return hit["position"]
