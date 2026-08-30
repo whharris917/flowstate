@@ -36,7 +36,7 @@ func _ready() -> void:
 	add_child(builder)
 	builder.setup(player, plant, hud)
 	_after_plant()
-	hud.toast("WASD move · E use · B build · C connect · X remove · F5/F9 save/load")
+	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · F5/F9 save/load")
 
 
 ## Environment, geometry, lighting. Override in each world.

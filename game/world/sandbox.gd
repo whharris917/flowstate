@@ -5,7 +5,8 @@ extends WorldBase
 ## a world-space grid shader so movement and placement scale read even
 ## with no walls anywhere. The starter loop sits on a pad at the origin.
 
-const GROUND_SIZE := 600.0
+const GROUND_SIZE := 4000.0   # wide enough that the edge stays past the horizon
+                              # even from the top of the camera's zoom handle
 const PAD_SIZE := Vector3(16.0, 0.16, 12.0)
 
 const COL_PAD := Color(0.55, 0.55, 0.53)
