@@ -60,11 +60,13 @@ class Tank(Component):
 class Gauge(Component):
     """Local indicator plus analog transmitter output.
 
-    Two kinds, both honest derivations of existing process state:
+    Three kinds, all honest derivations of existing process state:
       - "level_kpa": hydrostatic head at a vessel bottom. The process
         level (liters) becomes height via liters_per_meter, and
         P = rho*g*h (water) in kPa.
       - "flow": inline flow indication, L/s, read directly.
+      - "dp_pa": differential pressure between two pressure taps
+        (process_a - process_b), Pa — the cleanroom Magnehelic.
 
     The reading is mirrored on an analog signal output so it can later
     feed controllers — a gauge today, a transmitter when wired.
@@ -73,7 +75,9 @@ class Gauge(Component):
     KINDS = {
         "level_kpa": PortKind.PROCESS_LEVEL,
         "flow": PortKind.PROCESS_FLOW,
+        "dp_pa": PortKind.PROCESS_PRESSURE,
     }
+    UNITS = {"level_kpa": "kPa", "flow": "L/s", "dp_pa": "Pa"}
     WATER_KPA_PER_M = 9.81
 
     def __init__(
@@ -87,20 +91,114 @@ class Gauge(Component):
         self.kind = kind
         self.liters_per_meter = liters_per_meter
         self.reading = 0.0
-        self.process = self.add_input("process", self.KINDS[kind])
+        if kind == "dp_pa":
+            self.process_a = self.add_input("process_a", self.KINDS[kind])
+            self.process_b = self.add_input("process_b", self.KINDS[kind])
+        else:
+            self.process = self.add_input("process", self.KINDS[kind])
         self.signal = self.add_output("signal", PortKind.SIGNAL_ANALOG)
         self.add_observable("reading", "reading")
 
     def units(self) -> str:
-        return "kPa" if self.kind == "level_kpa" else "L/s"
+        return self.UNITS[self.kind]
 
     def tick(self, dt: float) -> None:
-        value = float(self.process.value)
-        if self.kind == "level_kpa":
-            self.reading = value / self.liters_per_meter * self.WATER_KPA_PER_M
+        if self.kind == "dp_pa":
+            self.reading = float(self.process_a.value) - float(self.process_b.value)
+        elif self.kind == "level_kpa":
+            self.reading = (
+                float(self.process.value) / self.liters_per_meter * self.WATER_KPA_PER_M
+            )
         else:
-            self.reading = value
+            self.reading = float(self.process.value)
         self.signal.value = self.reading
+
+
+class AirCascade(Component):
+    """Room-pressure cascade for a cleanroom suite.
+
+    Rooms hold gauge pressure (Pa) fed by constant HVAC supply;
+    air leaks between rooms (and to ambient) through doors. A closed
+    door leaks a little; an open door leaks a lot — open both doors of
+    an airlock and the cascade collapses, which the DP gauges will
+    show. Linear leak model, one pressure output port per room.
+
+    rooms: [{"id", "volume_m3", "supply_lps"}]
+    doors: [{"id", "a", "b", "leak_closed", "leak_open"}]
+           where a/b are room ids or "ambient" (0 Pa).
+    """
+
+    PRESSURE_RATE = 10.0  # Pa per (L/s imbalance) per m3, per second
+
+    def __init__(self, name: str, rooms: list[dict], doors: list[dict]) -> None:
+        super().__init__(name)
+        if not rooms:
+            raise ValueError("cascade needs at least one room")
+        self.rooms = {r["id"]: dict(r) for r in rooms}
+        self.doors = {d["id"]: dict(d) for d in doors}
+        self.pressures: dict[str, float] = {rid: 0.0 for rid in self.rooms}
+        self.door_open: dict[str, bool] = {did: False for did in self.doors}
+        for door in self.doors.values():
+            for end in (door["a"], door["b"]):
+                if end != "ambient" and end not in self.rooms:
+                    raise ValueError(f"door references unknown room {end!r}")
+        self._ports = {
+            rid: self.add_output(f"p_{rid}", PortKind.PROCESS_PRESSURE)
+            for rid in self.rooms
+        }
+
+    def set_door(self, door_id: str, is_open: bool) -> None:
+        if door_id not in self.door_open:
+            raise ValueError(f"unknown door {door_id!r}")
+        self.door_open[door_id] = is_open
+
+    def is_door_open(self, door_id: str) -> bool:
+        return self.door_open[door_id]
+
+    def _pressure_of(self, end: str) -> float:
+        return 0.0 if end == "ambient" else self.pressures[end]
+
+    def tick(self, dt: float) -> None:
+        # Semi-implicit update: each room's own pressure is implicit,
+        # neighbors are explicit (Jacobi step). Unconditionally stable
+        # even with the huge leak coefficient of an open door.
+        sum_c = {rid: 0.0 for rid in self.rooms}
+        sum_cp = {rid: 0.0 for rid in self.rooms}
+        for did, door in self.doors.items():
+            coeff = (
+                float(door.get("leak_open", 80.0))
+                if self.door_open[did]
+                else float(door.get("leak_closed", 3.0))
+            )
+            a, b = door["a"], door["b"]
+            if a != "ambient":
+                sum_c[a] += coeff
+                sum_cp[a] += coeff * self._pressure_of(b)
+            if b != "ambient":
+                sum_c[b] += coeff
+                sum_cp[b] += coeff * self._pressure_of(a)
+        new_pressures = {}
+        for rid, room in self.rooms.items():
+            gain = self.PRESSURE_RATE / float(room["volume_m3"]) * dt
+            supply = float(room["supply_lps"])
+            new_pressures[rid] = (
+                self.pressures[rid] + gain * (supply + sum_cp[rid])
+            ) / (1.0 + gain * sum_c[rid])
+        for rid in self.rooms:
+            self.pressures[rid] = new_pressures[rid]
+            self._ports[rid].value = new_pressures[rid]
+
+    def state_dict(self) -> dict:
+        return {"pressures": dict(self.pressures), "doors": dict(self.door_open)}
+
+    def apply_state(self, state: dict) -> None:
+        for rid, value in state.get("pressures", {}).items():
+            if rid in self.pressures:
+                self.pressures[rid] = float(value)
+                self._ports[rid].value = self.pressures[rid]
+        for did, value in state.get("doors", {}).items():
+            if did in self.door_open:
+                self.door_open[did] = bool(value)
 
 
 class FloatSwitch(Component):

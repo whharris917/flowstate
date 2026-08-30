@@ -39,7 +39,7 @@ func _process(_delta: float) -> void:
 
 
 func describe() -> String:
-	var wired := "wired" if gauge.process.wire_count > 0 else "NOT CONNECTED"
+	var wired := "wired" if gauge.is_wired() else "NOT CONNECTED"
 	return "%s — %.2f %s (%s)\nfull scale %.0f %s" % [
 		gauge.comp_name, gauge.reading, gauge.units(), wired,
 		gauge.full_scale(), gauge.units()]

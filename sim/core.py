@@ -34,6 +34,7 @@ class PortKind(Enum):
     SIGNAL_ANALOG = "signal_analog"      # 4-20 mA (float)
     PROCESS_FLOW = "process_flow"        # liquid flow, L/s (float)
     PROCESS_LEVEL = "process_level"      # liquid level, L (float)
+    PROCESS_PRESSURE = "process_pressure"  # gauge pressure, Pa (float)
 
 
 # How multiple wires landing on one input combine, per kind.

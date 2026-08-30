@@ -57,6 +57,26 @@ func _exercise_build_api() -> void:
 	var pump2 := place_new("pump", _world(Vector3(6.0, 0.0, -1.0)), 0.0)
 	if pump2 == null or not remove_equipment(pump2.comp_name):
 		problems.append("place/remove pump failed")
+	# Let the air cascade settle, then verify ordering and the DP gauge.
+	for _i in 2400:
+		sim.tick()
+	var cascade := sim.get_component("suite_hvac") as SimAirCascade
+	var p: Dictionary = cascade.pressures
+	if not (0.0 < float(p["al1"]) and float(p["al1"]) < float(p["gown"])
+			and float(p["gown"]) < float(p["al2"]) and float(p["al2"]) < float(p["core"])
+			and float(p["core"]) < float(p["iso"])):
+		problems.append("cascade ordering wrong: %s" % str(p))
+	var pdi := sim.get_component("pdi_iso") as SimGauge
+	if absf(pdi.reading - (float(p["iso"]) - float(p["core"]))) > 0.5:
+		problems.append("dp gauge disagrees with cascade")
+	cascade.set_door("gown_al2", true)
+	cascade.set_door("al2_core", true)
+	for _i in 600:
+		sim.tick()
+	if float(cascade.pressures["core"]) - float(cascade.pressures["gown"]) > 5.0:
+		problems.append("open airlock failed to collapse the step")
+	cascade.set_door("gown_al2", false)
+	cascade.set_door("al2_core", false)
 	if remove_equipment("supply_tank"):
 		problems.append("protected equipment was removable")
 	var real_path := save_path
@@ -117,8 +137,10 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as RelayView).setup(record as SimRelay)
 		"float_switch":
 			(view as FloatSwitchView).setup(record as SimFloatSwitch)
-		"gauge_level", "gauge_flow":
+		"gauge_level", "gauge_flow", "gauge_dp":
 			(view as GaugeView).setup(record as SimGauge)
+		"air_cascade":
+			(view as AsepticSuite).setup(record as SimAirCascade)
 	PlantFactory.attach_port_markers(view, record, type_id)
 	views[record.comp_name] = view
 	equip_types[record.comp_name] = type_id
@@ -222,6 +244,22 @@ func _build_initial_plant() -> void:
 	connect_equipment("level_switch", "contact", "pump_relay", "coil")
 	connect_equipment("pump_relay", "contact", "fill_pump", "run")
 	connect_equipment("fill_pump", "flow", "supply_tank", "in_flow")
+	_build_aseptic_suite()
+
+
+func _build_aseptic_suite() -> void:
+	# The suite view builds its own world-space geometry; keep its node
+	# at global y=0 (plant sits 0.08 up on the plinth).
+	place("air_cascade", "suite_hvac", {}, _world(Vector3(0, -0.08, 0)), 0.0, true)
+	var gauge_specs: Array = [
+		["pdi_gown", Vector3(-27.9, -0.08, -8.2), "p_gown", "p_al1"],
+		["pdi_core", Vector3(-32.2, -0.08, -7.3), "p_core", "p_al2"],
+		["pdi_iso", Vector3(-34.2, -0.08, -6.9), "p_iso", "p_core"],
+	]
+	for spec: Array in gauge_specs:
+		place("gauge_dp", spec[0], {}, _world(spec[1]), 0.0, true)
+		connect_equipment("suite_hvac", spec[2], spec[0], "process_a")
+		connect_equipment("suite_hvac", spec[3], spec[0], "process_b")
 
 
 func _world(local: Vector3) -> Vector3:

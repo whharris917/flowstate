@@ -110,10 +110,19 @@ func _build_shell() -> void:
 	_static_box(Vector3(ROOM_W, 0.5, ROOM_D), Vector3(0, -0.25, 0), COL_FLOOR)
 	_static_box(Vector3(9.2, 0.08, 3.4), Vector3(-1.0, 0.04, -3.2), COL_PLINTH)
 
-	# End walls (x = +-22): solid below, one glazed band up high.
+	# End walls (x = +-22): solid below, one glazed band up high. The
+	# west wall carries the doorway into the aseptic annex.
 	for side: float in [-1.0, 1.0]:
 		var wall_x := side * half_w
-		_static_box(Vector3(WALL_T, 7.6, ROOM_D), Vector3(wall_x, 3.8, 0), COL_WALL)
+		if side < 0.0:
+			var z0 := AsepticSuite.HALL_DOOR_Z0
+			var z1 := AsepticSuite.HALL_DOOR_Z1
+			var door_h := AsepticSuite.HALL_DOOR_H
+			_static_box(Vector3(WALL_T, 7.6, z0 + half_d), Vector3(wall_x, 3.8, (-half_d + z0) / 2.0), COL_WALL)
+			_static_box(Vector3(WALL_T, 7.6, half_d - z1), Vector3(wall_x, 3.8, (z1 + half_d) / 2.0), COL_WALL)
+			_static_box(Vector3(WALL_T, 7.6 - door_h, z1 - z0), Vector3(wall_x, (door_h + 7.6) / 2.0, (z0 + z1) / 2.0), COL_WALL)
+		else:
+			_static_box(Vector3(WALL_T, 7.6, ROOM_D), Vector3(wall_x, 3.8, 0), COL_WALL)
 		_static_box(Vector3(WALL_T, ROOM_H - 9.2, ROOM_D), Vector3(wall_x, (9.2 + ROOM_H) / 2.0, 0), COL_WALL)
 		for post_z: float in [-12.0, -8.0, -4.0, 0.0, 4.0, 8.0, 12.0]:
 			_static_box(Vector3(WALL_T, 1.6, 0.14), Vector3(wall_x, 8.4, post_z), COL_STEEL)

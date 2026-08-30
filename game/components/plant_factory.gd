@@ -10,6 +10,7 @@ const CATALOG: Array[Dictionary] = [
 	{"type": "relay", "label": "Relay cabinet"},
 	{"type": "gauge_level", "label": "Pressure gauge"},
 	{"type": "gauge_flow", "label": "Flow gauge"},
+	{"type": "gauge_dp", "label": "DP gauge"},
 ]
 
 # Ghost/collision footprint (x, y, z) and the view's y-offset when the
@@ -20,11 +21,13 @@ const FOOTPRINTS := {
 	"relay": Vector3(1.0, 2.2, 0.55),
 	"gauge_level": Vector3(0.5, 1.8, 0.5),
 	"gauge_flow": Vector3(0.5, 1.8, 0.5),
+	"gauge_dp": Vector3(0.5, 1.8, 0.5),
 	"float_switch": Vector3(0.25, 0.6, 0.25),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
-	"gauge_level": 0.0, "gauge_flow": 0.0, "float_switch": 0.0,
+	"gauge_level": 0.0, "gauge_flow": 0.0, "gauge_dp": 0.0,
+	"float_switch": 0.0, "air_cascade": 0.0,
 }
 
 # Where each port's marker sits in the view's local space.
@@ -35,6 +38,16 @@ const PORT_ANCHORS := {
 	"float_switch": {"level": Vector3(0, -0.22, 0.12), "contact": Vector3(0.14, 0.2, 0.1)},
 	"gauge_level": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
 	"gauge_flow": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
+	"gauge_dp": {"process_a": Vector3(-0.12, 0.25, 0.1), "process_b": Vector3(0.12, 0.25, 0.1),
+		"signal": Vector3(0.2, 1.32, 0)},
+	# Pressure taps sit on the suite's walls, near the ceiling.
+	"air_cascade": {
+		"p_al1": Vector3(-23.5, 2.5, -4.35),
+		"p_gown": Vector3(-26.8, 2.5, -3.35),
+		"p_al2": Vector3(-29.9, 2.5, -4.35),
+		"p_core": Vector3(-33.0, 2.5, -1.35),
+		"p_iso": Vector3(-35.3, 2.3, -5.6),
+	},
 }
 
 const KIND_COLORS := {
@@ -42,6 +55,7 @@ const KIND_COLORS := {
 	SimTypes.PortKind.SIGNAL_ANALOG: Color(0.92, 0.60, 0.10),
 	SimTypes.PortKind.PROCESS_FLOW: Color(0.16, 0.47, 0.84),
 	SimTypes.PortKind.PROCESS_LEVEL: Color(0.15, 0.65, 0.80),
+	SimTypes.PortKind.PROCESS_PRESSURE: Color(0.58, 0.40, 0.85),
 }
 
 
@@ -72,6 +86,10 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 				params.get("liters_per_meter", 45.45)))
 		"gauge_flow":
 			return sim.add(SimGauge.new(name_, "flow"))
+		"gauge_dp":
+			return sim.add(SimGauge.new(name_, "dp_pa"))
+		"air_cascade":
+			return sim.add(SimAirCascade.new(name_, AsepticSuite.ROOMS, AsepticSuite.DOORS))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -88,8 +106,10 @@ static func make_view(type_id: String, record: SimComponent,
 			view = RelayView.new()
 		"float_switch":
 			view = FloatSwitchView.new()
-		"gauge_level", "gauge_flow":
+		"gauge_level", "gauge_flow", "gauge_dp":
 			view = GaugeView.new()
+		"air_cascade":
+			view = AsepticSuite.new()
 	if view == null:
 		push_error("unknown equipment type '%s'" % type_id)
 		return null
