@@ -32,7 +32,13 @@ func _ready() -> void:
 	_mode_label = _make_label(HORIZONTAL_ALIGNMENT_LEFT)
 	_mode_label.set_anchors_preset(PRESET_BOTTOM_LEFT)
 	_mode_label.grow_vertical = GROW_DIRECTION_BEGIN
-	_mode_label.position = Vector2(12, -12)
+	# Pin the BOTTOM edge 12 px above the screen edge (zero height) and
+	# let the label grow upward from there — setting position instead
+	# pins the top edge, leaving the text body hanging off-screen.
+	_mode_label.offset_left = 12.0
+	_mode_label.offset_right = 12.0
+	_mode_label.offset_top = -12.0
+	_mode_label.offset_bottom = -12.0
 
 
 func _make_label(align: HorizontalAlignment) -> Label:
