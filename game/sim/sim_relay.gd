@@ -15,7 +15,7 @@ func _init(name_: String) -> void:
 	super(name_)
 	coil = add_input("coil", SimTypes.PortKind.SIGNAL_DISCRETE)
 	contact = add_output("contact", SimTypes.PortKind.SIGNAL_DISCRETE)
-	add_observable("cycles", func() -> float: return float(cycles))
+	add_observable("cycles", &"cycles")
 
 
 func tick(_dt: float) -> void:

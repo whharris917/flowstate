@@ -48,20 +48,24 @@ def _default_for(kind: PortKind) -> Value:
 
 
 class Port:
-    def __init__(self, owner: "Component", name: str, kind: PortKind) -> None:
-        self.owner = owner
+    """Ports know their owner's *name* for tag paths, never the owner
+    object — mirrors the GDScript port, where a back-reference would
+    make a component<->port RefCounted cycle and leak the graph."""
+
+    def __init__(self, owner_name: str, name: str, kind: PortKind) -> None:
+        self.owner_name = owner_name
         self.name = name
         self.kind = kind
         self.value: Value = _default_for(kind)
 
     @property
     def path(self) -> str:
-        return f"{self.owner.name}.{self.name}"
+        return f"{self.owner_name}.{self.name}"
 
 
 class InputPort(Port):
-    def __init__(self, owner: "Component", name: str, kind: PortKind) -> None:
-        super().__init__(owner, name, kind)
+    def __init__(self, owner_name: str, name: str, kind: PortKind) -> None:
+        super().__init__(owner_name, name, kind)
         self.wire_count = 0
 
     def reset(self) -> None:
@@ -103,26 +107,29 @@ class Component:
     Besides ports, a component may declare *observables*: named internal
     state (wear counters, totals) exposed read-only so the historian can
     record it. Observables are how failure evidence becomes trend data.
+    They are attribute names rather than closures so the GDScript port
+    (whose closures over self would leak through RefCounted cycles) can
+    mirror this structure exactly.
     """
 
     def __init__(self, name: str) -> None:
         self.name = name
         self.inputs: dict[str, InputPort] = {}
         self.outputs: dict[str, OutputPort] = {}
-        self.observables: dict[str, Callable[[], float]] = {}
+        self.observables: dict[str, str] = {}
 
     def add_input(self, name: str, kind: PortKind) -> InputPort:
-        port = InputPort(self, name, kind)
+        port = InputPort(self.name, name, kind)
         self.inputs[name] = port
         return port
 
     def add_output(self, name: str, kind: PortKind) -> OutputPort:
-        port = OutputPort(self, name, kind)
+        port = OutputPort(self.name, name, kind)
         self.outputs[name] = port
         return port
 
-    def add_observable(self, name: str, read: Callable[[], float]) -> None:
-        self.observables[name] = read
+    def add_observable(self, name: str, attr: str) -> None:
+        self.observables[name] = attr
 
     def tick(self, dt: float) -> None:
         raise NotImplementedError
@@ -164,8 +171,11 @@ class Simulation:
         for component in self.components:
             for port in component.outputs.values():
                 historian.register(port.path, lambda p=port: float(p.value))
-            for name, read in component.observables.items():
-                historian.register(f"{component.name}.{name}", read)
+            for name, attr in component.observables.items():
+                historian.register(
+                    f"{component.name}.{name}",
+                    lambda c=component, a=attr: float(getattr(c, a)),
+                )
         self.historian = historian
         historian.sample(self.time)
         return historian

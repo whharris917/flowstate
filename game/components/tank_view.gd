@@ -20,7 +20,7 @@ func setup(tank_: SimTank, switch_: SimFloatSwitch) -> void:
 	ViewUtil.cylinder(self, RADIUS, HEIGHT, Vector3(0, HEIGHT / 2.0, 0), shell_mat)
 	_fill = ViewUtil.cylinder(self, RADIUS * 0.9, 1.0, Vector3.ZERO,
 		ViewUtil.flat(Color(0.16, 0.47, 0.84)))
-	for trip_l in [switch.low_l, switch.high_l]:
+	for trip_l: float in [switch.low_l, switch.high_l]:
 		ViewUtil.cylinder(self, RADIUS + 0.03, 0.02,
 			Vector3(0, _y_for_level(trip_l), 0), ViewUtil.flat(Color(0.54, 0.53, 0.51)))
 	ViewUtil.label(self, tank.comp_name, Vector3(0, HEIGHT + 0.45, 0))

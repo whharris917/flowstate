@@ -21,6 +21,7 @@ var tank: SimTank
 var switch: SimFloatSwitch
 var relay: SimRelay
 var pump: SimPump
+var _level_tag: String
 
 
 func setup(historian_: SimHistorian, tank_: SimTank, switch_: SimFloatSwitch,
@@ -30,6 +31,7 @@ func setup(historian_: SimHistorian, tank_: SimTank, switch_: SimFloatSwitch,
 	switch = switch_
 	relay = relay_
 	pump = pump_
+	_level_tag = tank_.level.path()
 
 
 func _process(_delta: float) -> void:
@@ -44,18 +46,20 @@ func _draw() -> void:
 	var plot := Rect2(MARGIN_L, MARGIN_T,
 		size.x - MARGIN_L - MARGIN_R, size.y - MARGIN_T - MARGIN_B)
 	var times := historian.time
-	var levels := historian.series("tank.level")
+	var levels := historian.series(_level_tag)
+	if levels.size() != times.size():
+		return  # tag missing or mid-registration; never draw mismatched data
 	var t1 := times[times.size() - 1]
 	var t0 := maxf(times[0], t1 - WINDOW_S)
 	var y_max := tank.capacity_l
 
-	for tick_l in range(0, int(y_max) + 1, 25):
+	for tick_l: int in range(0, int(y_max) + 1, 25):
 		var y := plot.position.y + plot.size.y * (1.0 - tick_l / y_max)
 		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), COL_GRID, 1.0)
 		draw_string(font, Vector2(4, y + 4), str(tick_l),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COL_MUTED)
 
-	for trip in [switch.low_l, switch.high_l]:
+	for trip: float in [switch.low_l, switch.high_l]:
 		var y := plot.position.y + plot.size.y * (1.0 - trip / y_max)
 		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), COL_MUTED, 1.0)
 
@@ -74,7 +78,7 @@ func _draw() -> void:
 	if points.size() >= 2:
 		draw_polyline(points, COL_SERIES, 2.0, true)
 
-	draw_string(font, Vector2(6, 20), "tank.level — last %d s (historized)" % int(WINDOW_S),
+	draw_string(font, Vector2(6, 20), "%s — last %d s (historized)" % [_level_tag, int(WINDOW_S)],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, COL_MUTED)
 	draw_string(font, Vector2(size.x - 120, 20), "%.1f L" % tank.level_l,
 		HORIZONTAL_ALIGNMENT_RIGHT, 110, 15, COL_INK)

@@ -24,8 +24,8 @@ func _init(name_: String, capacity_l_: float, level_l_: float = 0.0, drain_lps_:
 	in_flow = add_input("in_flow", SimTypes.PortKind.PROCESS_FLOW)
 	level = add_output("level", SimTypes.PortKind.PROCESS_LEVEL)
 	level.value = level_l
-	add_observable("overflowed_l", func() -> float: return overflowed_l)
-	add_observable("ran_dry_ticks", func() -> float: return float(ran_dry_ticks))
+	add_observable("overflowed_l", &"overflowed_l")
+	add_observable("ran_dry_ticks", &"ran_dry_ticks")
 
 
 func tick(dt: float) -> void:

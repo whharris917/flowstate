@@ -7,12 +7,12 @@ A first-person factory-building simulation game set aboard a massive starship. T
 ## Roles
 - The human is the **creative director**. They set vision, review builds, and report what they saw. They do not write code and should not be asked to.
 - Claude is the **entire development team**: architecture, code, scenes, tools, tests, docs. Make decisions, explain them briefly, and ask only when a choice is genuinely creative rather than technical.
-- The director cannot see Claude's screen and Claude cannot run the Godot editor. Deliver things the director can drop into Godot and press play, then ask for a build report ("what did you see, what felt wrong").
+- The director cannot see Claude's screen and Claude cannot see rendered output, but Claude CAN run Godot headlessly (see Environment) and must do so before every delivery: `--import` to catch parse errors, then a `--quit-after 600` smoke run to catch runtime errors and read the kernel self-check. Deliver things the director can open and press play, then ask for a build report ("what did you see, what felt wrong").
 
 ## Environment (Windows)
 - Python lives in `.venv` (created from `~\anaconda3\python.exe`, 3.11). Always run Python via the venv: `.venv\Scripts\python.exe` or after `.venv\Scripts\Activate.ps1`. Never rely on a bare `python` or `py` on PATH — they do not exist on this machine.
 - Shell is PowerShell. Use PowerShell syntax in commands.
-- Godot 4.x is installed separately and opened by the director on `game/project.godot`. Claude authors `.gd`, `.tscn`, `.tres`, and `.gdshader` files as text.
+- Godot 4.7.2 is installed via winget (2026-08-29). Exe: `C:\Users\wilha\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.7.2-stable_win64.exe` (also on PATH as `godot` in fresh shells). The director opens `game/project.godot`; Claude authors `.gd`, `.tscn`, `.tres`, and `.gdshader` files as text and validates them headlessly: `& $exe --headless --path <repo>\game --import`, then `--quit-after 600`. GDScript gotchas that the editor catches but text-authoring misses: untyped for-loop variables break `:=` inference; RefCounted back-references (component<->port style) leak — check exit output for "resources still in use".
 
 ## Layout
 ```

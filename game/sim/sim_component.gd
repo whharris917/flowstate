@@ -3,12 +3,14 @@ class_name SimComponent
 ## never a Node. Nodes only render what these classes compute.
 ##
 ## Observables are named internal state (wear counters, totals) exposed
-## read-only so the historian can record them.
+## read-only so the historian can record them. They are property names,
+## not closures: a lambda here would capture self and leak the component
+## through a RefCounted cycle.
 
 var comp_name: String
 var inputs: Dictionary = {}       # String -> SimInputPort
 var outputs: Dictionary = {}      # String -> SimOutputPort
-var observables: Dictionary = {}  # String -> Callable () -> float
+var observables: Dictionary = {}  # String tag -> StringName property
 
 
 func _init(name_: String) -> void:
@@ -16,19 +18,19 @@ func _init(name_: String) -> void:
 
 
 func add_input(name_: String, kind: SimTypes.PortKind) -> SimInputPort:
-	var port := SimInputPort.new(self, name_, kind)
+	var port := SimInputPort.new(comp_name, name_, kind)
 	inputs[name_] = port
 	return port
 
 
 func add_output(name_: String, kind: SimTypes.PortKind) -> SimOutputPort:
-	var port := SimOutputPort.new(self, name_, kind)
+	var port := SimOutputPort.new(comp_name, name_, kind)
 	outputs[name_] = port
 	return port
 
 
-func add_observable(name_: String, read: Callable) -> void:
-	observables[name_] = read
+func add_observable(name_: String, property: StringName) -> void:
+	observables[name_] = property
 
 
 func tick(_dt: float) -> void:

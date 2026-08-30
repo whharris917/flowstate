@@ -39,8 +39,8 @@ class Tank(Component):
         self.in_flow = self.add_input("in_flow", PortKind.PROCESS_FLOW)
         self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
         self.level.value = level_l
-        self.add_observable("overflowed_l", lambda: self.overflowed_l)
-        self.add_observable("ran_dry_ticks", lambda: float(self.ran_dry_ticks))
+        self.add_observable("overflowed_l", "overflowed_l")
+        self.add_observable("ran_dry_ticks", "ran_dry_ticks")
 
     def tick(self, dt: float) -> None:
         inflow = float(self.in_flow.value)
@@ -102,7 +102,7 @@ class Relay(Component):
         self.cycles = 0
         self.coil = self.add_input("coil", PortKind.SIGNAL_DISCRETE)
         self.contact = self.add_output("contact", PortKind.SIGNAL_DISCRETE)
-        self.add_observable("cycles", lambda: float(self.cycles))
+        self.add_observable("cycles", "cycles")
 
     def tick(self, dt: float) -> None:
         coil = bool(self.coil.value)
@@ -136,7 +136,7 @@ class Pump(Component):
         self.starts = 0
         self.run = self.add_input("run", PortKind.SIGNAL_DISCRETE)
         self.flow = self.add_output("flow", PortKind.PROCESS_FLOW)
-        self.add_observable("starts", lambda: float(self.starts))
+        self.add_observable("starts", "starts")
 
     def set_mode(self, mode: str) -> None:
         if mode not in self.MODES:

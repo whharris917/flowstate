@@ -23,7 +23,7 @@ func _init(name_: String, rated_lps_: float, mode_: String = "auto") -> void:
 	set_mode(mode_)
 	run = add_input("run", SimTypes.PortKind.SIGNAL_DISCRETE)
 	flow = add_output("flow", SimTypes.PortKind.PROCESS_FLOW)
-	add_observable("starts", func() -> float: return float(starts))
+	add_observable("starts", &"starts")
 
 
 func set_mode(mode_: String) -> void:

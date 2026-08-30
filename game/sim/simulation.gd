@@ -63,7 +63,10 @@ func attach_historian(historian_: SimHistorian) -> SimHistorian:
 			var port: SimOutputPort = component.outputs[port_name]
 			historian_.register(port.path(), func() -> float: return port.value)
 		for obs_name: String in component.observables:
-			historian_.register(component.comp_name + "." + obs_name, component.observables[obs_name])
+			var comp := component
+			var prop: StringName = component.observables[obs_name]
+			historian_.register(component.comp_name + "." + obs_name,
+				func() -> float: return float(comp.get(prop)))
 	historian = historian_
 	historian_.sample(time)
 	return historian_
