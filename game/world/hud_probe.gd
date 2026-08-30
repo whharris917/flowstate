@@ -12,17 +12,16 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	await get_tree().create_timer(1.2).timeout
-	var hud: Hud = (get_child(0) as WorldBase).hud
-	print("[probe] viewport ", get_viewport().get_visible_rect())
-	print("[probe] hud rect ", hud.get_global_rect())
-	print("[probe] readout ", hud._readout_label.get_global_rect())
-	print("[probe] toast ", hud._toast_label.get_global_rect())
-	print("[probe] mode ", hud._mode_label.get_global_rect())
+	await get_tree().create_timer(1.6).timeout  # icon renders land in this window
+	var world := get_child(0) as WorldBase
 	await _shot("user://probe_normal.png")
+	world.player.camera.rotation.x = -0.5  # aim at the floor so the ghost lands
 	_press(KEY_B)
-	await get_tree().create_timer(0.5).timeout
+	await get_tree().create_timer(0.6).timeout
 	await _shot("user://probe_build.png")
+	_press(KEY_TAB)
+	await get_tree().create_timer(0.4).timeout
+	await _shot("user://probe_structure.png")
 	print("[probe] screenshots written to user://")
 	get_tree().quit()
 
