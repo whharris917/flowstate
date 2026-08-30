@@ -21,7 +21,7 @@ const EYE := Vector3(0, 1.6, 0)
 # same direction, exponentially faster per notch (C1 at the joint).
 const ZOOM_TIP := Vector3(0, 0, -0.55)
 const ZOOM_KNEE := Vector3(0, 0.15, 0.25)
-const ZOOM_TOP := Vector3(0, 5.4, 2.6)
+const ZOOM_TOP := Vector3(0, 5.4, 0.9)   # nearly overhead, just trailing the player
 const ZOOM_STEP := 0.07
 const ZOOM_T_MAX := 4.0        # ~870 m up the handle — effectively unbounded
 const ZOOM_EXT_RATE := 1.6     # exponential growth rate past the top
