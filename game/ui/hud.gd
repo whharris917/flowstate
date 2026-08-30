@@ -11,26 +11,29 @@ var _toast_tween: Tween
 
 
 func _ready() -> void:
-	set_anchors_preset(PRESET_FULL_RECT)
+	# set_anchors_preset alone compensates offsets to preserve the
+	# current (zero) rect — the whole HUD collapses to a point at the
+	# top-left. This variant zeroes the offsets too: a real full rect.
+	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	mouse_filter = MOUSE_FILTER_IGNORE
 
 	_look_label = _make_label(HORIZONTAL_ALIGNMENT_CENTER)
-	_look_label.set_anchors_preset(PRESET_CENTER_BOTTOM)
+	_look_label.set_anchors_and_offsets_preset(PRESET_CENTER_BOTTOM)
 	_look_label.position.y -= 140.0
 	_look_label.grow_horizontal = GROW_DIRECTION_BOTH
 
 	_readout_label = _make_label(HORIZONTAL_ALIGNMENT_LEFT)
-	_readout_label.set_anchors_preset(PRESET_TOP_LEFT)
+	_readout_label.set_anchors_and_offsets_preset(PRESET_TOP_LEFT)
 	_readout_label.position = Vector2(12, 10)
 
 	_toast_label = _make_label(HORIZONTAL_ALIGNMENT_CENTER)
-	_toast_label.set_anchors_preset(PRESET_CENTER_TOP)
+	_toast_label.set_anchors_and_offsets_preset(PRESET_CENTER_TOP)
 	_toast_label.position.y += 40.0
 	_toast_label.grow_horizontal = GROW_DIRECTION_BOTH
 	_toast_label.modulate.a = 0.0
 
 	_mode_label = _make_label(HORIZONTAL_ALIGNMENT_LEFT)
-	_mode_label.set_anchors_preset(PRESET_BOTTOM_LEFT)
+	_mode_label.set_anchors_and_offsets_preset(PRESET_BOTTOM_LEFT)
 	# A fixed region tucked 12 px inside the corner, tall enough for the
 	# build catalog list; bottom-aligned text reads as growing upward.
 	# Fixed rect + alignment beats relying on min-size auto-grow, which
