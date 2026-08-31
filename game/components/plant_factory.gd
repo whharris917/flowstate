@@ -8,11 +8,17 @@ const CATALOG: Array[Dictionary] = [
 	{"type": "tank", "label": "Tank 100 L"},
 	{"type": "pump", "label": "Pump 4 L/s"},
 	{"type": "reactor", "label": "Stirred reactor"},
-	{"type": "centrifuge", "label": "Centrifuge"},
 	{"type": "hx", "label": "Heat exchanger"},
 	{"type": "steamgen", "label": "Steam generator"},
-	{"type": "column", "label": "Distillation column"},
 	{"type": "vialfill", "label": "Vial filler (isolator)"},
+]
+
+const CATALOG_SEPARATION: Array[Dictionary] = [
+	{"type": "crystallizer", "label": "Crystallizer"},
+	{"type": "centrifuge", "label": "Centrifuge"},
+	{"type": "dryer", "label": "Cake dryer"},
+	{"type": "still", "label": "Recovery still"},
+	{"type": "column", "label": "Batch column"},
 ]
 
 const CATALOG_UTILITIES: Array[Dictionary] = [
@@ -26,6 +32,8 @@ const CATALOG_INSTRUMENTS: Array[Dictionary] = [
 	{"type": "gauge_flow", "label": "Flow gauge"},
 	{"type": "gauge_dp", "label": "DP gauge"},
 	{"type": "gauge_press", "label": "Pressure gauge"},
+	{"type": "gauge_temp", "label": "Temperature gauge"},
+	{"type": "gauge_conc", "label": "Purity analyser"},
 	{"type": "controller", "label": "PID controller"},
 ]
 
@@ -62,6 +70,11 @@ const FOOTPRINTS := {
 	"steamgen": Vector3(2.1, 2.8, 1.3),
 	"vaclock": Vector3(1.5, 2.9, 1.4),
 	"vialfill": Vector3(2.5, 2.5, 1.2),
+	"gauge_temp": Vector3(0.5, 1.8, 0.5),
+	"gauge_conc": Vector3(0.5, 1.8, 0.5),
+	"crystallizer": Vector3(1.7, 2.7, 1.7),
+	"dryer": Vector3(1.7, 1.7, 1.3),
+	"still": Vector3(1.5, 7.0, 1.5),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
@@ -72,6 +85,8 @@ const Y_OFFSETS := {
 	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
 	"reactor": 0.0, "centrifuge": 0.0, "hx": 0.0, "steamgen": 0.0,
 	"vaclock": 0.0, "vialfill": 0.0,
+	"gauge_temp": 0.0, "gauge_conc": 0.0,
+	"crystallizer": 0.0, "dryer": 0.0, "still": 0.0,
 }
 
 # Where each port's fitting sits in the view's local space, flush with
@@ -104,6 +119,12 @@ const PORT_ANCHORS := {
 	"gauge_press": {
 		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
 		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
+	"gauge_temp": {
+		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
+		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
+	"gauge_conc": {
+		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
+		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
 	"valve": {
 		"inlet": {"pos": Vector3(-0.31, 0.32, 0), "dir": Vector3.LEFT},
 		"outlet": {"pos": Vector3(0.31, 0.32, 0), "dir": Vector3.RIGHT},
@@ -126,10 +147,29 @@ const PORT_ANCHORS := {
 		"outlet": {"pos": Vector3(0.77, 0.5, 0), "dir": Vector3.RIGHT}},
 	"centrifuge": {
 		"inlet": {"pos": Vector3(0.16, 1.4, 0), "dir": Vector3.UP},
-		"purity_in": {"pos": Vector3(-0.48, 0.95, 0), "dir": Vector3.LEFT},
 		"power": {"pos": Vector3(0.16, 1.62, 0.14), "dir": Vector3.BACK},
 		"product": {"pos": Vector3(0.49, 0.65, 0), "dir": Vector3.RIGHT},
 		"waste": {"pos": Vector3(-0.49, 0.55, 0), "dir": Vector3.LEFT}},
+	"crystallizer": {
+		"inlet": {"pos": Vector3(-0.38, 2.1, 0), "dir": Vector3.UP},
+		"cool_duty": {"pos": Vector3(0.78, 1.35, 0), "dir": Vector3.RIGHT},
+		"power": {"pos": Vector3(0.2, 2.5, 0.18), "dir": Vector3.BACK},
+		"solids": {"pos": Vector3(-0.72, 1.6, 0), "dir": Vector3.LEFT},
+		"temp": {"pos": Vector3(-0.72, 1.1, 0), "dir": Vector3.LEFT},
+		"level": {"pos": Vector3(0, 1.0, -0.74), "dir": Vector3.FORWARD},
+		"outlet": {"pos": Vector3(0.72, 0.45, 0), "dir": Vector3.RIGHT}},
+	"dryer": {
+		"inlet": {"pos": Vector3(-0.76, 1.05, 0), "dir": Vector3.LEFT},
+		"heat_duty": {"pos": Vector3(0.3, 0.35, 0.6), "dir": Vector3.BACK},
+		"power": {"pos": Vector3(-0.3, 0.35, 0.6), "dir": Vector3.BACK},
+		"product": {"pos": Vector3(0.76, 0.5, 0), "dir": Vector3.RIGHT},
+		"vapor": {"pos": Vector3(0, 1.62, 0), "dir": Vector3.UP}},
+	"still": {
+		"inlet": {"pos": Vector3(-0.68, 2.6, 0), "dir": Vector3.LEFT},
+		"heat_duty": {"pos": Vector3(0.6, 0.7, 0.2), "dir": Vector3.RIGHT},
+		"power": {"pos": Vector3(-0.55, 0.6, 0.3), "dir": Vector3.BACK},
+		"distillate": {"pos": Vector3(0.66, 6.1, 0), "dir": Vector3.RIGHT},
+		"bottoms": {"pos": Vector3(0.62, 0.4, 0), "dir": Vector3.RIGHT}},
 	"hx": {
 		"steam_in": {"pos": Vector3(-0.35, 0.74, 0), "dir": Vector3.UP},
 		"cold_in": {"pos": Vector3(-0.97, 0.45, 0), "dir": Vector3.LEFT},
@@ -169,9 +209,10 @@ const PORT_ANCHORS := {
 # "inlet") that the plant expands into the availability + metered-draw
 # kernel wire pair. The player never touches "draw" directly.
 const FLOW_OUTLETS := {
-	"tank": {"outlet": {"avail": "level", "draw_in": "draw"}},
+	"tank": {"outlet": {"avail": "outlet", "draw_in": "draw"}},
 	"source": {"outlet": {"avail": "supply", "draw_in": "draw"}},
-	"reactor": {"outlet": {"avail": "level", "draw_in": "draw"}},
+	"reactor": {"outlet": {"avail": "outlet", "draw_in": "draw"}},
+	"crystallizer": {"outlet": {"avail": "outlet", "draw_in": "draw"}},
 }
 const FLOW_INLETS := {
 	"pump": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
@@ -180,6 +221,8 @@ const FLOW_INLETS := {
 	"steamgen": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 	"centrifuge": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 	"vialfill": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
+	"dryer": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
+	"still": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 }
 
 
@@ -194,6 +237,8 @@ static func flow_inlet_spec(type_id: String, port: String) -> Dictionary:
 const KIND_COLORS := {
 	SimTypes.PortKind.SIGNAL_DISCRETE: Color(0.11, 0.69, 0.48),
 	SimTypes.PortKind.SIGNAL_ANALOG: Color(0.92, 0.60, 0.10),
+	SimTypes.PortKind.PROCESS_STREAM: Color(0.16, 0.47, 0.84),
+	SimTypes.PortKind.PROCESS_SUPPLY: Color(0.15, 0.65, 0.80),
 	SimTypes.PortKind.PROCESS_FLOW: Color(0.16, 0.47, 0.84),
 	SimTypes.PortKind.PROCESS_LEVEL: Color(0.15, 0.65, 0.80),
 	SimTypes.PortKind.PROCESS_PRESSURE: Color(0.58, 0.40, 0.85),
@@ -232,6 +277,11 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimGauge.new(name_, "dp_pa"))
 		"gauge_press":
 			return sim.add(SimGauge.new(name_, "press_kpa"))
+		"gauge_temp":
+			return sim.add(SimGauge.new(name_, "temp_c"))
+		"gauge_conc":
+			return sim.add(SimGauge.new(name_, "conc_pct", 45.45,
+				params.get("species", "product")))
 		"column":
 			return sim.add(SimColumn.new(name_,
 				params.get("charge_l", 60.0), params.get("max_duty_kw", 100.0)))
@@ -243,7 +293,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 		"controller":
 			return sim.add(SimPID.new(name_,
 				params.get("kp", 8.0), params.get("ki", 1.5), params.get("kd", 0.0),
-				params.get("sp", 15.0)))
+				params.get("sp", 15.0),
+				params.get("out_min", 0.0), params.get("out_max", 100.0)))
 		"plc":
 			return sim.add(SimPLC.new(name_,
 				params.get("di", 8), params.get("do", 8),
@@ -255,7 +306,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 		"psu":
 			return sim.add(SimPowerSupply.new(name_))
 		"source":
-			return sim.add(SimSource.new(name_))
+			return sim.add(SimSource.new(name_,
+				params.get("species", "water"), params.get("temp_c", 20.0)))
 		"drain":
 			return sim.add(SimDrain.new(name_, params.get("rate_lps", 1.0)))
 		"reactor":
@@ -271,6 +323,13 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimVacuumLock.new(name_))
 		"vialfill":
 			return sim.add(SimVialFiller.new(name_))
+		"crystallizer":
+			return sim.add(SimCrystallizer.new(name_, params.get("capacity_l", 3000.0)))
+		"dryer":
+			return sim.add(SimDryer.new(name_, params.get("rate_lps", 2.0)))
+		"still":
+			return sim.add(SimStill.new(name_, params.get("rate_lps", 3.0),
+				params.get("cut_c", 150.0), params.get("sharpness", 0.95)))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -287,7 +346,8 @@ static func make_view(type_id: String, record: SimComponent,
 			view = RelayView.new()
 		"float_switch":
 			view = FloatSwitchView.new()
-		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press":
+		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", \
+		"gauge_temp", "gauge_conc":
 			view = GaugeView.new()
 		"column":
 			view = ColumnView.new()
@@ -315,6 +375,12 @@ static func make_view(type_id: String, record: SimComponent,
 			view = VacLockView.new()
 		"vialfill":
 			view = VialFillerView.new()
+		"crystallizer":
+			view = CrystallizerView.new()
+		"dryer":
+			view = DryerView.new()
+		"still":
+			view = StillView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
 	if view == null:
@@ -339,7 +405,7 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 			continue  # the facade wires draw automatically
 		var kind: SimTypes.PortKind = (record.inputs[port_name] as SimInputPort).kind
 		if not flow_inlet_spec(type_id, port_name).is_empty():
-			kind = SimTypes.PortKind.PROCESS_FLOW  # it's a pipe stub, draw it blue
+			kind = SimTypes.PortKind.PROCESS_STREAM  # a pipe stub: draw it blue
 		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
@@ -362,7 +428,7 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 		var raw: Variant = anchors_override.get(ui_port, anchors.get(ui_port))
 		markers["%s:%s" % [record.comp_name, ui_port]] = \
 			make_marker(view, record.comp_name, ui_port,
-				SimTypes.PortKind.PROCESS_FLOW, _anchor_pos(raw), false, _anchor_dir(raw))
+				SimTypes.PortKind.PROCESS_SUPPLY, _anchor_pos(raw), false, _anchor_dir(raw))
 	view.set_meta("port_markers", markers)
 
 
@@ -401,12 +467,15 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	body.add_child(shape)
 
 	var steel := ViewUtil.flat(Color(0.45, 0.47, 0.50))
-	var is_pipe := kind == SimTypes.PortKind.PROCESS_FLOW \
+	var is_pipe := SimTypes.is_stream(kind) \
+		or kind == SimTypes.PortKind.PROCESS_FLOW \
 		or kind == SimTypes.PortKind.PROCESS_LEVEL \
 		or kind == SimTypes.PortKind.PROCESS_PRESSURE
 	if is_pipe:
 		ViewUtil.box(body, Vector3(0.06, 0.15, 0.15), Vector3(-0.02, 0, 0), steel)
-		var neck_r := 0.05 if kind == SimTypes.PortKind.PROCESS_FLOW else 0.032
+		var neck_r := 0.032
+		if SimTypes.is_stream(kind) or kind == SimTypes.PortKind.PROCESS_FLOW:
+			neck_r = 0.05
 		var neck := ViewUtil.cylinder(body, neck_r, 0.15, Vector3(0.07, 0, 0), steel)
 		neck.rotation_degrees = Vector3(0, 0, 90)
 		var flange := ViewUtil.cylinder(body, neck_r * 1.8, 0.03, Vector3(0.145, 0, 0), steel)

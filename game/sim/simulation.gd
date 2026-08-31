@@ -86,13 +86,49 @@ func attach_historian(historian_: SimHistorian) -> SimHistorian:
 	return historian_
 
 
+## Every historian tag one component contributes.
+##
+## A stream port is not a number, so it fans out into the numbers an
+## operator would actually trend: rate, temperature, how much of it is
+## solid, and the fraction of each species in it. Composition becomes
+## real historized data rather than something a display has to infer.
+static func stream_tags(base: String) -> PackedStringArray:
+	var tags := PackedStringArray([base + ".flow", base + ".temp", base + ".solids"])
+	for i in SimSpecies.COUNT:
+		tags.append(base + ".x_" + SimSpecies.key_of(i))
+	return tags
+
+
+func _tag_names(component: SimComponent) -> PackedStringArray:
+	var tags := PackedStringArray()
+	for port_name: String in component.outputs:
+		var port: SimOutputPort = component.outputs[port_name]
+		if SimTypes.is_stream(port.kind):
+			tags.append_array(stream_tags(port.path()))
+		else:
+			tags.append(port.path())
+	for obs_name: String in component.observables:
+		tags.append(component.comp_name + "." + obs_name)
+	return tags
+
+
 ## Register one component's tags — for equipment added mid-run.
 func register_with_historian(component: SimComponent) -> void:
 	if historian == null:
 		return
 	for port_name: String in component.outputs:
 		var port: SimOutputPort = component.outputs[port_name]
-		historian.register(port.path(), func() -> float: return port.value)
+		if SimTypes.is_stream(port.kind):
+			var base := port.path()
+			historian.register(base + ".flow", func() -> float: return port.stream.flow_lps)
+			historian.register(base + ".temp", func() -> float: return port.stream.temp_c)
+			historian.register(base + ".solids", func() -> float: return port.stream.solids_frac)
+			for i in SimSpecies.COUNT:
+				var index := i
+				historian.register(base + ".x_" + SimSpecies.key_of(index),
+					func() -> float: return port.stream.comp[index])
+		else:
+			historian.register(port.path(), func() -> float: return port.value)
 	for obs_name: String in component.observables:
 		var comp := component
 		var prop: StringName = component.observables[obs_name]
@@ -124,13 +160,9 @@ func remove_component(name_: String) -> bool:
 	components.erase(component)
 	_by_name.erase(name_)
 	if historian != null:
-		for port_name: String in component.outputs:
-			var tag: String = (component.outputs[port_name] as SimOutputPort).path()
-			if historian.active_tags().has(tag):
-				historian.retire(tag)
-		for obs_name: String in component.observables:
-			var tag := name_ + "." + obs_name
-			if historian.active_tags().has(tag):
+		var active := historian.active_tags()
+		for tag in _tag_names(component):
+			if active.has(tag):
 				historian.retire(tag)
 	return true
 

@@ -31,6 +31,7 @@ from __future__ import annotations
 import re
 
 from sim.core import Component, PortKind
+from sim.library import Equation, EquipmentSpec, Param
 
 _REF_PATTERN = re.compile(r"^(di|do|m|t)_(\d+)$")
 _COIL_PATTERN = re.compile(r"^(do|m|t)_(\d+)$")
@@ -281,3 +282,155 @@ class PID(Component):
         self._integrator = float(state.get("integrator", self._integrator))
         self.output = float(state.get("output", self.output))
         self.out.value = self.output
+
+
+# ---------------------------------------------------------------------
+# Library pages for the control tier. The only copy of these equations;
+# see sim/library.py.
+# ---------------------------------------------------------------------
+
+PID.SPEC = EquipmentSpec(
+    key="pid",
+    title="PID Controller",
+    tier="control",
+    summary=(
+        "A single loop: it reads one measurement, compares it to a "
+        "setpoint, and drives one output. Derivative acts on the "
+        "measurement rather than the error, so a setpoint change does "
+        "not kick the output. The integrator is held back whenever the "
+        "output is railed, which is what stops it winding up while the "
+        "valve is already wide open. Manual and auto transfer bumplessly "
+        "because the integrator tracks the output in manual.\n\n"
+        "Direction is in the sign of the gains: positive gains raise the "
+        "output when the measurement is BELOW setpoint (heating, "
+        "filling). Negative gains raise it when the measurement is "
+        "ABOVE setpoint (cooling). A loop that runs away when you close "
+        "it usually has the sign wrong."
+    ),
+    ports={
+        "pv": "The measurement. Wire a transmitter or analyser here.",
+        "out": "Controller output. A valve command by default, but the "
+               "range is yours to set -- point it at a duty and the "
+               "output is kilowatts.",
+    },
+    equations=(
+        Equation("e = SP - PV", "Error. Its sign is what makes a loop "
+                                "direct or reverse acting."),
+        Equation(
+            "I += ki * e * dt",
+            "The integrator: it is what removes steady-state offset, "
+            "and what winds up if you let it.",
+        ),
+        Equation(
+            "D = -kd * (PV - PV_prev) / dt",
+            "Derivative on the measurement, not the error, so a setpoint "
+            "step does not spike the output.",
+        ),
+        Equation(
+            "out = clamp(kp*e + I + D, out_min, out_max)",
+            "The three terms, clamped to the output range.",
+        ),
+        Equation(
+            "if railed: I = out - kp*e - D",
+            "Anti-windup. While the output is against a limit the "
+            "integrator is held to match it, so the loop comes off the "
+            "rail the moment the error reverses instead of minutes "
+            "later.",
+        ),
+    ),
+    params=(
+        Param("kp", "-", "Proportional gain. Negative for a direct-acting "
+                         "loop such as cooling."),
+        Param("ki", "1/s", "Integral gain. Zero makes it a P-only loop, "
+                           "which is how a hand controller is built."),
+        Param("kd", "s", "Derivative gain. Usually zero on a noisy "
+                         "measurement."),
+        Param("sp", "-", "Setpoint, in the units of the measurement."),
+        Param("out_min", "-", "Bottom of the output range."),
+        Param("out_max", "-", "Top of the output range. Raise it to "
+                              "drive a duty in kW rather than a valve "
+                              "in percent."),
+    ),
+    assumptions=(
+        "No output rate limit, no deadband, no filtering on the "
+        "measurement.",
+        "The scan is the simulation tick: there is no separate, slower "
+        "controller execution period.",
+    ),
+)
+
+PLC.SPEC = EquipmentSpec(
+    key="plc",
+    title="Programmable Controller",
+    tier="control",
+    summary=(
+        "A small PLC running a ladder program. Every scan it samples "
+        "its inputs, solves each rung in order, and writes its outputs "
+        "-- so a rung can see a coil that an earlier rung set this same "
+        "scan, and a rung that reads a coil set later sees last scan's "
+        "value. That ordering is not a quirk to work around; it is the "
+        "thing that makes seal-in circuits and one-shots behave the way "
+        "they do in a real cabinet.\n\n"
+        "Its channels are dead unless the matching I/O card is fitted in "
+        "the rack, and the whole processor is dead without 24 V."
+    ),
+    ports={
+        "power": "24 V from the cabinet supply. No power, no scan.",
+        "di_0": "Discrete input channel.",
+        "di_1": "Discrete input channel.",
+        "di_2": "Discrete input channel.",
+        "di_3": "Discrete input channel.",
+        "di_4": "Discrete input channel.",
+        "di_5": "Discrete input channel.",
+        "di_6": "Discrete input channel.",
+        "di_7": "Discrete input channel.",
+        "ai_0": "Analog input channel.",
+        "ai_1": "Analog input channel.",
+        "ai_2": "Analog input channel.",
+        "ai_3": "Analog input channel.",
+        "do_0": "Discrete output channel.",
+        "do_1": "Discrete output channel.",
+        "do_2": "Discrete output channel.",
+        "do_3": "Discrete output channel.",
+        "do_4": "Discrete output channel.",
+        "do_5": "Discrete output channel.",
+        "do_6": "Discrete output channel.",
+        "do_7": "Discrete output channel.",
+        "ao_0": "Analog output channel.",
+        "ao_1": "Analog output channel.",
+        "ao_2": "Analog output channel.",
+        "ao_3": "Analog output channel.",
+    },
+    equations=(
+        Equation(
+            "scan: read inputs -> solve rungs in order -> write outputs",
+            "One pass per tick. Rung order is program order.",
+        ),
+        Equation(
+            "rung = OR over branches of (AND over contacts)",
+            "Parallel branches are an OR, series contacts an AND -- the "
+            "whole of ladder logic in one line.",
+        ),
+        Equation(
+            "TON: elapsed += dt while enabled; done when elapsed >= preset",
+            "An on-delay timer resets the moment its rung goes false.",
+        ),
+    ),
+    params=(
+        Param("di", "channels", "Discrete input channels."),
+        Param("do", "channels", "Discrete output channels."),
+        Param("ai", "channels", "Analog input channels."),
+        Param("ao", "channels", "Analog output channels."),
+        Param("memories", "bits", "Internal coils. Not wired to anything "
+                                  "in the field: they are the latches and "
+                                  "flags the program keeps for itself."),
+        Param("timers", "count", "On-delay timers available to the "
+                                 "program."),
+    ),
+    assumptions=(
+        "The scan is instantaneous and takes exactly one tick, however "
+        "long the program is.",
+        "No forcing, no online edits, no retentive memory across a power "
+        "cycle.",
+    ),
+)

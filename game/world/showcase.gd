@@ -157,14 +157,18 @@ static func _mcc_and_batch(plant: Plant) -> void:
 
 
 ## ---- Unit 300: synthesis train --------------------------------------------
-## Two reactant headers feed a jacketed reactor; a steam generator
-## fires a heat exchanger that preheats the A-feed and delivers the
-## reaction duty; the centrifuge splits the reactor discharge on its
-## live purity signal — product to a 56 kL storage tank, waste to the
-## sewer. Every stream is metered, every motor is powered and audible.
+## Two reagent headers and a recycled solvent header feed a jacketed
+## reactor; a steam generator fires a heat exchanger that preheats the
+## A-feed and delivers the reaction duty. The batch is cooled in a
+## crystallizer under a real temperature loop until product drops out of
+## solution, a centrifuge splits crystals from mother liquor, the cake
+## is dried and lands in the product silo, and the liquor goes to a
+## recovery still whose overheads return to the solvent tank and go
+## round again. Every stream is metered, every motor is powered and
+## audible, and the ring closes on real material.
 
 static func _unit_300(plant: Plant) -> void:
-	# Rack extension carrying the area's cable tray east to the unit.
+	# Rack extension carrying the area cable tray east to the unit.
 	for x: float in [27.0, 33.0, 39.0]:
 		plant.place_structure("s_column", "pr1x_col_%d" % int(x), Vector3(x, 0.0, 1.5), 0.0)
 	for tier: float in [3.0, 4.0]:
@@ -174,33 +178,72 @@ static func _unit_300(plant: Plant) -> void:
 	plant.place_run("run_tray", "pr1x_tray",
 		[plant.to_local(Vector3(21.2, 3.35, 1.5)), plant.to_local(Vector3(38.8, 3.35, 1.5))])
 
-	# Equipment: headers, feed pumps, boiler, exchanger, reactor,
-	# centrifuge, product tank, waste drain, level transmitter.
-	plant.place("source", "supply_301a", {}, Vector3(24.0, 0.0, -7.5), 0.0, false)
-	plant.place("source", "supply_301b", {}, Vector3(24.0, 0.0, -3.5), 0.0, false)
-	plant.place("source", "supply_bfw", {}, Vector3(24.0, 0.0, 2.5), 0.0, false)
-	plant.place("pump", "p_301a", {"rated_lps": 2.0}, Vector3(26.6, 0.0, -7.5), 0.0, false)
-	plant.place("pump", "p_301b", {"rated_lps": 2.0}, Vector3(26.6, 0.0, -3.5), 0.0, false)
+	# ---- feed end -------------------------------------------------
+	# A header is what it carries: this is where each species enters
+	# the plant, and everything downstream finds out by being piped.
+	plant.place("source", "supply_301a", {"species": "reagent_a"},
+		Vector3(24.0, 0.0, -7.5), 0.0, false)
+	plant.place("source", "supply_301b", {"species": "reagent_b"},
+		Vector3(24.0, 0.0, -3.5), 0.0, false)
+	plant.place("source", "supply_bfw", {"species": "water"},
+		Vector3(24.0, 0.0, 2.5), 0.0, false)
+	plant.place("source", "supply_solv", {"species": "solvent"},
+		Vector3(24.0, 0.0, 6.5), 0.0, false)
+	plant.place("pump", "p_301a", {"rated_lps": 0.6}, Vector3(26.6, 0.0, -7.5), 0.0, false)
+	plant.place("pump", "p_301b", {"rated_lps": 0.6}, Vector3(26.6, 0.0, -3.5), 0.0, false)
+	plant.place("pump", "p_solv", {"rated_lps": 0.3}, Vector3(26.6, 0.0, 6.5), 0.0, false)
 	plant.place("steamgen", "sg_301", {"rated_kgps": 0.5}, Vector3(27.6, 0.0, 3.2), 0.0, false)
 	plant.place("hx", "e_301", {"max_duty_kw": 1200.0}, Vector3(30.8, 0.0, -0.5), 0.0, false)
-	plant.place("reactor", "r_301", {"capacity_l": 4000.0, "rate_lps": 6.0},
+
+	# ---- reaction and crystallization ------------------------------
+	plant.place("reactor", "r_301", {"capacity_l": 6000.0, "rate_lps": 1.2},
 		Vector3(34.2, 0.0, -4.5), 0.0, false)
-	plant.place("centrifuge", "cf_301", {"rate_lps": 4.0}, Vector3(37.6, 0.0, -4.5), 0.0, false)
+	plant.place("pump", "p_302", {"rated_lps": 1.8}, Vector3(36.4, 0.0, -4.5), 0.0, false)
+	plant.place("crystallizer", "cx_303", {"capacity_l": 4000.0},
+		Vector3(38.8, 0.0, -4.5), 0.0, false)
+	# TIC-303 is direct acting: cooling has to rise when the batch is
+	# ABOVE setpoint, so its gains are negative. Its output is
+	# kilowatts removed, not valve percent.
+	plant.place("controller", "tic_303",
+		{"kp": -8.0, "ki": -0.25, "sp": 16.0, "out_max": 400.0},
+		Vector3(38.8, 0.0, -7.2), 0.0, false)
+	plant.place("centrifuge", "cf_301", {"rate_lps": 1.2}, Vector3(41.4, 0.0, -4.5), 0.0, false)
+
+	# ---- cake side: hopper, dryer, product silo --------------------
+	plant.place("tank", "ht_304", {"height_m": 1.8, "diameter_m": 1.0},
+		Vector3(43.8, 0.0, -4.5), 0.0, false)
+	plant.place("dryer", "dr_305", {"rate_lps": 1.0}, Vector3(46.2, 0.0, -4.5), 0.0, false)
+	# HIC-305 is a hand controller: an operator dialling in a duty.
+	plant.place("controller", "hic_305", {"kp": 0.0, "ki": 0.0, "out_max": 800.0},
+		Vector3(46.2, 0.0, -7.0), 0.0, false)
+	plant.place("tank", "pt_300", {"height_m": 7.0, "diameter_m": 3.2},
+		Vector3(49.2, 0.0, -1.0), 0.0, false)
+	plant.place("gauge_level", "lt_300", {"liters_per_meter": 8042.5},
+		Vector3(51.6, 0.0, 1.4), 0.0, false)
+	plant.place("vialfill", "vf_310", {}, Vector3(52.6, 0.0, -2.6), 0.0, false)
+	# An analyser on the fill line: the AI cannot say anything true
+	# about quality until this is wired.
+	plant.place("gauge_conc", "aq_310", {"species": "product"},
+		Vector3(51.0, 0.0, -4.4), 0.0, false)
+
+	# ---- liquor side: the recycle ----------------------------------
+	plant.place("tank", "lt_306", {"height_m": 2.4, "diameter_m": 1.4},
+		Vector3(41.4, 0.0, 4.2), 0.0, false)
+	plant.place("still", "st_307", {"rate_lps": 1.5, "cut_c": 150.0},
+		Vector3(44.6, 0.0, 4.2), 0.0, false)
+	plant.place("controller", "hic_307", {"kp": 0.0, "ki": 0.0, "out_max": 3000.0},
+		Vector3(46.8, 0.0, 6.6), 0.0, false)
+	plant.place("tank", "sv_308", {"height_m": 2.6, "diameter_m": 1.6},
+		Vector3(38.0, 0.0, 6.6), 0.0, false)
+	plant.place("pump", "p_309", {"rated_lps": 0.8}, Vector3(35.2, 0.0, 6.6), 0.0, false)
 	plant.place("drain", "du_301", {"rate_lps": 2.0}, Vector3(35.2, 0.0, -7.8), 0.0, false)
+
 	# The transfer lock: cycles vacuum-vent-drain on its own, its
 	# pressure on a local gauge and its condensate to an open drain.
 	plant.place("vaclock", "vl_302", {}, Vector3(30.6, 0.0, -8.0), 0.0, false)
 	plant.place("gauge_press", "pi_302", {}, Vector3(28.8, 0.0, -8.6), 0.0, false)
 	plant.place("drain", "du_302", {"rate_lps": 1.5}, Vector3(32.8, 0.0, -8.3), 0.0, false)
-	# The prize: 7.0 m x 3.2 m dia -> ~56.3 kL of finished product.
-	# A 1500 L heel from the last campaign, so downstream filling has
-	# something to run on while today's batch converts.
-	plant.place("tank", "pt_300", {"height_m": 7.0, "diameter_m": 3.2, "level_l": 1500.0},
-		Vector3(37.8, 0.0, 1.8), 0.0, false)
-	# Fill-finish: the isolator draws real product from the tank.
-	plant.place("vialfill", "vf_310", {}, Vector3(41.5, 0.0, -1.2), 0.0, false)
-	plant.place("gauge_level", "lt_300", {"liters_per_meter": 8042.5},
-		Vector3(40.2, 0.0, 3.2), 0.0, false)
+
 	# Nozzles where a real tank has them: fill low on the south face
 	# (a 6 m riser to the top head would be an unsupported span), level
 	# tap low on the east face, toward its transmitter.
@@ -208,10 +251,11 @@ static func _unit_300(plant: Plant) -> void:
 	pt_view.set_nozzle("inlet", 0.10, -1.9)
 	pt_view.set_nozzle("level", 0.22, 0.53)
 
-	# Process path. Facade pairs meter the header and reactor draws.
+	# ---- process path ----------------------------------------------
 	plant.connect_equipment("supply_301a", "outlet", "p_301a", "inlet")
 	plant.connect_equipment("supply_301b", "outlet", "p_301b", "inlet")
 	plant.connect_equipment("supply_bfw", "outlet", "sg_301", "inlet")
+	plant.connect_equipment("supply_solv", "outlet", "p_solv", "inlet")
 	plant.connect_equipment("p_301a", "outlet", "e_301", "cold_in",
 		[plant.to_local(Vector3(28.4, 0.35, -5.9)), plant.to_local(Vector3(28.4, 0.35, -0.5))])
 	plant.connect_equipment("sg_301", "steam", "e_301", "steam_in",
@@ -222,56 +266,135 @@ static func _unit_300(plant: Plant) -> void:
 		[plant.to_local(Vector3(31.6, 0.35, -3.5))])
 	plant.connect_equipment("e_301", "duty", "r_301", "heat_duty",
 		[plant.to_local(Vector3(31.9, 0.3, 0.4)), plant.to_local(Vector3(33.0, 0.3, -3.2))])
-	plant.connect_equipment("r_301", "outlet", "cf_301", "inlet",
-		[plant.to_local(Vector3(36.2, 0.35, -4.5))])
-	plant.connect_equipment("r_301", "purity", "cf_301", "purity_in",
-		[plant.to_local(Vector3(33.2, 0.3, -6.2)), plant.to_local(Vector3(36.6, 0.3, -6.2))])
-	plant.connect_equipment("cf_301", "product", "pt_300", "inlet",
-		[plant.to_local(Vector3(38.6, 0.35, -2.6))])
-	plant.connect_equipment("cf_301", "waste", "du_301", "flow_in",
-		[plant.to_local(Vector3(36.4, 0.35, -6.6))])
+	# Reactor -> crystallizer. Two vessels cannot be bolted together:
+	# one offers material and the other expects to be fed, so a
+	# transfer pump goes between them.
+	plant.connect_equipment("r_301", "outlet", "p_302", "inlet",
+		[plant.to_local(Vector3(35.4, 0.35, -4.5))])
+	plant.connect_equipment("p_302", "outlet", "cx_303", "inlet",
+		[plant.to_local(Vector3(37.6, 0.35, -4.5)), plant.to_local(Vector3(38.4, 0.9, -4.5))])
+	# The crystallizer temperature loop: analyser in, cooling duty out.
+	plant.connect_equipment("cx_303", "temp", "tic_303", "pv",
+		[plant.to_local(Vector3(37.9, 0.3, -6.2))])
+	plant.connect_equipment("tic_303", "out", "cx_303", "cool_duty",
+		[plant.to_local(Vector3(39.9, 0.3, -6.4))])
+	plant.connect_equipment("cx_303", "outlet", "cf_301", "inlet",
+		[plant.to_local(Vector3(40.4, 0.35, -4.5))])
+	# Cake side.
+	plant.connect_equipment("cf_301", "product", "ht_304", "inlet",
+		[plant.to_local(Vector3(42.6, 0.35, -4.5))])
+	plant.connect_equipment("ht_304", "outlet", "dr_305", "inlet",
+		[plant.to_local(Vector3(45.0, 0.35, -4.5))])
+	plant.connect_equipment("hic_305", "out", "dr_305", "heat_duty",
+		[plant.to_local(Vector3(46.5, 0.3, -6.0))])
+	plant.connect_equipment("dr_305", "product", "pt_300", "inlet",
+		[plant.to_local(Vector3(47.6, 0.35, -4.2)), plant.to_local(Vector3(47.6, 0.35, -2.9))])
 	plant.connect_equipment("pt_300", "level", "lt_300", "process")
+	plant.connect_equipment("pt_300", "outlet", "vf_310", "inlet",
+		[plant.to_local(Vector3(50.9, 0.35, -1.0)), plant.to_local(Vector3(50.9, 0.35, -2.6))])
+	plant.connect_equipment("dr_305", "product", "aq_310", "process",
+		[plant.to_local(Vector3(48.2, 0.3, -4.6))])
+	# Liquor side and the recycle.
+	plant.connect_equipment("cf_301", "waste", "lt_306", "inlet",
+		[plant.to_local(Vector3(41.4, 0.35, -2.6)), plant.to_local(Vector3(41.4, 0.35, 2.9))])
+	plant.connect_equipment("lt_306", "outlet", "st_307", "inlet",
+		[plant.to_local(Vector3(43.0, 0.35, 4.2))])
+	plant.connect_equipment("hic_307", "out", "st_307", "heat_duty",
+		[plant.to_local(Vector3(46.0, 0.3, 5.6))])
+	plant.connect_equipment("st_307", "distillate", "sv_308", "inlet",
+		[plant.to_local(Vector3(45.6, 0.35, 6.9)), plant.to_local(Vector3(39.2, 0.35, 6.9))])
+	plant.connect_equipment("st_307", "bottoms", "du_301", "flow_in",
+		[plant.to_local(Vector3(44.6, 0.35, 2.2)), plant.to_local(Vector3(35.2, 0.35, 2.2)),
+			plant.to_local(Vector3(35.2, 0.35, -6.9))])
+	plant.connect_equipment("p_solv", "outlet", "sv_308", "inlet",
+		[plant.to_local(Vector3(29.0, 0.35, 6.5)), plant.to_local(Vector3(36.6, 0.35, 6.5))])
+	# The loop closes here: recovered solvent goes back to the reactor.
+	plant.connect_equipment("sv_308", "outlet", "p_309", "inlet",
+		[plant.to_local(Vector3(36.7, 0.35, 6.6))])
+	plant.connect_equipment("p_309", "outlet", "r_301", "inlet_a",
+		[plant.to_local(Vector3(34.2, 0.35, 6.0)), plant.to_local(Vector3(34.2, 0.35, -2.6))])
+	# The lock keeps to itself.
 	plant.connect_equipment("vl_302", "press", "pi_302", "process",
 		[plant.to_local(Vector3(29.9, 0.35, -8.5))])
 	plant.connect_equipment("vl_302", "drain_flow", "du_302", "flow_in",
 		[plant.to_local(Vector3(31.7, 0.35, -8.15))])
-	plant.connect_equipment("pt_300", "outlet", "vf_310", "inlet",
-		[plant.to_local(Vector3(39.8, 0.35, -0.3))])
+	plant.connect_equipment("e_301", "condensate", "du_302", "flow_in",
+		[plant.to_local(Vector3(30.8, 0.35, -3.0)), plant.to_local(Vector3(32.4, 0.35, -7.4))])
 
-	# Power: 480 V drops from the plant feeder along the rack line.
+	# ---- power: 480 V drops from the plant feeder along the rack ----
 	var trunk := [Vector3(-3.6, 0.3, -0.8), Vector3(22.6, 0.3, -0.8)]
 	for load: Array in [
 			["p_301a", Vector3(25.6, 0.3, -6.6)],
 			["p_301b", Vector3(25.6, 0.3, -3.0)],
+			["p_solv", Vector3(25.6, 0.3, 5.8)],
 			["sg_301", Vector3(26.4, 0.3, 2.2)],
 			["r_301", Vector3(33.2, 0.3, -2.6)],
-			["cf_301", Vector3(36.8, 0.3, -3.4)],
+			["p_302", Vector3(35.8, 0.3, -3.6)],
+			["cx_303", Vector3(37.9, 0.3, -3.0)],
+			["cf_301", Vector3(40.6, 0.3, -3.4)],
+			["dr_305", Vector3(45.4, 0.3, -3.6)],
+			["st_307", Vector3(43.8, 0.3, 3.2)],
+			["p_309", Vector3(34.4, 0.3, 5.8)],
 			["vl_302", Vector3(29.6, 0.3, -7.2)],
-			["vf_310", Vector3(42.9, 0.3, -2.2)]]:
+			["vf_310", Vector3(53.9, 0.3, -3.6)]]:
 		var path: Array[Vector3] = []
 		for point: Vector3 in trunk:
 			path.append(plant.to_local(point))
 		path.append(plant.to_local(load[1] as Vector3))
 		plant.connect_equipment("plant_mains", "power", str(load[0]), "power", path)
 
-	# Commission the unit: burner and bowl on, both feed pumps in hand,
-	# and a working charge in the reactor so the continuous train has
-	# residence time — feeds run 4 L/s in, the bowl 4 L/s out, and the
-	# charge heats toward reaction temperature while purity climbs.
+	# ---- commissioned state ----------------------------------------
+	# Seeded deliberately so the loop is doing something within a
+	# minute rather than an hour. Everything here is a real inventory
+	# with a real composition; nothing is a display value.
 	(plant.sim.get_component("sg_301") as SimSteamGen).is_on = true
 	(plant.sim.get_component("cf_301") as SimCentrifuge).is_on = true
 	(plant.sim.get_component("vl_302") as SimVacuumLock).is_on = true
 	(plant.sim.get_component("vf_310") as SimVialFiller).is_on = true
-	for pump_name: String in ["p_301a", "p_301b"]:
+	(plant.sim.get_component("dr_305") as SimDryer).is_on = true
+	(plant.sim.get_component("st_307") as SimStill).is_on = true
+	for pump_name: String in ["p_301a", "p_301b", "p_solv", "p_302", "p_309"]:
 		(plant.sim.get_component(pump_name) as SimPump).mode = "hand"
-	var reac := plant.sim.get_component("r_301") as SimReactor
-	reac.volume_l = 2600.0
-	reac.level.value = 2600.0
-	reac.temp_c = 55.0  # held warm from the last shift; crosses 60 C in ~1 min
+	# The two hand controllers hold their duties.
+	var hic5 := plant.sim.get_component("hic_305") as SimPID
+	hic5.set_mode("manual")
+	hic5.manual_out = 420.0
+	var hic7 := plant.sim.get_component("hic_307") as SimPID
+	hic7.set_mode("manual")
+	hic7.manual_out = 2000.0
+
+	# A warm working charge in the reactor: solvent with both reagents
+	# in it, held over from the last shift and crossing 60 C shortly.
+	var charge := SimStream.zero_amounts()
+	charge[SimSpecies.SOLVENT] = 0.70
+	charge[SimSpecies.REAGENT_A] = 0.15
+	charge[SimSpecies.REAGENT_B] = 0.15
+	(plant.sim.get_component("r_301") as SimReactor).charge(2600.0, charge, 55.0)
+	# A hot, product-rich heel in the crystallizer, so it has residence
+	# time to actually drop crystals from the first minute.
+	var liquor := SimStream.zero_amounts()
+	liquor[SimSpecies.SOLVENT] = 0.74
+	liquor[SimSpecies.PRODUCT] = 0.21
+	liquor[SimSpecies.IMPURITY] = 0.05
+	(plant.sim.get_component("cx_303") as SimCrystallizer).charge(1100.0, liquor, 62.0)
+	# Recovered solvent from the last campaign, so the recycle pump has
+	# something to send while the still comes up.
+	var solvent := SimStream.zero_amounts()
+	solvent[SimSpecies.SOLVENT] = 0.97
+	solvent[SimSpecies.IMPURITY] = 0.03
+	(plant.sim.get_component("sv_308") as SimTank).charge(900.0, solvent, 30.0)
+	# A heel of dried product in the silo so filling can run at once.
+	var dry := SimStream.zero_amounts()
+	dry[SimSpecies.PRODUCT] = 0.94
+	dry[SimSpecies.IMPURITY] = 0.06
+	(plant.sim.get_component("pt_300") as SimTank).charge(1500.0, dry, 24.0)
 
 	_service_wire(plant, "sg_301", "e_301", Color(0.78, 0.79, 0.82), "ST-301")
-	_service_wire(plant, "cf_301", "pt_300", Color(0.13, 0.55, 0.28), "P-301")
-	_service_wire(plant, "cf_301", "du_301", Color(0.45, 0.36, 0.25), "WS-301")
+	_service_wire(plant, "cf_301", "ht_304", Color(0.13, 0.55, 0.28), "CK-301")
+	_service_wire(plant, "cf_301", "lt_306", Color(0.45, 0.36, 0.25), "ML-301")
+	_service_wire(plant, "st_307", "sv_308", Color(0.20, 0.45, 0.75), "SR-307")
+	_service_wire(plant, "p_309", "r_301", Color(0.20, 0.45, 0.75), "SR-309")
+	_service_wire(plant, "st_307", "du_301", Color(0.45, 0.36, 0.25), "WS-307")
 
 
 static func _signage(plant: Plant) -> void:

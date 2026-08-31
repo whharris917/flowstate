@@ -131,10 +131,12 @@ class HeatExchanger(Component):
             self.duty_kw = offered_kw if not cold.is_flowing else 0.0
 
         self.cold_out.value = cold.with_temp(self.outlet_temp_c)
-        condensed = self.duty_kw / self.LATENT_KJ_PER_KG
-        self.condensate.value = Stream.pure(
-            "water", min(condensed, steam.flow_lps), steam.temp_c
-        )
+        # Everything admitted to the shell condenses -- that is what the
+        # trap on the outlet is for. Steam the process could not absorb
+        # is not destroyed, it leaves hot down the condensate line,
+        # which is how over-steaming shows up as wasted feedwater on a
+        # drain totalizer instead of quietly vanishing.
+        self.condensate.value = Stream.pure("water", steam.flow_lps, steam.temp_c)
         self.duty.value = self.duty_kw
 
 
@@ -645,8 +647,11 @@ HeatExchanger.SPEC = EquipmentSpec(
             "signal never claims heat the process did not take.",
         ),
         Equation(
-            "m_condensate = Q / latent",
-            "Only the steam that gave up its heat condenses.",
+            "m_condensate = m_steam",
+            "Everything admitted to the shell condenses and leaves by "
+            "the trap. Steam the process could not absorb is wasted, "
+            "not destroyed -- pipe the condensate somewhere and the "
+            "waste is on a totalizer.",
         ),
     ),
     params=(
@@ -658,6 +663,8 @@ HeatExchanger.SPEC = EquipmentSpec(
         "A fixed 5 C approach stands in for the pinch.",
         "Zero holdup and zero thermal mass -- the exchanger responds "
         "within one scan.",
+        "Surplus heat in over-admitted steam leaves with the condensate "
+        "rather than being tracked as an enthalpy.",
     ),
 )
 

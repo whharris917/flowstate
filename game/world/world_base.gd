@@ -9,6 +9,7 @@ extends Node3D
 var plant: Plant
 var hud: Hud
 var builder: BuildController
+var library: LibraryPanel
 
 # Knobs a world sets in _init(), before _ready runs.
 var plant_height := 0.0
@@ -45,11 +46,13 @@ func _ready() -> void:
 	var tank_panel := TankConfigPanel.new()
 	layer.add_child(tank_panel)
 	plant.tank_panel = tank_panel
+	library = LibraryPanel.new()
+	layer.add_child(library)
 	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)
 	_after_plant()
-	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · F5/F9 save/load")
+	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · F5/F9 save/load")
 
 
 ## Environment, geometry, lighting. Override in each world.
@@ -75,7 +78,14 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("quicksave"):
+	if event.is_action_pressed("library"):
+		library.toggle()
+		# The panel owns the screen while it is up: free the mouse so the
+		# page can be read, and stop the player walking off behind it.
+		player.input_locked = library.visible
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if library.visible \
+			else Input.MOUSE_MODE_CAPTURED
+	elif event.is_action_pressed("quicksave"):
 		hud.toast("saved" if plant.save_game() else "save FAILED")
 	elif event.is_action_pressed("quickload"):
 		hud.toast("loaded" if plant.load_game() else "no save found")

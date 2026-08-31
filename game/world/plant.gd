@@ -287,7 +287,8 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as RelayView).setup(record as SimRelay)
 		"float_switch":
 			(view as FloatSwitchView).setup(record as SimFloatSwitch)
-		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press":
+		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", \
+		"gauge_temp", "gauge_conc":
 			(view as GaugeView).setup(record as SimGauge)
 		"column":
 			(view as ColumnView).setup(record as SimColumn)
@@ -315,6 +316,12 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as VacLockView).setup(record as SimVacuumLock)
 		"vialfill":
 			(view as VialFillerView).setup(record as SimVialFiller)
+		"crystallizer":
+			(view as CrystallizerView).setup(record as SimCrystallizer)
+		"dryer":
+			(view as DryerView).setup(record as SimDryer)
+		"still":
+			(view as StillView).setup(record as SimStill)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
 	if type_id == "tank":
@@ -1068,7 +1075,7 @@ func _self_check() -> void:
 	check.connect_ports(c_mains, "power", c_pump, "power")
 	check.connect_ports(c_src, "supply", c_pump, "inlet")
 	check.connect_ports(c_pump, "draw", c_src, "draw")
-	check.connect_ports(c_tank, "level", c_drn, "inlet")
+	check.connect_ports(c_tank, "outlet", c_drn, "inlet")
 	check.connect_ports(c_drn, "draw", c_tank, "draw")
 	check.connect_ports(c_tank, "level", c_switch, "level")
 	check.connect_ports(c_switch, "contact", c_relay, "coil")
@@ -1084,6 +1091,63 @@ func _self_check() -> void:
 		push_warning("[flowstate] kernel self-check FAILED — level %.1f L, overflow %.1f L, %d cycles"
 			% [c_tank.level_l, c_tank.overflowed_l, c_relay.cycles])
 	_control_self_check()
+	_stream_self_check()
+
+
+## Mirrors the Python stream tests: material has to be conserved when
+## streams merge, a vessel has to blend what arrives into what it holds,
+## and — the part save/load can quietly break — composition and
+## temperature have to survive a state round-trip. A tank that forgets
+## what is in it after a reload is the worst kind of bug, because
+## everything still runs and only the numbers are wrong.
+func _stream_self_check() -> void:
+	var problems: Array[String] = []
+
+	# Mixing conserves each species, and blends temperature by flow.
+	var hot := SimStream.pure(SimSpecies.SOLVENT, 2.0, 80.0)
+	var cold := SimStream.pure(SimSpecies.WATER, 6.0, 20.0)
+	var mixed := SimStream.mix(hot, cold)
+	if absf(mixed.flow_lps - 8.0) > 1e-4:
+		problems.append("mixing lost flow")
+	if absf(mixed.temp_c - 35.0) > 1e-3:
+		problems.append("mixing got the temperature wrong")
+	if absf(mixed.species_lps(SimSpecies.SOLVENT) - 2.0) > 1e-4 \
+			or absf(mixed.species_lps(SimSpecies.WATER) - 6.0) > 1e-4:
+		problems.append("mixing lost a species")
+
+	# A vessel blends what arrives into what it holds.
+	var check := Simulation.new(SIM_DT)
+	var vessel := check.add(SimTank.new("v", 4000.0)) as SimTank
+	var charge := SimStream.zero_amounts()
+	charge[SimSpecies.WATER] = 1.0
+	vessel.charge(1000.0, charge, 20.0)
+	for _i in 200:  # 10 s of hot solvent at 10 L/s
+		vessel.inlet.stream = SimStream.pure(SimSpecies.SOLVENT, 10.0, 80.0)
+		vessel.tick(SIM_DT)
+	if absf(vessel.level_l - 1100.0) > 1.0:
+		problems.append("vessel inventory drifted while filling")
+	if absf(vessel.contents.frac(SimSpecies.SOLVENT) - 100.0 / 1100.0) > 0.01:
+		problems.append("vessel did not blend the incoming composition")
+	if vessel.temp_c <= 20.5 or vessel.temp_c >= 80.0:
+		problems.append("hot feed did not warm the vessel")
+
+	# Composition survives a save/load round-trip.
+	var before := vessel.contents
+	var restored := SimTank.new("v2", 4000.0)
+	restored.apply_state(vessel.state_dict())
+	if absf(restored.level_l - vessel.level_l) > 1e-4:
+		problems.append("level lost in round-trip")
+	if absf(restored.temp_c - before.temp_c) > 1e-3:
+		problems.append("temperature lost in round-trip")
+	for i in SimSpecies.COUNT:
+		if absf(restored.contents.frac(i) - before.frac(i)) > 1e-3:
+			problems.append("composition lost in round-trip")
+			break
+
+	if problems.is_empty():
+		print("[flowstate] stream self-check OK — mixing conserves, vessels blend, composition survives save/load")
+	else:
+		push_warning("[flowstate] stream self-check FAILED — %s" % ", ".join(problems))
 
 
 ## Mirrors the Python control tests: a PID level loop must settle on
@@ -1121,13 +1185,13 @@ func _control_self_check() -> void:
 	plc.tick(SIM_DT)
 	var dropped := plc.do_ports[0].value < 0.5
 
-	if absf(level_kpa - 15.0) < 0.3 and absf(lv.outlet.value - 2.0) < 0.15 \
+	if absf(level_kpa - 15.0) < 0.3 and absf(lv.flow_lps - 2.0) < 0.15 \
 			and err == "" and sealed and dropped:
 		print("[flowstate] control self-check OK — PID holds %.1f kPa, ladder seals and drops"
 			% level_kpa)
 	else:
 		push_warning("[flowstate] control self-check FAILED — level %.2f kPa, flow %.2f, err '%s', sealed %s, dropped %s"
-			% [level_kpa, lv.outlet.value, err, sealed, dropped])
+			% [level_kpa, lv.flow_lps, err, sealed, dropped])
 
 
 ## Headless support-rule exercise. Physics space queries see nothing
@@ -1300,7 +1364,8 @@ func _params_for(record: SimComponent) -> Dictionary:
 		var fs := record as SimFloatSwitch
 		return {"low_l": fs.low_l, "high_l": fs.high_l}
 	if record is SimGauge:
-		return {"liters_per_meter": (record as SimGauge).liters_per_meter}
+		var g := record as SimGauge
+		return {"liters_per_meter": g.liters_per_meter, "species": g.species_key()}
 	if record is SimColumn:
 		var col := record as SimColumn
 		return {"charge_l": col.charge_l, "max_duty_kw": col.max_duty_kw}
@@ -1309,7 +1374,8 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"cv_lps": cvalve.cv_lps, "tau_s": cvalve.tau_s}
 	if record is SimPID:
 		var pid := record as SimPID
-		return {"kp": pid.kp, "ki": pid.ki, "kd": pid.kd, "sp": pid.sp}
+		return {"kp": pid.kp, "ki": pid.ki, "kd": pid.kd, "sp": pid.sp,
+			"out_min": pid.out_min, "out_max": pid.out_max}
 	if record is SimTerminal:
 		return {"kind": (record as SimTerminal).kind}
 	if record is SimDrain:
@@ -1323,6 +1389,16 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"max_duty_kw": (record as SimHeatExchanger).max_duty_kw}
 	if record is SimSteamGen:
 		return {"rated_kgps": (record as SimSteamGen).rated_kgps}
+	if record is SimSource:
+		var src := record as SimSource
+		return {"species": src.species_key(), "temp_c": src.temp_c}
+	if record is SimCrystallizer:
+		return {"capacity_l": (record as SimCrystallizer).capacity_l}
+	if record is SimDryer:
+		return {"rate_lps": (record as SimDryer).rate_lps}
+	if record is SimStill:
+		var st := record as SimStill
+		return {"rate_lps": st.rate_lps, "cut_c": st.cut_c, "sharpness": st.sharpness}
 	return {}
 
 

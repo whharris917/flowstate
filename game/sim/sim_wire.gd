@@ -14,4 +14,7 @@ func _init(src_: SimOutputPort, dst_: SimInputPort) -> void:
 
 
 func propagate() -> void:
-	dst.accumulate(src.value)
+	if SimTypes.is_stream(dst.kind):
+		dst.accumulate_stream(src.stream)
+	else:
+		dst.accumulate_value(src.value)

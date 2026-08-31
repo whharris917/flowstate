@@ -1,9 +1,12 @@
 class_name SimPump
 extends SimComponent
 ## Fixed-rate transfer pump with a Hand-Off-Auto selector, exactly like
-## the selector on a real motor starter. Draws from an unlimited supply
-## main for now. starts is the motor-wear counterpart to the relay's
-## cycles.
+## the selector on a real motor starter. It moves material at its
+## rating or at whatever the suction can actually give it, so a tank
+## running empty throttles the pump instead of going negative. What
+## comes out the discharge is what went in the suction — same
+## temperature, same composition, different rate. starts is the
+## motor-wear counterpart to the relay's cycles.
 
 const MODES: Array[String] = ["hand", "off", "auto"]
 
@@ -12,6 +15,7 @@ var mode: String = "auto"
 var running: bool = false
 var starts: int = 0
 var dry_run_s: float = 0.0
+var flow_lps: float = 0.0
 
 var run: SimInputPort
 var power: SimInputPort
@@ -27,11 +31,12 @@ func _init(name_: String, rated_lps_: float, mode_: String = "auto") -> void:
 	set_mode(mode_)
 	run = add_input("run", SimTypes.PortKind.SIGNAL_DISCRETE)
 	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
-	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_LEVEL)
-	outlet = add_output("outlet", SimTypes.PortKind.PROCESS_FLOW)
+	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_SUPPLY)
+	outlet = add_output("outlet", SimTypes.PortKind.PROCESS_STREAM)
 	draw = add_output("draw", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("starts", &"starts")
 	add_observable("dry_run_s", &"dry_run_s")
+	add_observable("flow_lps", &"flow_lps")
 
 
 func set_mode(mode_: String) -> void:
@@ -60,12 +65,15 @@ func tick(dt: float) -> void:
 	running = should_run
 	# The motor can spin against an empty inlet, but nothing moves and
 	# the seal wears.
-	var wet := inlet.value > 0.05
+	var offered := inlet.stream
+	var wet := offered.flow_lps > 1e-9
 	if running and not wet:
 		dry_run_s += dt
-	var delivered := rated_lps if (running and wet) else 0.0
-	outlet.value = delivered
-	draw.value = delivered
+	# Take the rating, or whatever the vessel can still give — which is
+	# how a tank running empty throttles the pump smoothly.
+	flow_lps = minf(rated_lps, offered.flow_lps) if running else 0.0
+	outlet.stream = offered.with_flow(flow_lps)
+	draw.value = flow_lps
 
 
 func state_dict() -> Dictionary:

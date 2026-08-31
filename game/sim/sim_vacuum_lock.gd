@@ -34,7 +34,7 @@ func _init(name_: String) -> void:
 	super(name_)
 	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
 	press = add_output("press", SimTypes.PortKind.PROCESS_PRESSURE)
-	drain_flow = add_output("drain_flow", SimTypes.PortKind.PROCESS_FLOW)
+	drain_flow = add_output("drain_flow", SimTypes.PortKind.PROCESS_STREAM)
 	add_observable("press_pa", &"press_pa")
 	add_observable("condensate_l", &"condensate_l")
 	add_observable("cycles", &"cycles")
@@ -76,7 +76,7 @@ func tick(dt: float) -> void:
 					cycles += 1
 					state = "evacuate"
 	press.value = press_pa
-	drain_flow.value = rate
+	drain_flow.stream = SimStream.pure(SimSpecies.WATER, rate, 40.0)
 
 
 func state_dict() -> Dictionary:

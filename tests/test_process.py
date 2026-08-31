@@ -108,14 +108,26 @@ class TestHeatExchanger:
         assert out.flow_lps == pytest.approx(2.0)
         assert out.temp_c > feed.temp_c
 
-    def test_condensate_matches_the_heat_delivered(self) -> None:
+    def test_everything_admitted_condenses(self) -> None:
+        """Mass has to close across the shell. Steam the process could
+        not absorb leaves hot down the condensate line rather than
+        disappearing from the plant."""
         hx = HeatExchanger("hx", max_duty_kw=1200.0)
         hx.steam_in.value = Stream.pure("water", 0.4, 180.0)
         hx.cold_in.value = Stream.pure("water", 3.0, 20.0)
         hx.tick(0.05)
-        expected = hx.duty_kw / HeatExchanger.LATENT_KJ_PER_KG
-        assert hx.condensate.value.flow_lps == pytest.approx(expected)
+        assert hx.condensate.value.flow_lps == pytest.approx(0.4)
         assert hx.condensate.value.frac("water") == pytest.approx(1.0)
+
+    def test_over_steaming_is_wasted_not_destroyed(self) -> None:
+        """Far more steam than the duty cap can use: the surplus still
+        has to come out of the condensate nozzle."""
+        hx = HeatExchanger("hx", max_duty_kw=200.0)
+        hx.steam_in.value = Stream.pure("water", 5.0, 180.0)
+        hx.cold_in.value = Stream.pure("water", 3.0, 20.0)
+        hx.tick(0.05)
+        assert hx.duty_kw == pytest.approx(200.0)
+        assert hx.condensate.value.flow_lps == pytest.approx(5.0)
 
 
 class TestReactor:

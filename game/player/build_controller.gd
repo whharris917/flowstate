@@ -77,7 +77,8 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	icons = AssetIcons.new()
 	add_child(icons)
 	var all_types: Array = []
-	for entry: Dictionary in PlantFactory.CATALOG + PlantFactory.CATALOG_INSTRUMENTS \
+	for entry: Dictionary in PlantFactory.CATALOG + PlantFactory.CATALOG_SEPARATION \
+			+ PlantFactory.CATALOG_INSTRUMENTS \
 			+ StructureFactory.CATALOG + StructureFactory.CATALOG_ROUTING \
 			+ PlantFactory.CATALOG_CONTROL + PlantFactory.CATALOG_UTILITIES:
 		all_types.append(entry["type"])
@@ -98,7 +99,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_cancel"):
 		_set_mode(Mode.NORMAL)
 	elif event.is_action_pressed("catalog_page") and mode == Mode.PLACE:
-		page = (page + 1) % 6
+		page = (page + 1) % 7
 		catalog_index = 0
 		_beam_anchor = Vector3.INF
 		_run_points.clear()
@@ -179,9 +180,9 @@ func _update_hud() -> void:
 			menu.visible = false
 			hud.set_mode_text("B build · C connect · X remove")
 		Mode.PLACE:
-			var page_names: Array[String] = ["EQUIPMENT", "INSTRUMENTS", "STRUCTURE",
+			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
 				"ROUTING & SIGNS", "CONTROL", "UTILITIES"]
-			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 6]],
+			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 7]],
 				_catalog(), icons, catalog_index)
 			if _is_stretch():
 				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
@@ -567,16 +568,17 @@ func _beam_aim(_space: PhysicsDirectSpaceState3D) -> Vector3:
 func _catalog() -> Array[Dictionary]:
 	match page:
 		0: return PlantFactory.CATALOG
-		1: return PlantFactory.CATALOG_INSTRUMENTS
-		2: return StructureFactory.CATALOG
-		3: return StructureFactory.CATALOG_ROUTING
-		5: return PlantFactory.CATALOG_UTILITIES
+		1: return PlantFactory.CATALOG_SEPARATION
+		2: return PlantFactory.CATALOG_INSTRUMENTS
+		3: return StructureFactory.CATALOG
+		4: return StructureFactory.CATALOG_ROUTING
+		6: return PlantFactory.CATALOG_UTILITIES
 	return PlantFactory.CATALOG_CONTROL
 
 
-## Pages 0, 1, 4, and 5 place sim equipment; 2 and 3 place structure.
+## Pages 0, 1, 2, 5, and 6 place sim equipment; 3 and 4 place structure.
 func _is_equipment_page() -> bool:
-	return page in [0, 1, 4, 5]
+	return page in [0, 1, 2, 5, 6]
 
 
 func _current_type() -> String:

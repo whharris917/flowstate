@@ -14,6 +14,9 @@ var is_on: bool = false
 var state: String = "idle"          # idle/index/fill/cap
 var timer_s: float = 0.0
 var vials_done: int = 0
+var fill_purity: float = 0.0
+var filled_l: float = 0.0
+var product_filled_l: float = 0.0
 
 var inlet: SimInputPort
 var power: SimInputPort
@@ -22,14 +25,18 @@ var draw: SimOutputPort
 
 func _init(name_: String) -> void:
 	super(name_)
-	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_LEVEL)
+	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_SUPPLY)
 	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
 	draw = add_output("draw", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("vials_done", &"vials_done")
+	add_observable("fill_purity", &"fill_purity")
+	add_observable("product_filled_l", &"product_filled_l")
 
 
 func tick(dt: float) -> void:
-	var fed := inlet.value > 1.0
+	var feed := inlet.stream
+	var needed := VIAL_ML / 1000.0 / FILL_S
+	var fed := feed.flow_lps >= needed
 	var running := is_on and power.value > 0.5 and fed
 	var rate := 0.0
 	if not running:
@@ -40,7 +47,7 @@ func tick(dt: float) -> void:
 			timer_s = INDEX_S
 		timer_s -= dt
 		if state == "fill":
-			rate = VIAL_ML / 1000.0 / FILL_S
+			rate = needed
 		if timer_s <= 0.0:
 			match state:
 				"index":
@@ -53,13 +60,22 @@ func tick(dt: float) -> void:
 					vials_done += 1
 					state = "index"
 					timer_s = INDEX_S
+	# It fills vials with whatever it is piped to, and keeps an honest
+	# record of what that was — so a train that quietly went off-spec is
+	# provable after the fact instead of arguable.
+	fill_purity = feed.frac(SimSpecies.PRODUCT)
+	filled_l += rate * dt
+	product_filled_l += rate * fill_purity * dt
 	draw.value = rate
 
 
 func state_dict() -> Dictionary:
-	return {"is_on": is_on, "vials_done": vials_done}
+	return {"is_on": is_on, "vials_done": vials_done, "filled_l": filled_l,
+		"product_filled_l": product_filled_l}
 
 
 func apply_state(state_: Dictionary) -> void:
 	is_on = state_.get("is_on", is_on)
 	vials_done = int(state_.get("vials_done", vials_done))
+	filled_l = state_.get("filled_l", filled_l)
+	product_filled_l = state_.get("product_filled_l", product_filled_l)

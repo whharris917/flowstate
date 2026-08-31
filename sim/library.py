@@ -198,10 +198,13 @@ def sample_components() -> list[Component]:
     constructed.
     """
     from sim import components as comp
+    from sim import control as ctrl
     from sim import process as proc
     from sim import separation as sep
 
     return [
+        ctrl.PID("controller"),
+        ctrl.PLC("plc"),
         comp.Tank("tank", capacity_l=4000.0),
         comp.Pump("pump", rated_lps=4.0),
         comp.ControlValve("valve"),
@@ -213,6 +216,7 @@ def sample_components() -> list[Component]:
         comp.MainsFeed("mains"),
         comp.PowerSupply("psu"),
         comp.Terminal("terminal"),
+        comp.Column("column"),
         proc.SteamGen("boiler"),
         proc.HeatExchanger("exchanger"),
         proc.Reactor("reactor"),

@@ -74,7 +74,15 @@ func _build_body() -> void:
 	add_child(body)
 
 
+## Set while a full-screen panel owns the screen. The movement code
+## polls Input directly rather than going through the event queue, so a
+## panel cannot stop the player walking just by marking events handled.
+var input_locked: bool = false
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if input_locked:
+		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion := event as InputEventMouseMotion
 		var sens := MOUSE_SENS * camera.fov / FOV_DEFAULT
@@ -107,7 +115,8 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 		_fall_speed = -velocity.y
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var input := Vector2.ZERO if input_locked else Input.get_vector(
+		"move_left", "move_right", "move_forward", "move_back")
 	var direction := (transform.basis * Vector3(input.x, 0, input.y)).normalized()
 	velocity.x = direction.x * SPEED
 	velocity.z = direction.z * SPEED

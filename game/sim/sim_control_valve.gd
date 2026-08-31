@@ -9,6 +9,7 @@ extends SimComponent
 var cv_lps: float
 var tau_s: float
 var position: float = 0.0   # percent, follows the command with a lag
+var flow_lps: float = 0.0
 
 var cmd: SimInputPort
 var inlet: SimInputPort
@@ -23,18 +24,23 @@ func _init(name_: String, cv_lps_ := 6.0, tau_s_ := 1.0) -> void:
 	cv_lps = cv_lps_
 	tau_s = tau_s_
 	cmd = add_input("cmd", SimTypes.PortKind.SIGNAL_ANALOG)
-	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_LEVEL)
-	outlet = add_output("outlet", SimTypes.PortKind.PROCESS_FLOW)
+	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_SUPPLY)
+	outlet = add_output("outlet", SimTypes.PortKind.PROCESS_STREAM)
 	draw = add_output("draw", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("position", &"position")
+	add_observable("flow_lps", &"flow_lps")
 
 
 func tick(dt: float) -> void:
 	var target := clampf(cmd.value, 0.0, 100.0)
 	position += (target - position) * dt / tau_s
-	var delivered := position / 100.0 * cv_lps if inlet.value > 0.05 else 0.0
-	outlet.value = delivered
-	draw.value = delivered
+	# The valve passes what it is opened for, or what the header can
+	# actually give it, whichever is less. Material through a valve is
+	# unchanged: same temperature, same composition, different rate.
+	var offered := inlet.stream
+	flow_lps = minf(position / 100.0 * cv_lps, offered.flow_lps)
+	outlet.stream = offered.with_flow(flow_lps)
+	draw.value = flow_lps
 
 
 func state_dict() -> Dictionary:
