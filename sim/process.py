@@ -268,3 +268,54 @@ class VacuumLock(Component):
                     self.state = "evacuate"
         self.press.value = self.press_pa
         self.drain_flow.value = rate
+
+
+class VialFiller(Component):
+    """Automated vial filler/capper in an isolator. A three-station
+    machine cycle — index the conveyor, fill a 10 mL vial from the
+    ``inlet`` facade pair, press the cap — that only runs powered, on,
+    and fed. Every millilitre filled is genuinely drawn from whatever
+    the inlet is piped to; ``vials_done`` is the lifetime count.
+    """
+
+    VIAL_ML = 10.0
+    INDEX_S = 0.5
+    FILL_S = 1.1
+    CAP_S = 0.8
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.is_on = False
+        self.state = "idle"          # idle/index/fill/cap
+        self.timer_s = 0.0
+        self.vials_done = 0
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_LEVEL)
+        self.power = self.add_input("power", PortKind.POWER, "480VAC")
+        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self.add_observable("vials_done", "vials_done")
+
+    def tick(self, dt: float) -> None:
+        fed = float(self.inlet.value) > 1.0
+        running = self.is_on and float(self.power.value) > 0.5 and fed
+        rate = 0.0
+        if not running:
+            self.state = "idle"
+        else:
+            if self.state == "idle":
+                self.state = "index"
+                self.timer_s = self.INDEX_S
+            self.timer_s -= dt
+            if self.state == "fill":
+                rate = self.VIAL_ML / 1000.0 / self.FILL_S
+            if self.timer_s <= 0.0:
+                if self.state == "index":
+                    self.state = "fill"
+                    self.timer_s = self.FILL_S
+                elif self.state == "fill":
+                    self.state = "cap"
+                    self.timer_s = self.CAP_S
+                elif self.state == "cap":
+                    self.vials_done += 1
+                    self.state = "index"
+                    self.timer_s = self.INDEX_S
+        self.draw.value = rate

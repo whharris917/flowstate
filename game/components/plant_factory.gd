@@ -12,6 +12,7 @@ const CATALOG: Array[Dictionary] = [
 	{"type": "hx", "label": "Heat exchanger"},
 	{"type": "steamgen", "label": "Steam generator"},
 	{"type": "column", "label": "Distillation column"},
+	{"type": "vialfill", "label": "Vial filler (isolator)"},
 ]
 
 const CATALOG_UTILITIES: Array[Dictionary] = [
@@ -60,6 +61,7 @@ const FOOTPRINTS := {
 	"hx": Vector3(2.0, 1.0, 0.8),
 	"steamgen": Vector3(2.1, 2.8, 1.3),
 	"vaclock": Vector3(1.5, 2.9, 1.4),
+	"vialfill": Vector3(2.5, 2.5, 1.2),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
@@ -69,7 +71,7 @@ const Y_OFFSETS := {
 	"valve": 0.0, "controller": 0.0, "cabinet": 0.0,
 	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
 	"reactor": 0.0, "centrifuge": 0.0, "hx": 0.0, "steamgen": 0.0,
-	"vaclock": 0.0,
+	"vaclock": 0.0, "vialfill": 0.0,
 }
 
 # Where each port's fitting sits in the view's local space, flush with
@@ -142,6 +144,9 @@ const PORT_ANCHORS := {
 		"power": {"pos": Vector3(-0.75, 0.9, 0.26), "dir": Vector3.BACK},
 		"press": {"pos": Vector3(0.42, 2.28, 0), "dir": Vector3.RIGHT},
 		"drain_flow": {"pos": Vector3(0.36, 0.6, 0), "dir": Vector3.RIGHT}},
+	"vialfill": {
+		"inlet": {"pos": Vector3(-1.17, 0.6, 0), "dir": Vector3.LEFT},
+		"power": {"pos": Vector3(1.17, 0.45, 0), "dir": Vector3.RIGHT}},
 	"psu": {
 		"ac_in": {"pos": Vector3(-0.25, 1.2, 0), "dir": Vector3.LEFT},
 		"dc_out": {"pos": Vector3(0.25, 1.2, 0), "dir": Vector3.RIGHT}},
@@ -174,6 +179,7 @@ const FLOW_INLETS := {
 	"drain": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 	"steamgen": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 	"centrifuge": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
+	"vialfill": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 }
 
 
@@ -263,6 +269,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimSteamGen.new(name_, params.get("rated_kgps", 0.5)))
 		"vaclock":
 			return sim.add(SimVacuumLock.new(name_))
+		"vialfill":
+			return sim.add(SimVialFiller.new(name_))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -305,6 +313,8 @@ static func make_view(type_id: String, record: SimComponent,
 			view = SteamGenView.new()
 		"vaclock":
 			view = VacLockView.new()
+		"vialfill":
+			view = VialFillerView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
 	if view == null:

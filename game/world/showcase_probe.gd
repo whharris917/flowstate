@@ -56,6 +56,17 @@ func _run(world: Node) -> void:
 	print("[probe] u300: steam %.2f kg/s · duty->%.0f kW · reactor %.0f L %.1f C · fuge %s · pt_300 %.1f L" % [
 		sg.steam.value, reac.heat_duty.value, reac.volume_l, reac.temp_c,
 		"SPIN" if fuge.spinning else "idle", product_tank.level_l])
+	player.global_position = Vector3(41.4, 0.15, 3.4)
+	player.rotation.y = 0.0  # facing -z, south toward the isolator
+	player.zoom_t = 0.45
+	player._zoom_now = 0.45
+	player.camera.rotation.x = -0.18
+	await get_tree().create_timer(0.6).timeout
+	await _shot("user://probe_showcase_vialfill.png")
+
+	var filler := plant.sim.get_component("vf_310") as SimVialFiller
+	print("[probe] vf_310: %s · %d vials · drawing %.4f L/s" % [
+		filler.state, filler.vials_done, filler.draw.value])
 	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
 	print("[probe] vl_302: %s · %.1f kPa · condensate %.1f L · %d bursts" % [
 		lock.state, lock.press_pa / 1000.0, lock.condensate_l, lock.vent_bursts_done])

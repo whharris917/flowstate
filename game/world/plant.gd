@@ -313,6 +313,8 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as SteamGenView).setup(record as SimSteamGen)
 		"vaclock":
 			(view as VacLockView).setup(record as SimVacuumLock)
+		"vialfill":
+			(view as VialFillerView).setup(record as SimVialFiller)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
 	if type_id == "tank":

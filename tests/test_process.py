@@ -209,3 +209,37 @@ class TestVacuumLock:
         sim.run(90.0)
         assert lock.state == "idle"
         assert lock.press_pa == pytest.approx(lock.PRESS_ATM_PA, rel=0.05)
+
+
+class TestVialFiller:
+    def _filler(self) -> tuple:
+        from sim.process import VialFiller
+        sim = Simulation(dt=0.05)
+        filler = sim.add(VialFiller("vf"))
+        wire_power(sim, filler)
+        source = sim.add(Source("product"))
+        sim.connect(source, "supply", filler, "inlet")
+        sim.connect(filler, "draw", source, "draw")
+        return sim, filler, source
+
+    def test_cycles_and_meters_every_millilitre(self) -> None:
+        sim, filler, source = self._filler()
+        filler.is_on = True
+        sim.run(120.0)
+        cycle = filler.INDEX_S + filler.FILL_S + filler.CAP_S
+        assert filler.vials_done == pytest.approx(120.0 / cycle, abs=2)
+        # Conservation: the header metered out what the vials hold.
+        expected_l = filler.vials_done * filler.VIAL_ML / 1000.0
+        assert source.total_l == pytest.approx(expected_l, abs=0.03)
+
+    def test_stops_dead_unfed_or_unpowered(self) -> None:
+        sim, filler, source = self._filler()
+        filler.is_on = True
+        sim.run(10.0)
+        assert filler.vials_done > 0
+        done = filler.vials_done
+        sim.disconnect(sim.get_component("mains_1"), "power", filler, "power")
+        sim.run(10.0)
+        assert filler.vials_done == done
+        assert filler.state == "idle"
+        assert filler.draw.value == 0.0

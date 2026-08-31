@@ -10,6 +10,7 @@ var _label: Label3D
 var _rumble: EquipmentAudio
 var _hiss: EquipmentAudio
 var _trap_t: float = 2.0
+var _plume: VaporPlume
 
 
 func setup(boiler_: SimSteamGen) -> void:
@@ -46,6 +47,7 @@ func setup(boiler_: SimSteamGen) -> void:
 		Vector3(0.2, 0.6, 0), -6.0, 1.0)
 	_hiss = EquipmentAudio.make(self, "res://audio/steam_loop.wav",
 		Vector3(0.35, 1.35, 0), -16.0, 1.1)
+	_plume = VaporPlume.make(self, Vector3(-0.6, 2.75, 0), 1.0)
 
 
 func _process(delta: float) -> void:
@@ -54,6 +56,7 @@ func _process(delta: float) -> void:
 	_fire_mat.emission_energy_multiplier = 2.0 if boiler.making else 0.0
 	_rumble.set_running(boiler.making)
 	_hiss.set_running(boiler.making)
+	_plume.set_strength(1.0 if boiler.making else 0.0)
 	# The drum trap cycles while steam is being made — quicker as the
 	# real header pressure builds, so the rhythm reads plant state.
 	if boiler.making:

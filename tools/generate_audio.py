@@ -373,6 +373,28 @@ def make_gurgle() -> None:
     write_wav(OUT_DIR / "gurgle_loop.wav", [buf[:n]], normalize_to=0.34)
 
 
+def make_servo() -> None:
+    """Servo index move: a quick rising whir that settles with a tiny
+    detent tick — one conveyor step."""
+    duration = 0.42
+    n = int(duration * SR)
+    buf = [0.0] * n
+    move_s = 0.30
+    for i in range(n):
+        t = i / SR
+        if t < move_s:
+            frac = t / move_s
+            f = 240.0 + 520.0 * math.sin(math.pi * frac)   # rev up, rev down
+            env = math.sin(math.pi * frac) ** 0.7
+            buf[i] = (math.sin(2.0 * math.pi * f * t)
+                      + 0.35 * math.sin(2.0 * math.pi * 2.0 * f * t)) * env * 0.5
+    tick_at = int((move_s + 0.02) * SR)
+    for i in range(tick_at, n):
+        t = (i - tick_at) / SR
+        buf[i] += math.sin(2.0 * math.pi * 1600.0 * t) * math.exp(-t * 300.0) * 0.4
+    write_wav(OUT_DIR / "servo.wav", [buf], normalize_to=0.30)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -388,6 +410,7 @@ def main() -> None:
     make_trap_burst()
     make_vent_blast()
     make_gurgle()
+    make_servo()
     for idx, (f0, decay, noise_amp) in enumerate(
             [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):

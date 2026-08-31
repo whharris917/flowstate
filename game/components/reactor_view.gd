@@ -69,6 +69,12 @@ func _process(delta: float) -> void:
 	var column := maxf(1.86 * frac, 0.005)
 	_strip.scale = Vector3(1, column, 1)
 	_strip.position = Vector3(0, 0.42 + column / 2.0, 0.805)
+	# The batch visibly changes color as it converts: reactant amber
+	# through to product green, straight from the real purity.
+	var mat := _strip.material_override as StandardMaterial3D
+	var tint := Color(0.85, 0.55, 0.15).lerp(Color(0.15, 0.75, 0.40), reactor.purity_frac)
+	mat.albedo_color = tint
+	mat.emission = tint
 	_label.text = "%.0f °C · %.0f %% pure" % [reactor.temp_c, reactor.purity_frac * 100.0]
 	# Limit chimes with hysteresis: reaching reaction temperature, and
 	# the batch clearing 90% purity, each announce themselves once.

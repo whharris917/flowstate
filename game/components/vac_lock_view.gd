@@ -12,6 +12,7 @@ var _label: Label3D
 var _glass: MeshInstance3D
 var _pump_audio: EquipmentAudio
 var _gurgle: EquipmentAudio
+var _puff: VaporPlume
 var _last_bursts: int = 0
 var _last_state: String = "idle"
 
@@ -75,6 +76,7 @@ func setup(lock_: SimVacuumLock) -> void:
 		Vector3(-0.75, 1.2, 0), -11.0, 1.35)
 	_gurgle = EquipmentAudio.make(self, "res://audio/gurgle_loop.wav",
 		Vector3(0, 0.6, 0.4), -7.0, 1.0)
+	_puff = VaporPlume.make(self, Vector3(0, 2.95, 0), 0.6, true)
 	_last_bursts = lock.vent_bursts_done
 	_last_state = lock.state
 
@@ -88,6 +90,7 @@ func _process(_delta: float) -> void:
 		_last_bursts = lock.vent_bursts_done
 		EquipmentAudio.play_once(self, "res://audio/vent_blast.wav",
 			Vector3(0, 2.76, 0), -6.0, randf_range(0.95, 1.05))
+		_puff.puff()
 	# The drainer tripping open and the vacuum valve reseating are
 	# mechanical events.
 	if lock.state != _last_state:

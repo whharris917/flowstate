@@ -193,8 +193,12 @@ static func _unit_300(plant: Plant) -> void:
 	plant.place("gauge_press", "pi_302", {}, Vector3(28.8, 0.0, -8.6), 0.0, false)
 	plant.place("drain", "du_302", {"rate_lps": 1.5}, Vector3(32.8, 0.0, -8.3), 0.0, false)
 	# The prize: 7.0 m x 3.2 m dia -> ~56.3 kL of finished product.
-	plant.place("tank", "pt_300", {"height_m": 7.0, "diameter_m": 3.2, "level_l": 0.0},
+	# A 1500 L heel from the last campaign, so downstream filling has
+	# something to run on while today's batch converts.
+	plant.place("tank", "pt_300", {"height_m": 7.0, "diameter_m": 3.2, "level_l": 1500.0},
 		Vector3(37.8, 0.0, 1.8), 0.0, false)
+	# Fill-finish: the isolator draws real product from the tank.
+	plant.place("vialfill", "vf_310", {}, Vector3(41.5, 0.0, -1.2), 0.0, false)
 	plant.place("gauge_level", "lt_300", {"liters_per_meter": 8042.5},
 		Vector3(40.2, 0.0, 3.2), 0.0, false)
 	# Nozzles where a real tank has them: fill low on the south face
@@ -231,6 +235,8 @@ static func _unit_300(plant: Plant) -> void:
 		[plant.to_local(Vector3(29.9, 0.35, -8.5))])
 	plant.connect_equipment("vl_302", "drain_flow", "du_302", "flow_in",
 		[plant.to_local(Vector3(31.7, 0.35, -8.15))])
+	plant.connect_equipment("pt_300", "outlet", "vf_310", "inlet",
+		[plant.to_local(Vector3(39.8, 0.35, -0.3))])
 
 	# Power: 480 V drops from the plant feeder along the rack line.
 	var trunk := [Vector3(-3.6, 0.3, -0.8), Vector3(22.6, 0.3, -0.8)]
@@ -240,7 +246,8 @@ static func _unit_300(plant: Plant) -> void:
 			["sg_301", Vector3(26.4, 0.3, 2.2)],
 			["r_301", Vector3(33.2, 0.3, -2.6)],
 			["cf_301", Vector3(36.8, 0.3, -3.4)],
-			["vl_302", Vector3(29.6, 0.3, -7.2)]]:
+			["vl_302", Vector3(29.6, 0.3, -7.2)],
+			["vf_310", Vector3(42.9, 0.3, -2.2)]]:
 		var path: Array[Vector3] = []
 		for point: Vector3 in trunk:
 			path.append(plant.to_local(point))
@@ -254,6 +261,7 @@ static func _unit_300(plant: Plant) -> void:
 	(plant.sim.get_component("sg_301") as SimSteamGen).is_on = true
 	(plant.sim.get_component("cf_301") as SimCentrifuge).is_on = true
 	(plant.sim.get_component("vl_302") as SimVacuumLock).is_on = true
+	(plant.sim.get_component("vf_310") as SimVialFiller).is_on = true
 	for pump_name: String in ["p_301a", "p_301b"]:
 		(plant.sim.get_component(pump_name) as SimPump).mode = "hand"
 	var reac := plant.sim.get_component("r_301") as SimReactor

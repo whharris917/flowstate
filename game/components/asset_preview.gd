@@ -65,6 +65,8 @@ static func build(type_id: String) -> Node3D:
 				(node as SteamGenView).setup(record as SimSteamGen)
 			"vaclock":
 				(node as VacLockView).setup(record as SimVacuumLock)
+			"vialfill":
+				(node as VialFillerView).setup(record as SimVialFiller)
 		node.set_meta("scratch_sim", scratch)
 	if node == null:
 		return null
