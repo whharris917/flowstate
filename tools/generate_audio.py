@@ -178,11 +178,68 @@ def make_step(path: Path, f0: float, decay: float, noise_amp: float,
     write_wav(path, [buf], normalize_to=level)
 
 
+def make_motor() -> None:
+    """4 s seamless motor loop: mains-hum fundamental, rotor harmonics,
+    and a whisper of bearing noise. Pitch-shifted per machine."""
+    duration = 4.0
+    n = int(duration * SR)
+    buf = [0.0] * n
+    for freq, amp in ((60.0, 0.30), (120.0, 0.22), (180.0, 0.10),
+                      (240.0, 0.07), (300.0, 0.035), (417.0, 0.03)):
+        add_partial(buf, freq, amp, duration)
+    # Slow loop-periodic load wobble.
+    for i in range(n):
+        buf[i] *= 1.0 + 0.10 * math.sin(2.0 * math.pi * 3.0 * i / n)
+    noise = loop_crossfade(brown_noise(n + int(0.5 * SR), leak=0.95, gain=0.25), 0.5)
+    alpha = 1.0 - math.exp(-2.0 * math.pi * 700.0 / SR)
+    lp = 0.0
+    for i in range(n):
+        lp += alpha * (noise[i] - lp)
+        buf[i] += lp * 0.18
+    write_wav(OUT_DIR / "motor_loop.wav", [buf], normalize_to=0.5)
+
+
+def make_steam() -> None:
+    """4 s seamless steam hiss: bandpassed noise breathing slowly."""
+    duration = 4.0
+    n = int(duration * SR)
+    noise = loop_crossfade(brown_noise(n + int(0.5 * SR), leak=0.6, gain=0.8), 0.5)
+    # Highpass-ish: subtract a heavy lowpass to leave the hiss band.
+    alpha = 1.0 - math.exp(-2.0 * math.pi * 900.0 / SR)
+    lp = 0.0
+    buf = [0.0] * n
+    for i in range(n):
+        lp += alpha * (noise[i] - lp)
+        buf[i] = noise[i] - lp
+    for i in range(n):
+        buf[i] *= 1.0 + 0.18 * math.sin(2.0 * math.pi * 2.0 * i / n)
+    write_wav(OUT_DIR / "steam_loop.wav", [buf], normalize_to=0.4)
+
+
+def make_boiler() -> None:
+    """4 s seamless boiler rumble: low rolling boil under a soft roar."""
+    duration = 4.0
+    n = int(duration * SR)
+    buf = [0.0] * n
+    for freq, amp in ((31.0, 0.28), (47.0, 0.20), (62.0, 0.14), (89.0, 0.08)):
+        add_partial(buf, freq, amp, duration)
+    noise = loop_crossfade(brown_noise(n + int(0.5 * SR), leak=0.985, gain=0.15), 0.5)
+    for i in range(n):
+        # Bubbling: amplitude ripple at a few loop-periodic rates.
+        ripple = 1.0 + 0.25 * math.sin(2.0 * math.pi * 7.0 * i / n) \
+            + 0.15 * math.sin(2.0 * math.pi * 13.0 * i / n)
+        buf[i] = buf[i] * ripple + noise[i] * 0.5
+    write_wav(OUT_DIR / "boiler_loop.wav", [buf], normalize_to=0.45)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
     make_music()
     make_hum()
+    make_motor()
+    make_steam()
+    make_boiler()
     for idx, (f0, decay, noise_amp) in enumerate(
             [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):

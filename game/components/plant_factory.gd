@@ -7,10 +7,13 @@ class_name PlantFactory
 const CATALOG: Array[Dictionary] = [
 	{"type": "tank", "label": "Tank 100 L"},
 	{"type": "pump", "label": "Pump 4 L/s"},
-	{"type": "relay", "label": "Relay cabinet"},
-	{"type": "column", "label": "Distillation column"},
 	{"type": "source", "label": "Supply header"},
 	{"type": "drain", "label": "Drain / sewer"},
+	{"type": "reactor", "label": "Stirred reactor"},
+	{"type": "centrifuge", "label": "Centrifuge"},
+	{"type": "hx", "label": "Heat exchanger"},
+	{"type": "steamgen", "label": "Steam generator"},
+	{"type": "column", "label": "Distillation column"},
 ]
 
 const CATALOG_INSTRUMENTS: Array[Dictionary] = [
@@ -23,6 +26,7 @@ const CATALOG_INSTRUMENTS: Array[Dictionary] = [
 
 const CATALOG_CONTROL: Array[Dictionary] = [
 	{"type": "valve", "label": "Control valve"},
+	{"type": "relay", "label": "Relay cabinet"},
 	{"type": "cabinet", "label": "Control cabinet"},
 	{"type": "mains", "label": "Mains feeder 480VAC"},
 	{"type": "psu", "label": "Power supply 24VDC"},
@@ -47,6 +51,10 @@ const FOOTPRINTS := {
 	"psu": Vector3(0.65, 1.6, 0.45),
 	"source": Vector3(0.75, 1.9, 0.75),
 	"drain": Vector3(0.95, 0.5, 0.95),
+	"reactor": Vector3(1.8, 3.1, 1.8),
+	"centrifuge": Vector3(1.2, 1.8, 1.2),
+	"hx": Vector3(2.0, 1.0, 0.8),
+	"steamgen": Vector3(2.1, 2.8, 1.3),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
@@ -55,6 +63,7 @@ const Y_OFFSETS := {
 	"float_switch": 0.0, "air_cascade": 0.0,
 	"valve": 0.0, "controller": 0.0, "cabinet": 0.0,
 	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
+	"reactor": 0.0, "centrifuge": 0.0, "hx": 0.0, "steamgen": 0.0,
 }
 
 # Where each port's fitting sits in the view's local space, flush with
@@ -92,11 +101,37 @@ const PORT_ANCHORS := {
 		"outlet": {"pos": Vector3(0.31, 0.32, 0), "dir": Vector3.RIGHT},
 		"cmd": {"pos": Vector3(0, 0.98, 0.22), "dir": Vector3.BACK}},
 	"source": {"outlet": {"pos": Vector3(0.5, 1.55, 0), "dir": Vector3.RIGHT}},
-	"drain": {"inlet": {"pos": Vector3(0.46, 0.52, 0), "dir": Vector3.RIGHT}},
+	"drain": {
+		"inlet": {"pos": Vector3(0.46, 0.52, 0), "dir": Vector3.RIGHT},
+		"flow_in": {"pos": Vector3(-0.46, 0.52, 0), "dir": Vector3.LEFT}},
 	"controller": {
 		"pv": {"pos": Vector3(-0.14, 1.12, 0.07), "dir": Vector3.BACK},
 		"out": {"pos": Vector3(0.14, 1.12, 0.07), "dir": Vector3.BACK}},
 	"mains": {"power": {"pos": Vector3(0.35, 1.05, 0), "dir": Vector3.RIGHT}},
+	"reactor": {
+		"inlet_a": {"pos": Vector3(-0.42, 2.42, 0), "dir": Vector3.UP},
+		"inlet_b": {"pos": Vector3(0.42, 2.42, 0), "dir": Vector3.UP},
+		"heat_duty": {"pos": Vector3(0.83, 1.1, 0), "dir": Vector3.RIGHT},
+		"power": {"pos": Vector3(0.2, 2.85, 0.18), "dir": Vector3.BACK},
+		"purity": {"pos": Vector3(-0.77, 1.7, 0), "dir": Vector3.LEFT},
+		"level": {"pos": Vector3(0, 1.0, -0.79), "dir": Vector3.FORWARD},
+		"outlet": {"pos": Vector3(0.77, 0.5, 0), "dir": Vector3.RIGHT}},
+	"centrifuge": {
+		"inlet": {"pos": Vector3(0.16, 1.4, 0), "dir": Vector3.UP},
+		"purity_in": {"pos": Vector3(-0.48, 0.95, 0), "dir": Vector3.LEFT},
+		"power": {"pos": Vector3(0.16, 1.62, 0.14), "dir": Vector3.BACK},
+		"product": {"pos": Vector3(0.49, 0.65, 0), "dir": Vector3.RIGHT},
+		"waste": {"pos": Vector3(-0.49, 0.55, 0), "dir": Vector3.LEFT}},
+	"hx": {
+		"steam_in": {"pos": Vector3(-0.35, 0.74, 0), "dir": Vector3.UP},
+		"cold_in": {"pos": Vector3(-0.97, 0.45, 0), "dir": Vector3.LEFT},
+		"cold_out": {"pos": Vector3(0.97, 0.45, 0), "dir": Vector3.RIGHT},
+		"duty": {"pos": Vector3(0.35, 0.45, 0.31), "dir": Vector3.BACK}},
+	"steamgen": {
+		"inlet": {"pos": Vector3(-1.05, 0.8, 0), "dir": Vector3.LEFT},
+		"power": {"pos": Vector3(0.5, 0.35, 0.7), "dir": Vector3.BACK},
+		"steam": {"pos": Vector3(0.35, 1.35, 0), "dir": Vector3.UP},
+		"press": {"pos": Vector3(-0.2, 1.35, 0), "dir": Vector3.UP}},
 	"psu": {
 		"ac_in": {"pos": Vector3(-0.25, 1.2, 0), "dir": Vector3.LEFT},
 		"dc_out": {"pos": Vector3(0.25, 1.2, 0), "dir": Vector3.RIGHT}},
@@ -121,11 +156,14 @@ const PORT_ANCHORS := {
 const FLOW_OUTLETS := {
 	"tank": {"outlet": {"avail": "level", "draw_in": "draw"}},
 	"source": {"outlet": {"avail": "supply", "draw_in": "draw"}},
+	"reactor": {"outlet": {"avail": "level", "draw_in": "draw"}},
 }
 const FLOW_INLETS := {
 	"pump": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 	"valve": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 	"drain": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
+	"steamgen": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
+	"centrifuge": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
 }
 
 
@@ -204,6 +242,15 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimSource.new(name_))
 		"drain":
 			return sim.add(SimDrain.new(name_, params.get("rate_lps", 1.0)))
+		"reactor":
+			return sim.add(SimReactor.new(name_,
+				params.get("capacity_l", 4000.0), params.get("rate_lps", 6.0)))
+		"centrifuge":
+			return sim.add(SimCentrifuge.new(name_, params.get("rate_lps", 4.0)))
+		"hx":
+			return sim.add(SimHeatExchanger.new(name_, params.get("max_duty_kw", 1200.0)))
+		"steamgen":
+			return sim.add(SimSteamGen.new(name_, params.get("rated_kgps", 0.5)))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -236,6 +283,14 @@ static func make_view(type_id: String, record: SimComponent,
 			view = SourceView.new()
 		"drain":
 			view = DrainView.new()
+		"reactor":
+			view = ReactorView.new()
+		"centrifuge":
+			view = CentrifugeView.new()
+		"hx":
+			view = HeatExchangerView.new()
+		"steamgen":
+			view = SteamGenView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
 	if view == null:

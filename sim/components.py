@@ -192,6 +192,7 @@ class Drain(Component):
         self.is_open = True
         self.total_l = 0.0
         self.inlet = self.add_input("inlet", PortKind.PROCESS_LEVEL)
+        self.flow_in = self.add_input("flow_in", PortKind.PROCESS_FLOW)
         self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("total_l", "total_l")
 
@@ -200,7 +201,9 @@ class Drain(Component):
         rate = self.rate_lps if (self.is_open and lvl > 0.0) else 0.0
         rate = min(rate, lvl / dt) if dt > 0.0 else rate
         self.draw.value = rate
-        self.total_l += rate * dt
+        # flow_in is a discharge line dumped straight into the sewer —
+        # a centrifuge's waste stream, a relief blowdown.
+        self.total_l += (rate + float(self.flow_in.value)) * dt
 
 
 class MainsFeed(Component):

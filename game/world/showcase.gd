@@ -12,6 +12,7 @@ static func build(plant: Plant) -> void:
 	_pipe_rack(plant)
 	_unit_100(plant)
 	_mcc_and_batch(plant)
+	_unit_300(plant)
 	_signage(plant)
 
 
@@ -155,12 +156,112 @@ static func _mcc_and_batch(plant: Plant) -> void:
 		plant.to_local(Vector3(12.5, 0.3, 7.0)), plant.to_local(Vector3(15.0, 0.3, 8.0))])
 
 
+## ---- Unit 300: synthesis train --------------------------------------------
+## Two reactant headers feed a jacketed reactor; a steam generator
+## fires a heat exchanger that preheats the A-feed and delivers the
+## reaction duty; the centrifuge splits the reactor discharge on its
+## live purity signal — product to a 56 kL storage tank, waste to the
+## sewer. Every stream is metered, every motor is powered and audible.
+
+static func _unit_300(plant: Plant) -> void:
+	# Rack extension carrying the area's cable tray east to the unit.
+	for x: float in [27.0, 33.0, 39.0]:
+		plant.place_structure("s_column", "pr1x_col_%d" % int(x), Vector3(x, 0.0, 1.5), 0.0)
+	for tier: float in [3.0, 4.0]:
+		for mid_x: float in [24.0, 30.0, 36.0]:
+			plant.place_structure("s_beam", "pr1x_beam_%d_%d" % [int(tier), int(mid_x)],
+				Vector3(mid_x, tier, 1.5), 0.0, 6.0)
+	plant.place_run("run_tray", "pr1x_tray",
+		[plant.to_local(Vector3(21.2, 3.35, 1.5)), plant.to_local(Vector3(38.8, 3.35, 1.5))])
+
+	# Equipment: headers, feed pumps, boiler, exchanger, reactor,
+	# centrifuge, product tank, waste drain, level transmitter.
+	plant.place("source", "supply_301a", {}, Vector3(24.0, 0.0, -7.5), 0.0, false)
+	plant.place("source", "supply_301b", {}, Vector3(24.0, 0.0, -3.5), 0.0, false)
+	plant.place("source", "supply_bfw", {}, Vector3(24.0, 0.0, 2.5), 0.0, false)
+	plant.place("pump", "p_301a", {"rated_lps": 2.0}, Vector3(26.6, 0.0, -7.5), 0.0, false)
+	plant.place("pump", "p_301b", {"rated_lps": 2.0}, Vector3(26.6, 0.0, -3.5), 0.0, false)
+	plant.place("steamgen", "sg_301", {"rated_kgps": 0.5}, Vector3(27.6, 0.0, 3.2), 0.0, false)
+	plant.place("hx", "e_301", {"max_duty_kw": 1200.0}, Vector3(30.8, 0.0, -0.5), 0.0, false)
+	plant.place("reactor", "r_301", {"capacity_l": 4000.0, "rate_lps": 6.0},
+		Vector3(34.2, 0.0, -4.5), 0.0, false)
+	plant.place("centrifuge", "cf_301", {"rate_lps": 4.0}, Vector3(37.6, 0.0, -4.5), 0.0, false)
+	plant.place("drain", "du_301", {"rate_lps": 2.0}, Vector3(35.2, 0.0, -7.8), 0.0, false)
+	# The prize: 7.0 m x 3.2 m dia -> ~56.3 kL of finished product.
+	plant.place("tank", "pt_300", {"height_m": 7.0, "diameter_m": 3.2, "level_l": 0.0},
+		Vector3(37.8, 0.0, 1.8), 0.0, false)
+	plant.place("gauge_level", "lt_300", {"liters_per_meter": 8042.5},
+		Vector3(40.2, 0.0, 3.2), 0.0, false)
+	# Nozzles where a real tank has them: fill low on the south face
+	# (a 6 m riser to the top head would be an unsupported span), level
+	# tap low on the east face, toward its transmitter.
+	var pt_view := plant.views["pt_300"] as TankView
+	pt_view.set_nozzle("inlet", 0.10, -1.9)
+	pt_view.set_nozzle("level", 0.22, 0.53)
+
+	# Process path. Facade pairs meter the header and reactor draws.
+	plant.connect_equipment("supply_301a", "outlet", "p_301a", "inlet")
+	plant.connect_equipment("supply_301b", "outlet", "p_301b", "inlet")
+	plant.connect_equipment("supply_bfw", "outlet", "sg_301", "inlet")
+	plant.connect_equipment("p_301a", "outlet", "e_301", "cold_in",
+		[plant.to_local(Vector3(28.4, 0.35, -5.9)), plant.to_local(Vector3(28.4, 0.35, -0.5))])
+	plant.connect_equipment("sg_301", "steam", "e_301", "steam_in",
+		[plant.to_local(Vector3(28.5, 0.35, 1.6)), plant.to_local(Vector3(30.1, 0.35, 0.3))])
+	plant.connect_equipment("e_301", "cold_out", "r_301", "inlet_a",
+		[plant.to_local(Vector3(33.0, 0.9, -1.6))])
+	plant.connect_equipment("p_301b", "outlet", "r_301", "inlet_b",
+		[plant.to_local(Vector3(31.6, 0.35, -3.5))])
+	plant.connect_equipment("e_301", "duty", "r_301", "heat_duty",
+		[plant.to_local(Vector3(31.9, 0.3, 0.4)), plant.to_local(Vector3(33.0, 0.3, -3.2))])
+	plant.connect_equipment("r_301", "outlet", "cf_301", "inlet",
+		[plant.to_local(Vector3(36.2, 0.35, -4.5))])
+	plant.connect_equipment("r_301", "purity", "cf_301", "purity_in",
+		[plant.to_local(Vector3(33.2, 0.3, -6.2)), plant.to_local(Vector3(36.6, 0.3, -6.2))])
+	plant.connect_equipment("cf_301", "product", "pt_300", "inlet",
+		[plant.to_local(Vector3(38.6, 0.35, -2.6))])
+	plant.connect_equipment("cf_301", "waste", "du_301", "flow_in",
+		[plant.to_local(Vector3(36.4, 0.35, -6.6))])
+	plant.connect_equipment("pt_300", "level", "lt_300", "process")
+
+	# Power: 480 V drops from the plant feeder along the rack line.
+	var trunk := [Vector3(-3.6, 0.3, -0.8), Vector3(22.6, 0.3, -0.8)]
+	for load: Array in [
+			["p_301a", Vector3(25.6, 0.3, -6.6)],
+			["p_301b", Vector3(25.6, 0.3, -3.0)],
+			["sg_301", Vector3(26.4, 0.3, 2.2)],
+			["r_301", Vector3(33.2, 0.3, -2.6)],
+			["cf_301", Vector3(36.8, 0.3, -3.4)]]:
+		var path: Array[Vector3] = []
+		for point: Vector3 in trunk:
+			path.append(plant.to_local(point))
+		path.append(plant.to_local(load[1] as Vector3))
+		plant.connect_equipment("plant_mains", "power", str(load[0]), "power", path)
+
+	# Commission the unit: burner and bowl on, both feed pumps in hand,
+	# and a working charge in the reactor so the continuous train has
+	# residence time — feeds run 4 L/s in, the bowl 4 L/s out, and the
+	# charge heats toward reaction temperature while purity climbs.
+	(plant.sim.get_component("sg_301") as SimSteamGen).is_on = true
+	(plant.sim.get_component("cf_301") as SimCentrifuge).is_on = true
+	for pump_name: String in ["p_301a", "p_301b"]:
+		(plant.sim.get_component(pump_name) as SimPump).mode = "hand"
+	var reac := plant.sim.get_component("r_301") as SimReactor
+	reac.volume_l = 2600.0
+	reac.level.value = 2600.0
+	reac.temp_c = 55.0  # held warm from the last shift; crosses 60 C in ~1 min
+
+	_service_wire(plant, "sg_301", "e_301", Color(0.78, 0.79, 0.82), "ST-301")
+	_service_wire(plant, "cf_301", "pt_300", Color(0.13, 0.55, 0.28), "P-301")
+	_service_wire(plant, "cf_301", "du_301", Color(0.45, 0.36, 0.25), "WS-301")
+
+
 static func _signage(plant: Plant) -> void:
 	var signs := [
 		["sign_u100", Vector3(11.6, 0.0, -2.4), 0.0, "UNIT 100\nLEVEL CONTROL"],
 		["sign_mcc", Vector3(12.9, 0.0, 7.8), PI, "MCC-1\nAUTHORIZED ONLY"],
 		["sign_rack", Vector3(9.0, 0.0, 2.8), 0.0, "PIPE RACK PR-1\nNO CLIMBING"],
 		["sign_still", Vector3(4.9, 0.08, -4.8), 0.0, "STILL AREA\nPPE REQUIRED"],
+		["sign_u300", Vector3(23.0, 0.0, -1.2), 0.0, "UNIT 300\nSYNTHESIS"],
 	]
 	for entry: Array in signs:
 		plant.place_structure("s_sign", entry[0], entry[1], entry[2])

@@ -10,6 +10,7 @@ var is_open: bool = true
 var total_l: float = 0.0
 
 var inlet: SimInputPort
+var flow_in: SimInputPort
 var draw: SimOutputPort
 
 
@@ -18,6 +19,7 @@ func _init(name_: String, rate_lps_ := 1.0) -> void:
 	assert(rate_lps_ > 0.0, "rate_lps must be positive")
 	rate_lps = rate_lps_
 	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_LEVEL)
+	flow_in = add_input("flow_in", SimTypes.PortKind.PROCESS_FLOW)
 	draw = add_output("draw", SimTypes.PortKind.PROCESS_FLOW)
 	add_observable("total_l", &"total_l")
 
@@ -27,7 +29,8 @@ func tick(dt: float) -> void:
 	if dt > 0.0:
 		rate = minf(rate, inlet.value / dt)
 	draw.value = rate
-	total_l += rate * dt
+	# flow_in is a discharge line dumped straight into the sewer.
+	total_l += (rate + flow_in.value) * dt
 
 
 func state_dict() -> Dictionary:

@@ -303,6 +303,14 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as SourceView).setup(record as SimSource)
 		"drain":
 			(view as DrainView).setup(record as SimDrain)
+		"reactor":
+			(view as ReactorView).setup(record as SimReactor)
+		"centrifuge":
+			(view as CentrifugeView).setup(record as SimCentrifuge)
+		"hx":
+			(view as HeatExchangerView).setup(record as SimHeatExchanger)
+		"steamgen":
+			(view as SteamGenView).setup(record as SimSteamGen)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
 	if type_id == "tank":
@@ -1295,6 +1303,15 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"kind": (record as SimTerminal).kind}
 	if record is SimDrain:
 		return {"rate_lps": (record as SimDrain).rate_lps}
+	if record is SimReactor:
+		var reac := record as SimReactor
+		return {"capacity_l": reac.capacity_l, "rate_lps": reac.rate_lps}
+	if record is SimCentrifuge:
+		return {"rate_lps": (record as SimCentrifuge).rate_lps}
+	if record is SimHeatExchanger:
+		return {"max_duty_kw": (record as SimHeatExchanger).max_duty_kw}
+	if record is SimSteamGen:
+		return {"rated_kgps": (record as SimSteamGen).rated_kgps}
 	return {}
 
 

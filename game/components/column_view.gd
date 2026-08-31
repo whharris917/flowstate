@@ -18,6 +18,7 @@ const PLATFORM_Y := 9.6
 
 var column: SimColumn
 var _reboiler_mat: StandardMaterial3D
+var _rumble: EquipmentAudio
 
 
 func setup(column_: SimColumn) -> void:
@@ -32,6 +33,8 @@ func setup(column_: SimColumn) -> void:
 	# A second interact volume at the platform so the column answers E
 	# (and shows its describe line) from the top as well.
 	ViewUtil.interact_body(self, Vector3(1.5, 1.6, 1.5), Vector3(0, 10.3, 0))
+	_rumble = EquipmentAudio.make(self, "res://audio/boiler_loop.wav",
+		Vector3(0, 1.15, 0), -10.0, 0.9)
 
 
 func _build_shell() -> void:
@@ -172,6 +175,7 @@ func _build_top_head() -> void:
 
 func _process(_delta: float) -> void:
 	_reboiler_mat.emission_energy_multiplier = 1.8 * column.duty_frac
+	_rumble.set_running(column.duty_kw > 1.0)
 
 
 func describe() -> String:

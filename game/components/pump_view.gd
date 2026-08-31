@@ -9,6 +9,7 @@ var _lamp_on: StandardMaterial3D
 var _lamp_off: StandardMaterial3D
 var _lamp: MeshInstance3D
 var _mode_label: Label3D
+var _motor: EquipmentAudio
 
 
 func setup(pump_: SimPump) -> void:
@@ -25,11 +26,14 @@ func setup(pump_: SimPump) -> void:
 	_mode_label = ViewUtil.label(self, "", Vector3(0, 0.95, 0))
 	_mode_label.modulate = Color(1.0, 0.75, 0.35)
 	ViewUtil.interact_body(self, Vector3(0.8, 0.9, 0.6), Vector3(0, 0.45, 0))
+	_motor = EquipmentAudio.make(self, "res://audio/motor_loop.wav",
+		Vector3(0, 0.42, 0), -12.0, 1.0)
 
 
 func _process(_delta: float) -> void:
 	_lamp.material_override = _lamp_on if pump.running else _lamp_off
 	_mode_label.text = pump.mode.to_upper()
+	_motor.set_running(pump.running)
 
 
 func describe() -> String:

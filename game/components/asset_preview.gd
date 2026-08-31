@@ -55,6 +55,14 @@ static func build(type_id: String) -> Node3D:
 				(node as SourceView).setup(record as SimSource)
 			"drain":
 				(node as DrainView).setup(record as SimDrain)
+			"reactor":
+				(node as ReactorView).setup(record as SimReactor)
+			"centrifuge":
+				(node as CentrifugeView).setup(record as SimCentrifuge)
+			"hx":
+				(node as HeatExchangerView).setup(record as SimHeatExchanger)
+			"steamgen":
+				(node as SteamGenView).setup(record as SimSteamGen)
 		node.set_meta("scratch_sim", scratch)
 	if node == null:
 		return null
