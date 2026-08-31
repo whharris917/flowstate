@@ -57,28 +57,54 @@ const Y_OFFSETS := {
 	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
 }
 
-# Where each port's marker sits in the view's local space.
+# Where each port's fitting sits in the view's local space, flush with
+# the equipment body. Entries are either a bare Vector3 (outward
+# direction derived radially) or {"pos": ..., "dir": ...} when the
+# mounting face isn't radial.
 const PORT_ANCHORS := {
 	# Tank anchors are unused — TankView builds its own movable nozzles.
-	"pump": {"run": Vector3(-0.3, 0.55, 0.25), "power": Vector3(-0.3, 0.25, -0.25),
-		"inlet": Vector3(-0.42, 0.42, 0), "outlet": Vector3(0.42, 0.42, 0)},
-	"relay": {"coil": Vector3(-0.18, -0.22, 0.14), "contact": Vector3(0.18, -0.22, 0.14)},
-	"float_switch": {"level": Vector3(0, -0.22, 0.12), "contact": Vector3(0.14, 0.2, 0.1)},
-	"gauge_level": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
-	"gauge_flow": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
-	"gauge_dp": {"process_a": Vector3(-0.12, 0.25, 0.1), "process_b": Vector3(0.12, 0.25, 0.1),
-		"signal": Vector3(0.2, 1.32, 0)},
-	"gauge_press": {"process": Vector3(0, 0.25, 0.1), "signal": Vector3(0.2, 1.32, 0)},
-	"valve": {"cmd": Vector3(-0.28, 0.85, 0.12), "inlet": Vector3(-0.38, 0.32, 0),
-		"outlet": Vector3(0.36, 0.32, 0)},
-	"source": {"outlet": Vector3(0.5, 1.55, 0)},
-	"drain": {"inlet": Vector3(0.45, 0.4, 0)},
-	"controller": {"pv": Vector3(-0.16, 1.05, 0.12), "out": Vector3(0.16, 1.05, 0.12)},
-	"mains": {"power": Vector3(0.5, 1.1, 0)},
-	"psu": {"ac_in": Vector3(-0.32, 1.2, 0.1), "dc_out": Vector3(0.32, 1.2, 0.1)},
-	# Overhead tap on the vapor line above the dished head; power lands
-	# at the reboiler band.
-	"column": {"p_top": Vector3(0, 10.75, 0.5), "power": Vector3(0.7, 1.15, 0)},
+	"pump": {
+		"inlet": {"pos": Vector3(-0.25, 0.42, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.25, 0.42, 0), "dir": Vector3.RIGHT},
+		"run": {"pos": Vector3(0.02, 0.44, 0.16), "dir": Vector3.BACK},
+		"power": {"pos": Vector3(-0.15, 0.18, -0.25), "dir": Vector3.FORWARD}},
+	"relay": {
+		"coil": {"pos": Vector3(-0.13, -0.2, 0.09), "dir": Vector3.BACK},
+		"contact": {"pos": Vector3(0.13, -0.2, 0.09), "dir": Vector3.BACK}},
+	"float_switch": {
+		"level": {"pos": Vector3(0, -0.26, 0), "dir": Vector3.DOWN},
+		"contact": {"pos": Vector3(0.06, 0.05, 0), "dir": Vector3.RIGHT}},
+	"gauge_level": {
+		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
+		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
+	"gauge_flow": {
+		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
+		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
+	"gauge_dp": {
+		"process_a": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
+		"process_b": {"pos": Vector3(0, 0.45, 0.04), "dir": Vector3.BACK},
+		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
+	"gauge_press": {
+		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
+		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
+	"valve": {
+		"inlet": {"pos": Vector3(-0.31, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.31, 0.32, 0), "dir": Vector3.RIGHT},
+		"cmd": {"pos": Vector3(0, 0.98, 0.22), "dir": Vector3.BACK}},
+	"source": {"outlet": {"pos": Vector3(0.5, 1.55, 0), "dir": Vector3.RIGHT}},
+	"drain": {"inlet": {"pos": Vector3(0.46, 0.52, 0), "dir": Vector3.RIGHT}},
+	"controller": {
+		"pv": {"pos": Vector3(-0.14, 1.12, 0.07), "dir": Vector3.BACK},
+		"out": {"pos": Vector3(0.14, 1.12, 0.07), "dir": Vector3.BACK}},
+	"mains": {"power": {"pos": Vector3(0.35, 1.05, 0), "dir": Vector3.RIGHT}},
+	"psu": {
+		"ac_in": {"pos": Vector3(-0.25, 1.2, 0), "dir": Vector3.LEFT},
+		"dc_out": {"pos": Vector3(0.25, 1.2, 0), "dir": Vector3.RIGHT}},
+	# Overhead tap at the end of the vapor line; power lands on the
+	# reboiler band.
+	"column": {
+		"p_top": {"pos": Vector3(0, 11.3, 1.08), "dir": Vector3.BACK},
+		"power": {"pos": Vector3(0.63, 1.15, 0), "dir": Vector3.RIGHT}},
 	# Pressure taps sit on the suite's walls, near the ceiling.
 	"air_cascade": {
 		"p_al1": Vector3(-23.5, 2.5, -4.35),
@@ -235,60 +261,97 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 		var kind: SimTypes.PortKind = (record.inputs[port_name] as SimInputPort).kind
 		if not flow_inlet_spec(type_id, port_name).is_empty():
 			kind = SimTypes.PortKind.PROCESS_FLOW  # it's a pipe stub, draw it blue
-		var anchor: Vector3 = anchors_override.get(port_name,
+		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
-			make_marker(view, record.comp_name, port_name, kind, anchor, true)
+			make_marker(view, record.comp_name, port_name, kind,
+				_anchor_pos(raw), true, _anchor_dir(raw))
 	for port_name: String in record.outputs:
 		if port_name == "draw":
 			continue
-		var anchor: Vector3 = anchors_override.get(port_name,
+		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.8, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name,
-				(record.outputs[port_name] as SimOutputPort).kind, anchor, false)
+				(record.outputs[port_name] as SimOutputPort).kind,
+				_anchor_pos(raw), false, _anchor_dir(raw))
 	# Facade outlets (tank/source) are not kernel ports; give them a
 	# marker of their own unless the view builds custom nozzles.
 	for ui_port: String in FLOW_OUTLETS.get(type_id, {}):
 		if not anchors.has(ui_port) and not anchors_override.has(ui_port):
 			continue
-		var anchor: Vector3 = anchors_override.get(ui_port, anchors.get(ui_port))
+		var raw: Variant = anchors_override.get(ui_port, anchors.get(ui_port))
 		markers["%s:%s" % [record.comp_name, ui_port]] = \
 			make_marker(view, record.comp_name, ui_port,
-				SimTypes.PortKind.PROCESS_FLOW, anchor, false)
+				SimTypes.PortKind.PROCESS_FLOW, _anchor_pos(raw), false, _anchor_dir(raw))
 	view.set_meta("port_markers", markers)
 
 
+static func _anchor_pos(raw: Variant) -> Vector3:
+	return (raw as Dictionary)["pos"] if raw is Dictionary else raw
+
+
+static func _anchor_dir(raw: Variant) -> Vector3:
+	return (raw as Dictionary).get("dir", Vector3.ZERO) if raw is Dictionary else Vector3.ZERO
+
+
+## An attached fitting, not a floating primitive: process ports are
+## flanged stub nozzles, signal and power ports are surface-mounted
+## junction boxes with cable glands. A mounting plate seats against
+## the equipment body; the fitting's local +X points outward along
+## dir (derived radially when not given).
 static func make_marker(view: Node3D, record_name: String, port_name: String,
-		kind: SimTypes.PortKind, local_pos: Vector3, is_input: bool) -> StaticBody3D:
+		kind: SimTypes.PortKind, local_pos: Vector3, is_input: bool,
+		dir: Vector3 = Vector3.ZERO) -> StaticBody3D:
+	if dir == Vector3.ZERO:
+		dir = Vector3(local_pos.x, 0.0, local_pos.z)
+		dir = dir.normalized() if dir.length() > 0.05 else Vector3.UP
 	var color: Color = KIND_COLORS[kind]
 	var body := StaticBody3D.new()
 	body.position = local_pos
 	body.collision_layer = 2
 	body.collision_mask = 0
+	var up_ref := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.9 else Vector3.FORWARD
+	var z_axis := dir.cross(up_ref).normalized()
+	body.basis = Basis(dir, z_axis.cross(dir), z_axis)
 	var shape := CollisionShape3D.new()
 	var sphere_shape := SphereShape3D.new()
-	sphere_shape.radius = 0.09
+	sphere_shape.radius = 0.11
 	shape.shape = sphere_shape
+	shape.position = Vector3(0.06, 0, 0)
 	body.add_child(shape)
-	var mesh_inst := MeshInstance3D.new()
-	if is_input:
-		var sphere := SphereMesh.new()
-		sphere.radius = 0.055
-		sphere.height = 0.11
-		mesh_inst.mesh = sphere
+
+	var steel := ViewUtil.flat(Color(0.45, 0.47, 0.50))
+	var is_pipe := kind == SimTypes.PortKind.PROCESS_FLOW \
+		or kind == SimTypes.PortKind.PROCESS_LEVEL \
+		or kind == SimTypes.PortKind.PROCESS_PRESSURE
+	if is_pipe:
+		ViewUtil.box(body, Vector3(0.06, 0.15, 0.15), Vector3(-0.02, 0, 0), steel)
+		var neck_r := 0.05 if kind == SimTypes.PortKind.PROCESS_FLOW else 0.032
+		var neck := ViewUtil.cylinder(body, neck_r, 0.15, Vector3(0.07, 0, 0), steel)
+		neck.rotation_degrees = Vector3(0, 0, 90)
+		var flange := ViewUtil.cylinder(body, neck_r * 1.8, 0.03, Vector3(0.145, 0, 0), steel)
+		flange.rotation_degrees = Vector3(0, 0, 90)
+		# Colored gasket face: a ring on inlets, a solid cap on outlets.
+		var face := ViewUtil.cylinder(body, neck_r * (1.35 if is_input else 1.1), 0.02,
+			Vector3(0.165, 0, 0), ViewUtil.glow(color, 0.8))
+		face.rotation_degrees = Vector3(0, 0, 90)
 	else:
-		var cube := BoxMesh.new()
-		cube.size = Vector3(0.1, 0.1, 0.1)
-		mesh_inst.mesh = cube
-	mesh_inst.material_override = ViewUtil.glow(color, 1.0)
-	body.add_child(mesh_inst)
+		ViewUtil.box(body, Vector3(0.05, 0.13, 0.13), Vector3(-0.015, 0, 0), steel)
+		ViewUtil.box(body, Vector3(0.09, 0.10, 0.10), Vector3(0.05, 0, 0),
+			ViewUtil.flat(Color(0.28, 0.29, 0.32)))
+		var gland := ViewUtil.cylinder(body, 0.022, 0.06, Vector3(0.115, 0, 0), steel)
+		gland.rotation_degrees = Vector3(0, 0, 90)
+		var collar := ViewUtil.cylinder(body, 0.036 if is_input else 0.03, 0.02,
+			Vector3(0.10, 0, 0), ViewUtil.glow(color, 0.9))
+		collar.rotation_degrees = Vector3(0, 0, 90)
+
 	var tag := Label3D.new()
 	tag.text = port_name
-	tag.position = Vector3(0, 0.14, 0)
+	tag.position = Vector3(0.08, 0.16, 0)
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.font_size = 26
-	tag.pixel_size = 0.003
+	tag.font_size = 24
+	tag.pixel_size = 0.0028
 	body.add_child(tag)
 	body.set_meta("record_name", record_name)
 	body.set_meta("port_name", port_name)

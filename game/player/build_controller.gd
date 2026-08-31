@@ -199,8 +199,8 @@ func _update_hud() -> void:
 				hud.set_mode_text("BUILD — click place · R rotate · B/Esc exit")
 		Mode.CONNECT:
 			menu.visible = false
-			var step := "click an OUTLET (cube) · G moves a vessel nozzle" if _pending_marker == null \
-				else "lay the run: click surfaces for waypoints (%d), finish on an INLET (sphere) · R undo point" \
+			var step := "click an outlet fitting · G moves a vessel nozzle" if _pending_marker == null \
+				else "lay the run: click surfaces for waypoints (%d), finish on an inlet fitting · R undo point" \
 				% _waypoints.size()
 			var support := "" if _pending_marker == null else \
 				("\nsupport OK (span %.1f m)" % _route_span if _route_ok
@@ -691,13 +691,13 @@ func _try_pick_port() -> void:
 	var marker := collider as StaticBody3D
 	if _pending_marker == null:
 		if bool(marker.get_meta("is_input")):
-			hud.toast("start from an OUTPUT port (cube)")
+			hud.toast("start from an outlet or output fitting")
 			return
 		_pending_marker = marker
 		_update_hud()
 		return
 	if not bool(marker.get_meta("is_input")):
-		hud.toast("finish on an INPUT port (sphere)")
+		hud.toast("finish on an inlet or input fitting")
 		return
 	_complete_connection(str(marker.get_meta("record_name")),
 		str(marker.get_meta("port_name")), marker.global_position)
