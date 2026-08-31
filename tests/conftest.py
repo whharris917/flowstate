@@ -2,7 +2,22 @@
 from __future__ import annotations
 
 from sim.components import MainsFeed, Source
-from sim.core import Component, Simulation
+from sim.core import Component, PortKind, Simulation
+
+
+class Duty(Component):
+    """A fixed analog output standing in for a controller or a duty
+    setpoint. Duties have to be *wired*, like everything else: an input
+    port is reset every scan, so a value poked onto one is gone before
+    the component ticks."""
+
+    def __init__(self, name: str, kw: float) -> None:
+        super().__init__(name)
+        self.kw = kw
+        self.out = self.add_output("out", PortKind.SIGNAL_ANALOG)
+
+    def tick(self, dt: float) -> None:
+        self.out.value = self.kw
 
 
 def wire_power(sim: Simulation, *components: Component) -> MainsFeed:
