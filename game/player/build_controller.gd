@@ -273,14 +273,15 @@ func _commit_nozzle_grab() -> void:
 
 func _update_route_preview() -> void:
 	var aim := _aim_point()
-	var sparse: Array = [_pending_marker.global_position]
-	sparse.append_array(_waypoints)
+	var tail: Array = []
+	tail.append_array(_waypoints)
 	if aim != Vector3.INF:
-		sparse.append(aim)
-	if sparse.size() < 2:
+		tail.append(aim)
+	if tail.is_empty():
 		_clear_route()
 		return
-	var path := PipeRoute.orthogonalize(sparse)
+	var path := PipeRoute.routed_open(_pending_marker.global_position,
+		_pending_marker.global_basis.x.normalized(), tail)
 	if path.size() < 2:
 		_clear_route()
 		return
@@ -700,17 +701,18 @@ func _try_pick_port() -> void:
 		hud.toast("finish on an inlet or input fitting")
 		return
 	_complete_connection(str(marker.get_meta("record_name")),
-		str(marker.get_meta("port_name")), marker.global_position)
+		str(marker.get_meta("port_name")), marker.global_position,
+		marker.global_basis.x.normalized())
 
 
 ## Land the pending routed connection on an input port. The support
 ## rule gets its veto before the kernel does; routing state is kept on
 ## refusal so the run can be fixed with more waypoints.
-func _complete_connection(dst_name: String, dst_port: String, dst_pos: Vector3) -> void:
-	var final_sparse: Array = [_pending_marker.global_position]
-	final_sparse.append_array(_waypoints)
-	final_sparse.append(dst_pos)
-	var check := SupportCheck.evaluate(PipeRoute.orthogonalize(final_sparse),
+func _complete_connection(dst_name: String, dst_port: String, dst_pos: Vector3,
+		dst_dir: Vector3 = Vector3.ZERO) -> void:
+	var check := SupportCheck.evaluate(PipeRoute.routed(
+			_pending_marker.global_position, _pending_marker.global_basis.x.normalized(),
+			dst_pos, dst_dir, _waypoints),
 		player.camera.get_world_3d().direct_space_state)
 	if not bool(check["ok"]):
 		hud.toast("unsupported span %.1f m (max %.1f) — route along structure"
@@ -768,7 +770,8 @@ func _port_picked(record_name: String, port_name: String, is_input: bool) -> voi
 		if _pending_marker == null:
 			hud.toast("right-click a SOURCE and pick an output first")
 			return
-		_complete_connection(record_name, port_name, marker.global_position)
+		_complete_connection(record_name, port_name, marker.global_position,
+			marker.global_basis.x.normalized())
 		return
 	if mode != Mode.CONNECT:
 		_set_mode(Mode.CONNECT)

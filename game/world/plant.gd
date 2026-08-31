@@ -887,17 +887,24 @@ func _revalidate_supports() -> void:
 	for visual in _wire_visuals:
 		if visual["node"] == null:
 			continue  # internal cabinet wire, nothing physical to carry
-		var sparse: Array = [_marker_pos(str(visual["a"]), str(visual["a_port"]))]
-		sparse.append_array(visual["waypoints"])
-		sparse.append(_marker_pos(str(visual["b"]), str(visual["b_port"])))
-		_apply_support(visual["node"] as PipeView, sparse, space)
+		var path := PipeRoute.routed(
+			_marker_pos(str(visual["a"]), str(visual["a_port"])),
+			_marker_dir(str(visual["a"]), str(visual["a_port"])),
+			_marker_pos(str(visual["b"]), str(visual["b_port"])),
+			_marker_dir(str(visual["b"]), str(visual["b_port"])),
+			visual["waypoints"])
+		_apply_support_path(visual["node"] as PipeView, path, space)
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
 		_apply_support(entry["node"] as PipeView, entry["points"], space)
 
 
 func _apply_support(view: PipeView, sparse_local: Array, space: PhysicsDirectSpaceState3D) -> void:
-	var path := PipeRoute.orthogonalize(sparse_local)
+	_apply_support_path(view, PipeRoute.orthogonalize(sparse_local), space)
+
+
+func _apply_support_path(view: PipeView, path: Array[Vector3],
+		space: PhysicsDirectSpaceState3D) -> void:
 	var global_path: Array[Vector3] = []
 	for point in path:
 		global_path.append(to_global(point))
@@ -937,12 +944,10 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 		getter = func() -> float: return port.value
 	var is_process := kind == SimTypes.PortKind.PROCESS_FLOW \
 		or kind == SimTypes.PortKind.PROCESS_LEVEL
-	var sparse: Array = [from]
-	sparse.append_array(waypoints)
-	sparse.append(to)
 	var pipe := PipeView.new()
 	add_child(pipe)
-	pipe.setup(PipeRoute.orthogonalize(sparse), getter,
+	pipe.setup(PipeRoute.routed(from, _marker_dir(src_name, src_port),
+			to, _marker_dir(dst_name, dst_port), waypoints), getter,
 		PlantFactory.KIND_COLORS[kind], 0.07 if is_process else 0.025,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	pipe.config_cb = _configure_run
@@ -956,6 +961,16 @@ func _marker_pos(record_name: String, port_name: String) -> Vector3:
 	var markers: Dictionary = view.get_meta("port_markers", {})
 	var marker: Node3D = markers.get("%s:%s" % [record_name, port_name])
 	return to_local(marker.global_position) if marker != null else view.position
+
+
+## The fitting's outward axis (plant-local): runs must leave along it.
+func _marker_dir(record_name: String, port_name: String) -> Vector3:
+	var view: Node3D = views.get(record_name)
+	if view == null:
+		return Vector3.ZERO
+	var markers: Dictionary = view.get_meta("port_markers", {})
+	var marker: Node3D = markers.get("%s:%s" % [record_name, port_name])
+	return marker.global_basis.x.normalized() if marker != null else Vector3.ZERO
 
 
 ## ---- the commissioned starting loop -------------------------------------
