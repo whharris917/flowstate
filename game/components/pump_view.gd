@@ -10,6 +10,7 @@ var _lamp_off: StandardMaterial3D
 var _lamp: MeshInstance3D
 var _mode_label: Label3D
 var _motor: EquipmentAudio
+var _was_running: bool = false
 
 
 func setup(pump_: SimPump) -> void:
@@ -34,6 +35,10 @@ func _process(_delta: float) -> void:
 	_lamp.material_override = _lamp_on if pump.running else _lamp_off
 	_mode_label.text = pump.mode.to_upper()
 	_motor.set_running(pump.running)
+	if pump.running != _was_running:
+		_was_running = pump.running
+		EquipmentAudio.play_once(self, "res://audio/clunk.wav",
+			Vector3(0, 0.5, 0), -8.0, 1.0 if pump.running else 0.8)
 
 
 func describe() -> String:

@@ -232,6 +232,106 @@ def make_boiler() -> None:
     write_wav(OUT_DIR / "boiler_loop.wav", [buf], normalize_to=0.45)
 
 
+def highpassed_noise(n: int, cutoff: float, leak: float = 0.6,
+                     gain: float = 0.8) -> list[float]:
+    """White-ish noise with the low band removed: the hiss register."""
+    noise = brown_noise(n, leak=leak, gain=gain)
+    alpha = 1.0 - math.exp(-2.0 * math.pi * cutoff / SR)
+    lp = 0.0
+    out = [0.0] * n
+    for i in range(n):
+        lp += alpha * (noise[i] - lp)
+        out[i] = noise[i] - lp
+    return out
+
+
+def make_valve_air() -> None:
+    """Pneumatic actuator stroke: a soft mechanical take-up thock, then
+    an air burst that decays as the diaphragm chamber equalizes."""
+    duration = 0.55
+    n = int(duration * SR)
+    buf = [0.0] * n
+    hiss = highpassed_noise(n, 1200.0)
+    for i in range(n):
+        t = i / SR
+        attack = min(1.0, t / 0.012)
+        thock = math.sin(2.0 * math.pi * (170.0 * math.exp(-t * 9.0) + 60.0) * t) \
+            * math.exp(-t * 26.0) * 0.7
+        air = hiss[i] * math.exp(-t * 7.5) * attack
+        buf[i] = thock + air
+    write_wav(OUT_DIR / "valve_air.wav", [buf], normalize_to=0.40)
+
+
+def make_clunk() -> None:
+    """Contactor / motor starter clunk: low armature thump, a metallic
+    tick, and one quieter mechanical bounce."""
+    duration = 0.30
+    n = int(duration * SR)
+    buf = [0.0] * n
+    tick = highpassed_noise(n, 2500.0, leak=0.4, gain=1.0)
+    for i in range(n):
+        t = i / SR
+        thump = math.sin(2.0 * math.pi * 88.0 * t) * math.exp(-t * 34.0)
+        ring = math.sin(2.0 * math.pi * 1380.0 * t) * math.exp(-t * 90.0) * 0.20
+        buf[i] = thump + ring + tick[i] * math.exp(-t * 240.0) * 0.5
+    bounce_at = int(0.055 * SR)
+    for i in range(bounce_at, n):
+        t = (i - bounce_at) / SR
+        buf[i] += math.sin(2.0 * math.pi * 96.0 * t) * math.exp(-t * 60.0) * 0.35
+    write_wav(OUT_DIR / "clunk.wav", [buf], normalize_to=0.48)
+
+
+def make_relay_click() -> None:
+    """Small ice-cube relay click: a 2 ms snap and a tiny ping."""
+    duration = 0.09
+    n = int(duration * SR)
+    buf = [0.0] * n
+    snap = highpassed_noise(n, 3000.0, leak=0.3, gain=1.0)
+    for i in range(n):
+        t = i / SR
+        buf[i] = snap[i] * math.exp(-t * 420.0) \
+            + math.sin(2.0 * math.pi * 2100.0 * t) * math.exp(-t * 160.0) * 0.25
+    write_wav(OUT_DIR / "relay_click.wav", [buf], normalize_to=0.30)
+
+
+def make_beep() -> None:
+    """Annunciator beep: a clean 1.9 kHz tone with cosine ramps, dry
+    and a little harsh on purpose — it has to read as an instrument,
+    not music."""
+    duration = 0.18
+    n = int(duration * SR)
+    buf = [0.0] * n
+    ramp = 0.012
+    for i in range(n):
+        t = i / SR
+        if t < ramp:
+            env = 0.5 * (1.0 - math.cos(math.pi * t / ramp))
+        elif t > duration - ramp:
+            env = 0.5 * (1.0 - math.cos(math.pi * (duration - t) / ramp))
+        else:
+            env = 1.0
+        buf[i] = (math.sin(2.0 * math.pi * 1900.0 * t)
+                  + 0.20 * math.sin(2.0 * math.pi * 3800.0 * t)) * env
+    write_wav(OUT_DIR / "beep.wav", [buf], normalize_to=0.32)
+
+
+def make_trap_burst() -> None:
+    """Steam trap discharge: hiss swells as the trap opens, chuffs
+    while condensate flashes through, and dies as the seat closes."""
+    duration = 1.3
+    n = int(duration * SR)
+    buf = [0.0] * n
+    hiss = highpassed_noise(n, 900.0)
+    for i in range(n):
+        t = i / SR
+        swell = min(1.0, t / 0.14)
+        decay = math.exp(-max(0.0, t - 0.45) * 4.5)
+        chuff = 1.0 + 0.45 * math.sin(2.0 * math.pi * 11.0 * t) \
+            + 0.20 * math.sin(2.0 * math.pi * 23.0 * t)
+        buf[i] = hiss[i] * swell * decay * chuff
+    write_wav(OUT_DIR / "trap_burst.wav", [buf], normalize_to=0.38)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -240,6 +340,11 @@ def main() -> None:
     make_motor()
     make_steam()
     make_boiler()
+    make_valve_air()
+    make_clunk()
+    make_relay_click()
+    make_beep()
+    make_trap_burst()
     for idx, (f0, decay, noise_amp) in enumerate(
             [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):

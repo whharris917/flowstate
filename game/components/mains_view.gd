@@ -4,6 +4,7 @@ extends Node3D
 ## voltage class on its face. The root of every power circuit.
 
 var mains: SimMainsFeed
+var _buzz: EquipmentAudio
 
 
 func setup(mains_: SimMainsFeed) -> void:
@@ -19,6 +20,14 @@ func setup(mains_: SimMainsFeed) -> void:
 	tag.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	ViewUtil.label(self, mains.comp_name, Vector3(0, 1.95, 0))
 	ViewUtil.interact_body(self, Vector3(0.8, 1.7, 0.6), Vector3(0, 0.85, 0))
+	# A live feeder buzzes quietly — the low mains hum, close up only.
+	_buzz = EquipmentAudio.make(self, "res://audio/motor_loop.wav",
+		Vector3(0, 1.0, 0), -20.0, 0.5)
+	_buzz.max_distance = 9.0
+
+
+func _process(_delta: float) -> void:
+	_buzz.set_running(true)
 
 
 func describe() -> String:

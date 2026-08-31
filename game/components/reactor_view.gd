@@ -10,6 +10,9 @@ var _shaft: Node3D
 var _strip: MeshInstance3D
 var _label: Label3D
 var _motor: EquipmentAudio
+var _at_temp: bool = false
+var _pure: bool = false
+var _alarm_t: float = 0.0
 
 
 func setup(reactor_: SimReactor) -> void:
@@ -67,6 +70,29 @@ func _process(delta: float) -> void:
 	_strip.scale = Vector3(1, column, 1)
 	_strip.position = Vector3(0, 0.42 + column / 2.0, 0.805)
 	_label.text = "%.0f °C · %.0f %% pure" % [reactor.temp_c, reactor.purity_frac * 100.0]
+	# Limit chimes with hysteresis: reaching reaction temperature, and
+	# the batch clearing 90% purity, each announce themselves once.
+	if reactor.temp_c >= SimReactor.REACT_MIN_C and not _at_temp:
+		_at_temp = true
+		EquipmentAudio.play_once(self, "res://audio/beep.wav",
+			Vector3(0, 3.0, 0), -8.0, 0.75)
+	elif reactor.temp_c < SimReactor.REACT_MIN_C - 3.0:
+		_at_temp = false
+	if reactor.purity_frac >= 0.9 and not _pure:
+		_pure = true
+		EquipmentAudio.play_once(self, "res://audio/beep.wav",
+			Vector3(0, 3.0, 0), -8.0, 1.5)
+	elif reactor.purity_frac < 0.87:
+		_pure = false
+	# High-level annunciator, same convention as tanks.
+	if frac > 0.95:
+		_alarm_t -= delta
+		if _alarm_t <= 0.0:
+			_alarm_t = 1.6
+			EquipmentAudio.play_once(self, "res://audio/beep.wav",
+				Vector3(0, 3.0, 0), -6.0, 1.0)
+	else:
+		_alarm_t = 0.0
 
 
 func describe() -> String:

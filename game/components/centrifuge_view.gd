@@ -8,6 +8,7 @@ var fuge: SimCentrifuge
 var _rotor: Node3D
 var _label: Label3D
 var _motor: EquipmentAudio
+var _was_spinning: bool = false
 
 
 func setup(fuge_: SimCentrifuge) -> void:
@@ -49,6 +50,10 @@ func _process(delta: float) -> void:
 	if fuge.spinning:
 		_rotor.rotate_y(delta * 22.0)
 	_motor.set_running(fuge.spinning)
+	if fuge.spinning != _was_spinning:
+		_was_spinning = fuge.spinning
+		EquipmentAudio.play_once(self, "res://audio/clunk.wav",
+			Vector3(0, 1.6, 0), -8.0, 1.1 if fuge.spinning else 0.85)
 	_label.text = "%s · %.1f L/s" % [
 		"SPINNING" if fuge.spinning else ("ON, waiting" if fuge.is_on else "stopped"),
 		fuge.draw.value]

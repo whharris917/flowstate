@@ -21,6 +21,7 @@ var nozzles := {
 var _strips: Array[MeshInstance3D] = []
 var _nozzle_nodes: Dictionary = {}   # port -> Node3D
 var _built: Node3D = null
+var _alarm_t: float = 0.0
 
 
 func setup(tank_: SimTank, switch_: SimFloatSwitch = null) -> void:
@@ -159,7 +160,7 @@ func apply_nozzles(saved: Dictionary) -> void:
 			set_nozzle(port, float(spot.get("frac", 0.5)), float(spot.get("angle", 0.0)))
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	var h := tank.height_m
 	var r := tank.diameter_m / 2.0
 	var frac := clampf(tank.level_l / tank.capacity_l, 0.0, 1.0)
@@ -169,6 +170,16 @@ func _process(_delta: float) -> void:
 		var column := maxf(strip_h * frac, 0.005)
 		liquid.scale = Vector3(1, column, 1)
 		liquid.position = dir * (r + 0.025) + Vector3(0, 0.15 + column / 2.0, 0)
+	# Local high-level annunciator: repeats while the real level sits
+	# above 92% of capacity.
+	if frac > 0.92:
+		_alarm_t -= delta
+		if _alarm_t <= 0.0:
+			_alarm_t = 1.6
+			EquipmentAudio.play_once(self, "res://audio/beep.wav",
+				Vector3(0, h + 0.2, 0), -6.0, 1.0)
+	else:
+		_alarm_t = 0.0
 
 
 func describe() -> String:

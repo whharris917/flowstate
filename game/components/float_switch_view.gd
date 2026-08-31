@@ -7,6 +7,7 @@ var switch: SimFloatSwitch
 var _lamp: MeshInstance3D
 var _lamp_on: StandardMaterial3D
 var _lamp_off: StandardMaterial3D
+var _was_closed: bool = false
 
 
 func setup(switch_: SimFloatSwitch) -> void:
@@ -22,6 +23,11 @@ func setup(switch_: SimFloatSwitch) -> void:
 
 func _process(_delta: float) -> void:
 	_lamp.material_override = _lamp_on if switch.closed else _lamp_off
+	# A trip is a limit reached: announce it, both ways.
+	if switch.closed != _was_closed:
+		_was_closed = switch.closed
+		EquipmentAudio.play_once(self, "res://audio/beep.wav",
+			Vector3(0, 0.25, 0), -9.0, 1.25 if switch.closed else 0.9)
 
 
 func describe() -> String:

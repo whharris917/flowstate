@@ -7,6 +7,9 @@ extends Node3D
 var valve: SimControlValve
 var _indicator: MeshInstance3D
 var _label: Label3D
+var _last_pos: float = 0.0
+var _air_cool: float = 0.0
+var _seated: bool = true
 
 
 func setup(valve_: SimControlValve) -> void:
@@ -42,9 +45,25 @@ func setup(valve_: SimControlValve) -> void:
 	ViewUtil.interact_body(self, Vector3(0.7, 1.2, 0.55), Vector3(0, 0.62, 0))
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_label.text = "%.0f %%" % valve.position
 	_indicator.position.y = 0.60 + valve.position / 100.0 * 0.22
+	# The actuator breathes when the stem actually travels: an air
+	# burst per stroke, re-fired while a long move is still going.
+	_air_cool = maxf(_air_cool - delta, 0.0)
+	var speed := absf(valve.position - _last_pos) / maxf(delta, 1e-5)
+	_last_pos = valve.position
+	if speed > 2.5 and _air_cool <= 0.0:
+		EquipmentAudio.play_once(self, "res://audio/valve_air.wav",
+			Vector3(0, 0.98, 0), -12.0, randf_range(0.92, 1.08))
+		_air_cool = 1.1
+	# Plug meeting the seat is a real mechanical event.
+	if valve.position < 1.0 and not _seated:
+		_seated = true
+		EquipmentAudio.play_once(self, "res://audio/clunk.wav",
+			Vector3(0, 0.35, 0), -12.0, 1.25)
+	elif valve.position > 4.0:
+		_seated = false
 
 
 func describe() -> String:

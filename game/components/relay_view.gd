@@ -6,6 +6,7 @@ var relay: SimRelay
 var _lamp: MeshInstance3D
 var _lamp_on: StandardMaterial3D
 var _lamp_off: StandardMaterial3D
+var _was_energized: bool = false
 
 
 func setup(relay_: SimRelay) -> void:
@@ -27,6 +28,10 @@ func setup(relay_: SimRelay) -> void:
 
 func _process(_delta: float) -> void:
 	_lamp.material_override = _lamp_on if relay.energized else _lamp_off
+	if relay.energized != _was_energized:
+		_was_energized = relay.energized
+		EquipmentAudio.play_once(self, "res://audio/relay_click.wav",
+			Vector3(0, 0.1, 0.1), -6.0, 1.0 if relay.energized else 0.9)
 
 
 func describe() -> String:

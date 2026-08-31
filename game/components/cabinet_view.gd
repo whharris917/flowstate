@@ -18,6 +18,8 @@ var _door: Node3D
 var _door_open := false
 var _edit_button: CabinetEditButton
 var _contents: Node3D
+var _relays: Array[SimRelay] = []
+var _relay_states: Array[bool] = []
 
 
 func setup(name_: String) -> void:
@@ -75,6 +77,24 @@ func setup(name_: String) -> void:
 	var out_tag := ViewUtil.label(self, "FIELD OUT", Vector3(0.72, H + 0.02, 0.12))
 	out_tag.font_size = 26
 	ViewUtil.interact_body(self, Vector3(W + 0.15, H, D + 0.2), Vector3(0, H / 2.0, 0))
+
+
+## The interposing relays inside genuinely click when their coils
+## change state — muffled through a closed door, clear when it's open.
+func set_relays(relays: Array[SimRelay]) -> void:
+	_relays = relays
+	_relay_states.clear()
+	for relay in _relays:
+		_relay_states.append(relay.energized)
+
+
+func _process(_delta: float) -> void:
+	for i in range(_relays.size()):
+		if _relays[i].energized != _relay_states[i]:
+			_relay_states[i] = _relays[i].energized
+			EquipmentAudio.play_once(self, "res://audio/relay_click.wav",
+				Vector3(0, 1.1, 0), -8.0 if _door_open else -16.0,
+				1.05 if _relays[i].energized else 0.95)
 
 
 ## Rebuild the interior from the editor's layout: modules on their

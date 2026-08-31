@@ -9,6 +9,7 @@ var _fire_mat: StandardMaterial3D
 var _label: Label3D
 var _rumble: EquipmentAudio
 var _hiss: EquipmentAudio
+var _trap_t: float = 2.0
 
 
 func setup(boiler_: SimSteamGen) -> void:
@@ -47,12 +48,21 @@ func setup(boiler_: SimSteamGen) -> void:
 		Vector3(0.35, 1.35, 0), -16.0, 1.1)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_label.text = "%.0f kPa %s" % [boiler.press_pa / 1000.0,
 		"· FIRING" if boiler.making else ("· dry!" if boiler.is_on else "· off")]
 	_fire_mat.emission_energy_multiplier = 2.0 if boiler.making else 0.0
 	_rumble.set_running(boiler.making)
 	_hiss.set_running(boiler.making)
+	# The drum trap cycles while steam is being made — quicker as the
+	# real header pressure builds, so the rhythm reads plant state.
+	if boiler.making:
+		_trap_t -= delta
+		if _trap_t <= 0.0:
+			var press_frac := clampf(boiler.press_pa / SimSteamGen.PRESS_FULL_PA, 0.0, 1.0)
+			_trap_t = 7.0 - 4.5 * press_frac
+			EquipmentAudio.play_once(self, "res://audio/trap_burst.wav",
+				Vector3(-0.9, 0.45, 0.3), -10.0, randf_range(0.95, 1.05))
 
 
 func describe() -> String:

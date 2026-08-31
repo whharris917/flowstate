@@ -575,6 +575,13 @@ func _sync_cabinet(cab: String) -> void:
 					{"ac_in": Vector3(-0.72, y, 0.12), "dc_out": Vector3(0.72, y, 0.12)})
 				y -= 0.115
 	view.set_layout(entry["modules"], _cabinet_wire_specs(cab))
+	var relays: Array[SimRelay] = []
+	for module_v: Variant in entry["modules"]:
+		for record_name: String in (module_v as Dictionary)["records"]:
+			var record := sim.get_component(record_name)
+			if record is SimRelay:
+				relays.append(record as SimRelay)
+	view.set_relays(relays)
 	_revalidate_in = 3
 
 

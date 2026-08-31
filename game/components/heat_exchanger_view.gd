@@ -6,6 +6,7 @@ extends Node3D
 var hx: SimHeatExchanger
 var _label: Label3D
 var _hiss: EquipmentAudio
+var _trap_t: float = 4.5
 
 
 func setup(hx_: SimHeatExchanger) -> void:
@@ -31,9 +32,17 @@ func setup(hx_: SimHeatExchanger) -> void:
 		Vector3(0, 0.75, 0), -20.0, 0.9)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_label.text = "%.0f kW" % hx.duty_kw
 	_hiss.set_running(hx.duty_kw > 10.0)
+	# Condensate trap on the channel head: cycles only under real load,
+	# offset from the boiler's trap so the two never sync up.
+	if hx.duty_kw > 10.0:
+		_trap_t -= delta
+		if _trap_t <= 0.0:
+			_trap_t = 9.0
+			EquipmentAudio.play_once(self, "res://audio/trap_burst.wav",
+				Vector3(0.87, 0.25, 0), -14.0, randf_range(0.8, 0.9))
 
 
 func describe() -> String:
