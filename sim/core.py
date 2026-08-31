@@ -23,8 +23,10 @@ from enum import Enum
 from typing import Callable, Optional, Union
 
 from sim.historian import Historian
+from sim.species import SPECIES_KEYS
+from sim.stream import Stream
 
-Value = Union[bool, float]
+Value = Union[bool, float, Stream]
 
 
 class PortKind(Enum):
@@ -32,21 +34,42 @@ class PortKind(Enum):
 
     SIGNAL_DISCRETE = "signal_discrete"  # 24 V on/off (bool)
     SIGNAL_ANALOG = "signal_analog"      # 4-20 mA (float)
-    PROCESS_FLOW = "process_flow"        # liquid flow, L/s (float)
-    PROCESS_LEVEL = "process_level"      # liquid level, L (float)
+    # Material moves on two port kinds, both carrying a Stream. They are
+    # distinct so the type system keeps refusing nonsense connections,
+    # exactly as the old flow/level split did:
+    #   PROCESS_STREAM — material actually being pushed. Its rate is what
+    #       is really moving. A pump discharge, a separator's product.
+    #   PROCESS_SUPPLY — material offered at a nozzle for someone to pull.
+    #       Its rate is the *most* that could be taken this instant. A
+    #       tank outlet, a supply header. The consumer decides its own
+    #       rate and reports it back on a PROCESS_FLOW draw wire.
+    PROCESS_STREAM = "process_stream"
+    PROCESS_SUPPLY = "process_supply"
+    PROCESS_FLOW = "process_flow"        # bare rate demand, L/s (float)
+    PROCESS_LEVEL = "process_level"      # liquid level, L (float) — instruments
     PROCESS_PRESSURE = "process_pressure"  # gauge pressure, Pa (float)
     POWER = "power"                      # electrical supply (1.0 = energized)
 
 
+STREAM_KINDS = {PortKind.PROCESS_STREAM, PortKind.PROCESS_SUPPLY}
+
 # How multiple wires landing on one input combine, per kind.
-# Discrete signals OR together (parallel contacts); flows sum (two pumps
-# into one header). Analog and level allow only a single source.
+# Discrete signals OR together (parallel contacts); demand rates sum
+# (two consumers pulling on one header); pushed material streams mix at
+# a tee, blending temperature and composition. Analog, level, and supply
+# allow only a single source.
 _SUMMING_KINDS = {PortKind.PROCESS_FLOW}
 _ORING_KINDS = {PortKind.SIGNAL_DISCRETE}
+_MIXING_KINDS = {PortKind.PROCESS_STREAM}
+_MULTI_WIRE_KINDS = _SUMMING_KINDS | _ORING_KINDS | _MIXING_KINDS
 
 
 def _default_for(kind: PortKind) -> Value:
-    return False if kind is PortKind.SIGNAL_DISCRETE else 0.0
+    if kind is PortKind.SIGNAL_DISCRETE:
+        return False
+    if kind in STREAM_KINDS:
+        return Stream.empty()
+    return 0.0
 
 
 class Port:
@@ -81,6 +104,8 @@ class InputPort(Port):
     def accumulate(self, incoming: Value) -> None:
         if self.kind in _SUMMING_KINDS:
             self.value = float(self.value) + float(incoming)
+        elif self.kind in _MIXING_KINDS:
+            self.value = Stream.mix(self.value, incoming)
         elif self.kind in _ORING_KINDS:
             self.value = bool(self.value) or bool(incoming)
         else:
@@ -103,7 +128,7 @@ class Wire:
                 f"voltage mismatch: {src.path} is {src.spec or '?'}, "
                 f"{dst.path} needs {dst.spec or '?'}"
             )
-        if dst.wire_count > 0 and dst.kind not in (_SUMMING_KINDS | _ORING_KINDS):
+        if dst.wire_count > 0 and dst.kind not in _MULTI_WIRE_KINDS:
             raise ValueError(f"{dst.path} ({dst.kind.value}) accepts only one wire")
         self.src = src
         self.dst = dst
@@ -220,39 +245,61 @@ class Simulation:
         self.components.remove(component)
         self._names.discard(name)
         if self.historian is not None:
-            for port in component.outputs.values():
-                if port.path in self.historian.active_tags:
-                    self.historian.retire(port.path)
-            for obs_name in component.observables:
-                tag = f"{name}.{obs_name}"
-                if tag in self.historian.active_tags:
+            active = set(self.historian.active_tags)
+            for tag, _read in self._tags_of(component):
+                if tag in active:
                     self.historian.retire(tag)
         return True
+
+    @staticmethod
+    def _tags_of(component: Component) -> list[tuple[str, Callable[[], float]]]:
+        """Every historian tag one component contributes.
+
+        Scalar outputs are one tag each. A stream output is not a
+        number, so it fans out into the numbers an operator would
+        actually trend: its rate, its temperature, how much of it is
+        solid, and the fraction of each species in it. Composition
+        becomes real historized data rather than something a display
+        has to infer.
+        """
+        tags: list[tuple[str, Callable[[], float]]] = []
+        for port in component.outputs.values():
+            if port.kind in STREAM_KINDS:
+                path = port.path
+                tags.append((f"{path}.flow", lambda p=port: float(p.value.flow_lps)))
+                tags.append((f"{path}.temp", lambda p=port: float(p.value.temp_c)))
+                tags.append(
+                    (f"{path}.solids", lambda p=port: float(p.value.solids_frac))
+                )
+                for key in SPECIES_KEYS:
+                    tags.append(
+                        (f"{path}.x_{key}", lambda p=port, k=key: float(p.value.frac(k)))
+                    )
+            else:
+                tags.append((port.path, lambda p=port: float(p.value)))
+        for obs_name, attr in component.observables.items():
+            tags.append(
+                (
+                    f"{component.name}.{obs_name}",
+                    lambda c=component, a=attr: float(getattr(c, a)),
+                )
+            )
+        return tags
 
     def register_with_historian(self, component: Component) -> None:
         """Register one component's tags (for equipment added after the
         historian was attached — mid-run placement)."""
         if self.historian is None:
             return
-        for port in component.outputs.values():
-            self.historian.register(port.path, lambda p=port: float(p.value))
-        for obs_name, attr in component.observables.items():
-            self.historian.register(
-                f"{component.name}.{obs_name}",
-                lambda c=component, a=attr: float(getattr(c, a)),
-            )
+        for tag, read in self._tags_of(component):
+            self.historian.register(tag, read)
 
     def attach_historian(self, historian: Historian) -> Historian:
         """Register every output port and observable as a tag, then take
         the t=0 baseline sample. Attach after the graph is built."""
         for component in self.components:
-            for port in component.outputs.values():
-                historian.register(port.path, lambda p=port: float(p.value))
-            for name, attr in component.observables.items():
-                historian.register(
-                    f"{component.name}.{name}",
-                    lambda c=component, a=attr: float(getattr(c, a)),
-                )
+            for tag, read in self._tags_of(component):
+                historian.register(tag, read)
         self.historian = historian
         historian.sample(self.time)
         return historian

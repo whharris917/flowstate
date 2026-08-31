@@ -6,6 +6,7 @@ import pytest
 from conftest import wire_power, wire_supply
 from sim.components import FloatSwitch, Pump, Relay, Tank
 from sim.core import Simulation
+from sim.stream import Stream
 
 
 class TestTank:
@@ -30,7 +31,7 @@ class TestTank:
     def test_overflow_is_tracked_and_level_clamped(self) -> None:
         sim = Simulation(dt=1.0)
         tank = sim.add(Tank("t", capacity_l=10.0, level_l=10.0))
-        tank.inlet.value = 5.0
+        tank.inlet.value = Stream.pure("water", 5.0)
         tank.tick(1.0)
         assert tank.level_l == 10.0
         assert tank.overflowed_l == pytest.approx(5.0)
@@ -87,13 +88,13 @@ class TestPump:
     def test_flow_follows_run_in_auto_and_counts_starts(self) -> None:
         pump = Pump("p", rated_lps=4.0)
         pump.power.value = 1.0
-        pump.inlet.value = 1.0e9
+        pump.inlet.value = Stream.pure("water", 1.0e9)
         pump.run.value = True
         pump.tick(0.05)
-        assert pump.outlet.value == 4.0
+        assert pump.outlet.value.flow_lps == 4.0
         pump.run.value = False
         pump.tick(0.05)
-        assert pump.outlet.value == 0.0
+        assert pump.outlet.value.flow_lps == 0.0
         pump.run.value = True
         pump.tick(0.05)
         assert pump.starts == 2

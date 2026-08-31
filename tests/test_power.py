@@ -14,7 +14,7 @@ class TestPower:
         pump = sim.add(Pump("p", rated_lps=4.0, mode="hand"))
         sim.run(1.0)
         assert not pump.running
-        assert pump.outlet.value == 0.0
+        assert pump.outlet.value.flow_lps == 0.0
 
     def test_powered_pump_runs(self) -> None:
         sim = Simulation(dt=0.05)

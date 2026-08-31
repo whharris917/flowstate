@@ -74,8 +74,8 @@ class TestRemoval:
         assert sim.remove_component("pump") is True
         assert sim.remove_component("pump") is False
         assert len(sim.wires) == 0
-        assert "pump.outlet" not in hist.active_tags
-        assert "pump.outlet" in hist.tags  # history preserved
+        assert "pump.outlet.flow" not in hist.active_tags
+        assert "pump.outlet.flow" in hist.tags  # history preserved
         sim.run(2.0)  # keeps ticking without the pump
         tank = sim.get_component("tank")
         assert tank is not None

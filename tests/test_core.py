@@ -6,19 +6,20 @@ import pytest
 from conftest import wire_power
 from sim.components import FloatSwitch, Pump, Relay, Tank
 from sim.core import Component, PortKind, Simulation
+from sim.stream import Stream
 
 
 class ConstantFlow(Component):
-    """Test stub: unconditionally outputs a fixed flow."""
+    """Test stub: unconditionally pushes a fixed stream of water."""
 
     def __init__(self, name: str, lps: float) -> None:
         super().__init__(name)
         self.lps = lps
-        self.flow = self.add_output("flow", PortKind.PROCESS_FLOW)
-        self.flow.value = lps
+        self.flow = self.add_output("flow", PortKind.PROCESS_STREAM)
+        self.flow.value = Stream.pure("water", lps)
 
     def tick(self, dt: float) -> None:
-        self.flow.value = self.lps
+        self.flow.value = Stream.pure("water", self.lps)
 
 
 def test_wire_rejects_mismatched_kinds() -> None:

@@ -1,24 +1,40 @@
 """Process-unit components: steam generation, heat exchange, reaction,
 and separation — the machinery of an actual synthesis train.
 
-All temperature/conversion dynamics are first-order and deterministic;
-every number a view or gauge shows comes from these records.
+Every unit here obeys the standing rule of this kernel: the streams
+*between* units are rich (rate, temperature, composition, phase), and
+the equations *inside* a unit are few and legible. There is no
+discretized transport, no VLE, no film coefficient anywhere. A vessel
+is a lumped inventory with a first-order energy balance; a separator is
+a split ratio; a reaction is a rate law with two gates on it. That is
+deliberate: a unit operation you can describe in five equations is a
+unit operation the player can be shown in five equations.
+
+All temperature/conversion dynamics are deterministic; every number a
+view or gauge shows comes from these records.
 """
 from __future__ import annotations
 
 from sim.core import Component, PortKind
+from sim.species import get as get_species
+from sim.stream import AMBIENT_C, SOLID_KEY, Stream, comp_from_amounts
 
 
 class SteamGen(Component):
     """Electrically fired steam generator. Feedwater comes through the
     ``inlet`` facade pair (wire a supply header's outlet to it); the
     burner needs 480 V and is toggled with ``is_on``. Produces
-    ``steam`` at the rated rate and holds a header ``press`` that
-    rises and falls first-order with firing — tap it with a gauge.
+    ``steam`` — a real material stream of water at the header's
+    saturation temperature — and holds a header ``press`` that rises
+    and falls first-order with firing.
     """
 
     PRESS_FULL_PA = 8.0e5
     PRESS_TAU_S = 10.0
+    # Saturation temperature, linearised across the operating range:
+    # atmospheric at no pressure, about 180 C at the 8 bar rating.
+    SAT_C_AT_ZERO = 100.0
+    SAT_C_AT_FULL = 180.0
 
     def __init__(self, name: str, rated_kgps: float = 0.5) -> None:
         super().__init__(name)
@@ -29,36 +45,57 @@ class SteamGen(Component):
         self.making = False
         self.press_pa = 0.0
         self.starve_s = 0.0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_LEVEL)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.steam = self.add_output("steam", PortKind.PROCESS_FLOW)
+        self.steam = self.add_output("steam", PortKind.PROCESS_STREAM)
         self.press = self.add_output("press", PortKind.PROCESS_PRESSURE)
         self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("press_pa", "press_pa")
         self.add_observable("starve_s", "starve_s")
+        self.add_observable("sat_temp_c", "sat_temp_c")
+
+    @property
+    def sat_temp_c(self) -> float:
+        """Saturation temperature at the current header pressure."""
+        frac = self.press_pa / self.PRESS_FULL_PA
+        return self.SAT_C_AT_ZERO + (self.SAT_C_AT_FULL - self.SAT_C_AT_ZERO) * frac
 
     def tick(self, dt: float) -> None:
-        wet = float(self.inlet.value) > 0.05
+        feed: Stream = self.inlet.value
+        wet = feed.flow_lps > 1e-9
         firing = self.is_on and float(self.power.value) > 0.5
         if firing and not wet:
             self.starve_s += dt  # firing dry: the operator's problem
         self.making = firing and wet
-        rate = self.rated_kgps if self.making else 0.0
-        self.steam.value = rate
-        self.draw.value = rate
+        rate = min(self.rated_kgps, feed.flow_lps) if self.making else 0.0
         target = self.PRESS_FULL_PA * (rate / self.rated_kgps)
         self.press_pa += (target - self.press_pa) * dt / self.PRESS_TAU_S
         self.press.value = self.press_pa
+        self.draw.value = rate
+        # Steam is water, hot. Downstream finds out how hot by being
+        # piped to it.
+        self.steam.value = Stream.pure("water", rate, self.sat_temp_c)
 
 
 class HeatExchanger(Component):
     """Shell-and-tube preheater: steam on the shell, the process
     stream through the tubes (``cold_in`` -> ``cold_out``, one scan).
-    The transferred ``duty`` (kW) is a real analog output — wire it to
-    whatever the heat serves.
+
+        Q_available = m_steam * latent
+        Q           = min(Q_available, Q_max)
+        dT          = Q / (m_cold * cp_cold)
+        T_out       = min(T_in + dT, T_steam - approach)
+
+    The last line is the one that matters: steam cannot heat a stream
+    past its own temperature, so an undersized header shows up as a
+    process that will not come up to heat no matter how long it runs.
+    Duty is recomputed from the temperature actually achieved, so the
+    ``duty`` signal never claims heat the process did not take. What
+    condenses leaves on ``condensate`` for a trap to deal with.
     """
 
     LATENT_KJ_PER_KG = 2000.0
+    APPROACH_C = 5.0
 
     def __init__(self, name: str, max_duty_kw: float = 1200.0) -> None:
         super().__init__(name)
@@ -66,35 +103,74 @@ class HeatExchanger(Component):
             raise ValueError("max_duty_kw must be positive")
         self.max_duty_kw = max_duty_kw
         self.duty_kw = 0.0
-        self.steam_in = self.add_input("steam_in", PortKind.PROCESS_FLOW)
-        self.cold_in = self.add_input("cold_in", PortKind.PROCESS_FLOW)
-        self.cold_out = self.add_output("cold_out", PortKind.PROCESS_FLOW)
+        self.outlet_temp_c = AMBIENT_C
+        self.steam_in = self.add_input("steam_in", PortKind.PROCESS_STREAM)
+        self.cold_in = self.add_input("cold_in", PortKind.PROCESS_STREAM)
+        self.cold_out = self.add_output("cold_out", PortKind.PROCESS_STREAM)
+        self.condensate = self.add_output("condensate", PortKind.PROCESS_STREAM)
         self.duty = self.add_output("duty", PortKind.SIGNAL_ANALOG)
         self.add_observable("duty_kw", "duty_kw")
+        self.add_observable("outlet_temp_c", "outlet_temp_c")
 
     def tick(self, dt: float) -> None:
-        self.duty_kw = min(float(self.steam_in.value) * self.LATENT_KJ_PER_KG,
-                           self.max_duty_kw)
-        self.cold_out.value = float(self.cold_in.value)
+        steam: Stream = self.steam_in.value
+        cold: Stream = self.cold_in.value
+        available_kw = steam.flow_lps * self.LATENT_KJ_PER_KG
+        offered_kw = min(available_kw, self.max_duty_kw)
+
+        if cold.is_flowing and offered_kw > 0.0:
+            cp = cold.cp_kj_per_kg_k()
+            ceiling_c = max(steam.temp_c - self.APPROACH_C, cold.temp_c)
+            rise_c = offered_kw / (cold.flow_lps * cp)
+            self.outlet_temp_c = min(cold.temp_c + rise_c, ceiling_c)
+            # Honest duty: what the stream actually absorbed.
+            self.duty_kw = cold.flow_lps * cp * (self.outlet_temp_c - cold.temp_c)
+        else:
+            self.outlet_temp_c = cold.temp_c
+            # No process flow to heat: the shell still condenses what
+            # it can against the tubes, which is what a bypassed
+            # exchanger really does.
+            self.duty_kw = offered_kw if not cold.is_flowing else 0.0
+
+        self.cold_out.value = cold.with_temp(self.outlet_temp_c)
+        condensed = self.duty_kw / self.LATENT_KJ_PER_KG
+        self.condensate.value = Stream.pure(
+            "water", min(condensed, steam.flow_lps), steam.temp_c
+        )
         self.duty.value = self.duty_kw
 
 
 class Reactor(Component):
-    """Jacketed stirred reactor. Reactants arrive on two feed nozzles
-    (``inlet_a``/``inlet_b``, plain flow); heat arrives as an analog
-    ``heat_duty`` in kW (a heat exchanger's duty output); the agitator
-    is a 480 V load — unmixed contents barely react. Inventory
-    converts from reactant to product first-order above the reaction
-    temperature; ``purity`` (0..1) is a live analog output, and the
-    vessel's outlet is the standard facade pair.
+    """Jacketed stirred reactor: A + B -> product, plus an impurity.
+
+    Reactants arrive on two feed nozzles and are blended into the
+    inventory; heat arrives as an analog ``heat_duty`` in kW (a heat
+    exchanger's duty output); the agitator is a 480 V load.
+
+        r          = k * f_T * f_mix                (L/s of each reagent)
+        f_T        = clamp((T - T_min)/(T_full - T_min), 0, 1)
+        f_mix      = 1 if agitating else 0.05
+        consumed   = min(r*dt, V*x_A, V*x_B)
+        produced   = 2 * consumed                   (volume conserved)
+        y_impurity = clamp(y0 + m*(T - T_ref), 0, 1)
+
+    The last line is the interesting one. Conversion rate climbs with
+    temperature and so does the impurity yield, so there is no single
+    right setpoint — running hot fills the vessel faster and dirtier.
+    That trade is the whole reason to instrument the thing.
     """
 
-    AMBIENT_C = 20.0
     REACT_MIN_C = 60.0
     REACT_FULL_C = 100.0
-    CP_KJ_PER_KG_K = 4.0
     LOSS_PER_S = 0.0008
     UNMIXED_FACTOR = 0.05
+    MIN_THERMAL_MASS_KG = 50.0
+    OUTLET_MAX_LPS = 250.0
+    VAPOR_LATENT_KJ_PER_KG = 900.0
+    # Selectivity: clean at the low end of the window, dirty when pushed.
+    IMPURITY_REF_C = 70.0
+    IMPURITY_BASE = 0.02
+    IMPURITY_SLOPE_PER_K = 0.004
 
     def __init__(self, name: str, capacity_l: float = 4000.0,
                  rate_lps: float = 6.0) -> None:
@@ -104,94 +180,246 @@ class Reactor(Component):
         self.capacity_l = capacity_l
         self.rate_lps = rate_lps      # max conversion rate at full temp
         self.volume_l = 0.0
-        self.product_l = 0.0
-        self.temp_c = self.AMBIENT_C
+        self.temp_c = AMBIENT_C
         self.overflowed_l = 0.0
         self.agitating = False
-        self.inlet_a = self.add_input("inlet_a", PortKind.PROCESS_FLOW)
-        self.inlet_b = self.add_input("inlet_b", PortKind.PROCESS_FLOW)
+        self.contents = Stream(0.0, AMBIENT_C, None)
+        self.inlet_a = self.add_input("inlet_a", PortKind.PROCESS_STREAM)
+        self.inlet_b = self.add_input("inlet_b", PortKind.PROCESS_STREAM)
         self.heat_duty = self.add_input("heat_duty", PortKind.SIGNAL_ANALOG)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
         self.draw = self.add_input("draw", PortKind.PROCESS_FLOW)
+        self.boiled_off_l = 0.0
+        self.boiling = False
         self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_SUPPLY)
+        self.vapor = self.add_output("vapor", PortKind.PROCESS_STREAM)
         self.purity = self.add_output("purity", PortKind.SIGNAL_ANALOG)
+        self.temp = self.add_output("temp", PortKind.SIGNAL_ANALOG)
         self.add_observable("temp_c", "temp_c")
         self.add_observable("volume_l", "volume_l")
         self.add_observable("purity_frac", "purity_frac")
+        self.add_observable("impurity_frac", "impurity_frac")
         self.add_observable("overflowed_l", "overflowed_l")
+        self.add_observable("boiled_off_l", "boiled_off_l")
+
+    def bubble_point_c(self) -> float:
+        """The batch boils when its most volatile component does.
+
+        A bubble-point stand-in: the lowest boiling point among the
+        species actually present in quantity. Crude, legible, and
+        enough to stop a vessel being driven to a temperature no
+        atmospheric reactor could reach.
+        """
+        present = [
+            get_species(key).boil_c
+            for key, frac in self.contents.comp.items()
+            if frac > 0.01
+        ]
+        return min(present) if present else 100.0
 
     @property
     def purity_frac(self) -> float:
-        return self.product_l / self.volume_l if self.volume_l > 1e-6 else 0.0
+        return self.contents.frac("product")
+
+    @property
+    def impurity_frac(self) -> float:
+        return self.contents.frac("impurity")
+
+    @property
+    def product_l(self) -> float:
+        return self.volume_l * self.purity_frac
+
+    def charge(self, volume_l: float, comp: dict[str, float],
+               temp_c: float = AMBIENT_C) -> None:
+        """Put a batch in the vessel directly — a commissioning charge,
+        or a save being restored."""
+        self.volume_l = min(max(volume_l, 0.0), self.capacity_l)
+        self.temp_c = temp_c
+        self.contents = Stream(self.volume_l, temp_c, comp)
+
+    def impurity_yield(self) -> float:
+        y = self.IMPURITY_BASE + self.IMPURITY_SLOPE_PER_K * (
+            self.temp_c - self.IMPURITY_REF_C
+        )
+        return min(max(y, 0.0), 1.0)
 
     def tick(self, dt: float) -> None:
-        inflow = (float(self.inlet_a.value) + float(self.inlet_b.value)) * dt
-        outflow = min(float(self.draw.value) * dt, self.volume_l + inflow)
-        # Outflow removes mix at current purity.
-        if self.volume_l > 1e-6:
-            self.product_l -= outflow * self.purity_frac
-        new_volume = self.volume_l + inflow - outflow
+        feed = Stream.mix(self.inlet_a.value, self.inlet_b.value)
+        added_l = feed.flow_lps * dt
+        outflow_l = min(float(self.draw.value) * dt, self.volume_l + added_l)
+
+        # Blend the feed in (volume-weighted, same rule as a tank).
+        if added_l > 0.0:
+            self.contents = Stream.mix(
+                self.contents.with_flow(self.volume_l), feed.with_flow(added_l)
+            )
+        new_volume = self.volume_l + added_l - outflow_l
         if new_volume > self.capacity_l:
-            spilled = new_volume - self.capacity_l
-            self.overflowed_l += spilled
-            self.product_l -= spilled * self.purity_frac
+            self.overflowed_l += new_volume - self.capacity_l
             new_volume = self.capacity_l
         self.volume_l = max(new_volume, 0.0)
-        self.product_l = max(min(self.product_l, self.volume_l), 0.0)
+        self.temp_c = self.contents.temp_c
 
-        # Temperature: duty in, first-order losses; fresh feed dilutes.
+        # Energy: jacket duty in, first-order ambient loss.
         self.agitating = float(self.power.value) > 0.5
-        mass = max(self.volume_l, 50.0)
-        self.temp_c += float(self.heat_duty.value) / (mass * self.CP_KJ_PER_KG_K) * dt
-        self.temp_c -= (self.temp_c - self.AMBIENT_C) * self.LOSS_PER_S * dt
+        mass = max(self.volume_l, self.MIN_THERMAL_MASS_KG)
+        cp = self.contents.cp_kj_per_kg_k()
+        self.temp_c += float(self.heat_duty.value) / (mass * cp) * dt
+        self.temp_c -= (self.temp_c - AMBIENT_C) * self.LOSS_PER_S * dt
 
-        # Conversion: first-order in reactant, gated by temperature and
-        # agitation.
-        reactant = self.volume_l - self.product_l
-        temp_factor = min(max((self.temp_c - self.REACT_MIN_C)
-                              / (self.REACT_FULL_C - self.REACT_MIN_C), 0.0), 1.0)
+        # Reaction, in absolute litres so the volume balance is exact.
+        amounts = {
+            key: self.volume_l * frac for key, frac in self.contents.comp.items()
+        }
+
+        # An atmospheric vessel cannot go past its bubble point: surplus
+        # duty boils the most volatile thing in it instead of raising
+        # the temperature. What leaves does so on the vapor nozzle, so
+        # the volume balance still closes.
+        boil_c = self.bubble_point_c()
+        boiled_l = 0.0
+        self.boiling = self.temp_c > boil_c
+        if self.boiling and self.volume_l > 0.0:
+            surplus_kj = (self.temp_c - boil_c) * mass * cp
+            self.temp_c = boil_c
+            lightest = min(
+                (k for k, v in amounts.items() if v > 0.0),
+                key=lambda k: get_species(k).boil_c,
+                default=None,
+            )
+            if lightest is not None:
+                boiled_l = min(
+                    surplus_kj / self.VAPOR_LATENT_KJ_PER_KG, amounts[lightest]
+                )
+                amounts[lightest] -= boiled_l
+                self.volume_l -= boiled_l
+                self.boiled_off_l += boiled_l
+                self.vapor.value = Stream.pure(
+                    lightest, boiled_l / dt if dt > 0.0 else 0.0, boil_c
+                )
+        if boiled_l <= 0.0:
+            self.vapor.value = Stream.empty()
+        temp_factor = min(
+            max((self.temp_c - self.REACT_MIN_C)
+                / (self.REACT_FULL_C - self.REACT_MIN_C), 0.0), 1.0)
         mix_factor = 1.0 if self.agitating else self.UNMIXED_FACTOR
-        converted = min(reactant, self.rate_lps * temp_factor * mix_factor * dt)
-        self.product_l += converted
+        consumed = min(
+            self.rate_lps * temp_factor * mix_factor * dt,
+            amounts.get("reagent_a", 0.0),
+            amounts.get("reagent_b", 0.0),
+        )
+        if consumed > 0.0:
+            produced = 2.0 * consumed
+            bad = self.impurity_yield()
+            amounts["reagent_a"] = amounts.get("reagent_a", 0.0) - consumed
+            amounts["reagent_b"] = amounts.get("reagent_b", 0.0) - consumed
+            amounts["product"] = amounts.get("product", 0.0) + produced * (1.0 - bad)
+            amounts["impurity"] = amounts.get("impurity", 0.0) + produced * bad
 
+        self.contents = Stream(
+            self.volume_l, self.temp_c, comp_from_amounts(amounts)
+        )
         self.level.value = self.volume_l
+        offered = min(self.volume_l / dt, self.OUTLET_MAX_LPS) if dt > 0.0 else 0.0
+        self.outlet.value = self.contents.with_flow(offered)
         self.purity.value = self.purity_frac
+        self.temp.value = self.temp_c
 
 
 class Centrifuge(Component):
-    """Disc-stack separator: pulls mix from an upstream vessel through
-    the ``inlet`` facade pair, splits it into ``product`` and
-    ``waste`` streams using the wired ``purity_in`` quality signal.
-    The bowl is a 480 V drive toggled with ``is_on``.
+    """Disc-stack separator: pulls slurry through the ``inlet`` facade
+    pair and splits it on the phase that is actually there.
+
+        solids_in  = F * s
+        captured   = solids_in * eta
+        cake_liquid= captured * w
+        cake       = captured + cake_liquid
+        liquor     = F - cake
+
+    ``eta`` is capture efficiency and ``w`` is how wet the cake comes
+    off — the reason a dryer exists downstream. Nothing tells this
+    machine the quality of its feed any more; it separates crystals
+    from mother liquor, and if the feed carries no crystals it sends
+    everything out the liquor nozzle. The bowl is a 480 V drive.
     """
 
-    def __init__(self, name: str, rate_lps: float = 4.0) -> None:
+    def __init__(self, name: str, rate_lps: float = 4.0,
+                 capture_eff: float = 0.95, cake_wetness: float = 0.25) -> None:
         super().__init__(name)
         if rate_lps <= 0.0:
             raise ValueError("rate_lps must be positive")
+        if not 0.0 <= capture_eff <= 1.0:
+            raise ValueError("capture_eff must be within [0, 1]")
+        if cake_wetness < 0.0:
+            raise ValueError("cake_wetness must be non-negative")
         self.rate_lps = rate_lps
+        self.capture_eff = capture_eff
+        self.cake_wetness = cake_wetness
         self.is_on = False
         self.spinning = False
         self.starts = 0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_LEVEL)
-        self.purity_in = self.add_input("purity_in", PortKind.SIGNAL_ANALOG)
+        self.cake_lps = 0.0
+        self.liquor_lps = 0.0
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.product = self.add_output("product", PortKind.PROCESS_FLOW)
-        self.waste = self.add_output("waste", PortKind.PROCESS_FLOW)
+        self.product = self.add_output("product", PortKind.PROCESS_STREAM)
+        self.waste = self.add_output("waste", PortKind.PROCESS_STREAM)
         self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("starts", "starts")
+        self.add_observable("cake_lps", "cake_lps")
+        self.add_observable("liquor_lps", "liquor_lps")
 
     def tick(self, dt: float) -> None:
         spinning = self.is_on and float(self.power.value) > 0.5
         if spinning and not self.spinning:
             self.starts += 1
         self.spinning = spinning
-        wet = float(self.inlet.value) > 0.5
-        rate = self.rate_lps if (spinning and wet) else 0.0
-        purity = min(max(float(self.purity_in.value), 0.0), 1.0)
+        feed: Stream = self.inlet.value
+        rate = min(self.rate_lps, feed.flow_lps) if spinning else 0.0
         self.draw.value = rate
-        self.product.value = rate * purity
-        self.waste.value = rate * (1.0 - purity)
+        if rate <= 0.0:
+            self.cake_lps = 0.0
+            self.liquor_lps = 0.0
+            self.product.value = Stream.empty()
+            self.waste.value = Stream.empty()
+            return
+
+        feed = feed.clamped_solids()
+        liquid_comp = feed.liquid_comp()
+        solids_lps = rate * feed.solids_frac
+        captured = solids_lps * self.capture_eff
+        cake_liquid = min(captured * self.cake_wetness, rate - solids_lps)
+        cake_total = captured + cake_liquid
+        liquor_total = rate - cake_total
+
+        # The cake is captured crystals plus the mother liquor clinging
+        # to them; the liquor carries everything else, crystals the
+        # bowl failed to catch included.
+        cake_amounts = {SOLID_KEY: captured}
+        for key, frac in liquid_comp.items():
+            cake_amounts[key] = cake_amounts.get(key, 0.0) + cake_liquid * frac
+        liquor_amounts = {SOLID_KEY: solids_lps - captured}
+        remaining_liquid = rate - solids_lps - cake_liquid
+        for key, frac in liquid_comp.items():
+            liquor_amounts[key] = (
+                liquor_amounts.get(key, 0.0) + remaining_liquid * frac
+            )
+
+        self.cake_lps = cake_total
+        self.liquor_lps = liquor_total
+        self.product.value = Stream(
+            cake_total,
+            feed.temp_c,
+            comp_from_amounts(cake_amounts),
+            captured / cake_total if cake_total > 0.0 else 0.0,
+        )
+        self.waste.value = Stream(
+            liquor_total,
+            feed.temp_c,
+            comp_from_amounts(liquor_amounts),
+            (solids_lps - captured) / liquor_total if liquor_total > 0.0 else 0.0,
+        )
 
 
 class VacuumLock(Component):
@@ -200,8 +428,8 @@ class VacuumLock(Component):
     discrete bursts, then dumps the condensate each cycle knocks out
     of the humid vented air through an automatic drainer. The cycle is
     a real state machine; ``press`` is a gauge-able output and
-    ``drain_flow`` a real stream to pipe to a drain. Needs 480 V for
-    the vacuum pump; ``is_on`` starts the cycle.
+    ``drain_flow`` a real water stream to pipe to a drain. Needs 480 V
+    for the vacuum pump; ``is_on`` starts the cycle.
     """
 
     PRESS_ATM_PA = 101300.0
@@ -225,7 +453,7 @@ class VacuumLock(Component):
         self.timer_s = 0.0
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
         self.press = self.add_output("press", PortKind.PROCESS_PRESSURE)
-        self.drain_flow = self.add_output("drain_flow", PortKind.PROCESS_FLOW)
+        self.drain_flow = self.add_output("drain_flow", PortKind.PROCESS_STREAM)
         self.add_observable("press_pa", "press_pa")
         self.add_observable("condensate_l", "condensate_l")
         self.add_observable("cycles", "cycles")
@@ -267,7 +495,7 @@ class VacuumLock(Component):
                     self.cycles += 1
                     self.state = "evacuate"
         self.press.value = self.press_pa
-        self.drain_flow.value = rate
+        self.drain_flow.value = Stream.pure("water", rate, 40.0)
 
 
 class VialFiller(Component):
@@ -275,7 +503,13 @@ class VialFiller(Component):
     machine cycle — index the conveyor, fill a 10 mL vial from the
     ``inlet`` facade pair, press the cap — that only runs powered, on,
     and fed. Every millilitre filled is genuinely drawn from whatever
-    the inlet is piped to; ``vials_done`` is the lifetime count.
+    the inlet is piped to.
+
+    It fills vials with whatever it is given. ``fill_purity`` is the
+    product fraction of the material going into the vials right now,
+    and ``product_filled_l`` totalizes the real product that reached
+    them — so a train that quietly went off-spec is provable after the
+    fact instead of arguable.
     """
 
     VIAL_ML = 10.0
@@ -289,13 +523,20 @@ class VialFiller(Component):
         self.state = "idle"          # idle/index/fill/cap
         self.timer_s = 0.0
         self.vials_done = 0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_LEVEL)
+        self.fill_purity = 0.0
+        self.filled_l = 0.0
+        self.product_filled_l = 0.0
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
         self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
         self.add_observable("vials_done", "vials_done")
+        self.add_observable("fill_purity", "fill_purity")
+        self.add_observable("product_filled_l", "product_filled_l")
 
     def tick(self, dt: float) -> None:
-        fed = float(self.inlet.value) > 1.0
+        feed: Stream = self.inlet.value
+        needed = self.VIAL_ML / 1000.0 / self.FILL_S
+        fed = feed.flow_lps >= needed
         running = self.is_on and float(self.power.value) > 0.5 and fed
         rate = 0.0
         if not running:
@@ -306,7 +547,7 @@ class VialFiller(Component):
                 self.timer_s = self.INDEX_S
             self.timer_s -= dt
             if self.state == "fill":
-                rate = self.VIAL_ML / 1000.0 / self.FILL_S
+                rate = needed
             if self.timer_s <= 0.0:
                 if self.state == "index":
                     self.state = "fill"
@@ -318,4 +559,7 @@ class VialFiller(Component):
                     self.vials_done += 1
                     self.state = "index"
                     self.timer_s = self.INDEX_S
+        self.fill_purity = feed.frac("product")
+        self.filled_l += rate * dt
+        self.product_filled_l += rate * self.fill_purity * dt
         self.draw.value = rate

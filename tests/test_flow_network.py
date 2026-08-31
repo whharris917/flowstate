@@ -21,7 +21,7 @@ class TestFlowNetwork:
         sim.connect(source, "supply", pump, "inlet")
         sim.connect(pump, "draw", source, "draw")
         sim.connect(pump, "outlet", tank, "inlet")
-        sim.connect(tank, "level", drain, "inlet")
+        sim.connect(tank, "outlet", drain, "inlet")
         sim.connect(drain, "draw", tank, "draw")
         sim.run(120.0)
         gained = tank.level_l
@@ -36,7 +36,7 @@ class TestFlowNetwork:
         pump = sim.add(Pump("p", rated_lps=3.0, mode="hand"))
         full = sim.add(Tank("f", capacity_l=100.0, level_l=0.0))
         wire_power(sim, pump)
-        sim.connect(empty, "level", pump, "inlet")
+        sim.connect(empty, "outlet", pump, "inlet")
         sim.connect(pump, "draw", empty, "draw")
         sim.connect(pump, "outlet", full, "inlet")
         sim.run(10.0)
@@ -50,7 +50,7 @@ class TestFlowNetwork:
         pump = sim.add(Pump("p", rated_lps=2.0, mode="hand"))
         tank_b = sim.add(Tank("b", capacity_l=100.0, level_l=0.0))
         wire_power(sim, pump)
-        sim.connect(tank_a, "level", pump, "inlet")
+        sim.connect(tank_a, "outlet", pump, "inlet")
         sim.connect(pump, "draw", tank_a, "draw")
         sim.connect(pump, "outlet", tank_b, "inlet")
         sim.run(20.0)
@@ -64,13 +64,13 @@ class TestFlowNetwork:
         for _ in range(200):                # 10 s of direct scans
             valve.tick(0.05)
         assert valve.position > 95.0        # positioner obeys the command
-        assert valve.outlet.value == 0.0      # but an empty header flows nothing
+        assert valve.outlet.value.flow_lps == 0.0      # but an empty header flows nothing
 
     def test_drain_stops_at_empty_and_closes(self) -> None:
         sim = Simulation(dt=0.05)
         tank = sim.add(Tank("t", capacity_l=100.0, level_l=5.0))
         drain = sim.add(Drain("d", rate_lps=2.0))
-        sim.connect(tank, "level", drain, "inlet")
+        sim.connect(tank, "outlet", drain, "inlet")
         sim.connect(drain, "draw", tank, "draw")
         sim.run(10.0)
         assert tank.level_l == pytest.approx(0.0, abs=0.2)
