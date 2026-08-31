@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 
 from sim.core import Component, PortKind
+from sim.library import Equation, EquipmentSpec, Param
 from sim.stream import AMBIENT_C, Stream
 
 
@@ -683,3 +684,436 @@ class Pump(Component):
         self.flow_lps = min(self.rated_lps, offered.flow_lps) if self.running else 0.0
         self.outlet.value = offered.with_flow(self.flow_lps)
         self.draw.value = self.flow_lps
+
+
+# ---------------------------------------------------------------------
+# Library pages. The only copy of these equations; see sim/library.py.
+# ---------------------------------------------------------------------
+
+Tank.SPEC = EquipmentSpec(
+    key="tank",
+    title="Storage Tank",
+    tier="process",
+    summary=(
+        "Holds liquid, and knows what the liquid is. Anything arriving "
+        "blends into the contents, so a hot stream genuinely warms the "
+        "vessel and a reagent charge genuinely changes what is in it. "
+        "What is drawn off leaves at whatever the contents currently "
+        "are. Overfill it and it spills, and the spill is counted."
+    ),
+    ports={
+        "inlet": "Material delivered into the vessel. Several lines may "
+                 "land here and they blend.",
+        "draw": "What downstream equipment is pulling off the outlet.",
+        "level": "Level tap, in litres, for a switch or a transmitter.",
+        "outlet": "The contents, offered to whatever pulls on them.",
+    },
+    equations=(
+        Equation(
+            "dV/dt = F_in - F_draw",
+            "Plain inventory balance.",
+        ),
+        Equation(
+            "x_new = (V*x + F_in*dt*x_in) / (V + F_in*dt)",
+            "Incoming material blends by volume. Draw-off and overflow "
+            "leave at the contents composition, so neither changes it -- "
+            "only the inflow does.",
+        ),
+        Equation(
+            "T_new = (V*T + F_in*dt*T_in) / (V + F_in*dt)",
+            "Temperature blends the same way.",
+        ),
+        Equation(
+            "offered = min(V / dt, nozzle_max)",
+            "What the outlet advertises. A nearly empty tank offers "
+            "almost nothing, which is what throttles a pump on it "
+            "instead of letting the level go negative.",
+        ),
+    ),
+    params=(
+        Param("capacity_l", "L", "Volume before it overflows. Follows the "
+                                 "geometry if you give height and diameter."),
+        Param("level_l", "L", "Starting inventory."),
+        Param("drain_lps", "L/s", "A fixed background consumption, for "
+                                  "standing in for downstream demand."),
+        Param("height_m", "m", "Shell height. Sets capacity with diameter."),
+        Param("diameter_m", "m", "Shell diameter."),
+        Param("temp_c", "C", "Starting temperature of the contents."),
+        Param("comp", "-", "Starting composition, as species fractions."),
+    ),
+    assumptions=(
+        "Perfectly mixed: one temperature and one composition throughout, "
+        "so there is no stratification and no settling.",
+        "Heat loss is a single first-order term, not an insulation model.",
+    ),
+)
+
+Pump.SPEC = EquipmentSpec(
+    key="pump",
+    title="Fixed-Rate Transfer Pump",
+    tier="process",
+    summary=(
+        "Moves material at its rating, or at whatever the suction can "
+        "actually give it. A Hand-Off-Auto selector decides where the "
+        "run command comes from, exactly like the switch on a real motor "
+        "starter -- and none of the three positions do anything without "
+        "480 V at the starter. Run it against an empty vessel and the "
+        "motor spins, nothing moves, and the seal wears."
+    ),
+    ports={
+        "run": "Run command in Auto. Ignored in Hand and Off.",
+        "power": "480 V to the starter. No power, no motor, Hand included.",
+        "inlet": "Suction. Wire it to the vessel or header it pulls from.",
+        "outlet": "Discharge, at the same temperature and composition as "
+                  "the suction.",
+        "draw": "What it is actually taking, metered back to the source.",
+    },
+    equations=(
+        Equation(
+            "running = (Hand) or (Auto and run) , and powered",
+            "The selector, then the starter.",
+        ),
+        Equation(
+            "F = min(rated, offered) if running else 0",
+            "It cannot pull what is not there, so an emptying tank "
+            "throttles it smoothly rather than going negative.",
+        ),
+        Equation(
+            "dry_run_s += dt   when running with nothing to pull",
+            "The wear metric that makes a mistake provable afterwards.",
+        ),
+    ),
+    params=(
+        Param("rated_lps", "L/s", "Flow when running with a wet suction."),
+        Param("mode", "-", "Hand, Off, or Auto."),
+    ),
+    assumptions=(
+        "No pump curve: flow does not fall off with discharge pressure, "
+        "because the kernel has no hydraulic network.",
+        "No start ramp -- it is at full rate on the scan it starts.",
+    ),
+)
+
+ControlValve.SPEC = EquipmentSpec(
+    key="control_valve",
+    title="Control Valve",
+    tier="control",
+    summary=(
+        "An air-actuated valve that follows a 0-100 % command with a "
+        "positioner lag. It passes only what its upstream header offers, "
+        "so a wide open valve on a dead header still flows nothing."
+    ),
+    ports={
+        "cmd": "Position command, 0-100 %, from a controller or an HMI.",
+        "inlet": "Upstream header.",
+        "outlet": "Downstream line, at the header's temperature and "
+                  "composition.",
+        "draw": "What it is passing, metered back to the header.",
+    },
+    equations=(
+        Equation(
+            "dx/dt = (cmd - x) / tau",
+            "The positioner chases the command first-order. This lag is "
+            "what a controller has to tune around.",
+        ),
+        Equation(
+            "F = min(x/100 * Cv, offered)",
+            "Linear trim, capped by what the header can supply.",
+        ),
+    ),
+    params=(
+        Param("cv_lps", "L/s", "Flow at 100 % open with supply available."),
+        Param("tau_s", "s", "Positioner time constant."),
+    ),
+    assumptions=(
+        "Linear trim and no pressure drop: flow is proportional to "
+        "position, not to the square root of dP.",
+        "No seat leakage, no hysteresis, no stiction.",
+    ),
+)
+
+Source.SPEC = EquipmentSpec(
+    key="source",
+    title="Supply Header",
+    tier="utility",
+    summary=(
+        "A utility tie-in at the edge of the modelled plant -- the "
+        "honest root of every flow path, the way a mains feeder is for "
+        "power. Supply is unlimited because the rest of the utility "
+        "system is off-plot, but everything drawn through it is metered. "
+        "A header is what it carries: this is where a species enters the "
+        "plant, and everything downstream finds out by being piped to it."
+    ),
+    ports={
+        "draw": "What equipment is pulling from the header. Totalized.",
+        "supply": "The material on offer, at its storage temperature.",
+    },
+    equations=(
+        Equation(
+            "total += F_draw * dt",
+            "The meter. This is the number a mass balance is checked "
+            "against.",
+        ),
+    ),
+    params=(
+        Param("species", "-", "What the header carries."),
+        Param("temp_c", "C", "Storage temperature."),
+        Param("comp", "-", "Full composition, for a premixed feed."),
+    ),
+    assumptions=(
+        "Infinite availability and no supply pressure: the header never "
+        "runs out and never sags.",
+    ),
+)
+
+Drain.SPEC = EquipmentSpec(
+    key="drain",
+    title="Drain / Sewer Connection",
+    tier="utility",
+    summary=(
+        "Where material leaves the plant. It pulls from a vessel when "
+        "open, accepts a discharge line dumped straight into it, and "
+        "meters everything it swallows -- including how much product "
+        "you sent down it, which is the number that hurts."
+    ),
+    ports={
+        "inlet": "The vessel it drains, when open.",
+        "flow_in": "A discharge line dumped straight to sewer: a "
+                   "separator's waste, a relief blowdown.",
+        "draw": "What it is pulling from the vessel.",
+    },
+    equations=(
+        Equation(
+            "F = min(rated, offered) if open else 0",
+            "It cannot swallow faster than its rating or faster than the "
+            "vessel can give.",
+        ),
+        Equation(
+            "lost_product += (F * x_product + F_in * x_product_in) * dt",
+            "Yield to sewer, on a trend. Nothing else in the plant will "
+            "tell you about this.",
+        ),
+    ),
+    params=(
+        Param("rate_lps", "L/s", "Maximum drain rate."),
+    ),
+    assumptions=(
+        "No back pressure and no sewer capacity: an open drain always "
+        "takes its rating.",
+    ),
+)
+
+Gauge.SPEC = EquipmentSpec(
+    key="gauge",
+    title="Gauge / Transmitter",
+    tier="control",
+    summary=(
+        "A local indicator that is also a transmitter. It reads one "
+        "honest derivation of the process it is tapped into and mirrors "
+        "it on an analog output, so it is a dial today and a measurement "
+        "the moment you wire it. Every reading here is a real conversion "
+        "of real sim state; nothing is smoothed or invented."
+    ),
+    ports={
+        "process": "The tap. What it means depends on the kind of gauge.",
+        "process_a": "High-side tap on a differential gauge.",
+        "process_b": "Low-side tap on a differential gauge.",
+        "signal": "The reading, mirrored as a 4-20 mA analog output.",
+    },
+    equations=(
+        Equation(
+            "P = level / L_per_m * rho*g      [level_kpa]",
+            "Hydrostatic head at a vessel bottom, in kPa.",
+        ),
+        Equation(
+            "reading = F                      [flow]",
+            "Rate straight off the stream in the line.",
+        ),
+        Equation(
+            "reading = T                      [temp_c]",
+            "Temperature of the stream in the line.",
+        ),
+        Equation(
+            "reading = x_species * 100        [conc_pct]",
+            "The analyser. This is what the AI needs before it can say "
+            "anything true about quality.",
+        ),
+        Equation(
+            "reading = P_a - P_b              [dp_pa]",
+            "Differential pressure across two taps.",
+        ),
+    ),
+    params=(
+        Param("kind", "-", "level_kpa, flow, temp_c, conc_pct, dp_pa, or "
+                           "press_kpa."),
+        Param("liters_per_meter", "L/m", "Vessel cross-section, for "
+                                         "turning level into head."),
+        Param("species", "-", "Which species an analyser reads."),
+    ),
+    assumptions=(
+        "No sensor lag, no noise, no drift, no calibration error. The "
+        "gauge reads the process exactly.",
+    ),
+)
+
+FloatSwitch.SPEC = EquipmentSpec(
+    key="float_switch",
+    title="Level Switch",
+    tier="control",
+    summary=(
+        "A mechanical level switch with two trip points. The contact "
+        "closes on falling level at the low point and opens on rising "
+        "level at the high one, holding its state in between. Set the "
+        "two apart and a pump cycles calmly; set them equal and it "
+        "chatters -- which is a valid configuration, and the lesson."
+    ),
+    ports={
+        "level": "Level tap from the vessel it watches.",
+        "contact": "Dry contact, closed when calling for fill.",
+    },
+    equations=(
+        Equation(
+            "closed = true   when level <= low",
+            "Calls for fill on falling level.",
+        ),
+        Equation(
+            "closed = false  when level >= high",
+            "Drops out on rising level. Between the two it holds -- that "
+            "gap is the hysteresis.",
+        ),
+    ),
+    params=(
+        Param("low_l", "L", "Level at which the contact closes."),
+        Param("high_l", "L", "Level at which it opens again."),
+    ),
+    assumptions=("Instant, bounce-free switching at an exact level.",),
+)
+
+Relay.SPEC = EquipmentSpec(
+    key="relay",
+    title="Interposing Relay",
+    tier="control",
+    summary=(
+        "Coil in, contact out, one scan later. It counts its own "
+        "energizations, which is what turns pump chatter from a feeling "
+        "into a number you can put on a trend."
+    ),
+    ports={
+        "coil": "Coil. Several contacts landing here behave as parallel "
+                "contacts and OR together.",
+        "contact": "Normally-open contact, following the coil.",
+    },
+    equations=(
+        Equation(
+            "contact = coil   (one scan later)",
+            "The scan delay is deliberate: it is what real relay and PLC "
+            "latency looks like, and what makes chatter reproducible.",
+        ),
+        Equation(
+            "cycles += 1  on each rising edge",
+            "The wear counter.",
+        ),
+    ),
+    assumptions=("No contact bounce, no pickup or dropout delay, no "
+                 "welded contacts.",),
+)
+
+MainsFeed.SPEC = EquipmentSpec(
+    key="mains_feed",
+    title="Mains Feeder",
+    tier="utility",
+    summary=(
+        "The plant's electrical supply: one always-energized output at "
+        "its voltage class. The honest root of every power circuit -- "
+        "nothing in the plant runs without a cable back to one of these."
+    ),
+    ports={"power": "Energized supply at the feeder's voltage class."},
+    equations=(
+        Equation("power = 1 always", "No load accounting or breakers yet."),
+    ),
+    params=(Param("spec", "-", "Voltage class, e.g. 480VAC."),),
+    assumptions=(
+        "Infinite capacity: no breaker, no load accounting, no volt drop. "
+        "Every feeder carries whatever you hang on it.",
+    ),
+)
+
+PowerSupply.SPEC = EquipmentSpec(
+    key="power_supply",
+    title="Control Power Supply",
+    tier="utility",
+    summary=(
+        "The cabinet PSU: 480 V in, 24 V out. Controllers ride on it, "
+        "and it dies with its feeder."
+    ),
+    ports={
+        "ac_in": "480 V supply from a feeder.",
+        "dc_out": "24 V control power.",
+    },
+    equations=(
+        Equation("dc_out = 1 if ac_in else 0", "It passes through or it "
+                                               "does not."),
+    ),
+    assumptions=("No current rating, no ride-through, no inrush.",),
+)
+
+Terminal.SPEC = EquipmentSpec(
+    key="terminal",
+    title="Terminal Block",
+    tier="control",
+    summary=(
+        "One terminal on a DIN rail: in to out, one scan later. The "
+        "honest cost of landing a wire on a strip."
+    ),
+    ports={"in": "Field or panel side.", "out": "The other side."},
+    equations=(
+        Equation("out = in   (one scan later)", "A wire is not free."),
+    ),
+    params=(Param("kind", "-", "discrete or analog."),),
+    assumptions=("No resistance, no loose terminals.",),
+)
+
+Column.SPEC = EquipmentSpec(
+    key="column",
+    title="Batch Distillation Column",
+    tier="separation",
+    summary=(
+        "A batch column at total reflux: the sump charge heats under the "
+        "reboiler, and past the boiling point the surplus duty becomes "
+        "boilup. Vapour arriving faster than the vent can pass it raises "
+        "the overhead pressure. The condenser returns everything, so the "
+        "charge is conserved and this is a pure temperature and pressure "
+        "machine. For a column that actually separates and draws "
+        "product, see the Solvent Recovery Still."
+    ),
+    ports={
+        "power": "480 V to the reboiler.",
+        "p_top": "Overhead pressure tap for a gauge.",
+    },
+    equations=(
+        Equation(
+            "dT/dt = Q / (m * cp)      below the boiling point",
+            "All the duty goes into sensible heat while it is coming up.",
+        ),
+        Equation(
+            "boilup = Q / latent       at the boiling point",
+            "Past boiling the temperature stops and the duty makes vapour "
+            "instead.",
+        ),
+        Equation(
+            "dP/dt = (boilup / C_vent - P) / tau",
+            "Overhead pressure settles where boilup equals what the vent "
+            "can pass.",
+        ),
+    ),
+    params=(
+        Param("charge_l", "L", "Sump charge."),
+        Param("max_duty_kw", "kW", "Reboiler duty at full fire."),
+        Param("temp_c", "C", "Starting sump temperature."),
+    ),
+    assumptions=(
+        "Total reflux only -- no product draw and no composition change.",
+        "A single fixed boiling point rather than a bubble point that "
+        "moves with composition.",
+    ),
+)

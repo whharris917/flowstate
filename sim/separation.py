@@ -13,16 +13,15 @@ species with a boilup cap. None of them pretend to be more.
 from __future__ import annotations
 
 from sim.core import Component, PortKind
+from sim.library import Equation, EquipmentSpec, Param
 from sim.species import get as get_species
 from sim.stream import AMBIENT_C, SOLID_KEY, Stream, comp_from_amounts
 
 
 class Crystallizer(Component):
     """Cooled, agitated vessel that drops product out of solution.
-
-        S(T)   = (S20 + m*(T - 20)) / 1000      (volume fraction)
-        excess = x_dissolved - S(T)
-        dx/dt  = excess * f_mix / tau
+    Governing equations are on the library page (``Crystallizer.SPEC``
+    at the foot of this module), which is their only copy.
 
     Cool the batch below saturation and crystals grow toward
     equilibrium with a time constant; warm it back up and they
@@ -137,11 +136,9 @@ class Crystallizer(Component):
 
 
 class Dryer(Component):
-    """Drives the last of the liquid off a wet filter cake.
-
-        liquid_in = F * (1 - s)
-        evap      = min(Q / latent, liquid_in)
-        product   = F - evap
+    """Drives the last of the liquid off a wet filter cake. Governing
+    equations are on the library page (``Dryer.SPEC``), which is their
+    only copy.
 
     What evaporates is the most volatile liquid present, so the solvent
     goes first and the crystals stay. Note what that means: anything
@@ -224,15 +221,12 @@ class Dryer(Component):
 class Still(Component):
     """Continuous solvent recovery still: takes mother liquor, sends
     the light ends overhead and the heavy ends out the bottom.
+    Governing equations are on the library page (``Still.SPEC`` at the
+    foot of this module), which is their only copy.
 
-        boilup = Q / latent
-        to_top(i) = f_i * eta       if boil(i) <  cut
-                  = f_i * (1 - eta) if boil(i) >= cut
-        distillate = min(sum(to_top), boilup)
-
-    ``eta`` is the sharpness of the cut -- a real column is never
-    perfect, so some solvent leaves in the bottoms and some heavy ends
-    carry over. The reboiler duty is the throttle: no duty, no boilup,
+    The cut is never perfect: some solvent leaves in the bottoms and
+    some heavy ends carry over. The reboiler duty is the throttle: no
+    duty, no boilup,
     no separation, and everything the still is fed leaves through the
     bottoms nozzle. Crystals never distill; they always report to the
     bottoms.
@@ -320,3 +314,171 @@ class Still(Component):
             comp_from_amounts(bottom_amounts),
             solid_lps / bottom_total if bottom_total > 0.0 else 0.0,
         )
+
+
+# ---------------------------------------------------------------------
+# Library pages. The only copy of these equations; see sim/library.py.
+# ---------------------------------------------------------------------
+
+Crystallizer.SPEC = EquipmentSpec(
+    key="crystallizer",
+    title="Cooling Crystallizer",
+    tier="separation",
+    summary=(
+        "A cooled, agitated vessel that drops product out of solution "
+        "by taking it below its solubility. Cool it and crystals grow; "
+        "warm it back up and they dissolve again, because it is the same "
+        "equation running in both directions. It needs the agitator: "
+        "nucleation wants the shear."
+    ),
+    ports={
+        "inlet": "Hot, dilute solution from upstream.",
+        "cool_duty": "Kilowatts *removed*, as an analog signal. Wire a "
+                     "chiller or a controller output.",
+        "power": "480 V to the agitator.",
+        "draw": "What downstream equipment is pulling off the outlet.",
+        "level": "Contents level tap.",
+        "outlet": "Slurry, offered to whatever pulls on it.",
+        "solids": "Fraction of the contents present as crystal, as an "
+                  "analog signal.",
+        "temp": "Batch temperature, as an analog signal.",
+    },
+    equations=(
+        Equation(
+            "S(T) = (S20 + m * (T - 20)) / 1000",
+            "Solubility as a straight line in temperature. Dividing by "
+            "1000 turns grams per litre into a volume fraction, because "
+            "the kernel takes 1 L as 1 kg.",
+        ),
+        Equation(
+            "excess = x_dissolved - S(T)",
+            "The driving force. Positive means crystals will grow; "
+            "negative means they will redissolve.",
+        ),
+        Equation(
+            "dx_solid/dt = excess * f_mix / tau",
+            "First-order approach to equilibrium, slowed twentyfold "
+            "without agitation.",
+        ),
+        Equation(
+            "dT/dt = -Q_cool / (m * cp) - (T - T_ambient) * k_loss",
+            "Energy balance. Duty is heat removed, so it subtracts.",
+        ),
+        Equation(
+            "T >= T_coolant",
+            "A jacket cannot chill the batch below the coolant feeding "
+            "it, whatever duty you ask for.",
+        ),
+    ),
+    params=(
+        Param("capacity_l", "L", "Working volume before it overflows."),
+    ),
+    assumptions=(
+        "One crystallizing species, and crystals are pure -- no "
+        "co-precipitation and no inclusion of impurity in the lattice.",
+        "No crystal size distribution: the solid is a single number, so "
+        "there is no fines/growth behaviour and nothing for a mill.",
+        "Solubility is linear in temperature, not a real curve.",
+    ),
+)
+
+Dryer.SPEC = EquipmentSpec(
+    key="dryer",
+    title="Cake Dryer",
+    tier="separation",
+    summary=(
+        "Drives the last of the liquid off a wet filter cake. What "
+        "evaporates is whatever is most volatile, so the solvent goes "
+        "and the crystals stay. Note what that means: anything dissolved "
+        "in the retained mother liquor is still there when the solvent "
+        "leaves. A dryer concentrates impurity exactly as well as it "
+        "concentrates product."
+    ),
+    ports={
+        "inlet": "Wet cake, pulled from a hopper or a vessel.",
+        "heat_duty": "Drying duty in kW, as an analog signal.",
+        "power": "480 V to the tumbler.",
+        "product": "Dried cake.",
+        "vapor": "What was driven off, as a real stream to condense or vent.",
+        "draw": "Cake actually taken, metered back upstream.",
+    },
+    equations=(
+        Equation(
+            "liquid_in = F * (1 - s)",
+            "Only the liquid part of the cake can evaporate.",
+        ),
+        Equation(
+            "evap = min(Q / latent, liquid_in)",
+            "Energy sets the ceiling; the liquid present sets the other "
+            "one. A huge duty on a dry cake does nothing.",
+        ),
+        Equation(
+            "product = F - evap",
+            "Everything that did not leave as vapour leaves as cake.",
+        ),
+    ),
+    params=(
+        Param("rate_lps", "L/s", "Cake throughput."),
+    ),
+    assumptions=(
+        "No drying curve: no constant-rate period, no falling-rate "
+        "period, no bound moisture. Duty divided by latent heat, capped.",
+        "Evaporation is strictly in order of boiling point.",
+    ),
+)
+
+Still.SPEC = EquipmentSpec(
+    key="still",
+    title="Solvent Recovery Still",
+    tier="separation",
+    summary=(
+        "Takes mother liquor and sends the light ends overhead and the "
+        "heavy ends out the bottom. The reboiler duty is the throttle: "
+        "no duty, no boilup, no separation, and everything you feed it "
+        "leaves through the bottoms. This is the unit that closes the "
+        "loop -- pipe the distillate back to a feed header and the "
+        "solvent goes round again."
+    ),
+    ports={
+        "inlet": "Feed, pulled from an upstream vessel.",
+        "heat_duty": "Reboiler duty in kW, as an analog signal.",
+        "power": "480 V to the reboiler.",
+        "distillate": "Overhead product, condensed. Usually the recycle.",
+        "bottoms": "Heavy ends, including every crystal in the feed.",
+        "draw": "Feed actually taken, metered back upstream.",
+    },
+    equations=(
+        Equation(
+            "boilup = Q / latent",
+            "The reboiler sets how much can go overhead at all.",
+        ),
+        Equation(
+            "to_top(i) = f_i * eta          if boil(i) <  cut",
+            "A species lighter than the cut mostly goes over.",
+        ),
+        Equation(
+            "to_top(i) = f_i * (1 - eta)    if boil(i) >= cut",
+            "A heavy one mostly stays down -- but not entirely. A real "
+            "column is never a perfect cut, and that leak is why "
+            "recycled solvent is never quite clean.",
+        ),
+        Equation(
+            "distillate = min(sum(to_top), boilup)",
+            "Scaled back proportionally if the reboiler cannot keep up.",
+        ),
+    ),
+    params=(
+        Param("rate_lps", "L/s", "Feed throughput."),
+        Param("cut_c", "C", "Boiling point dividing light from heavy."),
+        Param("sharpness", "-", "How clean the cut is. 1.0 would be "
+                                "perfect separation."),
+        Param("condenser_c", "C", "Temperature the distillate leaves at."),
+    ),
+    assumptions=(
+        "No trays, no reflux ratio, no McCabe-Thiele: a single split "
+        "ratio per species about one cut temperature.",
+        "No column holdup -- feed in becomes products out on the same "
+        "scan.",
+        "Solids never distill; they always report to the bottoms.",
+    ),
+)

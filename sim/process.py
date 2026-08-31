@@ -16,6 +16,7 @@ view or gauge shows comes from these records.
 from __future__ import annotations
 
 from sim.core import Component, PortKind
+from sim.library import Equation, EquipmentSpec, Param
 from sim.species import get as get_species
 from sim.stream import AMBIENT_C, SOLID_KEY, Stream, comp_from_amounts
 
@@ -80,13 +81,10 @@ class SteamGen(Component):
 class HeatExchanger(Component):
     """Shell-and-tube preheater: steam on the shell, the process
     stream through the tubes (``cold_in`` -> ``cold_out``, one scan).
+    Governing equations are on the library page (``HeatExchanger.SPEC``
+    at the foot of this module), which is their only copy.
 
-        Q_available = m_steam * latent
-        Q           = min(Q_available, Q_max)
-        dT          = Q / (m_cold * cp_cold)
-        T_out       = min(T_in + dT, T_steam - approach)
-
-    The last line is the one that matters: steam cannot heat a stream
+    The line that matters: steam cannot heat a stream
     past its own temperature, so an undersized header shows up as a
     process that will not come up to heat no matter how long it runs.
     Duty is recomputed from the temperature actually achieved, so the
@@ -145,16 +143,11 @@ class Reactor(Component):
 
     Reactants arrive on two feed nozzles and are blended into the
     inventory; heat arrives as an analog ``heat_duty`` in kW (a heat
-    exchanger's duty output); the agitator is a 480 V load.
+    exchanger's duty output); the agitator is a 480 V load. Governing
+    equations are on the library page (``Reactor.SPEC`` at the foot of
+    this module), which is their only copy.
 
-        r          = k * f_T * f_mix                (L/s of each reagent)
-        f_T        = clamp((T - T_min)/(T_full - T_min), 0, 1)
-        f_mix      = 1 if agitating else 0.05
-        consumed   = min(r*dt, V*x_A, V*x_B)
-        produced   = 2 * consumed                   (volume conserved)
-        y_impurity = clamp(y0 + m*(T - T_ref), 0, 1)
-
-    The last line is the interesting one. Conversion rate climbs with
+    The interesting one is the impurity yield. Conversion rate climbs with
     temperature and so does the impurity yield, so there is no single
     right setpoint — running hot fills the vessel faster and dirtier.
     That trade is the whole reason to instrument the thing.
@@ -329,16 +322,12 @@ class Reactor(Component):
 
 class Centrifuge(Component):
     """Disc-stack separator: pulls slurry through the ``inlet`` facade
-    pair and splits it on the phase that is actually there.
+    pair and splits it on the phase that is actually there. Governing
+    equations are on the library page (``Centrifuge.SPEC``), which is
+    their only copy.
 
-        solids_in  = F * s
-        captured   = solids_in * eta
-        cake_liquid= captured * w
-        cake       = captured + cake_liquid
-        liquor     = F - cake
-
-    ``eta`` is capture efficiency and ``w`` is how wet the cake comes
-    off — the reason a dryer exists downstream. Nothing tells this
+    Capture efficiency and cake wetness are the two knobs; the wet cake
+    is the reason a dryer exists downstream. Nothing tells this
     machine the quality of its feed any more; it separates crystals
     from mother liquor, and if the feed carries no crystals it sends
     everything out the liquor nozzle. The bowl is a 480 V drive.
@@ -563,3 +552,312 @@ class VialFiller(Component):
         self.filled_l += rate * dt
         self.product_filled_l += rate * self.fill_purity * dt
         self.draw.value = rate
+
+
+# ---------------------------------------------------------------------
+# Library pages for the units above.
+#
+# These are the only copy of the equations. They sit in the same file as
+# the tick() that implements them so the two are read and reviewed
+# together. Port names, kinds and directions are NOT written here --
+# the library reads those off a real component.
+# ---------------------------------------------------------------------
+
+SteamGen.SPEC = EquipmentSpec(
+    key="steam_gen",
+    title="Steam Generator",
+    tier="utility",
+    summary=(
+        "An electrically fired package boiler. Give it feedwater, 480 V "
+        "and a run command and it makes saturated steam at a header "
+        "pressure that rises and falls with firing. Fire it without "
+        "water and it does not break, but it keeps a running total of "
+        "how long you did it for."
+    ),
+    ports={
+        "inlet": "Feedwater. Pipe a water header to it.",
+        "power": "480 V to the burner. No power, no steam, ever.",
+        "steam": "Saturated steam to the plant, at the header temperature.",
+        "press": "Header pressure tap for a gauge.",
+        "draw": "Feedwater actually consumed, metered back to the header.",
+    },
+    equations=(
+        Equation(
+            "m_steam = min(rated, feed) if fired and wet else 0",
+            "It makes its rating, or whatever feedwater it can get.",
+        ),
+        Equation(
+            "dP/dt = (P_target - P) / tau,  P_target = P_full * m/rated",
+            "Header pressure lags firing with a first-order time constant.",
+        ),
+        Equation(
+            "T_sat = 100 + (180 - 100) * P / P_full",
+            "Saturation temperature, linearised across the range. This is "
+            "the ceiling on anything the steam is used to heat.",
+        ),
+    ),
+    params=(
+        Param("rated_kgps", "kg/s", "Steam output at full fire."),
+    ),
+    assumptions=(
+        "Saturation temperature is a straight line in pressure, not a "
+        "steam table.",
+        "No superheat, no blowdown, no boiler inventory: feedwater in "
+        "becomes steam out on the same scan.",
+    ),
+)
+
+HeatExchanger.SPEC = EquipmentSpec(
+    key="heat_exchanger",
+    title="Shell-and-Tube Exchanger",
+    tier="process",
+    summary=(
+        "Steam on the shell, process on the tubes. It heats the stream "
+        "you actually run through it, and it cannot heat that stream "
+        "past the temperature of the steam supplying it -- so an "
+        "undersized header shows up as a process that will not come up "
+        "to heat however long you wait."
+    ),
+    ports={
+        "steam_in": "Steam to the shell.",
+        "cold_in": "Process stream into the tubes.",
+        "cold_out": "The same stream, hotter. Composition is unchanged.",
+        "condensate": "Condensed steam, for a trap or a return header.",
+        "duty": "Heat actually transferred, kW, as an analog signal.",
+    },
+    equations=(
+        Equation(
+            "Q_available = m_steam * latent",
+            "The heat the steam could give up if it all condensed.",
+        ),
+        Equation(
+            "Q_offered = min(Q_available, Q_max)",
+            "Capped by the area you bought.",
+        ),
+        Equation(
+            "T_out = min(T_in + Q_offered / (m_cold * cp), T_steam - approach)",
+            "The temperature rise, limited by the steam temperature. "
+            "This is the line that matters.",
+        ),
+        Equation(
+            "Q = m_cold * cp * (T_out - T_in)",
+            "Duty is recomputed from the rise actually achieved, so the "
+            "signal never claims heat the process did not take.",
+        ),
+        Equation(
+            "m_condensate = Q / latent",
+            "Only the steam that gave up its heat condenses.",
+        ),
+    ),
+    params=(
+        Param("max_duty_kw", "kW", "Duty at full steam: the area limit."),
+    ),
+    assumptions=(
+        "No LMTD and no heat transfer coefficient: duty is capped by a "
+        "flat maximum and by the steam temperature, nothing else.",
+        "A fixed 5 C approach stands in for the pinch.",
+        "Zero holdup and zero thermal mass -- the exchanger responds "
+        "within one scan.",
+    ),
+)
+
+Reactor.SPEC = EquipmentSpec(
+    key="reactor",
+    title="Jacketed Stirred Reactor",
+    tier="process",
+    summary=(
+        "The heart of the train. Two reagents blend into the inventory "
+        "and combine into product, with an impurity alongside. It needs "
+        "heat to run at all and an agitator to run properly, and the "
+        "hotter you push it the faster it goes and the dirtier it gets. "
+        "There is no correct setpoint; that argument is the game."
+    ),
+    ports={
+        "inlet_a": "First feed nozzle. Anything piped here joins the batch.",
+        "inlet_b": "Second feed nozzle.",
+        "heat_duty": "Jacket duty in kW. Wire an exchanger or a controller.",
+        "power": "480 V to the agitator. Unstirred, it barely reacts.",
+        "draw": "What downstream equipment is pulling off the outlet.",
+        "level": "Contents level tap, for a switch or a transmitter.",
+        "outlet": "The batch, offered to whatever pulls on it.",
+        "vapor": "What boils off when duty exceeds the bubble point.",
+        "purity": "Product fraction of the contents, as an analog signal.",
+        "temp": "Batch temperature, as an analog signal.",
+    },
+    equations=(
+        Equation(
+            "f_T = clamp((T - 60) / (100 - 60), 0, 1)",
+            "Temperature gate: nothing below 60 C, flat out at 100 C.",
+        ),
+        Equation(
+            "f_mix = 1 if agitating else 0.05",
+            "An unstirred vessel reacts at a twentieth of the rate.",
+        ),
+        Equation(
+            "consumed = min(k * f_T * f_mix * dt, V*x_A, V*x_B)",
+            "First-order in rate, limited by whichever reagent runs out "
+            "first. The two combine one for one by volume.",
+        ),
+        Equation(
+            "produced = 2 * consumed",
+            "A litre of A and a litre of B make two litres of products, "
+            "so the volume balance closes exactly.",
+        ),
+        Equation(
+            "y_impurity = clamp(0.02 + 0.004 * (T - 70), 0, 1)",
+            "Selectivity. Every degree above 70 C costs a little more "
+            "of the batch to the impurity.",
+        ),
+        Equation(
+            "dT/dt = Q / (m * cp) - (T - T_ambient) * k_loss",
+            "Lumped energy balance: jacket duty in, ambient loss out. "
+            "Incoming feed blends its own temperature in as it arrives.",
+        ),
+        Equation(
+            "T <= bubble point of the contents",
+            "Surplus duty boils the most volatile species present "
+            "instead of raising the temperature further.",
+        ),
+    ),
+    params=(
+        Param("capacity_l", "L", "Working volume before it overflows."),
+        Param("rate_lps", "L/s", "Reagent consumed per second at full "
+                                 "temperature and full agitation."),
+    ),
+    assumptions=(
+        "Perfectly mixed: one temperature and one composition for the "
+        "whole vessel.",
+        "The reaction is first-order in rate and gated, not a real rate "
+        "law with an activation energy.",
+        "No heat of reaction -- all the heat comes from the jacket.",
+        "The bubble point is the lowest boiling species present, not a "
+        "real vapour-liquid equilibrium.",
+    ),
+)
+
+Centrifuge.SPEC = EquipmentSpec(
+    key="centrifuge",
+    title="Disc-Stack Centrifuge",
+    tier="separation",
+    summary=(
+        "Spins crystals out of the liquor they formed in. It reads the "
+        "solid phase actually present in its feed -- nothing tells it "
+        "what it is separating. Feed it clear liquid and it honestly "
+        "sends everything out the liquor nozzle. The cake comes off wet, "
+        "which is why there is a dryer after it."
+    ),
+    ports={
+        "inlet": "Slurry, pulled from an upstream vessel.",
+        "power": "480 V to the bowl drive.",
+        "product": "Wet cake: captured crystals plus clinging liquor.",
+        "waste": "Mother liquor, plus any crystals the bowl missed.",
+        "draw": "Slurry actually taken, metered back upstream.",
+    },
+    equations=(
+        Equation(
+            "F = min(rated, offered)",
+            "It processes its rating or whatever the vessel can give it.",
+        ),
+        Equation(
+            "captured = F * s * eta",
+            "Of the solid in the feed, the bowl catches a fixed fraction.",
+        ),
+        Equation(
+            "cake_liquid = captured * w",
+            "Cake wetness: liquor retained per unit of crystal, carrying "
+            "everything dissolved in it along for the ride.",
+        ),
+        Equation(
+            "liquor = F - (captured + cake_liquid)",
+            "Everything else leaves the other nozzle. The two add to F.",
+        ),
+    ),
+    params=(
+        Param("rate_lps", "L/s", "Throughput of the bowl."),
+        Param("capture_eff", "-", "Fraction of incoming solid caught."),
+        Param("cake_wetness", "-", "Litres of liquor retained per litre "
+                                   "of crystal."),
+    ),
+    assumptions=(
+        "A fixed capture efficiency: no g-force, no residence time, no "
+        "particle size.",
+        "The cake retains liquor at the feed composition -- there is no "
+        "wash step yet.",
+    ),
+)
+
+VacuumLock.SPEC = EquipmentSpec(
+    key="vacuum_lock",
+    title="Cyclic Vacuum Transfer Lock",
+    tier="utility",
+    summary=(
+        "A chamber that pulls down to rough vacuum, dwells, lets air "
+        "back in through the main valve in discrete bursts, and drains "
+        "the condensate each cycle knocks out of the humid air. A real "
+        "state machine on a real timer."
+    ),
+    ports={
+        "power": "480 V to the vacuum pump. Lose it and the lock "
+                 "equalizes back to atmosphere.",
+        "press": "Chamber pressure tap for a gauge.",
+        "drain_flow": "Condensate to a drain, delivered as it is made.",
+    },
+    equations=(
+        Equation(
+            "dP/dt = (P_vac - P) / tau      [evacuate]",
+            "First-order pull-down toward the pump's blank-off pressure.",
+        ),
+        Equation(
+            "P += (P_atm - P_vac) / n       [each vent burst]",
+            "Re-pressurization happens in n discrete steps, not smoothly.",
+        ),
+        Equation(
+            "condensate += V_cycle          [end of vent]",
+            "Each completed cycle knocks a fixed volume out of the air.",
+        ),
+    ),
+    assumptions=(
+        "A fixed condensate volume per cycle rather than a humidity "
+        "calculation.",
+        "No gas composition and no leak rate: the chamber is either "
+        "being pumped, holding, venting, or draining.",
+    ),
+)
+
+VialFiller.SPEC = EquipmentSpec(
+    key="vial_filler",
+    title="Vial Filler / Capper",
+    tier="process",
+    summary=(
+        "A three-station machine: index the conveyor, fill a vial, press "
+        "the cap. Every millilitre it puts in a vial is genuinely pulled "
+        "through its inlet. It will fill vials with whatever you pipe to "
+        "it and keep an honest record of what that was."
+    ),
+    ports={
+        "inlet": "Product, pulled from an upstream vessel.",
+        "power": "480 V to the machine.",
+        "draw": "Fill rate, metered back upstream. Zero except while "
+                "actually filling.",
+    },
+    equations=(
+        Equation(
+            "rate = V_vial / t_fill    [fill station only]",
+            "Draw is not continuous: it is zero while indexing and "
+            "capping, which is what gives the machine its rhythm.",
+        ),
+        Equation(
+            "cycle = t_index + t_fill + t_cap",
+            "One vial per cycle, so throughput follows directly.",
+        ),
+        Equation(
+            "product_filled += rate * x_product * dt",
+            "What actually reached the vials, as opposed to what was "
+            "supposed to.",
+        ),
+    ),
+    assumptions=(
+        "No reject station, no fill-weight variation, no stoppering "
+        "distinct from capping.",
+    ),
+)
