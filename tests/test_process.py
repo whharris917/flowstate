@@ -166,3 +166,46 @@ class TestSynthesisTrain:
         pumped = source_a.total_l + source_b.total_l
         held = reactor.volume_l + tank.level_l + drain.total_l
         assert pumped == pytest.approx(held, abs=10.0)
+
+
+class TestVacuumLock:
+    def _lock(self) -> tuple:
+        from sim.process import VacuumLock
+        sim = Simulation(dt=0.05)
+        lock = sim.add(VacuumLock("vl"))
+        wire_power(sim, lock)
+        return sim, lock
+
+    def test_idle_until_switched_on(self) -> None:
+        sim, lock = self._lock()
+        sim.run(10.0)
+        assert lock.state == "idle"
+        assert lock.press.value == pytest.approx(lock.PRESS_ATM_PA, rel=0.01)
+
+    def test_full_cycle_progression_and_condensate(self) -> None:
+        sim, lock = self._lock()
+        lock.is_on = True
+        seen = set()
+        drained = 0.0
+        for _ in range(int(120.0 / 0.05)):
+            sim.run(0.05)
+            seen.add(lock.state)
+            drained += float(lock.drain_flow.value) * 0.05
+        assert seen >= {"evacuate", "hold", "vent", "drain"}
+        assert lock.cycles >= 2
+        assert lock.vent_bursts_done >= lock.cycles * lock.VENT_BURSTS
+        # Conservation: everything condensed has gone out the drain port.
+        expected = lock.cycles * lock.CONDENSATE_PER_CYCLE_L
+        assert drained == pytest.approx(expected, abs=lock.CONDENSATE_PER_CYCLE_L)
+        # Pressure stays physical throughout.
+        assert lock.PRESS_VAC_PA * 0.9 <= lock.press_pa <= lock.PRESS_ATM_PA + 1.0
+
+    def test_power_loss_mid_cycle_equalizes(self) -> None:
+        sim, lock = self._lock()
+        lock.is_on = True
+        sim.run(15.0)          # well into evacuation
+        assert lock.press_pa < 50000.0
+        sim.disconnect(sim.get_component("mains_1"), "power", lock, "power")
+        sim.run(90.0)
+        assert lock.state == "idle"
+        assert lock.press_pa == pytest.approx(lock.PRESS_ATM_PA, rel=0.05)

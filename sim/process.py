@@ -192,3 +192,79 @@ class Centrifuge(Component):
         self.draw.value = rate
         self.product.value = rate * purity
         self.waste.value = rate * (1.0 - purity)
+
+
+class VacuumLock(Component):
+    """Cyclic vacuum transfer lock: a chamber that pulls down to rough
+    vacuum, dwells, re-pressurizes through its main air valve in
+    discrete bursts, then dumps the condensate each cycle knocks out
+    of the humid vented air through an automatic drainer. The cycle is
+    a real state machine; ``press`` is a gauge-able output and
+    ``drain_flow`` a real stream to pipe to a drain. Needs 480 V for
+    the vacuum pump; ``is_on`` starts the cycle.
+    """
+
+    PRESS_ATM_PA = 101300.0
+    PRESS_VAC_PA = 18000.0
+    EVAC_TAU_S = 6.0
+    HOLD_S = 3.0
+    VENT_BURSTS = 5
+    VENT_PAUSE_S = 1.4
+    CONDENSATE_PER_CYCLE_L = 5.0
+    DRAIN_LPS = 1.2
+    IDLE_EQUALIZE_TAU_S = 20.0
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.is_on = False
+        self.state = "idle"          # idle/evacuate/hold/vent/drain
+        self.press_pa = self.PRESS_ATM_PA
+        self.condensate_l = 0.0
+        self.cycles = 0
+        self.vent_bursts_done = 0    # lifetime counter; views watch edges
+        self.timer_s = 0.0
+        self.power = self.add_input("power", PortKind.POWER, "480VAC")
+        self.press = self.add_output("press", PortKind.PROCESS_PRESSURE)
+        self.drain_flow = self.add_output("drain_flow", PortKind.PROCESS_FLOW)
+        self.add_observable("press_pa", "press_pa")
+        self.add_observable("condensate_l", "condensate_l")
+        self.add_observable("cycles", "cycles")
+
+    def tick(self, dt: float) -> None:
+        rate = 0.0
+        if not (self.is_on and float(self.power.value) > 0.5):
+            self.state = "idle"
+            self.press_pa += ((self.PRESS_ATM_PA - self.press_pa)
+                              * dt / self.IDLE_EQUALIZE_TAU_S)
+        else:
+            if self.state == "idle":
+                self.state = "evacuate"
+            if self.state == "evacuate":
+                self.press_pa += ((self.PRESS_VAC_PA - self.press_pa)
+                                  * dt / self.EVAC_TAU_S)
+                if self.press_pa < self.PRESS_VAC_PA * 1.15:
+                    self.state = "hold"
+                    self.timer_s = self.HOLD_S
+            elif self.state == "hold":
+                self.timer_s -= dt
+                if self.timer_s <= 0.0:
+                    self.state = "vent"
+                    self.timer_s = self.VENT_PAUSE_S
+            elif self.state == "vent":
+                self.timer_s -= dt
+                if self.timer_s <= 0.0:
+                    step = (self.PRESS_ATM_PA - self.PRESS_VAC_PA) / self.VENT_BURSTS
+                    self.press_pa = min(self.PRESS_ATM_PA, self.press_pa + step)
+                    self.vent_bursts_done += 1
+                    self.timer_s = self.VENT_PAUSE_S
+                    if self.press_pa >= self.PRESS_ATM_PA - 100.0:
+                        self.condensate_l += self.CONDENSATE_PER_CYCLE_L
+                        self.state = "drain"
+            elif self.state == "drain":
+                rate = self.DRAIN_LPS if self.condensate_l > 0.0 else 0.0
+                self.condensate_l = max(self.condensate_l - rate * dt, 0.0)
+                if self.condensate_l <= 0.0:
+                    self.cycles += 1
+                    self.state = "evacuate"
+        self.press.value = self.press_pa
+        self.drain_flow.value = rate

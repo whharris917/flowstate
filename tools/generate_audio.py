@@ -332,6 +332,47 @@ def make_trap_burst() -> None:
     write_wav(OUT_DIR / "trap_burst.wav", [buf], normalize_to=0.38)
 
 
+def make_vent_blast() -> None:
+    """Main air valve burst: a hard valve pop, then a big rush of air
+    that tails off as chamber pressure steps up. Bigger and rounder
+    than the actuator's valve_air."""
+    duration = 0.85
+    n = int(duration * SR)
+    buf = [0.0] * n
+    rush = highpassed_noise(n, 700.0)
+    for i in range(n):
+        t = i / SR
+        attack = min(1.0, t / 0.006)
+        pop = math.sin(2.0 * math.pi * (140.0 * math.exp(-t * 12.0) + 45.0) * t) \
+            * math.exp(-t * 30.0) * 0.9
+        body = rush[i] * math.exp(-t * 4.2) * attack
+        buf[i] = pop + body
+    write_wav(OUT_DIR / "vent_blast.wav", [buf], normalize_to=0.46)
+
+
+def make_gurgle() -> None:
+    """3 s seamless condensate gurgle: a soft water-noise bed with
+    upward-chirping bubble blips scattered through the loop (kept off
+    the seam so it wraps cleanly)."""
+    duration = 3.0
+    n = int(duration * SR)
+    buf = loop_crossfade(brown_noise(n + int(0.5 * SR), leak=0.92, gain=0.10), 0.5)
+    for _ in range(46):
+        start = rng.uniform(0.05, duration - 0.30)
+        blip_len = rng.uniform(0.05, 0.16)
+        f0 = rng.uniform(180.0, 420.0)
+        sweep = rng.uniform(1.6, 3.2)
+        amp = rng.uniform(0.25, 0.65)
+        i0 = int(start * SR)
+        for j in range(int(blip_len * SR)):
+            t = j / SR
+            frac = t / blip_len
+            env = math.sin(math.pi * frac) ** 2
+            buf[i0 + j] += amp * env * math.sin(
+                2.0 * math.pi * f0 * (1.0 + sweep * frac) * t)
+    write_wav(OUT_DIR / "gurgle_loop.wav", [buf[:n]], normalize_to=0.34)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -345,6 +386,8 @@ def main() -> None:
     make_relay_click()
     make_beep()
     make_trap_burst()
+    make_vent_blast()
+    make_gurgle()
     for idx, (f0, decay, noise_amp) in enumerate(
             [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):

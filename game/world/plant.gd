@@ -311,6 +311,8 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as HeatExchangerView).setup(record as SimHeatExchanger)
 		"steamgen":
 			(view as SteamGenView).setup(record as SimSteamGen)
+		"vaclock":
+			(view as VacLockView).setup(record as SimVacuumLock)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
 	if type_id == "tank":

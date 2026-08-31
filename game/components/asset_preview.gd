@@ -63,6 +63,8 @@ static func build(type_id: String) -> Node3D:
 				(node as HeatExchangerView).setup(record as SimHeatExchanger)
 			"steamgen":
 				(node as SteamGenView).setup(record as SimSteamGen)
+			"vaclock":
+				(node as VacLockView).setup(record as SimVacuumLock)
 		node.set_meta("scratch_sim", scratch)
 	if node == null:
 		return null

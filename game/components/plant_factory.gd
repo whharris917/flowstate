@@ -7,13 +7,17 @@ class_name PlantFactory
 const CATALOG: Array[Dictionary] = [
 	{"type": "tank", "label": "Tank 100 L"},
 	{"type": "pump", "label": "Pump 4 L/s"},
-	{"type": "source", "label": "Supply header"},
-	{"type": "drain", "label": "Drain / sewer"},
 	{"type": "reactor", "label": "Stirred reactor"},
 	{"type": "centrifuge", "label": "Centrifuge"},
 	{"type": "hx", "label": "Heat exchanger"},
 	{"type": "steamgen", "label": "Steam generator"},
 	{"type": "column", "label": "Distillation column"},
+]
+
+const CATALOG_UTILITIES: Array[Dictionary] = [
+	{"type": "source", "label": "Supply header"},
+	{"type": "drain", "label": "Drain / sewer"},
+	{"type": "vaclock", "label": "Vacuum lock"},
 ]
 
 const CATALOG_INSTRUMENTS: Array[Dictionary] = [
@@ -55,6 +59,7 @@ const FOOTPRINTS := {
 	"centrifuge": Vector3(1.2, 1.8, 1.2),
 	"hx": Vector3(2.0, 1.0, 0.8),
 	"steamgen": Vector3(2.1, 2.8, 1.3),
+	"vaclock": Vector3(1.5, 2.9, 1.4),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5,
@@ -64,6 +69,7 @@ const Y_OFFSETS := {
 	"valve": 0.0, "controller": 0.0, "cabinet": 0.0,
 	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
 	"reactor": 0.0, "centrifuge": 0.0, "hx": 0.0, "steamgen": 0.0,
+	"vaclock": 0.0,
 }
 
 # Where each port's fitting sits in the view's local space, flush with
@@ -132,6 +138,10 @@ const PORT_ANCHORS := {
 		"power": {"pos": Vector3(0.5, 0.35, 0.7), "dir": Vector3.BACK},
 		"steam": {"pos": Vector3(0.35, 1.35, 0), "dir": Vector3.UP},
 		"press": {"pos": Vector3(-0.2, 1.35, 0), "dir": Vector3.UP}},
+	"vaclock": {
+		"power": {"pos": Vector3(-0.75, 0.9, 0.26), "dir": Vector3.BACK},
+		"press": {"pos": Vector3(0.42, 2.28, 0), "dir": Vector3.RIGHT},
+		"drain_flow": {"pos": Vector3(0.36, 0.6, 0), "dir": Vector3.RIGHT}},
 	"psu": {
 		"ac_in": {"pos": Vector3(-0.25, 1.2, 0), "dir": Vector3.LEFT},
 		"dc_out": {"pos": Vector3(0.25, 1.2, 0), "dir": Vector3.RIGHT}},
@@ -251,6 +261,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimHeatExchanger.new(name_, params.get("max_duty_kw", 1200.0)))
 		"steamgen":
 			return sim.add(SimSteamGen.new(name_, params.get("rated_kgps", 0.5)))
+		"vaclock":
+			return sim.add(SimVacuumLock.new(name_))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -291,6 +303,8 @@ static func make_view(type_id: String, record: SimComponent,
 			view = HeatExchangerView.new()
 		"steamgen":
 			view = SteamGenView.new()
+		"vaclock":
+			view = VacLockView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
 	if view == null:

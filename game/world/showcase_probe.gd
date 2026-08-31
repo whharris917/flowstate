@@ -56,6 +56,9 @@ func _run(world: Node) -> void:
 	print("[probe] u300: steam %.2f kg/s · duty->%.0f kW · reactor %.0f L %.1f C · fuge %s · pt_300 %.1f L" % [
 		sg.steam.value, reac.heat_duty.value, reac.volume_l, reac.temp_c,
 		"SPIN" if fuge.spinning else "idle", product_tank.level_l])
+	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
+	print("[probe] vl_302: %s · %.1f kPa · condensate %.1f L · %d bursts" % [
+		lock.state, lock.press_pa / 1000.0, lock.condensate_l, lock.vent_bursts_done])
 	var bad: Array[String] = []
 	for visual: Dictionary in plant._wire_visuals:
 		var node: Node = visual["node"]
