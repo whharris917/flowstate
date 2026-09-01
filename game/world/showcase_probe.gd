@@ -15,10 +15,13 @@ func _run(world: Node) -> void:
 	await get_tree().create_timer(4.0).timeout  # let loops move
 	var player: Player = (world as WorldBase).player
 
-	player.global_position = Vector3(26.0, 0.15, 26.0)
-	player.zoom_t = 2.4
-	player._zoom_now = 2.4
-	player.camera.rotation.x = -0.62
+	# The plant runs from x~0 to x~54, so the aerial stands off to the
+	# south of its midpoint and looks back up the train.
+	player.global_position = Vector3(28.0, 0.15, 24.0)
+	player.rotation.y = 0.0  # facing -z, up the length of the plant
+	player.zoom_t = 2.2
+	player._zoom_now = 2.2
+	player.camera.rotation.x = -0.70
 	await get_tree().create_timer(0.8).timeout
 	await _shot("user://probe_showcase_aerial.png")
 
