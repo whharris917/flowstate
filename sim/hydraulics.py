@@ -58,6 +58,26 @@ _DP_FLOOR_PA = 1.0
 _EPS = 1e-12
 
 
+def _square_law_flow(dp: float, k: float) -> float:
+    """Q for a square-law element, linearised through zero.
+
+    Below the floor the square law is replaced by the straight line that
+    meets it at the floor. The linearisation has to be applied to the
+    *flow* as well as to the slope: regularising only the slope leaves
+    Newton chasing a target its own derivative disagrees with, and it
+    grinds against the iteration cap forever without ever landing.
+    """
+    if abs(dp) >= _DP_FLOOR_PA:
+        return math.copysign(math.sqrt(abs(dp) / k), dp)
+    return dp * math.sqrt(_DP_FLOOR_PA / k) / _DP_FLOOR_PA
+
+
+def _square_law_slope(dp: float, k: float) -> float:
+    if abs(dp) >= _DP_FLOOR_PA:
+        return 1.0 / (2.0 * math.sqrt(k * abs(dp)))
+    return math.sqrt(_DP_FLOOR_PA / k) / _DP_FLOOR_PA
+
+
 class Branch:
     """One flow path between two nodes.
 
@@ -96,10 +116,10 @@ class Resistance(Branch):
         self.k = max(k_pa_per_lps2, _EPS)
 
     def flow(self, dp: float) -> float:
-        return math.copysign(math.sqrt(abs(dp) / self.k), dp)
+        return _square_law_flow(dp, self.k)
 
     def conductance(self, dp: float) -> float:
-        return 1.0 / (2.0 * math.sqrt(self.k * max(abs(dp), _DP_FLOOR_PA)))
+        return _square_law_slope(dp, self.k)
 
 
 class ControlResistance(Resistance):
@@ -130,12 +150,29 @@ class ControlResistance(Resistance):
     def flow(self, dp: float) -> float:
         if self.opening <= 1e-4:
             return 0.0
-        return math.copysign(math.sqrt(abs(dp) / self._k_now()), dp)
+        return _square_law_flow(dp, self._k_now())
 
     def conductance(self, dp: float) -> float:
         if self.opening <= 1e-4:
             return 0.0
-        return 1.0 / (2.0 * math.sqrt(self._k_now() * max(abs(dp), _DP_FLOOR_PA)))
+        return _square_law_slope(dp, self._k_now())
+
+
+class CheckResistance(Resistance):
+    """A resistance with a check valve in it: flow from a to b only.
+
+    A top-entry nozzle is one of these. The line discharges above the
+    liquid, so material can fall in and nothing can come back out --
+    which is not a detail, because without it an empty vessel will
+    happily supply liquid it does not have through the nozzle at its
+    roof.
+    """
+
+    def flow(self, dp: float) -> float:
+        return super().flow(dp) if dp > 0.0 else 0.0
+
+    def conductance(self, dp: float) -> float:
+        return super().conductance(dp) if dp > 0.0 else 0.0
 
 
 class PumpCurve(Branch):
@@ -207,8 +244,8 @@ class FixedFlow(Branch):
 class Network:
     """Nodes, branches, and the solve that reconciles them."""
 
-    MAX_ITERATIONS = 60
-    TOLERANCE_LPS = 1e-6
+    MAX_ITERATIONS = 20
+    TOLERANCE_LPS = 1e-4
     # Newton on a square-law branch is badly behaved far from the
     # answer: the slope of sqrt goes flat, so an undamped step can
     # overshoot by a factor of ten and sit there oscillating. Capping
@@ -218,7 +255,7 @@ class Network:
     MAX_STEP_PA = 150_000.0
     #: How many times to halve a step that is not helping before giving
     #: up on it and re-linearising.
-    MAX_HALVINGS = 12
+    MAX_HALVINGS = 8
 
     def __init__(self) -> None:
         self.pressures: list[float] = []
@@ -280,28 +317,47 @@ class Network:
                 break
 
             jacobian = [[0.0] * n for _ in range(n)]
+            neighbours: list[list[int]] = [[] for _ in range(n)]
             for branch in self.branches:
                 a, b = branch.node_a, branch.node_b
                 g = branch.conductance(self.pressures[a] - self.pressures[b])
                 if a in index_of:
                     ia = index_of[a]
                     jacobian[ia][ia] -= g
+                    neighbours[ia].append(b)
                     if b in index_of:
                         jacobian[ia][index_of[b]] += g
                 if b in index_of:
                     ib = index_of[b]
                     jacobian[ib][ib] -= g
+                    neighbours[ib].append(a)
                     if a in index_of:
                         jacobian[ib][index_of[a]] += g
 
-            # A node with no pressure-sensitive branch on it (only fixed
-            # flows) leaves a zero row; pin it so the system stays
-            # solvable rather than blowing up.
+            # Nodes with no conductive path back to a fixed pressure
+            # have no equation to satisfy. That covers a dead-ended
+            # nozzle, but also — and this is the one that bites — a
+            # whole island cut off by a shut valve at one end and a
+            # blocked check valve at the other. Such an island makes the
+            # matrix singular, and a solver that gives up on the whole
+            # system because one corner of it is adrift will leave real
+            # flows uncorrected everywhere else.
+            #
+            # So find what is actually connected, and let the rest
+            # equalise with its neighbours the way a dead leg does.
+            reachable, conducting = self._reachable_from_fixed(index_of)
+            rhs = [-r for r in residual]
+            dead: list[int] = []
             for i in range(n):
-                if abs(jacobian[i][i]) < 1e-12:
-                    jacobian[i][i] = -1e-9
+                if not reachable[i] or abs(jacobian[i][i]) < 1e-12:
+                    for j in range(n):
+                        jacobian[i][j] = 0.0
+                        jacobian[j][i] = 0.0
+                    jacobian[i][i] = -1.0
+                    rhs[i] = 0.0
+                    dead.append(i)
 
-            step = _solve_dense(jacobian, [-r for r in residual])
+            step = _solve_dense(jacobian, rhs)
             if step is None:
                 break
 
@@ -312,6 +368,8 @@ class Network:
             # the full step, and keep halving until the imbalance
             # actually improves.
             before = _norm(residual)
+            if max(abs(v) for v in step) < 1e-9:
+                break
             saved = [self.pressures[node] for node in free]
             scale = 1.0
             for _attempt in range(self.MAX_HALVINGS):
@@ -323,8 +381,77 @@ class Network:
                     break
                 scale *= 0.5
 
+
+        self._settle_islands(free, index_of, n)
         self._record_flows()
         self.residual_lps = self._worst_imbalance(index_of, len(free))
+
+    def _settle_islands(self, free: list[int], index_of: dict[int, int],
+                        n: int) -> None:
+        """Anything cut off from every fixed pressure settles to one
+        common value and stops flowing.
+
+        Run once, after the iteration: moving pressures behind Newton's
+        back mid-solve stops it converging at all.
+
+        Follow only branches that conduct. Averaging across a stopped
+        pump would drag the island toward the header it is isolated
+        from, and the difference that leaves behind keeps pushing
+        material through the pipe between them — material nothing
+        supplied.
+        """
+        reachable, conducting = self._reachable_from_fixed(index_of)
+        settled: set[int] = set()
+        for slot in range(n):
+            if reachable[slot]:
+                continue
+            start = free[slot]
+            if start in settled:
+                continue
+            island = [start]
+            settled.add(start)
+            queue = [start]
+            while queue:
+                node = queue.pop()
+                for neighbour in conducting.get(node, ()):
+                    if neighbour in settled or neighbour not in index_of:
+                        continue
+                    if reachable[index_of[neighbour]]:
+                        continue
+                    settled.add(neighbour)
+                    island.append(neighbour)
+                    queue.append(neighbour)
+            common = sum(self.pressures[x] for x in island) / len(island)
+            for node in island:
+                self.pressures[node] = common
+
+    def _reachable_from_fixed(self, index_of: dict[int, int]):
+        """Which free nodes can actually feel a fixed pressure, through
+        branches that are currently conducting.
+
+        A shut valve or a blocked check valve is a wall: whatever is
+        behind it is hydraulically adrift and has nothing to solve.
+        """
+        adjacency: dict[int, list[int]] = {}
+        for branch in self.branches:
+            a, b = branch.node_a, branch.node_b
+            if branch.conductance(self.pressures[a] - self.pressures[b]) <= 1e-12:
+                continue
+            adjacency.setdefault(a, []).append(b)
+            adjacency.setdefault(b, []).append(a)
+        seen: set[int] = set()
+        frontier = [i for i, is_fixed in enumerate(self.fixed) if is_fixed]
+        seen.update(frontier)
+        while frontier:
+            node = frontier.pop()
+            for neighbour in adjacency.get(node, ()):
+                if neighbour not in seen:
+                    seen.add(neighbour)
+                    frontier.append(neighbour)
+        reachable = [False] * len(index_of)
+        for node, slot in index_of.items():
+            reachable[slot] = node in seen
+        return reachable, adjacency
 
     def _residuals(self, index_of: dict[int, int], n: int) -> list[float]:
         """Net flow into each free node. Zero everywhere is the answer."""

@@ -11,7 +11,9 @@ from __future__ import annotations
 import math
 
 from sim.core import Component, PortKind
-from sim.hydraulics import ControlResistance, PumpCurve, static_head_pa
+from sim.hydraulics import (
+    CheckResistance, ControlResistance, PumpCurve, static_head_pa,
+)
 from sim.library import Equation, EquipmentSpec, Param
 from sim.stream import AMBIENT_C, Stream
 
@@ -44,6 +46,7 @@ class Tank(Component):
         temp_c: float = AMBIENT_C,
         comp: dict[str, float] | None = None,
         headspace_kpa: float = 0.0,
+        elevation_m: float = 0.0,
     ) -> None:
         super().__init__(name)
         if capacity_l <= 0.0:
@@ -54,6 +57,7 @@ class Tank(Component):
         self.level_l = level_l
         self.drain_lps = drain_lps
         self.headspace_kpa = headspace_kpa
+        self.elevation_m = elevation_m
         if height_m > 0.0 and diameter_m > 0.0:
             self.height_m = height_m
             self.diameter_m = diameter_m
@@ -117,11 +121,47 @@ class Tank(Component):
         self.contents = Stream(self.level_l, temp_c, comp)
         self.level.value = self.level_l
 
+    def _feed_ports(self):
+        return ("inlet",)
+
+    def _headspace_pa(self) -> float:
+        return self.headspace_kpa * 1000.0
+
+    #: The nozzle and its stub, Pa per (L/s)^2.
+    NOZZLE_K = 800.0
+    #: Flow the bottom nozzle passes at the reference drop.
+    OUTLET_CV_LPS = 20.0
+    #: Depth over which the bottom nozzle uncovers as the level falls
+    #: past it. Smooth, so an emptying vessel tails off instead of
+    #: chattering shut.
+    UNCOVER_M = 0.03
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        self._roof = net.add_node(0.0, fixed=True)
+        self._floor = net.add_node(0.0, fixed=True)
+        for feed in self._feed_ports():
+            net.add_branch(CheckResistance(
+                node[feed], self._roof, self.NOZZLE_K,
+                "%s.%s" % (self.name, feed)))
+        self._outlet_branch = net.add_branch(ControlResistance(
+            self._floor, node["outlet"], self.OUTLET_CV_LPS,
+            self.name + ".outlet"))
+
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
-        headspace_pa = self.headspace_kpa * 1000.0
-        net.set_pressure(node["inlet"], headspace_pa, fixed=True)
-        net.set_pressure(node["outlet"],
-                         headspace_pa + static_head_pa(self.depth_m), fixed=True)
+        headspace_pa = self._headspace_pa()
+        roof = headspace_pa + static_head_pa(self.elevation_m + self.height_m)
+        floor = headspace_pa + static_head_pa(self.elevation_m + self.depth_m)
+        net.set_pressure(self._roof, roof, fixed=True)
+        net.set_pressure(self._floor, floor, fixed=True)
+        # The bottom nozzle uncovers as the level drops past it. Filling
+        # back in through it is always allowed -- that is how you charge
+        # a vessel from below.
+        # Which way it went last scan, read off the branch itself: a
+        # node pressure can be floating, a solved flow cannot.
+        filling = self._outlet_branch.flow_lps < -1e-9
+        self._outlet_branch.opening = (
+            1.0 if filling else min(self.depth_m / self.UNCOVER_M, 1.0))
+
 
     def supplied_stream(self, port_name: str) -> Stream:
         return self.contents.with_flow(1.0)
@@ -268,10 +308,12 @@ class Source(Component):
         temp_c: float = AMBIENT_C,
         pressure_kpa: float = 400.0,
         comp: dict[str, float] | None = None,
+        elevation_m: float = 0.0,
     ) -> None:
         super().__init__(name)
         self.temp_c = float(temp_c)
         self.pressure_kpa = float(pressure_kpa)
+        self.elevation_m = float(elevation_m)
         # A single species by default; ``comp`` overrides it for a
         # header that carries a premixed feed.
         self.comp = dict(comp) if comp else {species: 1.0}
@@ -287,7 +329,10 @@ class Source(Component):
         return max(-self.outlet.flow_lps, 0.0)
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
-        net.set_pressure(node["outlet"], self.pressure_kpa * 1000.0, fixed=True)
+        net.set_pressure(
+            node["outlet"],
+            self.pressure_kpa * 1000.0 + static_head_pa(self.elevation_m),
+            fixed=True)
 
     def supplied_stream(self, port_name: str) -> Stream:
         return Stream(1.0, self.temp_c, self.comp)
@@ -306,11 +351,13 @@ class Drain(Component):
     passes nothing.
     """
 
-    def __init__(self, name: str, rate_lps: float = 1.0) -> None:
+    def __init__(self, name: str, rate_lps: float = 1.0,
+                 elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if rate_lps <= 0.0:
             raise ValueError("rate_lps must be positive")
         self.rate_lps = rate_lps
+        self.elevation_m = elevation_m
         self.is_open = True
         self.total_l = 0.0
         self.lost_product_l = 0.0
@@ -327,7 +374,7 @@ class Drain(Component):
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         # The far side of the drain valve is the sewer: atmospheric, and
         # it will take whatever it is given.
-        sewer = net.add_node(0.0, fixed=True)
+        sewer = net.add_node(static_head_pa(self.elevation_m), fixed=True)
         self._branch = net.add_branch(ControlResistance(
             node["inlet"], sewer, self.rate_lps, self.name))
 

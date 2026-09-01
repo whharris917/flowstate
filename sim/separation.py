@@ -13,7 +13,10 @@ species with a boilup cap. None of them pretend to be more.
 from __future__ import annotations
 
 from sim.core import Component, PortKind
-from sim.hydraulics import FixedFlow, PumpCurve, static_head_pa
+from sim.hydraulics import (
+    CheckResistance, ControlResistance, FixedFlow, PumpCurve,
+    static_head_pa,
+)
 from sim.library import Equation, EquipmentSpec, Param
 from sim.species import get as get_species
 from sim.stream import AMBIENT_C, SOLID_KEY, Stream, comp_from_amounts
@@ -40,12 +43,13 @@ class Crystallizer(Component):
     COOLANT_C = 5.0
 
     def __init__(self, name: str, capacity_l: float = 3000.0,
-                 height_m: float = 2.2) -> None:
+                 height_m: float = 2.2, elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if capacity_l <= 0.0:
             raise ValueError("capacity_l must be positive")
         self.capacity_l = capacity_l
         self.height_m = height_m
+        self.elevation_m = elevation_m
         self.volume_l = 0.0
         self.temp_c = AMBIENT_C
         self.agitating = False
@@ -94,9 +98,47 @@ class Crystallizer(Component):
         dissolved = self.contents.frac(SOLID_KEY) - self.contents.solids_frac
         return dissolved - self.saturation_frac()
 
+    def _feed_ports(self):
+        return ("inlet",)
+
+    def _headspace_pa(self) -> float:
+        return 0.0
+
+    #: The nozzle and its stub, Pa per (L/s)^2.
+    NOZZLE_K = 800.0
+    #: Flow the bottom nozzle passes at the reference drop.
+    OUTLET_CV_LPS = 20.0
+    #: Depth over which the bottom nozzle uncovers as the level falls
+    #: past it. Smooth, so an emptying vessel tails off instead of
+    #: chattering shut.
+    UNCOVER_M = 0.03
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        self._roof = net.add_node(0.0, fixed=True)
+        self._floor = net.add_node(0.0, fixed=True)
+        for feed in self._feed_ports():
+            net.add_branch(CheckResistance(
+                node[feed], self._roof, self.NOZZLE_K,
+                "%s.%s" % (self.name, feed)))
+        self._outlet_branch = net.add_branch(ControlResistance(
+            self._floor, node["outlet"], self.OUTLET_CV_LPS,
+            self.name + ".outlet"))
+
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
-        net.set_pressure(node["inlet"], 0.0, fixed=True)
-        net.set_pressure(node["outlet"], static_head_pa(self.depth_m), fixed=True)
+        headspace_pa = self._headspace_pa()
+        roof = headspace_pa + static_head_pa(self.elevation_m + self.height_m)
+        floor = headspace_pa + static_head_pa(self.elevation_m + self.depth_m)
+        net.set_pressure(self._roof, roof, fixed=True)
+        net.set_pressure(self._floor, floor, fixed=True)
+        # The bottom nozzle uncovers as the level drops past it. Filling
+        # back in through it is always allowed -- that is how you charge
+        # a vessel from below.
+        # Which way it went last scan, read off the branch itself: a
+        # node pressure can be floating, a solved flow cannot.
+        filling = self._outlet_branch.flow_lps < -1e-9
+        self._outlet_branch.opening = (
+            1.0 if filling else min(self.depth_m / self.UNCOVER_M, 1.0))
+
 
     def supplied_stream(self, port_name: str):
         return self.contents.with_flow(1.0)

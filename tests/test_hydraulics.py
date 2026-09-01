@@ -39,9 +39,9 @@ class TestConservation:
         out_a = _line(net, middle, sink_a, 8000.0)
         out_b = _line(net, middle, sink_b, 8000.0)
         net.solve()
-        assert net.residual_lps < 1e-5
+        assert net.residual_lps < Network.TOLERANCE_LPS
         assert feed.flow_lps == pytest.approx(out_a.flow_lps + out_b.flow_lps,
-                                              abs=1e-5)
+                                              abs=Network.TOLERANCE_LPS)
 
     def test_converges_in_a_handful_of_iterations(self) -> None:
         net = Network()
@@ -109,7 +109,7 @@ class TestTee:
         hard = _line(net, tee, hard_end, 9_000.0)
         net.solve()
         assert feed.flow_lps == pytest.approx(easy.flow_lps + hard.flow_lps,
-                                              abs=1e-5)
+                                              abs=Network.TOLERANCE_LPS)
         # Square law: nine times the k is a third of the flow.
         assert easy.flow_lps == pytest.approx(3.0 * hard.flow_lps, rel=0.02)
 
@@ -228,7 +228,7 @@ class TestFixedFlow:
         machine = net.add_branch(FixedFlow(node, out, 1.5))
         net.solve()
         assert machine.flow_lps == pytest.approx(1.5)
-        assert net.residual_lps < 1e-5
+        assert net.residual_lps < Network.TOLERANCE_LPS
 
     def test_starving_a_fixed_flow_pulls_its_suction_down(self) -> None:
         """Demand the network cannot meet drags the suction node toward
