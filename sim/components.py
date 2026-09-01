@@ -804,75 +804,105 @@ Tank.SPEC = EquipmentSpec(
         "Holds liquid, and knows what the liquid is. Anything arriving "
         "blends into the contents, so a hot stream genuinely warms the "
         "vessel and a reagent charge genuinely changes what is in it. "
-        "What is drawn off leaves at whatever the contents currently "
-        "are. Overfill it and it spills, and the spill is counted."
+        "What leaves does so at whatever the contents currently are. "
+        "Overfill it and it spills, and the spill is counted.\n\n"
+        "Its two nozzles differ only in where they are, and that is the "
+        "whole of its hydraulic behaviour: the outlet is at the bottom "
+        "and carries the head of everything standing above it, the inlet "
+        "is at the top at headspace pressure. Which is why a full tank "
+        "will drain into an empty one through nothing but a pipe, and "
+        "why filling one never has to fight its own level."
     ),
     ports={
-        "inlet": "Material delivered into the vessel. Several lines may "
-                 "land here and they blend.",
-        "draw": "What downstream equipment is pulling off the outlet.",
+        "inlet": "Top nozzle. Several runs may land here; they meet at a "
+                 "tee and blend. It sits above the liquid, so it cannot "
+                 "flow backwards.",
         "level": "Level tap, in litres, for a switch or a transmitter.",
-        "outlet": "The contents, offered to whatever pulls on them.",
+        "outlet": "Bottom nozzle, at headspace pressure plus the static "
+                  "head of the liquid. Material goes whichever way the "
+                  "network solves -- charging a vessel up through it is "
+                  "normal.",
     },
     equations=(
         Equation(
-            "dV/dt = F_in - F_draw",
-            "Plain inventory balance.",
+            "P_outlet = P_headspace + rho*g*(z + depth)",
+            "The boundary pressure the network sees at the bottom "
+            "nozzle. Piezometric, so elevation costs head without the "
+            "solver ever learning what elevation is.",
+        ),
+        Equation(
+            "dV/dt = F_inlet + F_outlet  (both signed into the vessel)",
+            "One balance covers filling, draining, and a line that "
+            "reversed on you.",
         ),
         Equation(
             "x_new = (V*x + F_in*dt*x_in) / (V + F_in*dt)",
-            "Incoming material blends by volume. Draw-off and overflow "
-            "leave at the contents composition, so neither changes it -- "
-            "only the inflow does.",
+            "Incoming material blends by volume. What leaves and what "
+            "overflows both go at the contents composition, so neither "
+            "changes it -- only the inflow does.",
         ),
         Equation(
             "T_new = (V*T + F_in*dt*T_in) / (V + F_in*dt)",
             "Temperature blends the same way.",
         ),
         Equation(
-            "offered = min(V / dt, nozzle_max)",
-            "What the outlet advertises. A nearly empty tank offers "
-            "almost nothing, which is what throttles a pump on it "
-            "instead of letting the level go negative.",
+            "opening = min(depth / 0.03 m, 1)",
+            "The bottom nozzle uncovers as the level falls past it, so a "
+            "vessel tails off instead of siphoning itself dry. Smooth, "
+            "so it does not chatter shut.",
         ),
     ),
     params=(
         Param("capacity_l", "L", "Volume before it overflows. Follows the "
                                  "geometry if you give height and diameter."),
         Param("level_l", "L", "Starting inventory."),
-        Param("drain_lps", "L/s", "A fixed background consumption, for "
-                                  "standing in for downstream demand."),
-        Param("height_m", "m", "Shell height. Sets capacity with diameter."),
+        Param("drain_lps", "L/s", "A standing leak off the inventory, for "
+                                  "standing in for an unmodelled user. "
+                                  "Not a nozzle: it takes no head."),
+        Param("height_m", "m", "Shell height. Sets capacity with diameter, "
+                               "and sets how high the top nozzle sits."),
         Param("diameter_m", "m", "Shell diameter."),
         Param("temp_c", "C", "Starting temperature of the contents."),
         Param("comp", "-", "Starting composition, as species fractions."),
+        Param("headspace_kpa", "kPa", "Blanket pressure over the liquid. "
+                                      "Adds to both nozzles equally."),
+        Param("elevation_m", "m", "Height of the vessel floor above grade. "
+                                  "This is what buys you gravity flow."),
     ),
     assumptions=(
         "Perfectly mixed: one temperature and one composition throughout, "
         "so there is no stratification and no settling.",
         "Heat loss is a single first-order term, not an insulation model.",
+        "The headspace is a fixed pressure, not a gas volume: filling the "
+        "vessel does not compress it and draining does not pull vacuum.",
+        "Only the two nozzles exist. There is no vent line, no overflow "
+        "nozzle you can pipe, and a spill just leaves the model.",
     ),
 )
 
 Pump.SPEC = EquipmentSpec(
     key="pump",
-    title="Fixed-Rate Transfer Pump",
+    title="Centrifugal Transfer Pump",
     tier="process",
     summary=(
-        "Moves material at its rating, or at whatever the suction can "
-        "actually give it. A Hand-Off-Auto selector decides where the "
-        "run command comes from, exactly like the switch on a real motor "
-        "starter -- and none of the three positions do anything without "
-        "480 V at the starter. Run it against an empty vessel and the "
-        "motor spins, nothing moves, and the seal wears."
+        "Adds head to a line, and then finds its own operating point "
+        "against whatever the system puts in front of it. It does not "
+        "deliver its rating on demand: open the discharge and it runs "
+        "out along its curve, throttle it and it walks back up. Ask it "
+        "to lift more than its shutoff head and it dead-heads -- the "
+        "motor turns, the valve is open, and nothing moves.\n\n"
+        "A Hand-Off-Auto selector decides where the run command comes "
+        "from, exactly like the switch on a real motor starter, and none "
+        "of the three positions do anything without 480 V at the starter."
     ),
     ports={
         "run": "Run command in Auto. Ignored in Hand and Off.",
         "power": "480 V to the starter. No power, no motor, Hand included.",
-        "inlet": "Suction. Wire it to the vessel or header it pulls from.",
-        "outlet": "Discharge, at the same temperature and composition as "
-                  "the suction.",
-        "draw": "What it is actually taking, metered back to the source.",
+        "inlet": "Suction nozzle. Pipe it to whatever it pulls from; the "
+                 "pressure it finds there is what decides whether it "
+                 "cavitates.",
+        "outlet": "Discharge nozzle, one head rise above the suction, at "
+                  "the same temperature and composition.",
     },
     equations=(
         Equation(
@@ -880,23 +910,56 @@ Pump.SPEC = EquipmentSpec(
             "The selector, then the starter.",
         ),
         Equation(
-            "F = min(rated, offered) if running else 0",
-            "It cannot pull what is not there, so an emptying tank "
-            "throttles it smoothly rather than going negative.",
+            "dP = H0 * (1 - (Q/Qmax)^2)",
+            "The curve. Shutoff head at no flow, falling away as the "
+            "square of flow, so two in parallel do not double the flow "
+            "and a longer line genuinely costs you rate.",
         ),
         Equation(
-            "dry_run_s += dt   when running with nothing to pull",
+            "H0 = rho*g*head_m ,  Qmax = 1.35 * rated_lps",
+            "What you sized it for: shutoff head from the head rating, "
+            "and a runout cap a third above rated flow.",
+        ),
+        Equation(
+            "Q = 0 when not running",
+            "A stopped pump shuts its line. That is not what a real one "
+            "does -- see the assumptions.",
+        ),
+        Equation(
+            "Q >= 0 always",
+            "It never runs backwards, however the pressures fall out.",
+        ),
+        Equation(
+            "dry_run_s += dt   when running with no flow",
             "The wear metric that makes a mistake provable afterwards.",
         ),
     ),
     params=(
-        Param("rated_lps", "L/s", "Flow when running with a wet suction."),
+        Param("rated_lps", "L/s", "Flow at the rated point. Runout is a "
+                                  "third above it."),
+        Param("head_m", "m", "Shutoff head, as metres of liquid. This is "
+                             "the lift it cannot exceed however long you "
+                             "run it."),
         Param("mode", "-", "Hand, Off, or Auto."),
     ),
     assumptions=(
-        "No pump curve: flow does not fall off with discharge pressure, "
-        "because the kernel has no hydraulic network.",
-        "No start ramp -- it is at full rate on the scan it starts.",
+        "One generic curve shape for every pump. No published curve, no "
+        "impeller trim, no speed control.",
+        "No efficiency and no best-efficiency point, so running far off "
+        "rated costs nothing in power or in wear.",
+        "Cavitation is a suction-pressure taper, not NPSH available "
+        "against NPSH required -- the species table carries no vapour "
+        "pressure to compute one from. It loses its curve over the last "
+        "20 kPa above a hard vacuum and delivers nothing at the bottom, "
+        "which is what makes a pump on an empty vessel stop rather than "
+        "keep insisting. The `cavitating` flag trips earlier than that, "
+        "so it warns before the flow has gone.",
+        "No start ramp -- it is on its curve on the scan it starts.",
+        "It is its own check valve, in both directions: stopped, it "
+        "blocks the line completely, and running, it will not reverse "
+        "however the pressures fall out. A real centrifugal does neither "
+        "-- it freewheels backwards under discharge head, which is why "
+        "real trains carry check valves this plant does not need.",
     ),
 )
 
@@ -906,15 +969,18 @@ ControlValve.SPEC = EquipmentSpec(
     tier="control",
     summary=(
         "An air-actuated valve that follows a 0-100 % command with a "
-        "positioner lag. It passes only what its upstream header offers, "
-        "so a wide open valve on a dead header still flows nothing."
+        "positioner lag, onto a trim that obeys the valve equation. "
+        "Which means its authority is real: half open is not half the "
+        "flow, and a valve sized far larger than the line it sits in "
+        "buys you almost nothing for the last half of its travel. That "
+        "is the classic badly-sized loop, and here it is something the "
+        "player can actually diagnose from a trend."
     ),
     ports={
         "cmd": "Position command, 0-100 %, from a controller or an HMI.",
-        "inlet": "Upstream header.",
-        "outlet": "Downstream line, at the header's temperature and "
-                  "composition.",
-        "draw": "What it is passing, metered back to the header.",
+        "inlet": "Upstream nozzle.",
+        "outlet": "Downstream nozzle, at the same temperature and "
+                  "composition -- a valve changes rate, not material.",
     },
     equations=(
         Equation(
@@ -923,18 +989,32 @@ ControlValve.SPEC = EquipmentSpec(
             "what a controller has to tune around.",
         ),
         Equation(
-            "F = min(x/100 * Cv, offered)",
-            "Linear trim, capped by what the header can supply.",
+            "Q = Cv * (x/100) * sqrt(dP / 100 kPa)",
+            "The valve equation. Flow follows the square root of the "
+            "drop across the valve, so it is the rest of the system, not "
+            "the command alone, that decides what gets through.",
+        ),
+        Equation(
+            "Q = 0 when x = 0",
+            "Shut is shut: it holds against any drop the network puts "
+            "across it.",
         ),
     ),
     params=(
-        Param("cv_lps", "L/s", "Flow at 100 % open with supply available."),
+        Param("cv_lps", "L/s", "The size of the valve: what it passes "
+                               "wide open across a 1 bar drop. Not US Cv "
+                               "(gpm at 1 psi) and not metric Kv."),
         Param("tau_s", "s", "Positioner time constant."),
     ),
     assumptions=(
-        "Linear trim and no pressure drop: flow is proportional to "
-        "position, not to the square root of dP.",
-        "No seat leakage, no hysteresis, no stiction.",
+        "Linear trim only -- no equal-percentage or quick-opening "
+        "characteristic, so the installed characteristic comes entirely "
+        "from the line it sits in.",
+        "No seat leakage, no hysteresis, no stiction, no dead band.",
+        "It resists in both directions equally and will not check "
+        "reverse flow.",
+        "No actuator fail position: cut the command and it goes to zero, "
+        "rather than to fail-open or fail-closed.",
     ),
 )
 
@@ -945,30 +1025,49 @@ Source.SPEC = EquipmentSpec(
     summary=(
         "A utility tie-in at the edge of the modelled plant -- the "
         "honest root of every flow path, the way a mains feeder is for "
-        "power. Supply is unlimited because the rest of the utility "
-        "system is off-plot, but everything drawn through it is metered. "
-        "A header is what it carries: this is where a species enters the "
-        "plant, and everything downstream finds out by being piped to it."
+        "power. A header is three things and nothing else: what it "
+        "carries, how hot it is, and what pressure it holds.\n\n"
+        "It has one nozzle. There is no inlet, because from the plant's "
+        "point of view there is nothing upstream. And there is no draw "
+        "port either: nothing announces what it took, because what "
+        "leaves is whatever the network pulls out, and the meter simply "
+        "reads that."
     ),
     ports={
-        "draw": "What equipment is pulling from the header. Totalized.",
-        "supply": "The material on offer, at its storage temperature.",
+        "outlet": "The tie-in nozzle. Holds its rated pressure whatever "
+                  "you draw, and the meter totalizes what left through "
+                  "it.",
     },
     equations=(
         Equation(
-            "total += F_draw * dt",
-            "The meter. This is the number a mass balance is checked "
-            "against.",
+            "P_outlet = pressure_kpa + rho*g*z   (fixed)",
+            "A boundary node. The header holds this pressure no matter "
+            "what is hung off it -- which is what makes a higher-pressure "
+            "header genuinely deliver more.",
+        ),
+        Equation(
+            "total += max(-F_outlet, 0) * dt",
+            "The meter. Flow at a nozzle is signed into the component, "
+            "so material leaving reads negative; this is the number a "
+            "mass balance is checked against.",
         ),
     ),
     params=(
         Param("species", "-", "What the header carries."),
         Param("temp_c", "C", "Storage temperature."),
+        Param("pressure_kpa", "kPa", "The pressure it holds at the tie-in. "
+                                     "This, and the resistance of what you "
+                                     "pipe to it, is what sets the flow."),
         Param("comp", "-", "Full composition, for a premixed feed."),
+        Param("elevation_m", "m", "Height of the tie-in above grade."),
     ),
     assumptions=(
-        "Infinite availability and no supply pressure: the header never "
-        "runs out and never sags.",
+        "Infinite availability and a perfectly stiff pressure: the header "
+        "never runs out and never sags, however much you pull.",
+        "It cannot be pushed into. Piping a running pump at it will not "
+        "back material up the utility system.",
+        "One fixed composition and temperature -- a header does not "
+        "change with the season or with what its own supply is doing.",
     ),
 )
 
@@ -977,35 +1076,51 @@ Drain.SPEC = EquipmentSpec(
     title="Drain / Sewer Connection",
     tier="utility",
     summary=(
-        "Where material leaves the plant. It pulls from a vessel when "
-        "open, accepts a discharge line dumped straight into it, and "
-        "meters everything it swallows -- including how much product "
-        "you sent down it, which is the number that hurts."
+        "Where material leaves the plant: a nozzle, a valve, and a pipe "
+        "to sewer. It has no magic rate -- its valve has a Cv like any "
+        "other, and what goes down it is whatever the head above it "
+        "pushes through. So a nearly empty vessel drains slowly, as one "
+        "does, and a deep one runs fast and then tails off.\n\n"
+        "It meters everything it swallows, and separately how much "
+        "product you sent down it, which is the number that hurts."
     ),
     ports={
-        "inlet": "The vessel it drains, when open.",
-        "flow_in": "A discharge line dumped straight to sewer: a "
-                   "separator's waste, a relief blowdown.",
-        "draw": "What it is pulling from the vessel.",
+        "inlet": "The line to sewer. Pipe a vessel bottom, a separator's "
+                 "waste, or a relief blowdown into it -- it is the same "
+                 "nozzle either way.",
     },
     equations=(
         Equation(
-            "F = min(rated, offered) if open else 0",
-            "It cannot swallow faster than its rating or faster than the "
-            "vessel can give.",
+            "Q = rate_lps * open * sqrt(dP / 100 kPa)",
+            "The drain valve, following the same valve equation as any "
+            "other. Shut it and it holds.",
         ),
         Equation(
-            "lost_product += (F * x_product + F_in * x_product_in) * dt",
+            "P_sewer = rho*g*z   (fixed)",
+            "The far side of the valve is atmosphere at the drain's own "
+            "elevation, and it will take whatever it is given.",
+        ),
+        Equation(
+            "lost_product += F * x_product * dt",
             "Yield to sewer, on a trend. Nothing else in the plant will "
             "tell you about this.",
         ),
     ),
     params=(
-        Param("rate_lps", "L/s", "Maximum drain rate."),
+        Param("rate_lps", "L/s", "Size of the drain valve: what it passes "
+                                 "wide open across a 1 bar drop, not a "
+                                 "rate it is guaranteed to achieve."),
+        Param("elevation_m", "m", "Height of the sewer connection. Put it "
+                                  "below what you are draining."),
     ),
     assumptions=(
-        "No back pressure and no sewer capacity: an open drain always "
-        "takes its rating.",
+        "The sewer is an infinite sink at atmospheric pressure: it never "
+        "backs up and never floods.",
+        "The drain valve does not check. Set the sewer connection above "
+        "what it serves and its own static head will push back up the "
+        "line -- correct arithmetic, but not a drain any longer.",
+        "Nothing is recovered and nothing is treated -- material down "
+        "here is simply gone, and only the meters remember it.",
     ),
 )
 

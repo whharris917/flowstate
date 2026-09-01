@@ -227,7 +227,10 @@ class Dryer(Component):
         return max(self.inlet.flow_lps, 0.0)
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
-        drum = net.add_node(0.0)
+        # A boundary, not a free node -- see the note on the centrifuge
+        # bowl. The cake discharge is imposed at last scan's rate, so a
+        # free drum could never start.
+        drum = net.add_node(0.0, fixed=True)
         self._feed = net.add_branch(PumpCurve(
             node["inlet"], drum, static_head_pa(self.FEED_HEAD_M),
             self.rate_lps, self.name + ".feed"))
@@ -332,7 +335,10 @@ class Still(Component):
         return max(self.inlet.flow_lps, 0.0)
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
-        sump = net.add_node(0.0)
+        # A boundary, not a free node -- see the note on the centrifuge
+        # bowl. Both products are imposed at last scan's split, so a
+        # free sump could never start.
+        sump = net.add_node(0.0, fixed=True)
         self._feed = net.add_branch(PumpCurve(
             node["inlet"], sump, static_head_pa(self.FEED_HEAD_M),
             self.rate_lps, self.name + ".feed"))
@@ -418,13 +424,14 @@ Crystallizer.SPEC = EquipmentSpec(
         "nucleation wants the shear."
     ),
     ports={
-        "inlet": "Hot, dilute solution from upstream.",
+        "inlet": "Top feed nozzle: hot, dilute solution from upstream. "
+                 "It sits above the liquid and cannot run backwards.",
         "cool_duty": "Kilowatts *removed*, as an analog signal. Wire a "
                      "chiller or a controller output.",
         "power": "480 V to the agitator.",
-        "draw": "What downstream equipment is pulling off the outlet.",
         "level": "Contents level tap.",
-        "outlet": "Slurry, offered to whatever pulls on it.",
+        "outlet": "Bottom nozzle, carrying the head of the slurry above "
+                  "it. It uncovers as the vessel empties.",
         "solids": "Fraction of the contents present as crystal, as an "
                   "analog signal.",
         "temp": "Batch temperature, as an analog signal.",
@@ -458,6 +465,10 @@ Crystallizer.SPEC = EquipmentSpec(
     ),
     params=(
         Param("capacity_l", "L", "Working volume before it overflows."),
+        Param("height_m", "m", "Shell height. Sets how high the feed "
+                               "nozzle sits and how much head a full "
+                               "vessel puts on the outlet."),
+        Param("elevation_m", "m", "Height of the vessel floor above grade."),
     ),
     assumptions=(
         "One crystallizing species, and crystals are pure -- no "
@@ -465,6 +476,8 @@ Crystallizer.SPEC = EquipmentSpec(
         "No crystal size distribution: the solid is a single number, so "
         "there is no fines/growth behaviour and nothing for a mill.",
         "Solubility is linear in temperature, not a real curve.",
+        "The slurry flows exactly like the liquid it came from: solids "
+        "add no viscosity, settle nowhere, and never plug a line.",
     ),
 )
 
@@ -481,35 +494,47 @@ Dryer.SPEC = EquipmentSpec(
         "concentrates product."
     ),
     ports={
-        "inlet": "Wet cake, pulled from a hopper or a vessel.",
+        "inlet": "Feed nozzle. Its own feed pump pulls wet cake through "
+                 "this while the dryer is running, so an empty hopper "
+                 "above it simply starves it.",
         "heat_duty": "Drying duty in kW, as an analog signal.",
         "power": "480 V to the tumbler.",
-        "product": "Dried cake.",
-        "vapor": "What was driven off, as a real stream to condense or vent.",
-        "draw": "Cake actually taken, metered back upstream.",
+        "product": "Dried cake, pushed out at whatever did not evaporate.",
     },
     equations=(
+        Equation(
+            "dP_feed = rho*g*12 m * (1 - (Q/rated)^2)   while running",
+            "The feed pump curve. Switch the dryer off and it stops "
+            "pulling cake.",
+        ),
         Equation(
             "liquid_in = F * (1 - s)",
             "Only the liquid part of the cake can evaporate.",
         ),
         Equation(
-            "evap = min(Q / latent, liquid_in)",
+            "evap = min(Q_duty / latent, liquid_in)",
             "Energy sets the ceiling; the liquid present sets the other "
             "one. A huge duty on a dry cake does nothing.",
         ),
         Equation(
-            "product = F - evap",
-            "Everything that did not leave as vapour leaves as cake.",
+            "Q_product = F - evap   (imposed at the discharge)",
+            "Everything that did not leave as vapour leaves as cake, so "
+            "the balance closes across the machine.",
         ),
     ),
     params=(
-        Param("rate_lps", "L/s", "Cake throughput."),
+        Param("rate_lps", "L/s", "Cake throughput: the rated flow of its "
+                                 "feed pump."),
     ),
     assumptions=(
         "No drying curve: no constant-rate period, no falling-rate "
         "period, no bound moisture. Duty divided by latent heat, capped.",
         "Evaporation is strictly in order of boiling point.",
+        "The vapour has no nozzle. It leaves through an unmodelled vent, "
+        "so you cannot condense or recover it -- only `dried_l` "
+        "remembers it went.",
+        "The cake discharge is an imposed rate, not pressure-driven: it "
+        "cannot be blocked in and takes no back pressure.",
     ),
 )
 
@@ -526,16 +551,20 @@ Still.SPEC = EquipmentSpec(
         "solvent goes round again."
     ),
     ports={
-        "inlet": "Feed, pulled from an upstream vessel.",
+        "inlet": "Feed nozzle. Its own feed pump pulls through this while "
+                 "the still is running.",
         "heat_duty": "Reboiler duty in kW, as an analog signal.",
         "power": "480 V to the reboiler.",
         "distillate": "Overhead product, condensed. Usually the recycle.",
         "bottoms": "Heavy ends, including every crystal in the feed.",
-        "draw": "Feed actually taken, metered back upstream.",
     },
     equations=(
         Equation(
-            "boilup = Q / latent",
+            "dP_feed = rho*g*20 m * (1 - (Q/rated)^2)   while running",
+            "The feed pump curve. No power, no feed.",
+        ),
+        Equation(
+            "boilup = Q_duty / latent",
             "The reboiler sets how much can go overhead at all.",
         ),
         Equation(
@@ -566,5 +595,9 @@ Still.SPEC = EquipmentSpec(
         "No column holdup -- feed in becomes products out on the same "
         "scan.",
         "Solids never distill; they always report to the bottoms.",
+        "Both products are imposed rates, not pressure-driven: the still "
+        "pushes its split out against any back pressure and cannot be "
+        "blocked in.",
+        "No column pressure, so the cut temperature never moves with it.",
     ),
 )

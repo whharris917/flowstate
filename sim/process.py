@@ -38,8 +38,11 @@ class SteamGen(Component):
     PRESS_TAU_S = 10.0
     SAT_C_AT_ZERO = 100.0
     SAT_C_AT_FULL = 180.0
-    #: Feedwater the burner will pull in per second at full fire.
-    FEED_HEAD_M = 25.0
+    #: Shutoff head of the boiler feed pump. It has to beat drum
+    #: pressure or the boiler cannot feed itself once it is hot, which
+    #: is why a real BFW pump is the tallest one in the plant: 8 bar of
+    #: drum is 81 m before the suction line has cost anything.
+    FEED_HEAD_M = 110.0
 
     def __init__(self, name: str, rated_kgps: float = 0.5) -> None:
         super().__init__(name)
@@ -74,17 +77,23 @@ class SteamGen(Component):
         return max(self.inlet.flow_lps, 0.0)
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
-        drum = net.add_node(0.0)
+        # The feed pump discharges into the drum, and the drum *is* the
+        # steam nozzle -- there is no boiler inventory, so feedwater
+        # arriving and steam leaving are two flows at one node. Giving
+        # the drum its own node instead would dead-end the feedwater:
+        # a node with a single branch can carry no flow, so the boiler
+        # could never take water and would starve for ever.
         self._feed = net.add_branch(PumpCurve(
-            node["inlet"], drum, static_head_pa(self.FEED_HEAD_M),
+            node["inlet"], node["steam"], static_head_pa(self.FEED_HEAD_M),
             self.rated_kgps, self.name + ".feed"))
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
         firing = self.is_on and float(self.power.value) > 0.5
         if self._feed is not None:
             self._feed.running = firing
-        # The steam nozzle holds header pressure: that is what drives
-        # steam anywhere at all.
+        # The drum holds header pressure: that is what drives steam
+        # anywhere at all, and it is also what the feed pump has to
+        # push against, which is why a hot boiler feeds more slowly.
         net.set_pressure(node["steam"], self.press_pa, fixed=True)
 
     def supplied_stream(self, port_name: str):
@@ -443,7 +452,12 @@ class Centrifuge(Component):
         return max(self.inlet.flow_lps, 0.0)
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
-        bowl = net.add_node(0.0)
+        # The bowl is a boundary, not a free node. It has to be: the
+        # discharges are imposed at the split worked out from last
+        # scan's draw, so a free bowl would have to balance them against
+        # a draw that does not exist yet -- and a machine that has never
+        # run has never drawn anything, so it would never start.
+        bowl = net.add_node(0.0, fixed=True)
         self._feed = net.add_branch(PumpCurve(
             node["inlet"], bowl, static_head_pa(self.FEED_HEAD_M),
             self.rate_lps, self.name + ".feed"))
@@ -696,23 +710,36 @@ SteamGen.SPEC = EquipmentSpec(
         "and a run command and it makes saturated steam at a header "
         "pressure that rises and falls with firing. Fire it without "
         "water and it does not break, but it keeps a running total of "
-        "how long you did it for."
+        "how long you did it for.\n\n"
+        "What it holds is a real pressure, and that pressure is what "
+        "pushes steam anywhere at all -- which is why an exchanger whose "
+        "condensate has nowhere to go gets no steam from it."
     ),
     ports={
-        "inlet": "Feedwater. Pipe a water header to it.",
+        "inlet": "Feedwater nozzle. Its own feed pump pulls through this "
+                 "while firing, so a header on the far end of a long run "
+                 "genuinely starves it.",
         "power": "480 V to the burner. No power, no steam, ever.",
-        "steam": "Saturated steam to the plant, at the header temperature.",
+        "steam": "The steam header nozzle. Holds boiler pressure, and "
+                 "that is what drives steam into whatever you pipe to it.",
         "press": "Header pressure tap for a gauge.",
-        "draw": "Feedwater actually consumed, metered back to the header.",
     },
     equations=(
         Equation(
-            "m_steam = min(rated, feed) if fired and wet else 0",
-            "It makes its rating, or whatever feedwater it can get.",
+            "dP_feed = rho*g*25 m * (1 - (Q/rated)^2)   while firing",
+            "The feed pump, on the same curve shape as any other pump. "
+            "Stop firing and it stops pulling.",
         ),
         Equation(
-            "dP/dt = (P_target - P) / tau,  P_target = P_full * m/rated",
-            "Header pressure lags firing with a first-order time constant.",
+            "P_steam = P   (fixed)",
+            "The steam nozzle is a boundary at drum pressure. Everything "
+            "downstream flows because of this number.",
+        ),
+        Equation(
+            "dP/dt = (P_target - P) / tau,  P_target = P_full * F_feed/rated",
+            "Drum pressure lags firing with a first-order time constant, "
+            "and what it is chasing is set by the feedwater actually "
+            "arriving.",
         ),
         Equation(
             "T_sat = 100 + (180 - 100) * P / P_full",
@@ -721,13 +748,24 @@ SteamGen.SPEC = EquipmentSpec(
         ),
     ),
     params=(
-        Param("rated_kgps", "kg/s", "Steam output at full fire."),
+        Param("rated_kgps", "kg/s", "Steam output at full fire, and the "
+                                    "rated flow of its feed pump."),
     ),
     assumptions=(
         "Saturation temperature is a straight line in pressure, not a "
         "steam table.",
         "No superheat, no blowdown, no boiler inventory: feedwater in "
         "becomes steam out on the same scan.",
+        "Steam is carried on the same 1 L = 1 kg liquid basis as "
+        "everything else -- the network has one phase, so the vapour is "
+        "not compressible and does not expand as it drops pressure.",
+        "The drum is a pressure boundary, like a supply header. It holds "
+        "its pressure however hard you draw on it, so it will hand out "
+        "more steam than its feedwater is bringing in and make up the "
+        "difference from nowhere. Mass does not close across the boiler: "
+        "it is the one place in the plant where that is true, and it is "
+        "why the drum pressure sags with feedwater rather than with "
+        "demand.",
     ),
 )
 
@@ -743,13 +781,21 @@ HeatExchanger.SPEC = EquipmentSpec(
         "to heat however long you wait."
     ),
     ports={
-        "steam_in": "Steam to the shell.",
-        "cold_in": "Process stream into the tubes.",
-        "cold_out": "The same stream, hotter. Composition is unchanged.",
-        "condensate": "Condensed steam, for a trap or a return header.",
+        "steam_in": "Shell inlet. Pipe it to a steam header.",
+        "cold_in": "Tube inlet: the process stream, cold.",
+        "cold_out": "Tube outlet: the same stream, hotter. Composition is "
+                    "unchanged -- an exchanger moves heat, not material.",
+        "condensate": "Shell outlet. Pipe it to a trap or a return "
+                      "header; leave it dead and no steam flows at all.",
         "duty": "Heat actually transferred, kW, as an analog signal.",
     },
     equations=(
+        Equation(
+            "dP_shell = K * Q_steam^2 ,  dP_tubes = K' * Q_process^2",
+            "Both sides are ordinary resistances, so the exchanger costs "
+            "pressure to push anything through -- and the shell only "
+            "passes steam if there is somewhere for the condensate to go.",
+        ),
         Equation(
             "Q_available = m_steam * latent",
             "The heat the steam could give up if it all condensed.",
@@ -787,6 +833,11 @@ HeatExchanger.SPEC = EquipmentSpec(
         "within one scan.",
         "Surplus heat in over-admitted steam leaves with the condensate "
         "rather than being tracked as an enthalpy.",
+        "Both resistances are fixed: fouling never builds up, so an "
+        "exchanger does not degrade with service.",
+        "Nothing checks that you piped steam to the shell. Run process "
+        "fluid through the shell side and it will be treated as the "
+        "heating medium.",
     ),
 )
 
@@ -802,14 +853,14 @@ Reactor.SPEC = EquipmentSpec(
         "There is no correct setpoint; that argument is the game."
     ),
     ports={
-        "inlet_a": "First feed nozzle. Anything piped here joins the batch.",
-        "inlet_b": "Second feed nozzle.",
+        "inlet_a": "First feed nozzle, at the top. Anything piped here "
+                   "joins the batch, and it cannot flow backwards.",
+        "inlet_b": "Second feed nozzle, alongside the first.",
         "heat_duty": "Jacket duty in kW. Wire an exchanger or a controller.",
         "power": "480 V to the agitator. Unstirred, it barely reacts.",
-        "draw": "What downstream equipment is pulling off the outlet.",
         "level": "Contents level tap, for a switch or a transmitter.",
-        "outlet": "The batch, offered to whatever pulls on it.",
-        "vapor": "What boils off when duty exceeds the bubble point.",
+        "outlet": "Bottom nozzle, carrying the head of the batch standing "
+                  "above it. It uncovers as the vessel empties.",
         "purity": "Product fraction of the contents, as an analog signal.",
         "temp": "Batch temperature, as an analog signal.",
     },
@@ -845,13 +896,19 @@ Reactor.SPEC = EquipmentSpec(
         Equation(
             "T <= bubble point of the contents",
             "Surplus duty boils the most volatile species present "
-            "instead of raising the temperature further.",
+            "instead of raising the temperature further. That vapour "
+            "leaves through the vent, so it comes off the inventory "
+            "rather than out of a nozzle you can pipe.",
         ),
     ),
     params=(
         Param("capacity_l", "L", "Working volume before it overflows."),
         Param("rate_lps", "L/s", "Reagent consumed per second at full "
                                  "temperature and full agitation."),
+        Param("height_m", "m", "Shell height. Sets how high the feed "
+                               "nozzles sit and how much head a full "
+                               "batch puts on the outlet."),
+        Param("elevation_m", "m", "Height of the vessel floor above grade."),
     ),
     assumptions=(
         "Perfectly mixed: one temperature and one composition for the "
@@ -861,6 +918,11 @@ Reactor.SPEC = EquipmentSpec(
         "No heat of reaction -- all the heat comes from the jacket.",
         "The bubble point is the lowest boiling species present, not a "
         "real vapour-liquid equilibrium.",
+        "Boil-off has no nozzle. It leaves the model through an unmodelled "
+        "vent, so you cannot condense it, recover it, or route it "
+        "anywhere -- it is only counted.",
+        "The vessel is atmospheric. The headspace holds no pressure, so "
+        "boiling is never suppressed by blanketing it.",
     ),
 )
 
@@ -873,19 +935,28 @@ Centrifuge.SPEC = EquipmentSpec(
         "solid phase actually present in its feed -- nothing tells it "
         "what it is separating. Feed it clear liquid and it honestly "
         "sends everything out the liquor nozzle. The cake comes off wet, "
-        "which is why there is a dryer after it."
+        "which is why there is a dryer after it.\n\n"
+        "It has its own feed pump, so what it draws is its curve against "
+        "the suction you gave it. Starve it and the rate falls away "
+        "rather than the machine inventing material."
     ),
     ports={
-        "inlet": "Slurry, pulled from an upstream vessel.",
+        "inlet": "Feed nozzle. Its own pump pulls slurry through this "
+                 "while the bowl is spinning.",
         "power": "480 V to the bowl drive.",
         "product": "Wet cake: captured crystals plus clinging liquor.",
         "waste": "Mother liquor, plus any crystals the bowl missed.",
-        "draw": "Slurry actually taken, metered back upstream.",
     },
     equations=(
         Equation(
-            "F = min(rated, offered)",
-            "It processes its rating or whatever the vessel can give it.",
+            "dP_feed = rho*g*18 m * (1 - (Q/rated)^2)   while spinning",
+            "The feed pump curve. Stop the bowl and it stops pulling.",
+        ),
+        Equation(
+            "Q_cake + Q_liquor = F   (imposed at the discharges)",
+            "Whatever it drew last scan leaves as two streams that add "
+            "back to it, so the bowl holds no inventory and the balance "
+            "closes across the machine.",
         ),
         Equation(
             "captured = F * s * eta",
@@ -911,7 +982,12 @@ Centrifuge.SPEC = EquipmentSpec(
         "A fixed capture efficiency: no g-force, no residence time, no "
         "particle size.",
         "The cake retains liquor at the feed composition -- there is no "
-        "wash step yet.",
+        "wash step yet, so this caps the purity the train can reach.",
+        "The two discharges are imposed rates, not pressure-driven: the "
+        "bowl will push its split out against any back pressure you put "
+        "on it, and it cannot be blocked in.",
+        "The split follows the draw by one scan, so a step change in "
+        "feed shows up at the discharges the scan after.",
     ),
 )
 
@@ -944,12 +1020,23 @@ VacuumLock.SPEC = EquipmentSpec(
             "condensate += V_cycle          [end of vent]",
             "Each completed cycle knocks a fixed volume out of the air.",
         ),
+        Equation(
+            "Q_drain = 1.2 L/s while draining   (imposed)",
+            "The automatic drainer pushes condensate out at its own rate. "
+            "Where it goes is the plant's problem, which is what the "
+            "drain line is for.",
+        ),
     ),
     assumptions=(
         "A fixed condensate volume per cycle rather than a humidity "
         "calculation.",
         "No gas composition and no leak rate: the chamber is either "
         "being pumped, holding, venting, or draining.",
+        "The chamber pressure is a state machine, not a node in the "
+        "hydraulic network -- it does not push or pull on anything you "
+        "pipe to it.",
+        "The drainer imposes its rate rather than solving for it, so it "
+        "cannot be blocked in and takes no back pressure.",
     ),
 )
 
@@ -964,23 +1051,28 @@ VialFiller.SPEC = EquipmentSpec(
         "it and keep an honest record of what that was."
     ),
     ports={
-        "inlet": "Product, pulled from an upstream vessel.",
+        "inlet": "Fill nozzle. The dosing pump pulls through this, and "
+                 "only while the fill station is actually filling.",
         "power": "480 V to the machine.",
-        "draw": "Fill rate, metered back upstream. Zero except while "
-                "actually filling.",
     },
     equations=(
         Equation(
-            "rate = V_vial / t_fill    [fill station only]",
-            "Draw is not continuous: it is zero while indexing and "
-            "capping, which is what gives the machine its rhythm.",
+            "Q = V_vial / t_fill  while filling, else 0   (imposed)",
+            "The draw is not continuous: it is zero while indexing and "
+            "capping, which is what gives the machine its rhythm and "
+            "what makes the fill line pulse.",
         ),
         Equation(
             "cycle = t_index + t_fill + t_cap",
             "One vial per cycle, so throughput follows directly.",
         ),
         Equation(
-            "product_filled += rate * x_product * dt",
+            "starved = filling and Q < 0.9 * needed",
+            "A dosing pump that cannot get its charge is starved, and "
+            "the suction heading for vacuum is how it finds out.",
+        ),
+        Equation(
+            "product_filled += Q * x_product * dt",
             "What actually reached the vials, as opposed to what was "
             "supposed to.",
         ),
@@ -988,5 +1080,9 @@ VialFiller.SPEC = EquipmentSpec(
     assumptions=(
         "No reject station, no fill-weight variation, no stoppering "
         "distinct from capping.",
+        "The dose is an imposed rate, so a starved machine still fills a "
+        "short vial and counts it as done rather than faulting.",
+        "Filled vials leave the modelled plant at the nozzle. Nothing "
+        "downstream of the fill point is simulated.",
     ),
 )
