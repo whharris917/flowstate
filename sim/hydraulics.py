@@ -56,6 +56,9 @@ MIN_PRESSURE_PA = -101_300.0
 # Jacobian of a square-law element stays finite through zero flow.
 _DP_FLOOR_PA = 1.0
 _EPS = 1e-12
+# Below this a branch is treated as carrying nothing, for the purpose of
+# working out what is connected to what.
+_CONDUCTING_EPS = 1e-12
 
 
 def _square_law_flow(dp: float, k: float) -> float:
@@ -98,6 +101,32 @@ class Branch:
         """dQ/d(dp). Newton needs the slope, not an exact derivative:
         an approximate one costs an iteration, never correctness."""
         raise NotImplementedError
+
+    def is_conducting(self, dp: float) -> bool:
+        """Whether material can actually cross this branch right now.
+
+        Kept separate from ``conductance`` because the two answer
+        different questions. Connectivity asks "is there a path?", and a
+        shut valve is a wall whatever slope it reports. Newton asks
+        "which way should I step?", and near a kink the useful slope is
+        the one on the far side of it.
+        """
+        return self.conductance(dp) > _CONDUCTING_EPS
+
+    # Most branches care only about the difference across them. A pump
+    # is the exception: it also cares how close its suction is to a
+    # vacuum, because that is what decides whether it is pumping or
+    # cavitating. These two hand the absolute pressures over so it can
+    # ask, and cost nothing for everything else.
+
+    def flow_at(self, pa: float, pb: float) -> float:
+        return self.flow(pa - pb)
+
+    def conductance_at(self, pa: float, pb: float) -> float:
+        return self.conductance(pa - pb)
+
+    def is_conducting_at(self, pa: float, pb: float) -> bool:
+        return self.is_conducting(pa - pb)
 
 
 class Resistance(Branch):
@@ -166,13 +195,28 @@ class CheckResistance(Resistance):
     which is not a detail, because without it an empty vessel will
     happily supply liquid it does not have through the nozzle at its
     roof.
+
+    The flow is one-way. The *slope* is not, and that distinction is
+    load-bearing. A shut check reporting zero slope tells Newton the
+    node is insensitive, so it takes a step sized by the pipe alone and
+    sails clean past the pressure at which the valve cracks -- then
+    back, then forwards, until the iteration cap. Reporting the
+    open-side slope instead says "there is a wall a few hundred pascals
+    away", and it lands on the crack point in two steps. The flow it
+    passes while shut is still exactly zero, so nothing is invented;
+    only the step length changes. ``is_conducting`` keeps connectivity
+    honest, because for working out what is joined to what a shut check
+    really is a wall.
     """
 
     def flow(self, dp: float) -> float:
         return super().flow(dp) if dp > 0.0 else 0.0
 
     def conductance(self, dp: float) -> float:
-        return super().conductance(dp) if dp > 0.0 else 0.0
+        return super().conductance(dp)
+
+    def is_conducting(self, dp: float) -> bool:
+        return dp > 0.0 and super().is_conducting(dp)
 
 
 class PumpCurve(Branch):
@@ -191,6 +235,17 @@ class PumpCurve(Branch):
     #: Flow past which the curve is treated as flat, as a multiple of
     #: the rating.
     RUNOUT_FACTOR = 1.35
+    #: How far above a hard vacuum the suction has to stay for the pump
+    #: to make its full curve. Inside this band it is losing prime, and
+    #: at the bottom of it it is moving nothing at all.
+    #:
+    #: This is what stops a pump on an empty vessel dragging its suction
+    #: line to vacuum and demanding material anyway. Without it the
+    #: suction pins at the floor, the imbalance can never be driven to
+    #: zero because the node cannot go any lower, and the solve grinds
+    #: against the iteration cap for the rest of the run. A taper rather
+    #: than a cut-off, because Newton cannot follow a cliff.
+    CAVITATION_BAND_PA = 20_000.0
 
     def __init__(self, node_a: int, node_b: int, head_pa: float,
                  max_lps: float, name: str = "") -> None:
@@ -198,6 +253,30 @@ class PumpCurve(Branch):
         self.head_pa = max(head_pa, _EPS)
         self.max_lps = max(max_lps, _EPS)
         self.running = False
+
+    def prime(self, suction_pa: float) -> float:
+        """How much of its curve it is making, 0 to 1. One whenever
+        there is real pressure on the suction, tapering to nothing as
+        that approaches a hard vacuum."""
+        headroom = suction_pa - MIN_PRESSURE_PA
+        return min(max(headroom / self.CAVITATION_BAND_PA, 0.0), 1.0)
+
+    def flow_at(self, pa: float, pb: float) -> float:
+        return self.flow(pa - pb) * self.prime(pa)
+
+    def conductance_at(self, pa: float, pb: float) -> float:
+        # Inside the band the suction pressure moves the flow twice
+        # over: along the curve, and by how much prime the pump has.
+        # Newton needs both terms or it under-steps and grinds -- the
+        # same trap as regularising a slope without its flow.
+        prime = self.prime(pa)
+        g = self.conductance(pa - pb) * prime
+        if 0.0 < prime < 1.0:
+            g += self.flow(pa - pb) / self.CAVITATION_BAND_PA
+        return g
+
+    def is_conducting_at(self, pa: float, pb: float) -> bool:
+        return self.is_conducting(pa - pb) and self.prime(pa) > 0.0
 
     def flow(self, dp: float) -> float:
         if not self.running:
@@ -227,7 +306,17 @@ class FixedFlow(Branch):
     """A machine that sets its own throughput: a metering pump, or a
     unit with its own feed pump inside it. It takes what it takes and
     the network works around it, which is what a positive-displacement
-    machine does until something cavitates."""
+    machine does until something cavitates.
+
+    Its conductance is zero -- pressure does not change what it does --
+    but it is emphatically *conducting*. Material crosses it, so
+    whatever it discharges into has a pressure to find rather than being
+    hydraulically adrift. Reading its flat slope as a wall is what
+    stopped a dryer ever pushing cake into a hopper: the receiving
+    nozzle sat behind a check that had not cracked yet, the solver
+    decided nothing could reach it, and the two ends waited for each
+    other for ever.
+    """
 
     def __init__(self, node_a: int, node_b: int, lps: float = 0.0,
                  name: str = "") -> None:
@@ -239,6 +328,9 @@ class FixedFlow(Branch):
 
     def conductance(self, dp: float) -> float:
         return 0.0
+
+    def is_conducting(self, dp: float) -> bool:
+        return True
 
 
 class Network:
@@ -264,6 +356,7 @@ class Network:
         self.iterations = 0
         self.residual_lps = 0.0
         self._solved_once = False
+        self._islanded: set[int] = set()
 
     def add_node(self, pressure_pa: float = ATMOSPHERIC_PA,
                  fixed: bool = False) -> int:
@@ -311,8 +404,18 @@ class Network:
 
         for _ in range(self.MAX_ITERATIONS):
             self.iterations += 1
+            # What is actually connected decides two things at once:
+            # which nodes have an equation to satisfy, and therefore
+            # which imbalances are worth converging on. A node adrift
+            # from every fixed pressure has neither -- and counting its
+            # residual anyway means the loop never breaks early and
+            # burns the full iteration cap every scan for the rest of
+            # the run, however correct the answer already is.
+            reachable, conducting = self._reachable_from_fixed(index_of)
             residual = self._residuals(index_of, n)
-            worst = max((abs(r) for r in residual), default=0.0)
+            worst = max(
+                (abs(r) for i, r in enumerate(residual) if reachable[i]),
+                default=0.0)
             if worst < self.TOLERANCE_LPS:
                 break
 
@@ -320,7 +423,7 @@ class Network:
             neighbours: list[list[int]] = [[] for _ in range(n)]
             for branch in self.branches:
                 a, b = branch.node_a, branch.node_b
-                g = branch.conductance(self.pressures[a] - self.pressures[b])
+                g = branch.conductance_at(self.pressures[a], self.pressures[b])
                 if a in index_of:
                     ia = index_of[a]
                     jacobian[ia][ia] -= g
@@ -345,7 +448,8 @@ class Network:
             #
             # So find what is actually connected, and let the rest
             # equalise with its neighbours the way a dead leg does.
-            reachable, conducting = self._reachable_from_fixed(index_of)
+            # (``reachable`` was worked out at the top of the iteration,
+            # because the convergence test needs it too.)
             rhs = [-r for r in residual]
             dead: list[int] = []
             for i in range(n):
@@ -424,6 +528,7 @@ class Network:
             common = sum(self.pressures[x] for x in island) / len(island)
             for node in island:
                 self.pressures[node] = common
+        self._islanded = settled
 
     def _reachable_from_fixed(self, index_of: dict[int, int]):
         """Which free nodes can actually feel a fixed pressure, through
@@ -435,7 +540,7 @@ class Network:
         adjacency: dict[int, list[int]] = {}
         for branch in self.branches:
             a, b = branch.node_a, branch.node_b
-            if branch.conductance(self.pressures[a] - self.pressures[b]) <= 1e-12:
+            if not branch.is_conducting_at(self.pressures[a], self.pressures[b]):
                 continue
             adjacency.setdefault(a, []).append(b)
             adjacency.setdefault(b, []).append(a)
@@ -458,7 +563,7 @@ class Network:
         residual = [0.0] * n
         for branch in self.branches:
             a, b = branch.node_a, branch.node_b
-            q = branch.flow(self.pressures[a] - self.pressures[b])
+            q = branch.flow_at(self.pressures[a], self.pressures[b])
             if a in index_of:
                 residual[index_of[a]] -= q
             if b in index_of:
@@ -466,9 +571,20 @@ class Network:
         return residual
 
     def _record_flows(self) -> None:
+        island = self._islanded
         for branch in self.branches:
-            dp = self.pressures[branch.node_a] - self.pressures[branch.node_b]
-            branch.flow_lps = branch.flow(dp)
+            a, b = branch.node_a, branch.node_b
+            if a in island and b in island:
+                # Nothing inside an island can be flowing. An island is
+                # cut off from every fixed pressure, so there is nowhere
+                # for material to come from or go to -- and settling it
+                # to one common pressure leaves a *running* pump reading
+                # its shutoff flow, which is a litre a second of nothing
+                # arriving from nowhere, and an imbalance the solve can
+                # never clear.
+                branch.flow_lps = 0.0
+                continue
+            branch.flow_lps = branch.flow_at(self.pressures[a], self.pressures[b])
 
     def _worst_imbalance(self, index_of: dict[int, int], n: int) -> float:
         """The largest flow imbalance left at any free node, reported
