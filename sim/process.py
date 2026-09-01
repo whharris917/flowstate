@@ -16,26 +16,29 @@ view or gauge shows comes from these records.
 from __future__ import annotations
 
 from sim.core import Component, PortKind
+from sim.hydraulics import (
+    FixedFlow, PumpCurve, Resistance, static_head_pa,
+)
 from sim.library import Equation, EquipmentSpec, Param
 from sim.species import get as get_species
 from sim.stream import AMBIENT_C, SOLID_KEY, Stream, comp_from_amounts
 
 
 class SteamGen(Component):
-    """Electrically fired steam generator. Feedwater comes through the
-    ``inlet`` facade pair (wire a supply header's outlet to it); the
-    burner needs 480 V and is toggled with ``is_on``. Produces
-    ``steam`` — a real material stream of water at the header's
-    saturation temperature — and holds a header ``press`` that rises
-    and falls first-order with firing.
+    """Electrically fired steam generator.
+
+    Feedwater arrives through the ``inlet`` nozzle and the burner needs
+    480 V. What it holds is a header *pressure*, and that pressure is
+    what pushes steam through anything connected downstream -- so an
+    exchanger only gets steam if its condensate has somewhere to go.
     """
 
     PRESS_FULL_PA = 8.0e5
     PRESS_TAU_S = 10.0
-    # Saturation temperature, linearised across the operating range:
-    # atmospheric at no pressure, about 180 C at the 8 bar rating.
     SAT_C_AT_ZERO = 100.0
     SAT_C_AT_FULL = 180.0
+    #: Feedwater the burner will pull in per second at full fire.
+    FEED_HEAD_M = 25.0
 
     def __init__(self, name: str, rated_kgps: float = 0.5) -> None:
         super().__init__(name)
@@ -46,54 +49,77 @@ class SteamGen(Component):
         self.making = False
         self.press_pa = 0.0
         self.starve_s = 0.0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.steam = self.add_output("steam", PortKind.PROCESS_STREAM)
+        self.steam = self.add_output("steam", PortKind.PROCESS_MATERIAL)
         self.press = self.add_output("press", PortKind.PROCESS_PRESSURE)
-        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self._feed = None
         self.add_observable("press_pa", "press_pa")
         self.add_observable("starve_s", "starve_s")
         self.add_observable("sat_temp_c", "sat_temp_c")
+        self.add_observable("steam_lps", "steam_lps")
 
     @property
     def sat_temp_c(self) -> float:
-        """Saturation temperature at the current header pressure."""
         frac = self.press_pa / self.PRESS_FULL_PA
         return self.SAT_C_AT_ZERO + (self.SAT_C_AT_FULL - self.SAT_C_AT_ZERO) * frac
 
+    @property
+    def steam_lps(self) -> float:
+        return max(-self.steam.flow_lps, 0.0)
+
+    @property
+    def feedwater_lps(self) -> float:
+        return max(self.inlet.flow_lps, 0.0)
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        drum = net.add_node(0.0)
+        self._feed = net.add_branch(PumpCurve(
+            node["inlet"], drum, static_head_pa(self.FEED_HEAD_M),
+            self.rated_kgps, self.name + ".feed"))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        firing = self.is_on and float(self.power.value) > 0.5
+        if self._feed is not None:
+            self._feed.running = firing
+        # The steam nozzle holds header pressure: that is what drives
+        # steam anywhere at all.
+        net.set_pressure(node["steam"], self.press_pa, fixed=True)
+
+    def supplied_stream(self, port_name: str):
+        if port_name == "steam":
+            return Stream.pure("water", 1.0, self.sat_temp_c)
+        return None
+
     def tick(self, dt: float) -> None:
-        feed: Stream = self.inlet.value
-        wet = feed.flow_lps > 1e-9
+        wet = self.feedwater_lps > 1e-6
         firing = self.is_on and float(self.power.value) > 0.5
         if firing and not wet:
-            self.starve_s += dt  # firing dry: the operator's problem
+            self.starve_s += dt  # firing dry: the operator problem
         self.making = firing and wet
-        rate = min(self.rated_kgps, feed.flow_lps) if self.making else 0.0
-        target = self.PRESS_FULL_PA * (rate / self.rated_kgps)
+        rate = self.feedwater_lps if self.making else 0.0
+        target = self.PRESS_FULL_PA * min(rate / self.rated_kgps, 1.0)
         self.press_pa += (target - self.press_pa) * dt / self.PRESS_TAU_S
         self.press.value = self.press_pa
-        self.draw.value = rate
-        # Steam is water, hot. Downstream finds out how hot by being
-        # piped to it.
-        self.steam.value = Stream.pure("water", rate, self.sat_temp_c)
 
 
 class HeatExchanger(Component):
-    """Shell-and-tube preheater: steam on the shell, the process
-    stream through the tubes (``cold_in`` -> ``cold_out``, one scan).
-    Governing equations are on the library page (``HeatExchanger.SPEC``
-    at the foot of this module), which is their only copy.
+    """Shell-and-tube preheater: steam on the shell, process on the
+    tubes.
 
-    The line that matters: steam cannot heat a stream
-    past its own temperature, so an undersized header shows up as a
-    process that will not come up to heat no matter how long it runs.
-    Duty is recomputed from the temperature actually achieved, so the
-    ``duty`` signal never claims heat the process did not take. What
-    condenses leaves on ``condensate`` for a trap to deal with.
+    The shell is a real path, not a number. Steam flows from the header
+    through the shell to the condensate nozzle, driven by the pressure
+    across it -- so an exchanger whose condensate has nowhere to go
+    passes no steam and delivers no duty, exactly as a shell with no
+    trap fitted would. Duty follows the steam that actually condensed.
     """
 
     LATENT_KJ_PER_KG = 2000.0
     APPROACH_C = 5.0
+    #: Shell resistance, Pa per (L/s)^2. Sized so a few hundred kPa of
+    #: header pressure passes a sensible steam rate.
+    SHELL_K = 400_000.0
+    TUBE_K = 2_000.0
 
     def __init__(self, name: str, max_duty_kw: float = 1200.0) -> None:
         super().__init__(name)
@@ -102,57 +128,64 @@ class HeatExchanger(Component):
         self.max_duty_kw = max_duty_kw
         self.duty_kw = 0.0
         self.outlet_temp_c = AMBIENT_C
-        self.steam_in = self.add_input("steam_in", PortKind.PROCESS_STREAM)
-        self.cold_in = self.add_input("cold_in", PortKind.PROCESS_STREAM)
-        self.cold_out = self.add_output("cold_out", PortKind.PROCESS_STREAM)
-        self.condensate = self.add_output("condensate", PortKind.PROCESS_STREAM)
+        self.steam_in = self.add_input("steam_in", PortKind.PROCESS_MATERIAL)
+        self.cold_in = self.add_input("cold_in", PortKind.PROCESS_MATERIAL)
+        self.cold_out = self.add_output("cold_out", PortKind.PROCESS_MATERIAL)
+        self.condensate = self.add_output("condensate", PortKind.PROCESS_MATERIAL)
         self.duty = self.add_output("duty", PortKind.SIGNAL_ANALOG)
         self.add_observable("duty_kw", "duty_kw")
         self.add_observable("outlet_temp_c", "outlet_temp_c")
+        self.add_observable("steam_lps", "steam_lps")
+
+    @property
+    def steam_lps(self) -> float:
+        return max(self.steam_in.flow_lps, 0.0)
+
+    @property
+    def process_lps(self) -> float:
+        return max(self.cold_in.flow_lps, 0.0)
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        net.add_branch(Resistance(node["steam_in"], node["condensate"],
+                                  self.SHELL_K, self.name + ".shell"))
+        net.add_branch(Resistance(node["cold_in"], node["cold_out"],
+                                  self.TUBE_K, self.name + ".tubes"))
+
+    def supplied_stream(self, port_name: str):
+        if port_name == "cold_out":
+            return self.cold_in.stream.with_temp(self.outlet_temp_c)
+        if port_name == "condensate":
+            return Stream.pure("water", 1.0, self.steam_in.stream.temp_c)
+        return None
 
     def tick(self, dt: float) -> None:
-        steam: Stream = self.steam_in.value
-        cold: Stream = self.cold_in.value
-        available_kw = steam.flow_lps * self.LATENT_KJ_PER_KG
-        offered_kw = min(available_kw, self.max_duty_kw)
-
-        if cold.is_flowing and offered_kw > 0.0:
+        steam = self.steam_in.stream
+        cold = self.cold_in.stream
+        offered_kw = min(self.steam_lps * self.LATENT_KJ_PER_KG, self.max_duty_kw)
+        if self.process_lps > 1e-9 and offered_kw > 0.0:
             cp = cold.cp_kj_per_kg_k()
             ceiling_c = max(steam.temp_c - self.APPROACH_C, cold.temp_c)
-            rise_c = offered_kw / (cold.flow_lps * cp)
+            rise_c = offered_kw / (self.process_lps * cp)
             self.outlet_temp_c = min(cold.temp_c + rise_c, ceiling_c)
-            # Honest duty: what the stream actually absorbed.
-            self.duty_kw = cold.flow_lps * cp * (self.outlet_temp_c - cold.temp_c)
+            self.duty_kw = self.process_lps * cp * (self.outlet_temp_c - cold.temp_c)
         else:
             self.outlet_temp_c = cold.temp_c
-            # No process flow to heat: the shell still condenses what
-            # it can against the tubes, which is what a bypassed
-            # exchanger really does.
-            self.duty_kw = offered_kw if not cold.is_flowing else 0.0
-
-        self.cold_out.value = cold.with_temp(self.outlet_temp_c)
-        # Everything admitted to the shell condenses -- that is what the
-        # trap on the outlet is for. Steam the process could not absorb
-        # is not destroyed, it leaves hot down the condensate line,
-        # which is how over-steaming shows up as wasted feedwater on a
-        # drain totalizer instead of quietly vanishing.
-        self.condensate.value = Stream.pure("water", steam.flow_lps, steam.temp_c)
+            self.duty_kw = offered_kw if self.process_lps <= 1e-9 else 0.0
         self.duty.value = self.duty_kw
 
 
 class Reactor(Component):
     """Jacketed stirred reactor: A + B -> product, plus an impurity.
 
-    Reactants arrive on two feed nozzles and are blended into the
-    inventory; heat arrives as an analog ``heat_duty`` in kW (a heat
-    exchanger's duty output); the agitator is a 480 V load. Governing
-    equations are on the library page (``Reactor.SPEC`` at the foot of
-    this module), which is their only copy.
+    A vessel, so its nozzles behave like one: the feeds enter at the top
+    against headspace pressure, and the outlet at the bottom carries the
+    static head of the batch standing above it. Heat arrives as an
+    analog duty; the agitator is a 480 V load.
 
-    The interesting one is the impurity yield. Conversion rate climbs with
-    temperature and so does the impurity yield, so there is no single
-    right setpoint — running hot fills the vessel faster and dirtier.
-    That trade is the whole reason to instrument the thing.
+    Conversion rate climbs with temperature and so does the impurity
+    yield, so there is no single right setpoint. Running hot fills the
+    vessel faster and dirtier, and that trade is the whole reason to
+    instrument the thing.
     """
 
     REACT_MIN_C = 60.0
@@ -160,35 +193,32 @@ class Reactor(Component):
     LOSS_PER_S = 0.0008
     UNMIXED_FACTOR = 0.05
     MIN_THERMAL_MASS_KG = 50.0
-    OUTLET_MAX_LPS = 250.0
     VAPOR_LATENT_KJ_PER_KG = 900.0
-    # Selectivity: clean at the low end of the window, dirty when pushed.
     IMPURITY_REF_C = 70.0
     IMPURITY_BASE = 0.02
     IMPURITY_SLOPE_PER_K = 0.004
 
     def __init__(self, name: str, capacity_l: float = 4000.0,
-                 rate_lps: float = 6.0) -> None:
+                 rate_lps: float = 6.0, height_m: float = 2.4) -> None:
         super().__init__(name)
         if capacity_l <= 0.0 or rate_lps <= 0.0:
             raise ValueError("capacity and rate must be positive")
         self.capacity_l = capacity_l
-        self.rate_lps = rate_lps      # max conversion rate at full temp
+        self.rate_lps = rate_lps
+        self.height_m = height_m
         self.volume_l = 0.0
         self.temp_c = AMBIENT_C
         self.overflowed_l = 0.0
-        self.agitating = False
-        self.contents = Stream(0.0, AMBIENT_C, None)
-        self.inlet_a = self.add_input("inlet_a", PortKind.PROCESS_STREAM)
-        self.inlet_b = self.add_input("inlet_b", PortKind.PROCESS_STREAM)
-        self.heat_duty = self.add_input("heat_duty", PortKind.SIGNAL_ANALOG)
-        self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.draw = self.add_input("draw", PortKind.PROCESS_FLOW)
         self.boiled_off_l = 0.0
         self.boiling = False
+        self.agitating = False
+        self.contents = Stream(0.0, AMBIENT_C, None)
+        self.inlet_a = self.add_input("inlet_a", PortKind.PROCESS_MATERIAL)
+        self.inlet_b = self.add_input("inlet_b", PortKind.PROCESS_MATERIAL)
+        self.heat_duty = self.add_input("heat_duty", PortKind.SIGNAL_ANALOG)
+        self.power = self.add_input("power", PortKind.POWER, "480VAC")
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
-        self.outlet = self.add_output("outlet", PortKind.PROCESS_SUPPLY)
-        self.vapor = self.add_output("vapor", PortKind.PROCESS_STREAM)
         self.purity = self.add_output("purity", PortKind.SIGNAL_ANALOG)
         self.temp = self.add_output("temp", PortKind.SIGNAL_ANALOG)
         self.add_observable("temp_c", "temp_c")
@@ -197,21 +227,6 @@ class Reactor(Component):
         self.add_observable("impurity_frac", "impurity_frac")
         self.add_observable("overflowed_l", "overflowed_l")
         self.add_observable("boiled_off_l", "boiled_off_l")
-
-    def bubble_point_c(self) -> float:
-        """The batch boils when its most volatile component does.
-
-        A bubble-point stand-in: the lowest boiling point among the
-        species actually present in quantity. Crude, legible, and
-        enough to stop a vessel being driven to a temperature no
-        atmospheric reactor could reach.
-        """
-        present = [
-            get_species(key).boil_c
-            for key, frac in self.contents.comp.items()
-            if frac > 0.01
-        ]
-        return min(present) if present else 100.0
 
     @property
     def purity_frac(self) -> float:
@@ -225,13 +240,28 @@ class Reactor(Component):
     def product_l(self) -> float:
         return self.volume_l * self.purity_frac
 
+    @property
+    def cross_section_m2(self) -> float:
+        return (self.capacity_l / 1000.0) / max(self.height_m, 1e-9)
+
+    @property
+    def depth_m(self) -> float:
+        return (self.volume_l / 1000.0) / max(self.cross_section_m2, 1e-9)
+
     def charge(self, volume_l: float, comp: dict[str, float],
                temp_c: float = AMBIENT_C) -> None:
-        """Put a batch in the vessel directly — a commissioning charge,
-        or a save being restored."""
         self.volume_l = min(max(volume_l, 0.0), self.capacity_l)
         self.temp_c = temp_c
         self.contents = Stream(self.volume_l, temp_c, comp)
+        self.level.value = self.volume_l
+
+    def bubble_point_c(self) -> float:
+        present = [
+            get_species(key).boil_c
+            for key, frac in self.contents.comp.items()
+            if frac > 0.01
+        ]
+        return min(present) if present else 100.0
 
     def impurity_yield(self) -> float:
         y = self.IMPURITY_BASE + self.IMPURITY_SLOPE_PER_K * (
@@ -239,41 +269,50 @@ class Reactor(Component):
         )
         return min(max(y, 0.0), 1.0)
 
-    def tick(self, dt: float) -> None:
-        feed = Stream.mix(self.inlet_a.value, self.inlet_b.value)
-        added_l = feed.flow_lps * dt
-        outflow_l = min(float(self.draw.value) * dt, self.volume_l + added_l)
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        for feed in ("inlet_a", "inlet_b"):
+            net.set_pressure(node[feed], 0.0, fixed=True)
+        net.set_pressure(node["outlet"], static_head_pa(self.depth_m), fixed=True)
 
-        # Blend the feed in (volume-weighted, same rule as a tank).
+    def supplied_stream(self, port_name: str):
+        return self.contents.with_flow(1.0)
+
+    def tick(self, dt: float) -> None:
+        nozzles = (self.inlet_a, self.inlet_b, self.outlet)
+        arriving = Stream.mix_all([
+            port.stream.with_flow(port.flow_lps)
+            for port in nozzles if port.flow_lps > 0.0
+        ])
+        leaving_lps = sum(-p.flow_lps for p in nozzles if p.flow_lps < 0.0)
+        added_l = arriving.flow_lps * dt
+        removed_l = min(leaving_lps * dt, self.volume_l + added_l)
+
         if added_l > 0.0:
             self.contents = Stream.mix(
-                self.contents.with_flow(self.volume_l), feed.with_flow(added_l)
+                self.contents.with_flow(self.volume_l), arriving.with_flow(added_l)
             )
-        new_volume = self.volume_l + added_l - outflow_l
+        new_volume = self.volume_l + added_l - removed_l
         if new_volume > self.capacity_l:
             self.overflowed_l += new_volume - self.capacity_l
             new_volume = self.capacity_l
         self.volume_l = max(new_volume, 0.0)
         self.temp_c = self.contents.temp_c
 
-        # Energy: jacket duty in, first-order ambient loss.
         self.agitating = float(self.power.value) > 0.5
         mass = max(self.volume_l, self.MIN_THERMAL_MASS_KG)
         cp = self.contents.cp_kj_per_kg_k()
         self.temp_c += float(self.heat_duty.value) / (mass * cp) * dt
         self.temp_c -= (self.temp_c - AMBIENT_C) * self.LOSS_PER_S * dt
 
-        # Reaction, in absolute litres so the volume balance is exact.
         amounts = {
             key: self.volume_l * frac for key, frac in self.contents.comp.items()
         }
 
-        # An atmospheric vessel cannot go past its bubble point: surplus
-        # duty boils the most volatile thing in it instead of raising
-        # the temperature. What leaves does so on the vapor nozzle, so
-        # the volume balance still closes.
+        # An atmospheric vessel cannot be driven past its bubble point:
+        # surplus duty boils the most volatile thing in it and that
+        # vapour leaves through the vent, which is why it comes off the
+        # inventory rather than out of a nozzle.
         boil_c = self.bubble_point_c()
-        boiled_l = 0.0
         self.boiling = self.temp_c > boil_c
         if self.boiling and self.volume_l > 0.0:
             surplus_kj = (self.temp_c - boil_c) * mass * cp
@@ -290,11 +329,7 @@ class Reactor(Component):
                 amounts[lightest] -= boiled_l
                 self.volume_l -= boiled_l
                 self.boiled_off_l += boiled_l
-                self.vapor.value = Stream.pure(
-                    lightest, boiled_l / dt if dt > 0.0 else 0.0, boil_c
-                )
-        if boiled_l <= 0.0:
-            self.vapor.value = Stream.empty()
+
         temp_factor = min(
             max((self.temp_c - self.REACT_MIN_C)
                 / (self.REACT_FULL_C - self.REACT_MIN_C), 0.0), 1.0)
@@ -316,24 +351,21 @@ class Reactor(Component):
             self.volume_l, self.temp_c, comp_from_amounts(amounts)
         )
         self.level.value = self.volume_l
-        offered = min(self.volume_l / dt, self.OUTLET_MAX_LPS) if dt > 0.0 else 0.0
-        self.outlet.value = self.contents.with_flow(offered)
         self.purity.value = self.purity_frac
         self.temp.value = self.temp_c
 
 
 class Centrifuge(Component):
-    """Disc-stack separator: pulls slurry through the ``inlet`` facade
-    pair and splits it on the phase that is actually there. Governing
-    equations are on the library page (``Centrifuge.SPEC``), which is
-    their only copy.
+    """Disc-stack separator: crystals out of the liquor they formed in.
 
-    Capture efficiency and cake wetness are the two knobs; the wet cake
-    is the reason a dryer exists downstream. Nothing tells this
-    machine the quality of its feed any more; it separates crystals
-    from mother liquor, and if the feed carries no crystals it sends
-    everything out the liquor nozzle. The bowl is a 480 V drive.
+    It has its own feed pump, so what it draws is set by its curve
+    against the suction it is given -- starve it and the rate falls
+    away rather than the machine inventing material. What it does with
+    what it drew is its own business: the split is set by the phase
+    actually present in the feed, and nothing tells it what that is.
     """
+
+    FEED_HEAD_M = 18.0
 
     def __init__(self, name: str, rate_lps: float = 4.0,
                  capture_eff: float = 0.95, cake_wetness: float = 0.25) -> None:
@@ -352,31 +384,63 @@ class Centrifuge(Component):
         self.starts = 0
         self.cake_lps = 0.0
         self.liquor_lps = 0.0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
+        self._cake = Stream.empty()
+        self._liquor = Stream.empty()
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.product = self.add_output("product", PortKind.PROCESS_STREAM)
-        self.waste = self.add_output("waste", PortKind.PROCESS_STREAM)
-        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self.product = self.add_output("product", PortKind.PROCESS_MATERIAL)
+        self.waste = self.add_output("waste", PortKind.PROCESS_MATERIAL)
+        self._feed = None
+        self._to_cake = None
+        self._to_liquor = None
         self.add_observable("starts", "starts")
         self.add_observable("cake_lps", "cake_lps")
         self.add_observable("liquor_lps", "liquor_lps")
+        self.add_observable("draw_lps", "draw_lps")
+
+    @property
+    def draw_lps(self) -> float:
+        return max(self.inlet.flow_lps, 0.0)
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        bowl = net.add_node(0.0)
+        self._feed = net.add_branch(PumpCurve(
+            node["inlet"], bowl, static_head_pa(self.FEED_HEAD_M),
+            self.rate_lps, self.name + ".feed"))
+        self._to_cake = net.add_branch(
+            FixedFlow(bowl, node["product"], 0.0, self.name + ".cake"))
+        self._to_liquor = net.add_branch(
+            FixedFlow(bowl, node["waste"], 0.0, self.name + ".liquor"))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        spinning = self.is_on and float(self.power.value) > 0.5
+        if self._feed is not None:
+            self._feed.running = spinning
+        # The split is worked out from what actually came in, so the
+        # discharges follow the draw by one scan.
+        if self._to_cake is not None:
+            self._to_cake.lps = self.cake_lps
+            self._to_liquor.lps = self.liquor_lps
+
+    def supplied_stream(self, port_name: str):
+        if port_name == "product":
+            return self._cake
+        if port_name == "waste":
+            return self._liquor
+        return None
 
     def tick(self, dt: float) -> None:
         spinning = self.is_on and float(self.power.value) > 0.5
         if spinning and not self.spinning:
             self.starts += 1
         self.spinning = spinning
-        feed: Stream = self.inlet.value
-        rate = min(self.rate_lps, feed.flow_lps) if spinning else 0.0
-        self.draw.value = rate
-        if rate <= 0.0:
+        feed = self.inlet.stream.clamped_solids()
+        rate = self.draw_lps
+        if rate <= 1e-9:
             self.cake_lps = 0.0
             self.liquor_lps = 0.0
-            self.product.value = Stream.empty()
-            self.waste.value = Stream.empty()
             return
 
-        feed = feed.clamped_solids()
         liquid_comp = feed.liquid_comp()
         solids_lps = rate * feed.solids_frac
         captured = solids_lps * self.capture_eff
@@ -384,9 +448,6 @@ class Centrifuge(Component):
         cake_total = captured + cake_liquid
         liquor_total = rate - cake_total
 
-        # The cake is captured crystals plus the mother liquor clinging
-        # to them; the liquor carries everything else, crystals the
-        # bowl failed to catch included.
         cake_amounts = {SOLID_KEY: captured}
         for key, frac in liquid_comp.items():
             cake_amounts[key] = cake_amounts.get(key, 0.0) + cake_liquid * frac
@@ -399,18 +460,13 @@ class Centrifuge(Component):
 
         self.cake_lps = cake_total
         self.liquor_lps = liquor_total
-        self.product.value = Stream(
-            cake_total,
-            feed.temp_c,
-            comp_from_amounts(cake_amounts),
-            captured / cake_total if cake_total > 0.0 else 0.0,
-        )
-        self.waste.value = Stream(
-            liquor_total,
-            feed.temp_c,
+        self._cake = Stream(
+            max(cake_total, 1e-9), feed.temp_c, comp_from_amounts(cake_amounts),
+            captured / cake_total if cake_total > 0.0 else 0.0)
+        self._liquor = Stream(
+            max(liquor_total, 1e-9), feed.temp_c,
             comp_from_amounts(liquor_amounts),
-            (solids_lps - captured) / liquor_total if liquor_total > 0.0 else 0.0,
-        )
+            (solids_lps - captured) / liquor_total if liquor_total > 0.0 else 0.0)
 
 
 class VacuumLock(Component):
@@ -439,15 +495,31 @@ class VacuumLock(Component):
         self.state = "idle"          # idle/evacuate/hold/vent/drain
         self.press_pa = self.PRESS_ATM_PA
         self.condensate_l = 0.0
+        self.draining_lps = 0.0
         self.cycles = 0
         self.vent_bursts_done = 0    # lifetime counter; views watch edges
         self.timer_s = 0.0
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
         self.press = self.add_output("press", PortKind.PROCESS_PRESSURE)
-        self.drain_flow = self.add_output("drain_flow", PortKind.PROCESS_STREAM)
+        self.drain_flow = self.add_output("drain_flow", PortKind.PROCESS_MATERIAL)
+        self._drainer = None
         self.add_observable("press_pa", "press_pa")
         self.add_observable("condensate_l", "condensate_l")
         self.add_observable("cycles", "cycles")
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        # The drainer pushes condensate out; where it goes is the
+        # plant's problem, which is what a drain line is for.
+        chamber = net.add_node(0.0, fixed=True)
+        self._drainer = net.add_branch(
+            FixedFlow(chamber, node["drain_flow"], 0.0, self.name + ".drainer"))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        if self._drainer is not None:
+            self._drainer.lps = self.draining_lps
+
+    def supplied_stream(self, port_name: str):
+        return Stream.pure("water", 1.0, 40.0)
 
     def tick(self, dt: float) -> None:
         rate = 0.0
@@ -486,21 +558,16 @@ class VacuumLock(Component):
                     self.cycles += 1
                     self.state = "evacuate"
         self.press.value = self.press_pa
-        self.drain_flow.value = Stream.pure("water", rate, 40.0)
+        self.draining_lps = rate
 
 
 class VialFiller(Component):
-    """Automated vial filler/capper in an isolator. A three-station
-    machine cycle — index the conveyor, fill a 10 mL vial from the
-    ``inlet`` facade pair, press the cap — that only runs powered, on,
-    and fed. Every millilitre filled is genuinely drawn from whatever
-    the inlet is piped to.
+    """Automated vial filler/capper in an isolator: index, fill, cap.
 
-    It fills vials with whatever it is given. ``fill_purity`` is the
-    product fraction of the material going into the vials right now,
-    and ``product_filled_l`` totalizes the real product that reached
-    them — so a train that quietly went off-spec is provable after the
-    fact instead of arguable.
+    Every millilitre it puts in a vial is genuinely pulled through its
+    inlet, and only while the fill station is actually filling -- which
+    is what gives the machine its rhythm. It fills vials with whatever
+    it is piped to and keeps an honest record of what that was.
     """
 
     VIAL_ML = 10.0
@@ -517,19 +584,37 @@ class VialFiller(Component):
         self.fill_purity = 0.0
         self.filled_l = 0.0
         self.product_filled_l = 0.0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
+        self.starved = False
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self._draw = None
         self.add_observable("vials_done", "vials_done")
         self.add_observable("fill_purity", "fill_purity")
         self.add_observable("product_filled_l", "product_filled_l")
 
+    @property
+    def needed_lps(self) -> float:
+        return self.VIAL_ML / 1000.0 / self.FILL_S
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        # Filled vials leave the modelled system.
+        away = net.add_node(0.0, fixed=True)
+        self._draw = net.add_branch(
+            FixedFlow(node["inlet"], away, 0.0, self.name + ".fill"))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        filling = self.state == "fill" and self.is_on \
+            and float(self.power.value) > 0.5
+        if self._draw is not None:
+            self._draw.lps = self.needed_lps if filling else 0.0
+
     def tick(self, dt: float) -> None:
-        feed: Stream = self.inlet.value
-        needed = self.VIAL_ML / 1000.0 / self.FILL_S
-        fed = feed.flow_lps >= needed
-        running = self.is_on and float(self.power.value) > 0.5 and fed
-        rate = 0.0
+        feed = self.inlet.stream
+        drawn = max(self.inlet.flow_lps, 0.0)
+        # A dosing pump that cannot get its charge is starved, and the
+        # suction going toward vacuum is how it finds out.
+        self.starved = self.state == "fill" and drawn < self.needed_lps * 0.9
+        running = self.is_on and float(self.power.value) > 0.5
         if not running:
             self.state = "idle"
         else:
@@ -537,8 +622,6 @@ class VialFiller(Component):
                 self.state = "index"
                 self.timer_s = self.INDEX_S
             self.timer_s -= dt
-            if self.state == "fill":
-                rate = needed
             if self.timer_s <= 0.0:
                 if self.state == "index":
                     self.state = "fill"
@@ -551,9 +634,8 @@ class VialFiller(Component):
                     self.state = "index"
                     self.timer_s = self.INDEX_S
         self.fill_purity = feed.frac("product")
-        self.filled_l += rate * dt
-        self.product_filled_l += rate * self.fill_purity * dt
-        self.draw.value = rate
+        self.filled_l += drawn * dt
+        self.product_filled_l += drawn * self.fill_purity * dt
 
 
 # ---------------------------------------------------------------------

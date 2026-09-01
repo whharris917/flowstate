@@ -151,6 +151,10 @@ class PumpCurve(Branch):
     backwards.
     """
 
+    #: Flow past which the curve is treated as flat, as a multiple of
+    #: the rating.
+    RUNOUT_FACTOR = 1.35
+
     def __init__(self, node_a: int, node_b: int, head_pa: float,
                  max_lps: float, name: str = "") -> None:
         super().__init__(node_a, node_b, name)
@@ -166,7 +170,11 @@ class PumpCurve(Branch):
         rise = -dp
         if rise >= self.head_pa:
             return 0.0          # dead-headed
-        return self.max_lps * math.sqrt(1.0 - rise / self.head_pa)
+        # Past the end of the curve a centrifugal pump stops being a
+        # pump and is only a fitting, so cap the runout rather than
+        # letting a high-pressure header drive it to silly flows.
+        return min(self.max_lps * math.sqrt(1.0 - rise / self.head_pa),
+                   self.max_lps * self.RUNOUT_FACTOR)
 
     def conductance(self, dp: float) -> float:
         if not self.running:
@@ -208,6 +216,9 @@ class Network:
     # on the first solve and nothing at all afterwards, because a warm
     # start is already within a few hundred pascals.
     MAX_STEP_PA = 150_000.0
+    #: How many times to halve a step that is not helping before giving
+    #: up on it and re-linearising.
+    MAX_HALVINGS = 12
 
     def __init__(self) -> None:
         self.pressures: list[float] = []
@@ -263,32 +274,25 @@ class Network:
 
         for _ in range(self.MAX_ITERATIONS):
             self.iterations += 1
-            residual = [0.0] * n
-            jacobian = [[0.0] * n for _ in range(n)]
+            residual = self._residuals(index_of, n)
+            worst = max((abs(r) for r in residual), default=0.0)
+            if worst < self.TOLERANCE_LPS:
+                break
 
+            jacobian = [[0.0] * n for _ in range(n)]
             for branch in self.branches:
                 a, b = branch.node_a, branch.node_b
-                dp = self.pressures[a] - self.pressures[b]
-                q = branch.flow(dp)
-                g = branch.conductance(dp)
-                # Flow leaves a and arrives at b.
+                g = branch.conductance(self.pressures[a] - self.pressures[b])
                 if a in index_of:
                     ia = index_of[a]
-                    residual[ia] -= q
                     jacobian[ia][ia] -= g
                     if b in index_of:
                         jacobian[ia][index_of[b]] += g
                 if b in index_of:
                     ib = index_of[b]
-                    residual[ib] += q
                     jacobian[ib][ib] -= g
                     if a in index_of:
                         jacobian[ib][index_of[a]] += g
-
-            worst = max((abs(r) for r in residual), default=0.0)
-            self.residual_lps = worst
-            if worst < self.TOLERANCE_LPS:
-                break
 
             # A node with no pressure-sensitive branch on it (only fixed
             # flows) leaves a zero row; pin it so the system stays
@@ -300,13 +304,39 @@ class Network:
             step = _solve_dense(jacobian, [-r for r in residual])
             if step is None:
                 break
-            for slot, node in enumerate(free):
-                move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, step[slot]))
-                self.pressures[node] = max(
-                    self.pressures[node] + move, MIN_PRESSURE_PA)
+
+            # Damped step. An undamped Newton step on a square law will
+            # happily leap clean over the answer and land the same
+            # distance the other side, then leap back, forever -- which
+            # is exactly what a dead-ended drain does at zero flow. Try
+            # the full step, and keep halving until the imbalance
+            # actually improves.
+            before = _norm(residual)
+            saved = [self.pressures[node] for node in free]
+            scale = 1.0
+            for _attempt in range(self.MAX_HALVINGS):
+                for slot, node in enumerate(free):
+                    move = step[slot] * scale
+                    move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
+                    self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
+                if _norm(self._residuals(index_of, n)) < before:
+                    break
+                scale *= 0.5
 
         self._record_flows()
         self.residual_lps = self._worst_imbalance(index_of, len(free))
+
+    def _residuals(self, index_of: dict[int, int], n: int) -> list[float]:
+        """Net flow into each free node. Zero everywhere is the answer."""
+        residual = [0.0] * n
+        for branch in self.branches:
+            a, b = branch.node_a, branch.node_b
+            q = branch.flow(self.pressures[a] - self.pressures[b])
+            if a in index_of:
+                residual[index_of[a]] -= q
+            if b in index_of:
+                residual[index_of[b]] += q
+        return residual
 
     def _record_flows(self) -> None:
         for branch in self.branches:
@@ -326,6 +356,10 @@ class Network:
             if branch.node_b in index_of:
                 totals[index_of[branch.node_b]] += branch.flow_lps
         return max(abs(t) for t in totals)
+
+
+def _norm(values: list[float]) -> float:
+    return math.sqrt(sum(v * v for v in values))
 
 
 def _solve_dense(matrix: list[list[float]], rhs: list[float]) -> list[float] | None:

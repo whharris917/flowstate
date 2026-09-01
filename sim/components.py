@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 
 from sim.core import Component, PortKind
+from sim.hydraulics import ControlResistance, PumpCurve, static_head_pa
 from sim.library import Equation, EquipmentSpec, Param
 from sim.stream import AMBIENT_C, Stream
 
@@ -18,28 +19,18 @@ from sim.stream import AMBIENT_C, Stream
 class Tank(Component):
     """Holds liquid, and knows what the liquid is.
 
-    Inflow arriving on ``inlet`` is blended into the inventory: the
-    contents take a volume-weighted temperature and composition, which
-    is what makes a hot stream genuinely warm a vessel and a reagent
-    charge genuinely change what is in it. Whatever is drawn off leaves
-    at the current contents composition.
+    Two nozzles, and the difference between them is where they are. The
+    outlet is at the bottom, so it carries the static head of whatever
+    is standing above it — which is why a full tank will drain into an
+    empty one through nothing but a pipe. The inlet is at the top, at
+    headspace pressure, so filling it never has to fight the level.
 
-    The vessel offers its contents at ``outlet`` as a supply: the rate
-    published there is the most that could be taken this instant, so a
-    pump on a nearly empty tank throttles itself instead of pulling
-    liquid that is not there. ``level`` stays a plain level tap for
-    instruments.
-
-    ``overflowed_l`` and ``ran_dry_ticks`` are the failure evidence a
-    player would trace.
+    Inflow is blended into the inventory: the contents take a
+    volume-weighted temperature and composition, which is what makes a
+    hot stream genuinely warm a vessel. Whatever leaves does so at the
+    current contents composition.
     """
 
-    # Nozzle capacity: the ceiling on what the outlet can offer however
-    # full the vessel is. Keeps a full tank from advertising an absurd
-    # instantaneous rate.
-    OUTLET_MAX_LPS = 250.0
-    # Bare-vessel heat loss to the hall. Slow: a hot batch left
-    # overnight is cold in the morning, but nothing changes in a minute.
     LOSS_PER_S = 0.0002
 
     def __init__(
@@ -52,6 +43,7 @@ class Tank(Component):
         diameter_m: float = 0.0,
         temp_c: float = AMBIENT_C,
         comp: dict[str, float] | None = None,
+        headspace_kpa: float = 0.0,
     ) -> None:
         super().__init__(name)
         if capacity_l <= 0.0:
@@ -61,8 +53,8 @@ class Tank(Component):
         self.capacity_l = capacity_l
         self.level_l = level_l
         self.drain_lps = drain_lps
+        self.headspace_kpa = headspace_kpa
         if height_m > 0.0 and diameter_m > 0.0:
-            # Geometry given: capacity follows it honestly.
             self.height_m = height_m
             self.diameter_m = diameter_m
             self.capacity_l = math.pi * (diameter_m / 2.0) ** 2 * height_m * 1000.0
@@ -72,44 +64,45 @@ class Tank(Component):
             self.diameter_m = 2.0 * math.sqrt(
                 capacity_l / 1000.0 / (math.pi * height_m))
         else:
-            # Capacity only: drum-like proportions (h = 1.4 d).
             self.diameter_m = (4.0 * capacity_l / 1000.0 / (1.4 * math.pi)) ** (1.0 / 3.0)
             self.height_m = 1.4 * self.diameter_m
         if self.level_l > self.capacity_l:
             raise ValueError("level_l must be within [0, capacity_l]")
         self.temp_c = float(temp_c)
-        # The contents, carried as a Stream so blending reuses the one
-        # mixing rule in the kernel. Its flow field holds the inventory
-        # in litres rather than a rate: mixing is volume-weighted, so
-        # the arithmetic is identical either way.
         self.contents = Stream(self.level_l, self.temp_c, comp)
         self.overflowed_l = 0.0
         self.ran_dry_ticks = 0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_STREAM)
-        self.draw = self.add_input("draw", PortKind.PROCESS_FLOW)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
-        self.outlet = self.add_output("outlet", PortKind.PROCESS_SUPPLY)
         self.level.value = level_l
         self.add_observable("overflowed_l", "overflowed_l")
         self.add_observable("ran_dry_ticks", "ran_dry_ticks")
         self.add_observable("temp_c", "temp_c")
+        self.add_observable("depth_m", "depth_m")
 
     @property
     def comp(self) -> dict[str, float]:
-        """What the vessel currently holds, as fractions."""
         return self.contents.comp
 
     @property
     def solids_frac(self) -> float:
         return self.contents.solids_frac
 
+    @property
+    def cross_section_m2(self) -> float:
+        return math.pi * (self.diameter_m / 2.0) ** 2
+
+    @property
+    def depth_m(self) -> float:
+        """How deep the liquid stands. This is what the outlet nozzle
+        feels, and what a level transmitter is really measuring."""
+        return (self.level_l / 1000.0) / max(self.cross_section_m2, 1e-9)
+
     def species_l(self, key: str) -> float:
-        """Litres of one species in the vessel."""
         return self.level_l * self.contents.frac(key)
 
     def set_size(self, height_m: float, diameter_m: float) -> None:
-        """Resize the vessel; capacity follows the geometry honestly
-        and the inventory is clamped to what still fits."""
         if height_m <= 0.0 or diameter_m <= 0.0:
             raise ValueError("height and diameter must be positive")
         self.height_m = height_m
@@ -117,43 +110,51 @@ class Tank(Component):
         self.capacity_l = math.pi * (diameter_m / 2.0) ** 2 * height_m * 1000.0
         self.level_l = min(self.level_l, self.capacity_l)
 
+    def charge(self, volume_l: float, comp: dict[str, float],
+               temp_c: float = AMBIENT_C) -> None:
+        self.level_l = min(max(volume_l, 0.0), self.capacity_l)
+        self.temp_c = temp_c
+        self.contents = Stream(self.level_l, temp_c, comp)
+        self.level.value = self.level_l
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        headspace_pa = self.headspace_kpa * 1000.0
+        net.set_pressure(node["inlet"], headspace_pa, fixed=True)
+        net.set_pressure(node["outlet"],
+                         headspace_pa + static_head_pa(self.depth_m), fixed=True)
+
+    def supplied_stream(self, port_name: str) -> Stream:
+        return self.contents.with_flow(1.0)
+
     def tick(self, dt: float) -> None:
-        incoming: Stream = self.inlet.value
-        added_l = incoming.flow_lps * dt
-        # Demand: equipment drawing from the outlet (pumps, drains)
-        # plus the legacy constant-drain parameter. Can't remove more
-        # than it holds.
-        demand = self.drain_lps + float(self.draw.value)
-        available = self.level_l + added_l
-        drained = min(demand * dt, available)
-        if drained < demand * dt - 1e-9:
+        # Both nozzles are signed into the vessel, so one balance covers
+        # filling, draining, and a line that reversed on us.
+        net_lps = self.inlet.flow_lps + self.outlet.flow_lps
+        arriving = Stream.mix_all([
+            port.stream.with_flow(port.flow_lps)
+            for port in (self.inlet, self.outlet) if port.flow_lps > 0.0
+        ])
+        added_l = arriving.flow_lps * dt
+        leaving_l = max(-net_lps + arriving.flow_lps, 0.0) * dt
+        demand_l = (self.drain_lps * dt) + leaving_l
+        if demand_l > self.level_l + added_l + 1e-9:
             self.ran_dry_ticks += 1
 
-        # Blend what arrived into what was already there. Draw-off and
-        # overflow both leave at the contents composition, so neither
-        # changes it -- only the inflow does.
         if added_l > 0.0:
             self.contents = Stream.mix(
                 self.contents.with_flow(self.level_l),
-                incoming.with_flow(added_l),
+                arriving.with_flow(added_l),
             )
-
-        new_level = self.level_l + added_l - drained
+        new_level = self.level_l + added_l - min(demand_l, self.level_l + added_l)
         if new_level > self.capacity_l:
             self.overflowed_l += new_level - self.capacity_l
             new_level = self.capacity_l
         self.level_l = max(new_level, 0.0)
 
-        # Ambient loss, then republish the contents at the new level.
         self.temp_c = self.contents.temp_c
         self.temp_c -= (self.temp_c - AMBIENT_C) * self.LOSS_PER_S * dt
         self.contents = self.contents.with_flow(self.level_l).with_temp(self.temp_c)
-
         self.level.value = self.level_l
-        # Offer the contents: at most a full nozzle, and never more
-        # than is actually in the vessel this scan.
-        offered = min(self.level_l / dt, self.OUTLET_MAX_LPS) if dt > 0.0 else 0.0
-        self.outlet.value = self.contents.with_flow(offered)
 
 
 class Gauge(Component):
@@ -179,9 +180,9 @@ class Gauge(Component):
 
     KINDS = {
         "level_kpa": PortKind.PROCESS_LEVEL,
-        "flow": PortKind.PROCESS_STREAM,
-        "temp_c": PortKind.PROCESS_STREAM,
-        "conc_pct": PortKind.PROCESS_STREAM,
+        "flow": PortKind.PROCESS_MATERIAL,
+        "temp_c": PortKind.PROCESS_MATERIAL,
+        "conc_pct": PortKind.PROCESS_MATERIAL,
         "dp_pa": PortKind.PROCESS_PRESSURE,
         "press_kpa": PortKind.PROCESS_PRESSURE,
     }
@@ -194,6 +195,10 @@ class Gauge(Component):
         "press_kpa": "kPa",
     }
     WATER_KPA_PER_M = 9.81
+    #: The kinds that tap a line rather than a signal. A tap observes
+    #: without carrying: piping a thermowell into a header must not put
+    #: a hole in it.
+    TAP_KINDS = {"flow", "temp_c", "conc_pct"}
 
     def __init__(
         self,
@@ -219,6 +224,9 @@ class Gauge(Component):
         self.signal = self.add_output("signal", PortKind.SIGNAL_ANALOG)
         self.add_observable("reading", "reading")
 
+    def tap_ports(self) -> set[str]:
+        return {"process"} if self.kind in self.TAP_KINDS else set()
+
     def units(self) -> str:
         return self.UNITS[self.kind]
 
@@ -232,61 +240,70 @@ class Gauge(Component):
         elif self.kind == "press_kpa":
             self.reading = float(self.process.value) / 1000.0
         elif self.kind == "flow":
-            self.reading = self.process.value.flow_lps
+            self.reading = self.process.stream.flow_lps
         elif self.kind == "temp_c":
-            self.reading = self.process.value.temp_c
+            self.reading = self.process.stream.temp_c
         else:  # conc_pct
-            self.reading = self.process.value.frac(self.species) * 100.0
+            self.reading = self.process.stream.frac(self.species) * 100.0
         self.signal.value = self.reading
 
 
 class Source(Component):
-    """Supply header: a utility tie-in at the edge of the modeled
-    plant — the honest root of every flow path, the way MainsFeed is
-    for power. Availability is unlimited (the wider utility system is
-    off-plot), but everything drawn through it is metered
-    (``total_l``). Pumps and valves wire their inlet to ``supply``
-    ("always wet") and their ``draw`` back here for the meter.
+    """Supply header: a utility tie-in at the edge of the modelled
+    plant — the honest root of every flow path, the way MainsFeed is for
+    power.
 
-    A header is what it carries: this is where a species enters the
-    plant. A solvent header delivers solvent at its storage
-    temperature, and everything downstream finds that out by being
-    piped to it rather than by being told.
+    A header is three things and nothing else: what it carries, how hot
+    it is, and what pressure it holds. There is no inlet, because from
+    the plant's point of view there is nothing upstream — just a
+    reservoir deep enough to hold the pressure whatever you draw. And
+    there is no draw port either: what leaves is whatever the network
+    pulls out of it, and the meter reads that.
     """
-
-    AVAILABLE_LPS = 1.0e6
 
     def __init__(
         self,
         name: str,
         species: str = "water",
         temp_c: float = AMBIENT_C,
+        pressure_kpa: float = 400.0,
         comp: dict[str, float] | None = None,
     ) -> None:
         super().__init__(name)
         self.temp_c = float(temp_c)
+        self.pressure_kpa = float(pressure_kpa)
         # A single species by default; ``comp`` overrides it for a
         # header that carries a premixed feed.
         self.comp = dict(comp) if comp else {species: 1.0}
         self.total_l = 0.0
-        self.draw = self.add_input("draw", PortKind.PROCESS_FLOW)
-        self.supply = self.add_output("supply", PortKind.PROCESS_SUPPLY)
-        self.supply.value = self._offered()
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         self.add_observable("total_l", "total_l")
+        self.add_observable("delivered_lps", "delivered_lps")
 
-    def _offered(self) -> Stream:
-        return Stream(self.AVAILABLE_LPS, self.temp_c, self.comp)
+    @property
+    def delivered_lps(self) -> float:
+        """What the plant is drawing right now. Negative flow at the
+        nozzle means material leaving, which is the normal direction."""
+        return max(-self.outlet.flow_lps, 0.0)
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        net.set_pressure(node["outlet"], self.pressure_kpa * 1000.0, fixed=True)
+
+    def supplied_stream(self, port_name: str) -> Stream:
+        return Stream(1.0, self.temp_c, self.comp)
 
     def tick(self, dt: float) -> None:
-        self.total_l += float(self.draw.value) * dt
-        self.supply.value = self._offered()
+        self.total_l += self.delivered_lps * dt
 
 
 class Drain(Component):
-    """Gravity drain to sewer or recovery: pulls up to ``rate_lps``
-    whenever the connected vessel holds liquid and the drain is open,
-    and meters everything it swallows. Wire vessel ``level`` in and
-    ``draw`` back to the vessel's ``out_flow``.
+    """Where material leaves the plant: a nozzle, a valve, and a pipe to
+    sewer.
+
+    It has no magic rate. Its valve has a Cv like any other, and what
+    goes down it is whatever the head above it pushes through -- so a
+    nearly empty vessel drains slowly, as one does. Shut it and it
+    passes nothing.
     """
 
     def __init__(self, name: str, rate_lps: float = 1.0) -> None:
@@ -297,25 +314,34 @@ class Drain(Component):
         self.is_open = True
         self.total_l = 0.0
         self.lost_product_l = 0.0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
-        self.flow_in = self.add_input("flow_in", PortKind.PROCESS_STREAM)
-        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
+        self._branch = None
         self.add_observable("total_l", "total_l")
         self.add_observable("lost_product_l", "lost_product_l")
+        self.add_observable("flow_lps", "flow_lps")
+
+    @property
+    def flow_lps(self) -> float:
+        return max(self.inlet.flow_lps, 0.0)
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        # The far side of the drain valve is the sewer: atmospheric, and
+        # it will take whatever it is given.
+        sewer = net.add_node(0.0, fixed=True)
+        self._branch = net.add_branch(ControlResistance(
+            node["inlet"], sewer, self.rate_lps, self.name))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        if self._branch is not None:
+            self._branch.cv_lps = self.rate_lps
+            self._branch.opening = 1.0 if self.is_open else 0.0
 
     def tick(self, dt: float) -> None:
-        offered: Stream = self.inlet.value
-        rate = min(self.rate_lps, offered.flow_lps) if self.is_open else 0.0
-        self.draw.value = rate
-        # flow_in is a discharge line dumped straight into the sewer —
-        # a separator's waste stream, a relief blowdown.
-        discharge: Stream = self.flow_in.value
-        self.total_l += (rate + discharge.flow_lps) * dt
-        # A drain meters what it swallows, and the product it swallows
-        # is the number that hurts: yield lost to the sewer, on a trend.
-        self.lost_product_l += (
-            rate * offered.frac("product") + discharge.species_lps("product")
-        ) * dt
+        taken = self.flow_lps
+        self.total_l += taken * dt
+        # The product it swallows is the number that hurts: yield lost
+        # to sewer, on a trend, where nothing else will tell you.
+        self.lost_product_l += taken * self.inlet.stream.frac("product") * dt
 
 
 class MainsFeed(Component):
@@ -349,10 +375,15 @@ class PowerSupply(Component):
 
 
 class ControlValve(Component):
-    """Air-actuated control valve: 0-100 % analog command, first-order
-    positioner lag, flow = position/100 * cv_lps. It passes only what
-    its ``supply`` offers: wire an upstream ``level`` in and ``draw``
-    back — an empty header means no flow no matter the command.
+    """Air-actuated control valve: a 0-100 % command through a
+    first-order positioner onto a trim that follows the valve equation.
+
+        Q = Cv * f(x) * sqrt(dP / dP_ref)
+
+    Which means its authority is real. Put it in a line whose own
+    resistance dominates and opening it further buys almost nothing --
+    the classic badly-sized valve, and now a thing the player can
+    actually diagnose.
     """
 
     def __init__(self, name: str, cv_lps: float = 6.0, tau_s: float = 1.0) -> None:
@@ -364,25 +395,29 @@ class ControlValve(Component):
         self.cv_lps = cv_lps
         self.tau_s = tau_s
         self.position = 0.0  # percent, follows the command with a lag
-        self.flow_lps = 0.0
         self.cmd = self.add_input("cmd", PortKind.SIGNAL_ANALOG)
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
-        self.outlet = self.add_output("outlet", PortKind.PROCESS_STREAM)
-        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
+        self._branch = None
         self.add_observable("position", "position")
         self.add_observable("flow_lps", "flow_lps")
+
+    @property
+    def flow_lps(self) -> float:
+        return max(self.inlet.flow_lps, 0.0)
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        self._branch = net.add_branch(ControlResistance(
+            node["inlet"], node["outlet"], self.cv_lps, self.name))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        if self._branch is not None:
+            self._branch.cv_lps = self.cv_lps
+            self._branch.opening = self.position / 100.0
 
     def tick(self, dt: float) -> None:
         target = max(0.0, min(100.0, float(self.cmd.value)))
         self.position += (target - self.position) * dt / self.tau_s
-        offered: Stream = self.inlet.value
-        # The valve passes what it is opened for, or what the header
-        # can actually give it, whichever is less.
-        self.flow_lps = min(self.position / 100.0 * self.cv_lps, offered.flow_lps)
-        # Material through a valve is unchanged: same temperature, same
-        # composition, different rate.
-        self.outlet.value = offered.with_flow(self.flow_lps)
-        self.draw.value = self.flow_lps
 
 
 class Terminal(Component):
@@ -622,68 +657,92 @@ class Relay(Component):
 
 
 class Pump(Component):
-    """Fixed-rate transfer pump with a Hand-Off-Auto selector.
+    """Centrifugal transfer pump with a Hand-Off-Auto selector.
 
-    In ``auto`` the motor follows the ``run`` input; ``hand`` forces it
-    on and ``off`` forces it off, exactly like the selector on a real
-    motor starter. The pump moves only fluid it actually pulls: wire
-    ``suction`` to an upstream vessel's or source's ``level`` and
-    ``draw`` back to its ``out_flow``/``draw`` — running against an
-    empty suction delivers nothing and accrues ``dry_run_s`` wear.
-    ``starts`` is the motor-wear counterpart to the relay's ``cycles``.
+    It has a curve, so it does not simply deliver its rating: it finds
+    its own operating point against whatever the system puts in front of
+    it. Ask it to lift more than its shutoff head and it dead-heads --
+    the motor turns, the discharge valve is open, and nothing moves.
+    Two in parallel do not double the flow. Run it against a suction
+    that cannot keep up and the suction node falls toward vacuum, which
+    is what ``cavitating`` reports.
     """
 
     MODES = ("hand", "off", "auto")
+    #: Suction pressure below which the pump is cavitating rather than
+    #: pumping. Crude stand-in for NPSH.
+    CAVITATION_PA = -60_000.0
 
-    def __init__(self, name: str, rated_lps: float, mode: str = "auto") -> None:
+    def __init__(self, name: str, rated_lps: float, mode: str = "auto",
+                 head_m: float = 30.0) -> None:
         super().__init__(name)
         if rated_lps <= 0.0:
             raise ValueError("rated_lps must be positive")
+        if head_m <= 0.0:
+            raise ValueError("head_m must be positive")
         self.rated_lps = rated_lps
+        self.head_m = head_m
         self.mode = "auto"
         self.set_mode(mode)
         self.running = False
         self.starts = 0
         self.dry_run_s = 0.0
-        self.flow_lps = 0.0
+        self.cavitating = False
+        self.suction_pa = 0.0
+        self.discharge_pa = 0.0
         self.run = self.add_input("run", PortKind.SIGNAL_DISCRETE)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
-        self.outlet = self.add_output("outlet", PortKind.PROCESS_STREAM)
-        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
+        self._branch = None
         self.add_observable("starts", "starts")
         self.add_observable("dry_run_s", "dry_run_s")
         self.add_observable("flow_lps", "flow_lps")
+        self.add_observable("head_pa", "head_pa")
+
+    @property
+    def flow_lps(self) -> float:
+        return max(self.inlet.flow_lps, 0.0)
+
+    @property
+    def head_pa(self) -> float:
+        """The rise it is actually making right now."""
+        return self.discharge_pa - self.suction_pa
 
     def set_mode(self, mode: str) -> None:
         if mode not in self.MODES:
             raise ValueError(f"mode must be one of {self.MODES}")
         self.mode = mode
 
-    def tick(self, dt: float) -> None:
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        self._branch = net.add_branch(PumpCurve(
+            node["inlet"], node["outlet"],
+            static_head_pa(self.head_m), self.rated_lps, self.name))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
         if self.mode == "hand":
-            run = True
+            wants = True
         elif self.mode == "off":
-            run = False
+            wants = False
         else:
-            run = bool(self.run.value)
+            wants = bool(self.run.value)
         # No 480 V at the starter, no motor — hand mode included.
-        run = run and float(self.power.value) > 0.5
-        if run and not self.running:
+        self.running = wants and float(self.power.value) > 0.5
+        if self._branch is not None:
+            self._branch.running = self.running
+            self._branch.head_pa = max(static_head_pa(self.head_m), 1e-12)
+            self._branch.max_lps = max(self.rated_lps, 1e-12)
+        self.suction_pa = net.pressures[node["inlet"]]
+        self.discharge_pa = net.pressures[node["outlet"]]
+
+    def tick(self, dt: float) -> None:
+        was_running = getattr(self, "_was_running", False)
+        if self.running and not was_running:
             self.starts += 1
-        self.running = run
-        # The motor can spin against an empty inlet, but nothing moves
-        # and the seal wears.
-        offered: Stream = self.inlet.value
-        wet = offered.flow_lps > 1e-9
-        if self.running and not wet:
+        self._was_running = self.running
+        self.cavitating = self.running and self.suction_pa <= self.CAVITATION_PA
+        if self.running and self.flow_lps < 1e-6:
             self.dry_run_s += dt
-        # A fixed-rate pump takes its rating, or whatever the vessel can
-        # still give it — which is how a tank running empty throttles
-        # the pump instead of going negative.
-        self.flow_lps = min(self.rated_lps, offered.flow_lps) if self.running else 0.0
-        self.outlet.value = offered.with_flow(self.flow_lps)
-        self.draw.value = self.flow_lps
 
 
 # ---------------------------------------------------------------------

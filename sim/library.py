@@ -31,9 +31,7 @@ from sim.core import Component, PortKind
 KIND_LABELS: dict[PortKind, str] = {
     PortKind.SIGNAL_DISCRETE: "24 V discrete",
     PortKind.SIGNAL_ANALOG: "4-20 mA analog",
-    PortKind.PROCESS_STREAM: "material (delivered)",
-    PortKind.PROCESS_SUPPLY: "material (offered)",
-    PortKind.PROCESS_FLOW: "draw demand, L/s",
+    PortKind.PROCESS_MATERIAL: "nozzle",
     PortKind.PROCESS_LEVEL: "level tap, L",
     PortKind.PROCESS_PRESSURE: "pressure tap, Pa",
     PortKind.POWER: "electrical supply",

@@ -13,6 +13,7 @@ species with a boilup cap. None of them pretend to be more.
 from __future__ import annotations
 
 from sim.core import Component, PortKind
+from sim.hydraulics import FixedFlow, PumpCurve, static_head_pa
 from sim.library import Equation, EquipmentSpec, Param
 from sim.species import get as get_species
 from sim.stream import AMBIENT_C, SOLID_KEY, Stream, comp_from_amounts
@@ -20,44 +21,41 @@ from sim.stream import AMBIENT_C, SOLID_KEY, Stream, comp_from_amounts
 
 class Crystallizer(Component):
     """Cooled, agitated vessel that drops product out of solution.
-    Governing equations are on the library page (``Crystallizer.SPEC``
-    at the foot of this module), which is their only copy.
 
-    Cool the batch below saturation and crystals grow toward
+    A vessel, so its outlet carries static head and its inlet sits at
+    headspace. Cool the batch below saturation and crystals grow toward
     equilibrium with a time constant; warm it back up and they
     redissolve, because the same equation runs in both directions.
     Without a powered agitator the process crawls -- nucleation needs
     the shear.
 
     The cooling duty is a positive number on ``cool_duty``: kilowatts
-    *removed*. Wire a chiller loop or a controller output to it.
+    *removed*.
     """
 
     TAU_S = 60.0
     UNMIXED_FACTOR = 0.1
     LOSS_PER_S = 0.0004
-    OUTLET_MAX_LPS = 250.0
     MIN_THERMAL_MASS_KG = 50.0
-    # A jacket cannot chill the batch below the coolant feeding it.
-    # Without this a duty left on drives the vessel to nonsense.
     COOLANT_C = 5.0
 
-    def __init__(self, name: str, capacity_l: float = 3000.0) -> None:
+    def __init__(self, name: str, capacity_l: float = 3000.0,
+                 height_m: float = 2.2) -> None:
         super().__init__(name)
         if capacity_l <= 0.0:
             raise ValueError("capacity_l must be positive")
         self.capacity_l = capacity_l
+        self.height_m = height_m
         self.volume_l = 0.0
         self.temp_c = AMBIENT_C
         self.agitating = False
         self.overflowed_l = 0.0
         self.contents = Stream(0.0, AMBIENT_C, None)
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_STREAM)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.cool_duty = self.add_input("cool_duty", PortKind.SIGNAL_ANALOG)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.draw = self.add_input("draw", PortKind.PROCESS_FLOW)
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
-        self.outlet = self.add_output("outlet", PortKind.PROCESS_SUPPLY)
         self.solids = self.add_output("solids", PortKind.SIGNAL_ANALOG)
         self.temp = self.add_output("temp", PortKind.SIGNAL_ANALOG)
         self.add_observable("temp_c", "temp_c")
@@ -70,85 +68,96 @@ class Crystallizer(Component):
     def solids_frac(self) -> float:
         return self.contents.solids_frac
 
+    @property
+    def cross_section_m2(self) -> float:
+        return (self.capacity_l / 1000.0) / max(self.height_m, 1e-9)
+
+    @property
+    def depth_m(self) -> float:
+        return (self.volume_l / 1000.0) / max(self.cross_section_m2, 1e-9)
+
     def charge(self, volume_l: float, comp: dict[str, float],
                temp_c: float = AMBIENT_C, solids_frac: float = 0.0) -> None:
         self.volume_l = min(max(volume_l, 0.0), self.capacity_l)
         self.temp_c = temp_c
         self.contents = Stream(self.volume_l, temp_c, comp, solids_frac)
+        self.level.value = self.volume_l
 
     def saturation_frac(self) -> float:
         """Equilibrium dissolved fraction of the crystallizing species
         at the current temperature. Grams per litre becomes a volume
-        fraction directly on the kernel's 1 L = 1 kg basis."""
+        fraction directly on the kernel 1 L = 1 kg basis."""
         return get_species(SOLID_KEY).solubility_g_per_l(self.temp_c) / 1000.0
 
     @property
     def supersaturation(self) -> float:
-        """How far past saturation the dissolved product is. Negative
-        means there is room for more, and crystals will redissolve."""
         dissolved = self.contents.frac(SOLID_KEY) - self.contents.solids_frac
         return dissolved - self.saturation_frac()
 
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        net.set_pressure(node["inlet"], 0.0, fixed=True)
+        net.set_pressure(node["outlet"], static_head_pa(self.depth_m), fixed=True)
+
+    def supplied_stream(self, port_name: str):
+        return self.contents.with_flow(1.0)
+
     def tick(self, dt: float) -> None:
-        incoming: Stream = self.inlet.value
-        added_l = incoming.flow_lps * dt
-        outflow_l = min(float(self.draw.value) * dt, self.volume_l + added_l)
+        nozzles = (self.inlet, self.outlet)
+        arriving = Stream.mix_all([
+            port.stream.with_flow(port.flow_lps)
+            for port in nozzles if port.flow_lps > 0.0
+        ])
+        leaving_lps = sum(-p.flow_lps for p in nozzles if p.flow_lps < 0.0)
+        added_l = arriving.flow_lps * dt
+        removed_l = min(leaving_lps * dt, self.volume_l + added_l)
 
         if added_l > 0.0:
             self.contents = Stream.mix(
-                self.contents.with_flow(self.volume_l), incoming.with_flow(added_l)
+                self.contents.with_flow(self.volume_l), arriving.with_flow(added_l)
             )
-        new_volume = self.volume_l + added_l - outflow_l
+        new_volume = self.volume_l + added_l - removed_l
         if new_volume > self.capacity_l:
             self.overflowed_l += new_volume - self.capacity_l
             new_volume = self.capacity_l
         self.volume_l = max(new_volume, 0.0)
 
-        # Energy: duty is heat removed, so it subtracts.
         self.temp_c = self.contents.temp_c
         self.agitating = float(self.power.value) > 0.5
         mass = max(self.volume_l, self.MIN_THERMAL_MASS_KG)
         cp = self.contents.cp_kj_per_kg_k()
         self.temp_c -= float(self.cool_duty.value) / (mass * cp) * dt
         self.temp_c -= (self.temp_c - AMBIENT_C) * self.LOSS_PER_S * dt
-        # The jacket can only take the batch down to its coolant.
         if float(self.cool_duty.value) > 0.0:
             self.temp_c = max(self.temp_c, self.COOLANT_C)
 
-        # Crystallize toward equilibrium, in both directions.
         mix_factor = 1.0 if self.agitating else self.UNMIXED_FACTOR
         total_product = self.contents.frac(SOLID_KEY)
         solid = self.contents.solids_frac
-        dissolved = total_product - solid
-        excess = dissolved - self.saturation_frac()
-        change = excess * mix_factor * dt / self.TAU_S
-        # Never more solid than there is product, never less than none.
-        solid = min(max(solid + change, 0.0), total_product)
+        excess = (total_product - solid) - self.saturation_frac()
+        solid = min(max(solid + excess * mix_factor * dt / self.TAU_S, 0.0),
+                    total_product)
 
         self.contents = Stream(
             self.volume_l, self.temp_c, self.contents.comp, solid
         )
         self.level.value = self.volume_l
-        offered = min(self.volume_l / dt, self.OUTLET_MAX_LPS) if dt > 0.0 else 0.0
-        self.outlet.value = self.contents.with_flow(offered)
         self.solids.value = self.contents.solids_frac
         self.temp.value = self.temp_c
 
 
 class Dryer(Component):
-    """Drives the last of the liquid off a wet filter cake. Governing
-    equations are on the library page (``Dryer.SPEC``), which is their
-    only copy.
+    """Drives the last of the liquid off a wet filter cake.
 
-    What evaporates is the most volatile liquid present, so the solvent
-    goes first and the crystals stay. Note what that means: anything
-    that was *dissolved* in the retained mother liquor is left behind in
-    the cake as the solvent leaves. A dryer concentrates impurity as
-    surely as it concentrates product, which is why the wash matters
-    upstream. Needs 480 V for the tumbler.
+    It has its own feed, so what it takes depends on what the hopper
+    above it can give. What evaporates is the most volatile liquid
+    present, so the solvent goes first and the crystals stay -- which
+    means anything dissolved in the retained mother liquor is still
+    there when the solvent leaves. The vapour goes out of the vent
+    rather than a nozzle; ``dried_l`` totalizes it.
     """
 
     LATENT_KJ_PER_KG = 900.0
+    FEED_HEAD_M = 12.0
 
     def __init__(self, name: str, rate_lps: float = 2.0) -> None:
         super().__init__(name)
@@ -159,24 +168,46 @@ class Dryer(Component):
         self.running = False
         self.evap_lps = 0.0
         self.dried_l = 0.0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
+        self.product_lps = 0.0
+        self._cake = Stream.empty()
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.heat_duty = self.add_input("heat_duty", PortKind.SIGNAL_ANALOG)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.product = self.add_output("product", PortKind.PROCESS_STREAM)
-        self.vapor = self.add_output("vapor", PortKind.PROCESS_STREAM)
-        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self.product = self.add_output("product", PortKind.PROCESS_MATERIAL)
+        self._feed = None
+        self._out = None
         self.add_observable("evap_lps", "evap_lps")
         self.add_observable("dried_l", "dried_l")
+        self.add_observable("draw_lps", "draw_lps")
+
+    @property
+    def draw_lps(self) -> float:
+        return max(self.inlet.flow_lps, 0.0)
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        drum = net.add_node(0.0)
+        self._feed = net.add_branch(PumpCurve(
+            node["inlet"], drum, static_head_pa(self.FEED_HEAD_M),
+            self.rate_lps, self.name + ".feed"))
+        self._out = net.add_branch(
+            FixedFlow(drum, node["product"], 0.0, self.name + ".cake"))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        self.running = self.is_on and float(self.power.value) > 0.5
+        if self._feed is not None:
+            self._feed.running = self.running
+        if self._out is not None:
+            self._out.lps = self.product_lps
+
+    def supplied_stream(self, port_name: str):
+        return self._cake if port_name == "product" else None
 
     def tick(self, dt: float) -> None:
-        feed: Stream = self.inlet.value.clamped_solids()
-        self.running = self.is_on and float(self.power.value) > 0.5
-        rate = min(self.rate_lps, feed.flow_lps) if self.running else 0.0
-        self.draw.value = rate
-        if rate <= 0.0:
+        feed = self.inlet.stream.clamped_solids()
+        rate = self.draw_lps
+        if rate <= 1e-9:
             self.evap_lps = 0.0
-            self.product.value = Stream.empty()
-            self.vapor.value = Stream.empty()
+            self.product_lps = 0.0
             return
 
         amounts = {key: rate * frac for key, frac in feed.comp.items()}
@@ -185,57 +216,42 @@ class Dryer(Component):
         capacity = max(float(self.heat_duty.value), 0.0) / self.LATENT_KJ_PER_KG
         to_evaporate = min(capacity, liquid_lps)
 
-        # Take it off the most volatile liquid species first, never
-        # touching what is already crystal.
-        vapor_amounts: dict[str, float] = {}
         remaining = to_evaporate
-        liquid_keys = sorted(
-            (k for k in amounts if amounts[k] > 0.0),
-            key=lambda k: get_species(k).boil_c,
-        )
-        for key in liquid_keys:
+        for key in sorted(
+                (k for k in amounts if amounts[k] > 0.0),
+                key=lambda k: get_species(k).boil_c):
             if remaining <= 0.0:
                 break
             liquid_here = amounts[key] - (solid_lps if key == SOLID_KEY else 0.0)
             take = min(remaining, max(liquid_here, 0.0))
             if take > 0.0:
                 amounts[key] -= take
-                vapor_amounts[key] = take
                 remaining -= take
         evaporated = to_evaporate - remaining
 
         self.evap_lps = evaporated
         self.dried_l += evaporated * dt
-        product_lps = rate - evaporated
-        self.product.value = Stream(
-            product_lps,
-            feed.temp_c,
-            comp_from_amounts(amounts),
-            solid_lps / product_lps if product_lps > 0.0 else 0.0,
-        )
-        self.vapor.value = Stream(
-            evaporated, feed.temp_c, comp_from_amounts(vapor_amounts)
-        )
+        self.product_lps = rate - evaporated
+        self._cake = Stream(
+            max(self.product_lps, 1e-9), feed.temp_c, comp_from_amounts(amounts),
+            solid_lps / self.product_lps if self.product_lps > 0.0 else 0.0)
 
 
 class Still(Component):
-    """Continuous solvent recovery still: takes mother liquor, sends
-    the light ends overhead and the heavy ends out the bottom.
-    Governing equations are on the library page (``Still.SPEC`` at the
-    foot of this module), which is their only copy.
+    """Continuous solvent recovery still: light ends overhead, heavy
+    ends out the bottom.
 
-    The cut is never perfect: some solvent leaves in the bottoms and
-    some heavy ends carry over. The reboiler duty is the throttle: no
-    duty, no boilup,
-    no separation, and everything the still is fed leaves through the
-    bottoms nozzle. Crystals never distill; they always report to the
-    bottoms.
+    The reboiler duty is the throttle: no duty, no boilup, no
+    separation, and everything it is fed leaves through the bottoms.
+    The cut is never perfect, which is why recycled solvent is never
+    quite as clean as fresh. Crystals never distill.
 
-    This is the unit that closes the loop. Pipe the distillate back to
-    a reagent header and the solvent goes round again.
+    This is the unit that closes the loop: pipe the distillate back to a
+    feed header and the solvent goes round again.
     """
 
     LATENT_KJ_PER_KG = 900.0
+    FEED_HEAD_M = 20.0
 
     def __init__(self, name: str, rate_lps: float = 3.0, cut_c: float = 150.0,
                  sharpness: float = 0.95, condenser_c: float = 40.0) -> None:
@@ -252,30 +268,62 @@ class Still(Component):
         self.running = False
         self.boilup_lps = 0.0
         self.distillate_lps = 0.0
+        self.bottoms_lps = 0.0
         self.recovered_l = 0.0
-        self.inlet = self.add_input("inlet", PortKind.PROCESS_SUPPLY)
+        self._top = Stream.empty()
+        self._bottom = Stream.empty()
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.heat_duty = self.add_input("heat_duty", PortKind.SIGNAL_ANALOG)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
-        self.distillate = self.add_output("distillate", PortKind.PROCESS_STREAM)
-        self.bottoms = self.add_output("bottoms", PortKind.PROCESS_STREAM)
-        self.draw = self.add_output("draw", PortKind.PROCESS_FLOW)
+        self.distillate = self.add_output("distillate", PortKind.PROCESS_MATERIAL)
+        self.bottoms = self.add_output("bottoms", PortKind.PROCESS_MATERIAL)
+        self._feed = None
+        self._to_top = None
+        self._to_bottom = None
         self.add_observable("boilup_lps", "boilup_lps")
         self.add_observable("distillate_lps", "distillate_lps")
         self.add_observable("recovered_l", "recovered_l")
+        self.add_observable("draw_lps", "draw_lps")
+
+    @property
+    def draw_lps(self) -> float:
+        return max(self.inlet.flow_lps, 0.0)
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        sump = net.add_node(0.0)
+        self._feed = net.add_branch(PumpCurve(
+            node["inlet"], sump, static_head_pa(self.FEED_HEAD_M),
+            self.rate_lps, self.name + ".feed"))
+        self._to_top = net.add_branch(
+            FixedFlow(sump, node["distillate"], 0.0, self.name + ".overhead"))
+        self._to_bottom = net.add_branch(
+            FixedFlow(sump, node["bottoms"], 0.0, self.name + ".bottoms"))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        self.running = self.is_on and float(self.power.value) > 0.5
+        if self._feed is not None:
+            self._feed.running = self.running
+        if self._to_top is not None:
+            self._to_top.lps = self.distillate_lps
+            self._to_bottom.lps = self.bottoms_lps
+
+    def supplied_stream(self, port_name: str):
+        if port_name == "distillate":
+            return self._top
+        if port_name == "bottoms":
+            return self._bottom
+        return None
 
     def tick(self, dt: float) -> None:
-        feed: Stream = self.inlet.value.clamped_solids()
-        self.running = self.is_on and float(self.power.value) > 0.5
-        rate = min(self.rate_lps, feed.flow_lps) if self.running else 0.0
-        self.draw.value = rate
+        feed = self.inlet.stream.clamped_solids()
+        rate = self.draw_lps
         self.boilup_lps = (
             max(float(self.heat_duty.value), 0.0) / self.LATENT_KJ_PER_KG
             if self.running else 0.0
         )
-        if rate <= 0.0:
+        if rate <= 1e-9:
             self.distillate_lps = 0.0
-            self.distillate.value = Stream.empty()
-            self.bottoms.value = Stream.empty()
+            self.bottoms_lps = 0.0
             return
 
         solid_lps = rate * feed.solids_frac
@@ -290,30 +338,26 @@ class Still(Component):
             )
 
         wanted_total = sum(wanted.values())
-        # The reboiler sets the ceiling: you cannot take more overhead
-        # than you can boil.
         scale = 1.0
         if wanted_total > self.boilup_lps:
             scale = self.boilup_lps / wanted_total if wanted_total > 0.0 else 0.0
         top_amounts = {k: v * scale for k, v in wanted.items()}
         top_total = sum(top_amounts.values())
-
-        bottom_amounts: dict[str, float] = {}
-        for key, frac in feed.comp.items():
-            bottom_amounts[key] = rate * frac - top_amounts.get(key, 0.0)
+        bottom_amounts = {
+            key: rate * frac - top_amounts.get(key, 0.0)
+            for key, frac in feed.comp.items()
+        }
         bottom_total = rate - top_total
 
         self.distillate_lps = top_total
+        self.bottoms_lps = bottom_total
         self.recovered_l += top_total * dt
-        self.distillate.value = Stream(
-            top_total, self.condenser_c, comp_from_amounts(top_amounts)
-        )
-        self.bottoms.value = Stream(
-            bottom_total,
-            feed.temp_c,
+        self._top = Stream(max(top_total, 1e-9), self.condenser_c,
+                           comp_from_amounts(top_amounts))
+        self._bottom = Stream(
+            max(bottom_total, 1e-9), feed.temp_c,
             comp_from_amounts(bottom_amounts),
-            solid_lps / bottom_total if bottom_total > 0.0 else 0.0,
-        )
+            solid_lps / bottom_total if bottom_total > 0.0 else 0.0)
 
 
 # ---------------------------------------------------------------------
