@@ -7,7 +7,6 @@ from conftest import wire_supply
 from sim.components import ControlValve, Gauge, Tank, Terminal
 from sim.control import PID, PLC
 from sim.core import Simulation
-from sim.stream import Stream
 
 
 def _plc() -> tuple[Simulation, PLC]:
@@ -165,9 +164,9 @@ class TestPIDLoop:
 
 class TestValveAndTerminal:
     def test_positioner_lag(self) -> None:
-        sim = Simulation(dt=0.05)
-        valve = sim.add(ControlValve("cv", cv_lps=10.0, tau_s=1.0))
-        valve.inlet.value = Stream.pure("water", 1.0e9)
+        """The positioner is pure signal: what the trim then passes is
+        the network's business, so nothing needs to be piped to it."""
+        valve = ControlValve("cv", cv_lps=10.0, tau_s=1.0)
         valve.cmd.value = 100.0
         for _ in range(20):  # 1.0 s in scan steps: ~63 % of the way
             valve.tick(0.05)

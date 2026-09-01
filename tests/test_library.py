@@ -85,11 +85,29 @@ class TestPortTablesMatchReality:
 
         page = describe(Reactor("rx"))
         kinds = {row["name"]: row["kind"] for row in page["ports"]}
-        assert kinds["inlet_a"] == "process_stream"
-        assert kinds["outlet"] == "process_supply"
-        assert kinds["draw"] == "process_flow"
+        assert kinds["inlet_a"] == "process_material"
+        assert kinds["outlet"] == "process_material"
         assert kinds["power"] == "power"
         assert kinds["purity"] == "signal_analog"
+
+    def test_there_is_only_one_material_kind(self) -> None:
+        """A nozzle is a nozzle. With pressure deciding direction there
+        is nothing left for a second material kind to protect against,
+        so no page may show one."""
+        material = {"process_material", "process_level", "process_pressure"}
+        for page in catalog(sample_components()):
+            for row in page["ports"]:
+                assert not row["kind"].startswith("process_") or \
+                    row["kind"] in material, \
+                    f"{page['title']}.{row['name']} is {row['kind']}"
+
+    def test_no_page_still_advertises_a_draw_port(self) -> None:
+        """The draw wire is gone. A page offering one would be inviting
+        the player to wire up bookkeeping."""
+        for page in catalog(sample_components()):
+            names = {row["name"] for row in page["ports"]}
+            assert "draw" not in names, page["title"]
+            assert "supply" not in names, page["title"]
 
     def test_directions_are_right(self) -> None:
         from sim.separation import Still

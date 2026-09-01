@@ -4,22 +4,8 @@ from __future__ import annotations
 import pytest
 
 from conftest import wire_power
-from sim.components import FloatSwitch, Pump, Relay, Tank
-from sim.core import Component, PortKind, Simulation
-from sim.stream import Stream
-
-
-class ConstantFlow(Component):
-    """Test stub: unconditionally pushes a fixed stream of water."""
-
-    def __init__(self, name: str, lps: float) -> None:
-        super().__init__(name)
-        self.lps = lps
-        self.flow = self.add_output("flow", PortKind.PROCESS_STREAM)
-        self.flow.value = Stream.pure("water", lps)
-
-    def tick(self, dt: float) -> None:
-        self.flow.value = Stream.pure("water", self.lps)
+from sim.components import FloatSwitch, Pump, Relay, Source, Tank
+from sim.core import PortKind, Simulation
 
 
 def test_wire_rejects_mismatched_kinds() -> None:
@@ -40,13 +26,35 @@ def test_single_source_kinds_reject_second_wire() -> None:
         sim.connect(tank_b, "level", switch, "level")
 
 
-def test_flow_inputs_sum() -> None:
-    sim = Simulation(dt=1.0)
-    tank = sim.add(Tank("t", capacity_l=100.0))
-    sim.connect(sim.add(ConstantFlow("fa", 2.0)), "flow", tank, "inlet")
-    sim.connect(sim.add(ConstantFlow("fb", 3.0)), "flow", tank, "inlet")
-    sim.run(2.0)
-    assert tank.level_l == pytest.approx(10.0)
+def test_material_inputs_sum() -> None:
+    """Two runs onto one nozzle is a tee, and the vessel fills at the
+    sum of them. Nothing declares those two rates — the network solves
+    them — so the balance is what is checked, against the meters."""
+    sim = Simulation(dt=0.05)
+    tank = sim.add(Tank("t", capacity_l=4000.0, height_m=3.0))
+    a = sim.add(Source("a", pressure_kpa=300.0))
+    b = sim.add(Source("b", pressure_kpa=300.0))
+    sim.connect(a, "outlet", tank, "inlet")
+    sim.connect(b, "outlet", tank, "inlet")
+    sim.run(60.0)
+    assert a.total_l > 0.0 and b.total_l > 0.0
+    assert tank.level_l == pytest.approx(a.total_l + b.total_l, abs=0.5)
+
+
+def test_material_ports_are_not_reset_by_the_scan() -> None:
+    """Every other input kind reverts to its default at the top of a
+    scan, because a wire re-delivers it. A nozzle does not: what stands
+    in the line is resolved by the hydraulic pass, and a reset would
+    erase it every tick."""
+    sim = Simulation(dt=0.05)
+    tank = sim.add(Tank("t", capacity_l=4000.0, height_m=3.0))
+    header = sim.add(Source("s", species="solvent", pressure_kpa=300.0))
+    sim.connect(header, "outlet", tank, "inlet")
+    sim.run(10.0)
+    assert tank.inlet.stream.frac("solvent") == pytest.approx(1.0)
+    for port in tank.inputs.values():
+        port.reset()
+    assert tank.inlet.stream.frac("solvent") == pytest.approx(1.0)
 
 
 def test_discrete_inputs_or_like_parallel_contacts() -> None:

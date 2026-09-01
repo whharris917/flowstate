@@ -26,8 +26,8 @@ def test_registers_ports_and_observables_as_tags() -> None:
     sim, _ = _build_plant()
     hist = sim.attach_historian(Historian())
 
-    def stream_tags(path: str) -> set[str]:
-        """A stream port is not a number, so it is historized as the
+    def nozzle_tags(path: str) -> set[str]:
+        """A nozzle does not carry a number, so it is historized as the
         numbers an operator would actually trend."""
         return {f"{path}.flow", f"{path}.temp", f"{path}.solids"} | {
             f"{path}.x_{key}" for key in SPECIES_KEYS
@@ -38,14 +38,15 @@ def test_registers_ports_and_observables_as_tags() -> None:
         "tank.overflowed_l",
         "tank.ran_dry_ticks",
         "tank.temp_c",
+        "tank.depth_m",
         "switch.contact",
         "relay.contact",
         "relay.cycles",
-        "pump.draw",
         "pump.starts",
         "pump.dry_run_s",
         "pump.flow_lps",
-    } | stream_tags("tank.outlet") | stream_tags("pump.outlet")
+        "pump.head_pa",
+    } | nozzle_tags("tank.outlet") | nozzle_tags("pump.outlet")
 
 
 def test_samples_every_scan_including_t0_baseline() -> None:

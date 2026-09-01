@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from conftest import wire_power, wire_supply
-from sim.components import Gauge, Pump, Relay, Tank
+from sim.components import Gauge, Pump, Tank
 from sim.core import Simulation
 from sim.historian import Historian
 
@@ -23,17 +23,39 @@ class TestGauge:
         assert gauge.signal.value == pytest.approx(9.81)
         assert gauge.units() == "kPa"
 
-    def test_flow_gauge_reads_flow(self) -> None:
-        sim = Simulation(dt=1.0)
+    def test_flow_gauge_reads_the_flow_that_was_solved(self) -> None:
+        """An inline FI reads the line, and the line is running at
+        whatever the network worked out — not at the pump's rating."""
+        sim = Simulation(dt=0.05)
         pump = sim.add(Pump("pump", rated_lps=4.0, mode="hand"))
         wire_power(sim, pump)
         wire_supply(sim, pump)
+        tank = sim.add(Tank("tank", capacity_l=4000.0, height_m=3.0))
+        sim.connect(pump, "outlet", tank, "inlet")
         gauge = sim.add(Gauge("fi_1", "flow"))
         sim.connect(pump, "outlet", gauge, "process")
-        sim.tick()
-        sim.tick()
-        assert gauge.reading == pytest.approx(4.0)
+        sim.run(5.0)
+        assert gauge.reading > 0.0
+        assert gauge.reading == pytest.approx(pump.flow_lps, rel=1e-6)
         assert gauge.units() == "L/s"
+
+    def test_a_tap_does_not_steal_from_the_line_it_reads(self) -> None:
+        """The point of a tap: a thermowell in a header must not be a
+        hole in it. Fitting one changes nothing about the flow."""
+        def rig(with_gauge: bool) -> float:
+            sim = Simulation(dt=0.05)
+            pump = sim.add(Pump("pump", rated_lps=4.0, mode="hand"))
+            wire_power(sim, pump)
+            wire_supply(sim, pump)
+            tank = sim.add(Tank("tank", capacity_l=4000.0, height_m=3.0))
+            sim.connect(pump, "outlet", tank, "inlet")
+            if with_gauge:
+                gauge = sim.add(Gauge("fi_1", "flow"))
+                sim.connect(pump, "outlet", gauge, "process")
+            sim.run(20.0)
+            return tank.level_l
+
+        assert rig(True) == pytest.approx(rig(False), rel=1e-9)
 
     def test_rejects_bad_construction(self) -> None:
         with pytest.raises(ValueError):
@@ -59,11 +81,11 @@ class TestMidRunPlacement:
 
 class TestRemoval:
     def _plant(self) -> tuple[Simulation, Historian]:
-        sim = Simulation(dt=1.0)
+        sim = Simulation(dt=0.05)
         pump = sim.add(Pump("pump", rated_lps=2.0, mode="hand"))
         wire_power(sim, pump)
         wire_supply(sim, pump)
-        tank = sim.add(Tank("tank", capacity_l=100.0))
+        tank = sim.add(Tank("tank", capacity_l=4000.0, height_m=3.0))
         sim.connect(pump, "outlet", tank, "inlet")
         hist = sim.attach_historian(Historian())
         return sim, hist
@@ -80,6 +102,19 @@ class TestRemoval:
         tank = sim.get_component("tank")
         assert tank is not None
 
+    def test_pulling_a_run_takes_the_network_with_it(self) -> None:
+        """One player pipe is now one kernel wire, so removing the pump
+        removes the whole flow path — there is no second bookkeeping
+        wire left behind to keep a phantom draw alive."""
+        sim, _ = self._plant()
+        sim.run(10.0)
+        tank = sim.get_component("tank")
+        filled = tank.level_l
+        assert filled > 0.0
+        assert sim.remove_component("pump")
+        sim.run(10.0)
+        assert tank.level_l == pytest.approx(filled, abs=1e-6)
+
     def test_removed_input_accepts_new_wire(self) -> None:
         sim, _ = self._plant()
         sim.remove_component("pump")
@@ -89,7 +124,7 @@ class TestRemoval:
         wire_supply(sim, pump2)
         tank = sim.get_component("tank")
         sim.connect(pump2, "outlet", tank, "inlet")
-        sim.run(2.0)
+        sim.run(10.0)
         assert tank.level_l > 0.0
 
     def test_unique_names_never_collide(self) -> None:

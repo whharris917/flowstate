@@ -3,13 +3,22 @@
 The point of these units is that they compose. Each one is checked on
 its own equations, and then the whole downstream sequence is run end to
 end to prove the material balance closes across all of them.
+
+Since the kernel went over to pressure, none of these machines can be
+handed a throughput. Each has its own feed pump, so what it processes is
+that pump's curve against the vessel above it -- which is why the tests
+that care about a rate build a network, and the tests that care about
+the equations stand material at the nozzle with ``feed()`` and read the
+discharge back through ``supplied_stream``.
 """
 from __future__ import annotations
 
 import pytest
 
-from conftest import Duty, wire_power
+from conftest import Duty, feed, wire_power
+from sim.components import Drain, Tank
 from sim.core import Simulation
+from sim.process import Centrifuge
 from sim.separation import Crystallizer, Dryer, Still
 from sim.stream import Stream
 
@@ -81,8 +90,31 @@ class TestCrystallizer:
         assert cx.volume_l == pytest.approx(2000.0, abs=0.5)
         assert cx.contents.frac("product") == pytest.approx(0.35, abs=0.01)
 
+    def test_it_fills_and_discharges_like_a_vessel(self) -> None:
+        """Piped up rather than poked: the feed nozzle is at the roof
+        and the outlet at the floor, so it fills from a header and the
+        slurry leaves under its own head."""
+        sim = Simulation(dt=0.05)
+        from sim.components import Source
+        header = sim.add(Source("hdr", species="solvent", pressure_kpa=300.0))
+        cx = sim.add(Crystallizer("cx", capacity_l=3000.0, height_m=2.4))
+        drain = sim.add(Drain("d", rate_lps=1.0))
+        wire_power(sim, cx)
+        sim.connect(header, "outlet", cx, "inlet")
+        sim.connect(cx, "outlet", drain, "inlet")
+        sim.run(300.0)
+        assert cx.volume_l > 0.0
+        assert drain.total_l > 0.0
+        assert header.total_l == pytest.approx(
+            cx.volume_l + drain.total_l, abs=1.0)
+
 
 class TestDryer:
+    """The dryer works out what evaporates from what actually arrived at
+    its nozzle, so these stand material at the nozzle. What leaves is
+    published by the network, so the cake is read back through
+    ``supplied_stream`` -- the same value the port would carry."""
+
     def _wet_cake(self, flow: float = 2.0) -> Stream:
         # 60 % crystal, the rest mother liquor.
         return Stream(
@@ -92,37 +124,50 @@ class TestDryer:
         )
 
     def test_needs_power_and_being_switched_on(self) -> None:
-        dryer = Dryer("dr", rate_lps=2.0)
-        dryer.inlet.value = self._wet_cake()
-        dryer.heat_duty.value = 500.0
-        dryer.tick(0.05)
-        assert dryer.draw.value == 0.0
-        assert dryer.product.value.flow_lps == 0.0
+        """Switched on but unpowered, its feed pump does not turn, so
+        nothing is drawn and nothing comes out."""
+        sim = Simulation(dt=0.05)
+        hopper = sim.add(Tank("ct", capacity_l=3000.0, level_l=2000.0,
+                              height_m=3.0, comp={"product": 1.0}))
+        dryer = sim.add(Dryer("dr", rate_lps=2.0))
+        sim.connect(hopper, "outlet", dryer, "inlet")
+        sim.connect(sim.add(Duty("q", 500.0)), "out", dryer, "heat_duty")
+        dryer.is_on = True
+        sim.run(5.0)
+        assert dryer.running is False
+        assert dryer.draw_lps == pytest.approx(0.0)
+        assert dryer.product_lps == pytest.approx(0.0)
 
     def test_evaporates_the_solvent_first(self) -> None:
         dryer = Dryer("dr", rate_lps=2.0)
         dryer.is_on = True
         dryer.power.value = 1.0
-        dryer.inlet.value = self._wet_cake(flow=2.0)
+        feed(dryer.inlet, self._wet_cake(flow=2.0))
         dryer.heat_duty.value = 180.0       # 0.2 L/s of evaporation
         dryer.tick(0.05)
-        vapor = dryer.vapor.value
-        assert vapor.flow_lps == pytest.approx(0.2)
-        assert vapor.frac("solvent") == pytest.approx(1.0)
-        # Conservation across the two nozzles.
-        assert dryer.product.value.flow_lps + vapor.flow_lps == pytest.approx(2.0)
+        assert dryer.evap_lps == pytest.approx(0.2)
+        # Conservation: what did not evaporate leaves as cake.
+        assert dryer.product_lps + dryer.evap_lps == pytest.approx(2.0)
+        # The solvent went and the product stayed. The cake stream is
+        # published at the rate it actually leaves, so its species rates
+        # are directly comparable with the feed.
+        cake = dryer.supplied_stream("product")
+        assert cake.flow_lps == pytest.approx(dryer.product_lps)
+        assert cake.species_lps("solvent") == pytest.approx(
+            2.0 * 0.25 - 0.2, abs=1e-6)
+        assert cake.species_lps("product") == pytest.approx(2.0 * 0.7, abs=1e-6)
 
     def test_drying_concentrates_the_cake(self) -> None:
         dryer = Dryer("dr", rate_lps=2.0)
         dryer.is_on = True
         dryer.power.value = 1.0
-        feed = self._wet_cake(flow=2.0)
-        dryer.inlet.value = feed
+        wet = self._wet_cake(flow=2.0)
+        feed(dryer.inlet, wet)
         dryer.heat_duty.value = 450.0
         dryer.tick(0.05)
-        cake = dryer.product.value
-        assert cake.solids_frac > feed.solids_frac
-        assert cake.frac("product") > feed.frac("product")
+        cake = dryer.supplied_stream("product")
+        assert cake.solids_frac > wet.solids_frac
+        assert cake.frac("product") > wet.frac("product")
 
     def test_cannot_evaporate_more_liquid_than_it_has(self) -> None:
         """A huge duty on a nearly dry cake evaporates the liquid and
@@ -130,53 +175,83 @@ class TestDryer:
         dryer = Dryer("dr", rate_lps=2.0)
         dryer.is_on = True
         dryer.power.value = 1.0
-        dryer.inlet.value = Stream(
+        feed(dryer.inlet, Stream(
             2.0, 40.0, {"product": 0.95, "solvent": 0.05}, solids_frac=0.9
-        )
+        ))
         dryer.heat_duty.value = 100000.0
         dryer.tick(0.05)
         # Only the 10 % that was liquid can go.
-        assert dryer.vapor.value.flow_lps == pytest.approx(0.2, abs=0.01)
-        assert dryer.product.value.flow_lps == pytest.approx(1.8, abs=0.01)
-        assert dryer.product.value.solids_frac == pytest.approx(1.0, abs=0.01)
+        assert dryer.evap_lps == pytest.approx(0.2, abs=0.01)
+        assert dryer.product_lps == pytest.approx(1.8, abs=0.01)
+        assert dryer.supplied_stream("product").solids_frac == pytest.approx(
+            1.0, abs=0.01)
 
     def test_impurity_stays_behind_in_the_cake(self) -> None:
         """The uncomfortable truth about drying: what was dissolved in
-        the retained liquor is still there when the solvent leaves."""
+        the retained liquor is still there when the solvent leaves. A
+        dryer concentrates impurity exactly as well as product."""
         dryer = Dryer("dr", rate_lps=2.0)
         dryer.is_on = True
         dryer.power.value = 1.0
-        feed = self._wet_cake(flow=2.0)
-        dryer.inlet.value = feed
+        wet = self._wet_cake(flow=2.0)
+        feed(dryer.inlet, wet)
         dryer.heat_duty.value = 450.0
         dryer.tick(0.05)
-        assert dryer.product.value.frac("impurity") > feed.frac("impurity")
-        assert dryer.vapor.value.frac("impurity") == pytest.approx(0.0)
+        cake = dryer.supplied_stream("product")
+        assert cake.frac("impurity") > wet.frac("impurity")
+        # Not a drop of it left: the impurity is all still there, just
+        # in less liquid.
+        assert cake.species_lps("impurity") == pytest.approx(
+            wet.species_lps("impurity"), abs=1e-6)
+
+    def test_it_dries_what_a_hopper_can_give_it(self) -> None:
+        sim = Simulation(dt=0.05)
+        hopper = sim.add(Tank("ct", capacity_l=3000.0, level_l=2000.0,
+                              height_m=3.0, comp={"product": 0.7, "solvent": 0.3}))
+        dryer = sim.add(Dryer("dr", rate_lps=2.0))
+        dry_tank = sim.add(Tank("dt", capacity_l=3000.0, height_m=3.0))
+        wire_power(sim, dryer)
+        sim.connect(hopper, "outlet", dryer, "inlet")
+        sim.connect(dryer, "product", dry_tank, "inlet")
+        sim.connect(sim.add(Duty("q", 400.0)), "out", dryer, "heat_duty")
+        dryer.is_on = True
+        sim.run(300.0)
+        assert dryer.dried_l > 0.0
+        assert dry_tank.level_l > 0.0
+        # Everything that left the hopper is either in the dry tank or
+        # went up the vent, and the vent total is on a counter.
+        left = 2000.0 - hopper.level_l
+        assert left == pytest.approx(dry_tank.level_l + dryer.dried_l, abs=1.0)
 
 
 class TestStill:
     def _liquor(self, flow: float = 3.0) -> Stream:
         return Stream(flow, 60.0, {"solvent": 0.8, "product": 0.1, "impurity": 0.1})
 
-    def test_no_duty_means_no_separation(self) -> None:
-        still = Still("st", rate_lps=3.0)
+    def _running(self, **kwargs) -> Still:
+        """A still on its own bench. ``running`` is normally decided in
+        the hydraulic pass, so a bare-tick test has to set it."""
+        still = Still("st", **kwargs)
         still.is_on = True
         still.power.value = 1.0
-        still.inlet.value = self._liquor()
+        still.running = True
+        return still
+
+    def test_no_duty_means_no_separation(self) -> None:
+        still = self._running(rate_lps=3.0)
+        feed(still.inlet, self._liquor())
         still.heat_duty.value = 0.0
         still.tick(0.05)
-        assert still.distillate.value.flow_lps == pytest.approx(0.0)
-        assert still.bottoms.value.flow_lps == pytest.approx(3.0)
+        assert still.distillate_lps == pytest.approx(0.0)
+        assert still.bottoms_lps == pytest.approx(3.0)
 
     def test_light_ends_go_overhead(self) -> None:
-        still = Still("st", rate_lps=3.0, cut_c=150.0, sharpness=0.95)
-        still.is_on = True
-        still.power.value = 1.0
-        still.inlet.value = self._liquor(flow=3.0)
+        still = self._running(rate_lps=3.0, cut_c=150.0, sharpness=0.95)
+        feed(still.inlet, self._liquor(flow=3.0))
         still.heat_duty.value = 5000.0      # plenty of boilup
         still.tick(0.05)
-        top = still.distillate.value
-        bottom = still.bottoms.value
+        top = still.supplied_stream("distillate")
+        bottom = still.supplied_stream("bottoms")
         # Solvent boils at 111, below the cut, so 95 % of it goes over.
         assert top.species_lps("solvent") == pytest.approx(3.0 * 0.8 * 0.95)
         # Product boils at 320, well above: it stays down.
@@ -184,42 +259,54 @@ class TestStill:
         assert top.frac("solvent") > 0.9
 
     def test_material_balance_closes(self) -> None:
-        still = Still("st", rate_lps=3.0)
-        still.is_on = True
-        still.power.value = 1.0
-        feed = self._liquor(flow=3.0)
-        still.inlet.value = feed
+        still = self._running(rate_lps=3.0)
+        liquor = self._liquor(flow=3.0)
+        feed(still.inlet, liquor)
         still.heat_duty.value = 5000.0
         still.tick(0.05)
-        top = still.distillate.value
-        bottom = still.bottoms.value
-        assert top.flow_lps + bottom.flow_lps == pytest.approx(3.0)
+        top = still.supplied_stream("distillate")
+        bottom = still.supplied_stream("bottoms")
+        assert still.distillate_lps + still.bottoms_lps == pytest.approx(3.0)
         for key in ("solvent", "product", "impurity"):
             assert top.species_lps(key) + bottom.species_lps(key) == pytest.approx(
-                feed.species_lps(key) * (3.0 / feed.flow_lps)
-            )
+                liquor.species_lps(key))
 
     def test_reboiler_duty_throttles_the_overhead(self) -> None:
-        still = Still("st", rate_lps=3.0)
-        still.is_on = True
-        still.power.value = 1.0
-        still.inlet.value = self._liquor(flow=3.0)
+        still = self._running(rate_lps=3.0)
+        feed(still.inlet, self._liquor(flow=3.0))
         still.heat_duty.value = 900.0       # exactly 1.0 L/s of boilup
         still.tick(0.05)
         assert still.boilup_lps == pytest.approx(1.0)
-        assert still.distillate.value.flow_lps == pytest.approx(1.0)
+        assert still.distillate_lps == pytest.approx(1.0)
 
     def test_crystals_never_distill(self) -> None:
-        still = Still("st", rate_lps=3.0)
-        still.is_on = True
-        still.power.value = 1.0
-        still.inlet.value = Stream(
+        still = self._running(rate_lps=3.0)
+        feed(still.inlet, Stream(
             3.0, 60.0, {"solvent": 0.5, "product": 0.5}, solids_frac=0.4
-        )
+        ))
         still.heat_duty.value = 5000.0
         still.tick(0.05)
         solids_in = 3.0 * 0.4
-        assert still.bottoms.value.solids_lps() == pytest.approx(solids_in, abs=1e-6)
+        bottom = still.supplied_stream("bottoms")
+        assert bottom.solids_frac * still.bottoms_lps == pytest.approx(
+            solids_in, abs=1e-6)
+
+    def test_an_unpowered_still_boils_nothing(self) -> None:
+        """Switched on, fed, and dark. Its feed pump does not turn, so
+        it never gets a drop to work on."""
+        from sim.components import Source
+        sim = Simulation(dt=0.05)
+        vessel = sim.add(Tank("lt", capacity_l=5000.0, level_l=3000.0,
+                              height_m=3.0, comp={"solvent": 1.0}))
+        still = sim.add(Still("st", rate_lps=3.0))
+        sim.connect(vessel, "outlet", still, "inlet")
+        sim.connect(sim.add(Duty("reb", 1800.0)), "out", still, "heat_duty")
+        still.is_on = True                      # on, but no 480 V
+        sim.run(10.0)
+        assert still.running is False
+        assert still.draw_lps == pytest.approx(0.0)
+        assert still.recovered_l == pytest.approx(0.0)
+        assert vessel.level_l == pytest.approx(3000.0, abs=1e-6)
 
 
 class TestDownstreamTrain:
@@ -227,23 +314,20 @@ class TestDownstreamTrain:
         """Crystallizer -> centrifuge -> dryer for the product, with the
         mother liquor going to a still for solvent recovery.
 
-        Note the shape the kernel forces: a machine that *pushes*
-        material cannot feed one that *pulls* it. A vessel goes between
-        them, which is what a real plant does anyway -- a centrifuge
-        discharges to a hopper, and the dryer takes from the hopper.
+        Every join here is now a single pipe: there is no draw wire to
+        pair with it, and no tee component either. The hoppers between
+        the machines are here because a real plant has them, not because
+        the kernel demands them.
         """
-        from sim.components import Drain, Tank
-        from sim.process import Centrifuge
-
         sim = Simulation(dt=0.05)
         cx = sim.add(Crystallizer("cx", capacity_l=3000.0))
         fuge = sim.add(Centrifuge("cf", rate_lps=2.0))
-        cake_tank = sim.add(Tank("ct", capacity_l=5000.0))
+        cake_tank = sim.add(Tank("ct", capacity_l=5000.0, height_m=3.0))
         dryer = sim.add(Dryer("dr", rate_lps=2.0))
-        dry_tank = sim.add(Tank("dt", capacity_l=5000.0))
-        liquor_tank = sim.add(Tank("lt", capacity_l=5000.0))
+        dry_tank = sim.add(Tank("dt", capacity_l=5000.0, height_m=3.0))
+        liquor_tank = sim.add(Tank("lt", capacity_l=5000.0, height_m=3.0))
         still = sim.add(Still("st", rate_lps=3.0))
-        recovered = sim.add(Tank("rt", capacity_l=5000.0))
+        recovered = sim.add(Tank("rt", capacity_l=5000.0, height_m=3.0))
         heavies = sim.add(Drain("hv", rate_lps=5.0))
         wire_power(sim, cx, fuge, dryer, still)
 
@@ -251,16 +335,13 @@ class TestDownstreamTrain:
         cx.charge(2500.0, {"product": 0.35, "solvent": 0.60, "impurity": 0.05}, 80.0)
 
         sim.connect(cx, "outlet", fuge, "inlet")
-        sim.connect(fuge, "draw", cx, "draw")
         sim.connect(fuge, "product", cake_tank, "inlet")
         sim.connect(fuge, "waste", liquor_tank, "inlet")
         sim.connect(cake_tank, "outlet", dryer, "inlet")
-        sim.connect(dryer, "draw", cake_tank, "draw")
         sim.connect(dryer, "product", dry_tank, "inlet")
         sim.connect(liquor_tank, "outlet", still, "inlet")
-        sim.connect(still, "draw", liquor_tank, "draw")
         sim.connect(still, "distillate", recovered, "inlet")
-        sim.connect(still, "bottoms", heavies, "flow_in")
+        sim.connect(still, "bottoms", heavies, "inlet")
 
         # Utilities, wired rather than poked.
         sim.connect(sim.add(Duty("chill", 300.0)), "out", cx, "cool_duty")

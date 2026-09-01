@@ -1,4 +1,4 @@
-"""The recycle loop: the proof that the stream model actually closes.
+"""The recycle loop: the proof that the kernel actually closes.
 
 A recycle is the thing a bare-flow-rate kernel cannot express. Material
 leaves the reactor, is worked on by four downstream units, and some of
@@ -22,6 +22,11 @@ This is the shape of the whole synthesis train:
       still <-- liquor tank <-- (mother liquor from the centrifuge)
          |
          +--> bottoms --> drain
+
+Every join drawn above is one pipe and one kernel wire. There is no
+draw wire paired with any of them, and no tee component where the fresh
+and recycled solvent lines meet the reactor -- they simply land on the
+same nozzle, and the network splits them by what it costs to get there.
 """
 from __future__ import annotations
 
@@ -54,12 +59,13 @@ class RecyclePlant:
         self.pump_tx = sim.add(Pump("p_tx", rated_lps=1.5, mode="hand"))
         self.cx = sim.add(Crystallizer("cx", capacity_l=4000.0))
         self.fuge = sim.add(Centrifuge("cf", rate_lps=1.2))
-        self.cake_tank = sim.add(Tank("t_cake", capacity_l=4000.0))
+        self.cake_tank = sim.add(Tank("t_cake", capacity_l=4000.0, height_m=3.0))
         self.dryer = sim.add(Dryer("dr", rate_lps=2.0))
-        self.dry_tank = sim.add(Tank("t_dry", capacity_l=4000.0))
-        self.liquor_tank = sim.add(Tank("t_liq", capacity_l=8000.0))
+        self.dry_tank = sim.add(Tank("t_dry", capacity_l=4000.0, height_m=3.0))
+        self.liquor_tank = sim.add(Tank("t_liq", capacity_l=8000.0, height_m=4.0))
         self.still = sim.add(Still("st", rate_lps=3.0))
-        self.solvent_tank = sim.add(Tank("t_solv", capacity_l=8000.0, level_l=500.0,
+        self.solvent_tank = sim.add(Tank("t_solv", capacity_l=8000.0,
+                                         level_l=500.0, height_m=4.0,
                                          comp={"solvent": 1.0}))
         self.pump_recycle = sim.add(Pump("p_rc", rated_lps=1.0, mode="hand"))
         self.heavies = sim.add(Drain("dr_hv", rate_lps=5.0))
@@ -75,44 +81,37 @@ class RecyclePlant:
             (self.src_a, self.pump_a, "inlet_a"),
             (self.src_b, self.pump_b, "inlet_b"),
         ):
-            sim.connect(source, "supply", pump, "inlet")
-            sim.connect(pump, "draw", source, "draw")
+            sim.connect(source, "outlet", pump, "inlet")
             sim.connect(pump, "outlet", self.reactor, nozzle)
 
         # Makeup solvent tops up the solvent tank; the recycle pump
-        # sends the tank's contents to the reactor. Fresh and recovered
+        # sends the tank contents to the reactor. Fresh and recovered
         # solvent mix in the tank, which is the whole point of it.
-        sim.connect(self.makeup, "supply", self.pump_makeup, "inlet")
-        sim.connect(self.pump_makeup, "draw", self.makeup, "draw")
+        sim.connect(self.makeup, "outlet", self.pump_makeup, "inlet")
         sim.connect(self.pump_makeup, "outlet", self.solvent_tank, "inlet")
         sim.connect(self.solvent_tank, "outlet", self.pump_recycle, "inlet")
-        sim.connect(self.pump_recycle, "draw", self.solvent_tank, "draw")
         sim.connect(self.pump_recycle, "outlet", self.reactor, "inlet_a")
 
-        # Reactor -> crystallizer -> centrifuge. Two vessels cannot be
-        # bolted together: one offers material and the other expects to
-        # be fed, so a transfer pump goes between them. The kernel
-        # refuses the wire otherwise, which is the same answer a real
-        # plant gives.
+        # Reactor -> crystallizer -> centrifuge. A transfer pump between
+        # the two vessels, because the reactor sits at grade and cannot
+        # push its own batch up into the crystallizer. That is a
+        # judgement about elevation now, not a rule the kernel enforces:
+        # raise the reactor instead and the pipe alone would do it.
         sim.connect(self.reactor, "outlet", self.pump_tx, "inlet")
-        sim.connect(self.pump_tx, "draw", self.reactor, "draw")
         sim.connect(self.pump_tx, "outlet", self.cx, "inlet")
         sim.connect(self.cx, "outlet", self.fuge, "inlet")
-        sim.connect(self.fuge, "draw", self.cx, "draw")
 
         # Cake side: hopper -> dryer -> dry product
         sim.connect(self.fuge, "product", self.cake_tank, "inlet")
         sim.connect(self.cake_tank, "outlet", self.dryer, "inlet")
-        sim.connect(self.dryer, "draw", self.cake_tank, "draw")
         sim.connect(self.dryer, "product", self.dry_tank, "inlet")
 
         # Liquor side: the recycle. Still overheads go back to the
         # solvent tank and round again.
         sim.connect(self.fuge, "waste", self.liquor_tank, "inlet")
         sim.connect(self.liquor_tank, "outlet", self.still, "inlet")
-        sim.connect(self.still, "draw", self.liquor_tank, "draw")
         sim.connect(self.still, "distillate", self.solvent_tank, "inlet")
-        sim.connect(self.still, "bottoms", self.heavies, "flow_in")
+        sim.connect(self.still, "bottoms", self.heavies, "inlet")
 
         # Utilities
         sim.connect(sim.add(Duty("q_rx", 700.0)), "out", self.reactor, "heat_duty")
@@ -151,11 +150,28 @@ class RecyclePlant:
         )
 
 
-class TestRecycleLoop:
-    def test_the_loop_runs_and_solvent_comes_back(self) -> None:
-        plant = RecyclePlant()
-        plant.sim.run(1200.0)
+SOAK_S = 600.0
 
+
+@pytest.fixture(scope="module")
+def soaked() -> tuple[RecyclePlant, float]:
+    """One commissioned plant, soaked once, read by every test below
+    that only wants to look at it.
+
+    Built once on purpose. A ring this size is a genuinely expensive
+    thing to simulate -- fifty nodes solved every scan for ten thousand
+    scans -- and every assertion here is about the same soak, so
+    rebuilding it per test would buy nothing but minutes.
+    """
+    plant = RecyclePlant()
+    start_inventory = plant.held()
+    plant.sim.run(SOAK_S)
+    return plant, start_inventory
+
+
+class TestRecycleLoop:
+    def test_the_loop_runs_and_solvent_comes_back(self, soaked) -> None:
+        plant, _ = soaked
         assert plant.reactor.purity_frac > 0.05      # product is being made
         assert plant.cx.solids_frac > 0.05           # crystals are dropping
         assert plant.dry_tank.level_l > 0.0          # dry product is landing
@@ -163,29 +179,46 @@ class TestRecycleLoop:
         assert plant.still.recovered_l > 50.0
         assert plant.solvent_tank.comp.get("solvent", 0.0) > 0.7
 
-    def test_mass_closes_around_the_ring(self) -> None:
+    def test_mass_closes_around_the_ring(self, soaked) -> None:
         """Nothing is created or destroyed anywhere in the loop, even
         though material passes through the same vessels repeatedly."""
-        plant = RecyclePlant()
-        start_inventory = plant.held()
-        plant.sim.run(1200.0)
+        plant, start_inventory = soaked
         assert plant.held() == pytest.approx(
             start_inventory + plant.fed_in(), rel=0.02
         )
 
-    def test_recycle_carries_more_than_the_makeup(self) -> None:
+    def test_the_solve_stays_healthy_all_the_way_round(self, soaked) -> None:
+        """A ring is the hard case for a nodal solve: every node feeds
+        back into itself eventually. It still has to balance, and from a
+        warm start it still has to do it in a couple of iterations."""
+        plant, _ = soaked
+        net = plant.sim._network
+        assert net.residual_lps <= net.TOLERANCE_LPS
+        assert net.iterations <= 4
+
+    def test_no_pump_in_the_ring_is_left_cavitating(self, soaked) -> None:
+        """A machine whose supply has not arrived drags its suction
+        toward vacuum. That is honest, but a commissioned plant running
+        steadily should have none of it -- and if one does, the solve
+        that reports it is the one to trust."""
+        plant, _ = soaked
+        starved = [p.name for p in (plant.pump_a, plant.pump_b,
+                                    plant.pump_makeup, plant.pump_tx,
+                                    plant.pump_recycle)
+                   if p.cavitating]
+        assert starved == []
+
+    def test_recycle_carries_more_than_the_makeup(self, soaked) -> None:
         """The payoff: most of the solvent reaching the reactor has been
         round the loop before, rather than coming fresh off a header."""
-        plant = RecyclePlant()
-        plant.sim.run(1200.0)
+        plant, _ = soaked
         assert plant.still.recovered_l > plant.makeup.total_l
 
-    def test_recycle_carries_impurity_with_it(self) -> None:
+    def test_recycle_carries_impurity_with_it(self, soaked) -> None:
         """The other half of the payoff, and the reason a purge exists:
         an imperfect cut sends a little heavy material back round, so
         the recycled solvent is never quite as clean as fresh."""
-        plant = RecyclePlant()
-        plant.sim.run(1200.0)
+        plant, _ = soaked
         recycled = plant.solvent_tank.comp
         assert recycled.get("solvent", 0.0) < 1.0
         assert recycled.get("impurity", 0.0) > 0.0
@@ -194,10 +227,9 @@ class TestRecycleLoop:
         """Pull the recycle line and the ring behaves differently --
         proof it is load-bearing rather than decorative.
 
-        Pulling a pipe means removing *both* wires of the facade: the
-        material line and the draw that meters it. Removing only the
-        discharge would leave the pump still sucking on the tank and
-        pumping onto the floor.
+        Pulling a pipe is now one disconnect, not two. The draw wire it
+        used to be paired with is gone, so there is no way to leave a
+        pump still sucking on a tank and discharging onto the floor.
         """
         closed = RecyclePlant()
         opened = RecyclePlant()
@@ -207,12 +239,28 @@ class TestRecycleLoop:
         opened.sim.disconnect(
             opened.solvent_tank, "outlet", opened.pump_recycle, "inlet"
         )
-        opened.sim.disconnect(
-            opened.pump_recycle, "draw", opened.solvent_tank, "draw"
-        )
-        closed.sim.run(600.0)
-        opened.sim.run(600.0)
+        closed.sim.run(400.0)
+        opened.sim.run(400.0)
         # Without the recycle the reactor gets only its two reagents.
         assert closed.reactor.volume_l > opened.reactor.volume_l
         # And the solvent it is no longer drinking backs up in the tank.
         assert opened.solvent_tank.level_l > closed.solvent_tank.level_l
+
+    def test_an_orphaned_pump_moves_nothing(self) -> None:
+        """Pulling only the discharge leaves the recycle pump piped to
+        the tank and open to nothing. With pressure solving direction a
+        line that ends nowhere passes nothing, so the pump turns and the
+        tank stays where it is -- the old model would have kept
+        decrementing the tank through the draw wire."""
+        plant = RecyclePlant()
+        plant.sim.disconnect(
+            plant.pump_recycle, "outlet", plant.reactor, "inlet_a"
+        )
+        plant.sim.run(60.0)
+        before = plant.solvent_tank.level_l
+        plant.sim.run(60.0)
+        assert plant.pump_recycle.running
+        assert plant.pump_recycle.flow_lps == pytest.approx(0.0, abs=1e-6)
+        # The tank only rises, from makeup and distillate. Nothing is
+        # being drawn out of it.
+        assert plant.solvent_tank.level_l >= before
