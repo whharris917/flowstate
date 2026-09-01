@@ -1035,8 +1035,8 @@ Source.SPEC = EquipmentSpec(
     ),
     ports={
         "outlet": "The tie-in nozzle. Holds its rated pressure whatever "
-                  "you draw, and the meter totalizes what left through "
-                  "it.",
+                  "you draw, and the meter keeps a running total of "
+                  "what left through it.",
     },
     equations=(
         Equation(

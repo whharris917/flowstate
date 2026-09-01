@@ -195,7 +195,7 @@ class Dryer(Component):
     present, so the solvent goes first and the crystals stay -- which
     means anything dissolved in the retained mother liquor is still
     there when the solvent leaves. The vapour goes out of the vent
-    rather than a nozzle; ``dried_l`` totalizes it.
+    rather than a nozzle; ``dried_l`` keeps a running total of it.
     """
 
     LATENT_KJ_PER_KG = 900.0

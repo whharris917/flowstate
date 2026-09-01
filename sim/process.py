@@ -819,7 +819,7 @@ HeatExchanger.SPEC = EquipmentSpec(
             "Everything admitted to the shell condenses and leaves by "
             "the trap. Steam the process could not absorb is wasted, "
             "not destroyed -- pipe the condensate somewhere and the "
-            "waste is on a totalizer.",
+            "waste is counted rather than hidden.",
         ),
     ),
     params=(
