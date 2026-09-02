@@ -84,7 +84,7 @@ func setup(lock_: SimVacuumLock) -> void:
 func _process(_delta: float) -> void:
 	_label.text = "%s · %.0f kPa" % [lock.state.to_upper(), lock.press_pa / 1000.0]
 	_pump_audio.set_running(lock.state == "evacuate")
-	_gurgle.set_running(lock.state == "drain" and lock.drain_flow.value > 0.0)
+	_gurgle.set_running(lock.state == "drain" and lock.draining_lps > 0.0)
 	# One blast per real vent step of the main air valve.
 	if lock.vent_bursts_done != _last_bursts:
 		_last_bursts = lock.vent_bursts_done

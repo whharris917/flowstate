@@ -47,7 +47,7 @@ func _process(delta: float) -> void:
 
 func describe() -> String:
 	return "%s — heat exchanger\nsteam %.2f kg/s · duty %.0f kW (max %.0f)" % [
-		hx.comp_name, hx.steam_in.value, hx.duty_kw, hx.max_duty_kw]
+		hx.comp_name, hx.steam_lps, hx.duty_kw, hx.max_duty_kw]
 
 
 func use() -> void:

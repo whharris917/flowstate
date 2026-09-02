@@ -63,7 +63,7 @@ func describe() -> String:
 	return "%s — centrifuge, %.1f L/s (E starts/stops)\n%s · product %.2f L/s · waste %.2f L/s · %d starts" % [
 		fuge.comp_name, fuge.rate_lps,
 		"SPINNING" if fuge.spinning else ("ON but starved/unpowered" if fuge.is_on else "stopped"),
-		fuge.product.value, fuge.waste.value, fuge.starts]
+		fuge.cake_lps, fuge.liquor_lps, fuge.starts]
 
 
 func use() -> void:
