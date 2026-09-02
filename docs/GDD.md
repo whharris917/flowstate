@@ -190,7 +190,6 @@ Scale-up problems are discoveries, not arbitrary challenges: the route was never
 - **Name.** For the ship, the AI, the medicine, and the game.
 - **The AI's voice.** Warm, clinical, wry? Does it have a personality flaw that matters?
 - **Destination.** Who is waiting, and do they ever speak to the ship?
-- **The designers' argument.** Do we include the "someone didn't trust the AI" thread?
 - **The player's body.** Sleep and food as gentle rhythms or real constraints?
 - **Failure texture.** How bad is a lost batch? A lost cell bank? Does the ship carry a second bank?
 - **What stays manual forever.** Which tasks should the endgame still require a human hand for?
