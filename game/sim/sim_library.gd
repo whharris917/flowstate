@@ -6,14 +6,14 @@ class_name SimLibrary
 ## is never allowed to describe a machine that does not exist.
 ##
 ##   * Prose, equations, parameters and assumptions come from
-##     SimLibraryData, generated from the Python specs by
-##     tools/generate_library.py. Those specs sit beside the tick() that
-##     implements them and are the only copy.
+##     SimLibraryData, which is hand-authored under the director's
+##     editorial review. It is not generated from the Python specs
+##     and need not match them.
 ##   * The PORT TABLE is not written down anywhere. It is read off a
 ##     real constructed component here, from the same add_input and
 ##     add_output calls the simulation uses, so a page cannot list a
 ##     nozzle the equipment does not have or miss one it does.
-##   * Anything the generated data cannot explain is shown as
+##   * Anything the page data cannot explain is shown as
 ##     undocumented rather than quietly omitted.
 
 ## Reading order for the index: process first, then the separation

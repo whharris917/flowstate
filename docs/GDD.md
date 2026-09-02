@@ -1,12 +1,12 @@
 # Working Title — Game Design Document
-**Version 0.1 — 29 August 2026**
+**Version 0.2 — 1 September 2026**
 **Creative Director:** you · **Development:** Claude
 
 ---
 
 ## 1. Vision
 
-A first-person factory-building simulation set aboard a massive starship, where the factory does not exist yet. The player builds a pharmaceutical plant from raw materials and bare bulkheads, one sensor, relay, and wire at a time, guided by an AI that knows the chemistry but cannot see or touch the world until the player instruments it.
+A first-person factory-building simulation set aboard a massive starship, where the factory does not exist yet. The player builds a pharmaceutical plant from raw materials and bare bulkheads, one sensor, relay, and wire at a time, advised by an AI that knows the chemistry, sees only what the player sees, and controls nothing.
 
 **One sentence:** *Nobody designed this factory. They packed the periodic table into a ship, added an AI, and sent one person to figure it out on the way.*
 
@@ -15,7 +15,6 @@ A first-person factory-building simulation set aboard a massive starship, where 
 2. **Manual first, then automate.** Every automated system was once a chore the player did by hand. Automation is earned by suffering the manual version.
 3. **Awe.** The scale of the ship, the hold, and the plant should make the player feel small, and then feel responsible.
 4. **One integrated system.** Life support, power, thermal, and the medicine plant share resources. The ship is one machine with a person inside it.
-5. **The AI sees what you wire.** Every sensor extends the AI's perception; every actuator extends its agency. Progression is the restoration of a mind's body.
 
 **Tone:** lonely, sacred, industrial. Silence, hum, reverb. Competence as heroism. The illness the medicine treats is deliberately abstract; the drama is the plant.
 
@@ -34,14 +33,14 @@ The process was never run beyond lab scale. The route is paper. The plant is unb
 Not the ideal candidate — the available one. Competent with their hands, some industrial background, no experience with *this*. Knows what a wrench feels like; does not know bioprocessing. The AI knows theory the player lacks; the player knows the world the AI cannot touch.
 
 ### 2.3 The AI
-Rushed into the ship with vast knowledge and almost no senses: a few cameras, housekeeping telemetry, no plant instrumentation because there was no plant. It cannot act because there were no actuators to give it, because the hastily built safety architecture requires a human in every loop, and — optionally — because someone on the design team did not trust it and locked it out, an argument still preserved in the ship's documents.
+The player's advisor, not an operator. It carries the route, the theory, and the ship's documents. It sees only what the player sees and controls nothing: no instrumentation of its own, no actuators, no hand on any valve, and that never changes. The factory is the player's.
 
 The AI is a mentor, a voice in the silence, and fallible. It reasons from incomplete data and an unvalidated route. It is sometimes confidently wrong. The player learns to distrust a guess and demand a measurement.
 
 ### 2.4 Arc
 - **Act I — Hands.** Survive. Keep your own air. Learn the isolator. Restore the tram. Enter the hold.
-- **Act II — Eyes.** Instrument the ship. Build the first plant. Give the AI senses. Discover that scale-up breaks everything.
-- **Act III — Agency.** Automate the plant end to end. The AI runs the ship. The player goes outside because they want to.
+- **Act II — Eyes.** Instrument the ship. Build the first plant. Discover that scale-up breaks everything.
+- **Act III — Agency.** Automate the plant end to end. The ship runs on the player's logic. The player goes outside because they want to.
 - **Arrival.** No countdown. The ship arrives when it arrives; the ending is how many doses are on board. A well-run ship arrives full. A struggling one arrives with something. There is no "lose."
 
 ### 2.5 The medicine
@@ -133,10 +132,7 @@ Threats are environmental, not hostile:
 
 The plant competes with life support for heat rejection, power, and water. The ship must be built as one system.
 
-### 4.6 The AI's perception
-A first-class system. The AI can query only sensors that are installed, wired, and landed on a network it can read. Early on the player reads gauges aloud. Each sensor expands what the AI can advise on; each actuator expands what it can do; each PLC is agency restored. The endgame is a ship the AI can run, built by hand.
-
-### 4.7 Exploration
+### 4.6 Exploration
 Reward is *what* you find: unlogged crates of transmitters, a laminated P&ID on a bench, engineer's notes contradicting the AI, a prefab module that becomes a bioreactor suite once powered. Gates are engineering: restore a bus to light a section, fix a leak to pressurize it, route heat to warm it. The tram is dead at start; restoring it is an early milestone and paces the unlock of districts.
 
 ---
@@ -153,7 +149,7 @@ The ladder is the history of industrial control. Each tier removes the previous 
 | 3 Micro-PLC / ladder | Replace the relay cabinet with logic | On/off control oscillates |
 | 4 Analog & PID | Transmitters, control valves, loops | Can't see it all at once |
 | 5 HMI & alarms | Screens, trends, alarm management | Islands of control |
-| 6 Networked / SCADA | Fieldbus, plant overview, redundancy | — the AI can run the ship |
+| 6 Networked / SCADA | Fieldbus, plant overview, redundancy | — the plant runs unattended |
 
 Plant flow maps onto progression front to back:
 - **Life Support** (Tiers 0–2): the first plant; survival loop
@@ -189,24 +185,7 @@ Scale-up problems are discoveries, not arbitrary challenges: the route was never
 
 ---
 
-## 8. Build order
-
-The protection against a huge beautiful ship with nothing in it: build one district completely and make it excellent before extending the spine.
-
-1. **Kernel prototype (Python).** Tank, float switch, relay, pump. Prove the wire-it-and-watch-it loop is fun on paper. Add the hysteresis/chatter problem.
-2. **Engine foundations (Godot).** First-person controller → look-and-interact → grid placement → connect two objects → panel UI → save/load. Ugly and functional.
-3. **Vertical slice: Life Support.** One district, Tiers 0–2, the survival loop, the first automation of the player's own air. This is the game in miniature; everything is judged against it.
-4. **Ladder editor.** Tier 3 against the same kernel.
-5. **The spine and the tram.** Districts as stops, unlocked by engineering.
-6. **The hold.** Instanced inventory, the reveal, the dead control station.
-7. **Fill-Finish and the isolator.** Glove-port interaction model, contamination propagation.
-8. **Upstream, then downstream.** Tiers 4–6, scale-up discoveries, the AI's growing perception.
-9. **Exterior and EVA.** Suit systems, external assets, the view.
-10. **Arrival.** Ending as dose count.
-
----
-
-## 9. Open questions for the creative director
+## 8. Open questions for the creative director
 
 - **Name.** For the ship, the AI, the medicine, and the game.
 - **The AI's voice.** Warm, clinical, wry? Does it have a personality flaw that matters?

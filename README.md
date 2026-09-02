@@ -2,7 +2,7 @@
 
 First-person factory-building sim aboard a starship. Design bible: `docs/GDD.md`. Working agreement: `CLAUDE.md`.
 
-## Python kernel (build-order step 1)
+## Python kernel
 
 ```powershell
 # launch the live operator GUI (opens in your browser)
@@ -17,7 +17,7 @@ operator graphic and live trends of historized data. Try setting low trip = high
 trip and watch the relay cycle counter. Full history is downloadable as CSV from
 the page footer.
 
-## Godot first playable (build-order step 2)
+## Godot first playable
 
 Open `game/project.godot` in Godot 4.3+ and press play. WASD + mouse to move,
 E to cycle the pump's Hand-Off-Auto selector, F5/F9 save/load, Esc releases the

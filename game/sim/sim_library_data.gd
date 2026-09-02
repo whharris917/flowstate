@@ -1,11 +1,10 @@
 class_name SimLibraryData
-## GENERATED FILE — do not edit by hand.
+## The in-game equipment library pages. HAND-AUTHORED under the
+## director's editorial review (2026-09-01) — edit this file directly.
 ##
-## Written by tools/generate_library.py from the EquipmentSpec
-## declarations in sim/*.py, which are the single source of truth
-## for equipment prose and equations. Edit a SPEC and re-run the
-## generator; editing this file just means your change is lost the
-## next time somebody does.
+## It was seeded from the Python EquipmentSpecs by a generator that
+## has since been removed. It is not derived from the Python source
+## and is not required to match it.
 ##
 ## Port NAMES, KINDS and DIRECTIONS are deliberately absent: the
 ## library reads those off a live component so a page can never
