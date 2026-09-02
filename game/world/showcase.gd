@@ -46,15 +46,23 @@ static func _unit_100(plant: Plant) -> void:
 	for corner: Vector2 in [Vector2(13, -6), Vector2(19, -6), Vector2(13, -1.8), Vector2(19, -1.8)]:
 		plant.place_structure("s_column", "u100_col_%d_%d" % [int(corner.x), int(-corner.y * 10)],
 			Vector3(corner.x, 0.0, corner.y), 0.0)
-	plant.place_structure("s_beam", "u100_beam_s", Vector3(16, 3.0, -6.0), 0.0, 6.0)
-	plant.place_structure("s_beam", "u100_beam_n", Vector3(16, 3.0, -1.8), 0.0, 6.0)
-	plant.place_structure("s_beam", "u100_beam_w", Vector3(13, 3.0, -3.9), PI / 2.0, 4.2)
-	plant.place_structure("s_beam", "u100_beam_e", Vector3(19, 3.0, -3.9), PI / 2.0, 4.2)
-	plant.place_structure("s_deck", "u100_deck", Vector3(16, 3.18, -3.9), 0.0)
-	plant.place_structure("s_catwalk", "u100_catwalk", Vector3(16, 3.18, -6.2), 0.0)
-	plant.place_structure("s_railing", "u100_rail_n", Vector3(16, 3.33, -1.95), 0.0, 4.0)
-	plant.place_structure("s_railing", "u100_rail_w", Vector3(14.05, 3.33, -3.9), PI / 2.0, 3.8)
-	plant.place_structure("s_stairs", "u100_stairs", Vector3(20.1, 0.0, -3.9), PI / 2.0)
+	# A flight of stairs rises 3.0 m to the top of its hull, so the deck
+	# it serves sits on beams at 2.7: beam top 2.875, deck top 3.025,
+	# and the player walks straight off the stairs onto it.
+	plant.place_structure("s_beam", "u100_beam_s", Vector3(16, 2.7, -6.0), 0.0, 6.0)
+	plant.place_structure("s_beam", "u100_beam_n", Vector3(16, 2.7, -1.8), 0.0, 6.0)
+	plant.place_structure("s_beam", "u100_beam_w", Vector3(13, 2.7, -3.9), PI / 2.0, 4.2)
+	plant.place_structure("s_beam", "u100_beam_e", Vector3(19, 2.7, -3.9), PI / 2.0, 4.2)
+	plant.place_structure("s_deck", "u100_deck", Vector3(16, 2.875, -3.9), 0.0)
+	plant.place_structure("s_catwalk", "u100_catwalk", Vector3(16, 2.875, -6.2), 0.0)
+	# The stairs land on the north edge, the one side where no frame
+	# beam crosses the flight: the east beam at x 19 would run straight
+	# across a flight from the east. The landing sits over the north
+	# edge beam, with the railing split around it.
+	plant.place_structure("s_railing", "u100_rail_n1", Vector3(14.85, 3.025, -1.95), 0.0, 1.7)
+	plant.place_structure("s_railing", "u100_rail_n2", Vector3(17.6, 3.025, -1.95), 0.0, 0.8)
+	plant.place_structure("s_railing", "u100_rail_w", Vector3(14.05, 3.025, -3.9), PI / 2.0, 3.8)
+	plant.place_structure("s_stairs", "u100_stairs", Vector3(16.5, 0.0, 0.2), 0.0)
 
 	# The loop: LV-101 fills FT-100 from the supply header
 	# against a real drain; LT-101 reads the head, LIC-101 drives the
@@ -412,61 +420,75 @@ static func _unit_300(plant: Plant) -> void:
 ## the rig; the same 1700 L go round.
 
 static func _unit_400(plant: Plant) -> void:
-	# ---- the tower: 4 x 4 m, decks at 3.18 and 6.18 -----------------
-	for corner: Vector2 in [Vector2(-4, 9), Vector2(0, 9), Vector2(-4, 13), Vector2(0, 13)]:
-		plant.place_structure("s_column", "u400_col_%d_%d" % [int(-corner.x), int(corner.y)],
-			Vector3(corner.x, 0.0, corner.y), 0.0)
-	for tier: float in [3.0, 6.0]:
-		var t := int(tier)
-		plant.place_structure("s_beam", "u400_beam_%d_n" % t, Vector3(-2, tier, 9), 0.0, 4.0)
-		plant.place_structure("s_beam", "u400_beam_%d_s" % t, Vector3(-2, tier, 13), 0.0, 4.0)
-		plant.place_structure("s_beam", "u400_beam_%d_w" % t, Vector3(-4, tier, 11), PI / 2.0, 4.0)
-		plant.place_structure("s_beam", "u400_beam_%d_e" % t, Vector3(0, tier, 11), PI / 2.0, 4.0)
-	plant.place_structure("s_deck", "u400_deck_mid", Vector3(-2, 3.18, 11), 0.0)
-	plant.place_structure("s_deck", "u400_deck_top", Vector3(-2, 6.18, 11), 0.0)
-	# Stairs: grade to the mid deck from the east; mid to top along the
-	# west side of the mid deck. Railings leave the landings open.
+	# ---- the tower: a 4 x 12 m platform with a 4 x 4 m top deck --------
+	# A flight of stairs tops out 3.03 m above its base, so the decks
+	# sit on beams at 2.7 and 5.7 (deck tops 3.025 and 6.025) and the
+	# player walks straight off each flight onto the next level. The
+	# platform runs three bays south so the second flight, 4.4 m plus
+	# room to stand behind it, fits on it.
+	for z: float in [9.0, 13.0, 17.0, 21.0]:
+		for x: float in [-4.0, 0.0]:
+			plant.place_structure("s_column", "u400_col_%d_%d" % [int(-x), int(z)],
+				Vector3(x, 0.0, z), 0.0)
+		plant.place_structure("s_beam", "u400_beam_27_x%d" % int(z), Vector3(-2, 2.7, z), 0.0, 4.0)
+	for z: float in [11.0, 15.0, 19.0]:
+		plant.place_structure("s_beam", "u400_beam_27_w%d" % int(z), Vector3(-4, 2.7, z), PI / 2.0, 4.0)
+		plant.place_structure("s_beam", "u400_beam_27_e%d" % int(z), Vector3(0, 2.7, z), PI / 2.0, 4.0)
+		plant.place_structure("s_deck", "u400_deck_mid_%d" % int(z), Vector3(-2, 2.875, z), 0.0)
+	plant.place_structure("s_beam", "u400_beam_57_n", Vector3(-2, 5.7, 9), 0.0, 4.0)
+	plant.place_structure("s_beam", "u400_beam_57_s", Vector3(-2, 5.7, 13), 0.0, 4.0)
+	plant.place_structure("s_beam", "u400_beam_57_w", Vector3(-4, 5.7, 11), PI / 2.0, 4.0)
+	plant.place_structure("s_beam", "u400_beam_57_e", Vector3(0, 5.7, 11), PI / 2.0, 4.0)
+	plant.place_structure("s_deck", "u400_deck_top", Vector3(-2, 5.875, 11), 0.0)
+	# Stairs: grade to the mid deck from the east, landing at z 11-12.5;
+	# mid to top along the platform's west strip, climbing north onto
+	# the top deck's south edge. Each top edge sits 0.1 m inside its
+	# deck so the landing spans the edge beam.
 	plant.place_structure("s_stairs", "u400_stairs_lo", Vector3(2.1, 0.0, 11.75), PI / 2.0)
-	plant.place_structure("s_stairs", "u400_stairs_hi", Vector3(-3.2, 3.33, 11.0), PI)
-	plant.place_structure("s_railing", "u400_rail_m_n", Vector3(-1.2, 3.33, 9.05), 0.0, 2.4)
-	plant.place_structure("s_railing", "u400_rail_m_e", Vector3(-0.05, 3.33, 10.0), PI / 2.0, 2.0)
-	plant.place_structure("s_railing", "u400_rail_m_s", Vector3(-1.2, 3.33, 12.95), 0.0, 2.4)
-	plant.place_structure("s_railing", "u400_rail_t_n", Vector3(-2, 6.33, 9.05), 0.0, 4.0)
-	plant.place_structure("s_railing", "u400_rail_t_w", Vector3(-3.95, 6.33, 11.0), PI / 2.0, 4.0)
-	plant.place_structure("s_railing", "u400_rail_t_e", Vector3(-0.05, 6.33, 11.0), PI / 2.0, 4.0)
-	plant.place_structure("s_railing", "u400_rail_t_s", Vector3(-1.0, 6.33, 12.95), 0.0, 2.0)
+	plant.place_structure("s_stairs", "u400_stairs_hi", Vector3(-3.2, 3.025, 15.1), 0.0)
+	# Railings leave the two landings and the foot of the flight open.
+	plant.place_structure("s_railing", "u400_rail_m_n", Vector3(-2, 3.025, 9.05), 0.0, 4.0)
+	plant.place_structure("s_railing", "u400_rail_m_e1", Vector3(-0.05, 3.025, 10.0), PI / 2.0, 2.0)
+	plant.place_structure("s_railing", "u400_rail_m_e2", Vector3(-0.05, 3.025, 16.75), PI / 2.0, 8.5)
+	plant.place_structure("s_railing", "u400_rail_m_s", Vector3(-2, 3.025, 20.95), 0.0, 4.0)
+	plant.place_structure("s_railing", "u400_rail_m_w1", Vector3(-3.95, 3.025, 10.95), PI / 2.0, 3.9)
+	plant.place_structure("s_railing", "u400_rail_m_w2", Vector3(-3.95, 3.025, 19.15), PI / 2.0, 3.7)
+	plant.place_structure("s_railing", "u400_rail_t_n", Vector3(-2, 6.025, 9.05), 0.0, 4.0)
+	plant.place_structure("s_railing", "u400_rail_t_w", Vector3(-3.95, 6.025, 11.0), PI / 2.0, 4.0)
+	plant.place_structure("s_railing", "u400_rail_t_e", Vector3(-0.05, 6.025, 11.0), PI / 2.0, 4.0)
+	plant.place_structure("s_railing", "u400_rail_t_s", Vector3(-1.2, 6.025, 12.95), 0.0, 2.4)
 
 	# ---- equipment ---------------------------------------------------
 	# Three vessels at three heights. Placement height is elevation, so
-	# the top tank's floor really is 6.25 m above the sump's.
+	# the top tank's floor really is six metres above the sump's. The
+	# mid tank keeps to the north-east corner, clear of both landings.
 	plant.place("tank", "t_403", {"height_m": 2.0, "diameter_m": 1.13},
 		Vector3(-2.0, 0.0, 11.0), 0.0, false)
 	plant.place("tank", "t_402", {"height_m": 1.6, "diameter_m": 0.9},
-		Vector3(-0.9, 3.33, 11.6), 0.0, false)
+		Vector3(-0.9, 3.025, 9.9), 0.0, false)
 	plant.place("tank", "t_401", {"height_m": 1.6, "diameter_m": 0.9},
-		Vector3(-1.4, 6.33, 11.4), 0.0, false)
+		Vector3(-1.4, 6.025, 11.4), 0.0, false)
 	plant.place("pump", "p_401", {"rated_lps": 3.0, "head_m": 30.0}, Vector3(-5.8, 0.0, 9.6), 0.0, false)
 	plant.place("pump", "p_402", {"rated_lps": 3.0, "head_m": 5.0}, Vector3(-5.8, 0.0, 12.4), 0.0, false)
 	plant.place("float_switch", "ls_401", {"low_l": 300.0, "high_l": 650.0},
-		Vector3(-2.9, 7.1, 9.9), 0.0, false)
+		Vector3(-2.9, 6.8, 9.9), 0.0, false)
 	plant.place("relay", "k_401", {}, Vector3(-7.6, 0.0, 11.0), 0.0, false)
 	plant.place("gauge_flow", "fi_401", {}, Vector3(-6.6, 0.0, 7.6), 0.0, false)
 	# Ranged to the top tank's cross-section: 636 L per metre of head.
 	plant.place("gauge_level", "li_401", {"liters_per_meter": 636.2},
-		Vector3(-0.5, 6.33, 9.8), 0.0, false)
+		Vector3(-0.5, 6.025, 9.8), 0.0, false)
 
-	# Nozzles face their runs: the sump draws off toward the pumps and
-	# fills from the south, the top tank fills from the west riser and
-	# drains toward the south-east column.
+	# Nozzles face their runs. Outlets sit a little higher than the
+	# default so their lines clear the railing toe boards.
 	var sump := plant.views["t_403"] as TankView
 	sump.set_nozzle("outlet", 0.10, PI)
 	sump.set_nozzle("inlet", 0.92, PI / 2.0)
 	var mid := plant.views["t_402"] as TankView
-	mid.set_nozzle("inlet", 0.92, PI / 2.0)
-	mid.set_nozzle("outlet", 0.10, -PI / 2.0)
+	mid.set_nozzle("inlet", 0.92, 0.0)
+	mid.set_nozzle("outlet", 0.16, -PI / 2.0)
 	var top := plant.views["t_401"] as TankView
 	top.set_nozzle("inlet", 0.92, PI)
-	top.set_nozzle("outlet", 0.10, PI / 4.0)
+	top.set_nozzle("outlet", 0.16, PI / 4.0)
 	top.set_nozzle("level", 0.55, -PI / 2.0)
 
 	# ---- process path ------------------------------------------------
@@ -475,24 +497,25 @@ static func _unit_400(plant: Plant) -> void:
 		_local(plant, [Vector3(-4.0, 0.35, 10.7), Vector3(-6.6, 0.35, 10.7)]))
 	plant.connect_equipment("t_403", "outlet", "p_402", "inlet",
 		_local(plant, [Vector3(-4.0, 0.3, 11.3), Vector3(-6.7, 0.3, 11.3), Vector3(-6.7, 0.3, 12.4)]))
-	# Risers hug the west columns up to the top tank's inlet; the two
-	# meet at its nozzle.
+	# Risers hug the west columns up past the top-deck railing to the
+	# top tank's inlet; the two meet at its nozzle.
 	plant.connect_equipment("p_401", "outlet", "t_401", "inlet",
-		_local(plant, [Vector3(-4.4, 0.42, 9.0), Vector3(-4.4, 7.4, 9.0), Vector3(-4.4, 7.4, 11.4)]))
+		_local(plant, [Vector3(-4.4, 0.42, 9.0), Vector3(-4.4, 7.35, 9.0), Vector3(-4.4, 7.35, 11.4)]))
 	plant.connect_equipment("p_402", "outlet", "t_401", "inlet",
-		_local(plant, [Vector3(-4.4, 0.42, 13.0), Vector3(-4.4, 7.6, 13.0), Vector3(-4.4, 7.6, 11.6)]))
-	# Gravity: the top tank's outlet tees down the south-east column,
-	# one line to the mid tank, one all the way to the sump.
+		_local(plant, [Vector3(-4.4, 0.42, 13.0), Vector3(-4.4, 7.55, 13.0), Vector3(-4.4, 7.55, 11.6)]))
+	# Gravity: the top tank's outlet tees down the south-east column.
+	# One line runs along the east beam to the mid tank's inlet in the
+	# north-east corner, the other all the way to the sump.
 	plant.connect_equipment("t_401", "outlet", "t_402", "inlet",
-		_local(plant, [Vector3(0.45, 6.49, 13.45), Vector3(0.45, 5.0, 13.45)]))
+		_local(plant, [Vector3(0.45, 6.28, 13.45), Vector3(0.45, 5.4, 13.45), Vector3(0.45, 5.4, 9.9)]))
 	plant.connect_equipment("t_401", "outlet", "t_403", "inlet",
-		_local(plant, [Vector3(0.6, 6.49, 13.45), Vector3(0.6, 2.75, 13.45),
-			Vector3(-2.0, 2.75, 13.45), Vector3(-2.0, 2.75, 12.4)]))
-	# The mid tank drains to the sump down the north-east column and
-	# in under the deck.
+		_local(plant, [Vector3(0.6, 6.28, 13.45), Vector3(0.6, 2.45, 13.45),
+			Vector3(-2.0, 2.45, 13.45), Vector3(-2.0, 2.45, 12.4)]))
+	# The mid tank drains north under the railing, down the north-east
+	# column, and in under the deck to the sump.
 	plant.connect_equipment("t_402", "outlet", "t_403", "inlet",
-		_local(plant, [Vector3(0.4, 3.49, 8.6), Vector3(0.4, 2.6, 8.6),
-			Vector3(0.4, 2.6, 13.6), Vector3(-2.0, 2.6, 13.6)]))
+		_local(plant, [Vector3(-0.9, 3.28, 8.55), Vector3(0.4, 3.28, 8.55), Vector3(0.4, 2.45, 8.55),
+			Vector3(0.4, 2.45, 13.6), Vector3(-2.0, 2.45, 13.6)]))
 	# The gravity lines are long and thin, so the top tank fills faster
 	# than it drains and the switch gets to cycle the pump, and the mid
 	# tank's drain is sized so its level follows the top tank's with a
@@ -504,9 +527,9 @@ static func _unit_400(plant: Plant) -> void:
 	# ---- signals: level switch -> relay -> P-401 in Auto --------------
 	plant.connect_equipment("t_401", "level", "ls_401", "level")
 	plant.connect_equipment("t_401", "level", "li_401", "process",
-		_local(plant, [Vector3(-0.5, 6.7, 10.5)]))
+		_local(plant, [Vector3(-0.5, 6.4, 10.5)]))
 	plant.connect_equipment("ls_401", "contact", "k_401", "coil",
-		_local(plant, [Vector3(-4.45, 6.6, 8.6), Vector3(-4.45, 0.3, 8.6),
+		_local(plant, [Vector3(-4.45, 6.3, 8.6), Vector3(-4.45, 0.3, 8.6),
 			Vector3(-7.9, 0.3, 8.6), Vector3(-7.9, 0.3, 11.44)]))
 	plant.connect_equipment("k_401", "contact", "p_401", "run",
 		_local(plant, [Vector3(-7.3, 0.3, 11.6), Vector3(-7.3, 0.3, 10.3)]))
@@ -539,7 +562,7 @@ static func _unit_400(plant: Plant) -> void:
 	plant.place_structure("s_sign", "sign_u400", Vector3(3.2, 0.0, 8.6), 0.0)
 	plant.set_sign_text("sign_u400", "UNIT 400\nGRAVITY RIG")
 	plant.place_structure("s_sign", "sign_p402", Vector3(-7.6, 0.0, 13.7), 0.0)
-	plant.set_sign_text("sign_p402", "P-402: 5 m HEAD\nT-401 INLET AT 7.8 m")
+	plant.set_sign_text("sign_p402", "P-402: 5 m HEAD\nT-401 INLET AT 7.5 m")
 
 
 ## World-space waypoints to plant-local, for the routed runs.

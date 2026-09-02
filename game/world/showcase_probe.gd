@@ -97,7 +97,8 @@ func _run(world: Node) -> void:
 	print("[probe] vf_310: %s · %d vials · drawing %.4f L/s · filling at %.1f%% product" % [
 		filler.state, filler.vials_done, filler.draw_lps, filler.fill_purity * 100.0])
 
-	# Unit 400: the gravity rig, seen from the south-east.
+	# Unit 400: the gravity rig, seen from the south-east, then the east
+	# stairs and the mid-deck landing up close.
 	player.global_position = Vector3(4.5, 0.15, 20.5)
 	player.rotation.y = 0.45
 	player.zoom_t = 0.95
@@ -105,7 +106,30 @@ func _run(world: Node) -> void:
 	player.camera.rotation.x = 0.02
 	await get_tree().create_timer(0.6).timeout
 	await _shot("user://probe_showcase_u400.png")
+	player.global_position = Vector3(5.2, 0.15, 15.4)
+	player.rotation.y = 0.75
+	player.zoom_t = 0.6
+	player._zoom_now = 0.6
+	player.camera.rotation.x = 0.12
+	await get_tree().create_timer(0.6).timeout
+	await _shot("user://probe_showcase_u400_stairs.png")
 	_print_rig(plant, "u400 at start")
+	# Walk the stairs for real: from the foot of the east flight onto
+	# the mid deck, then from the foot of the west flight onto the top
+	# deck. A step at either landing leaves the player short.
+	await _walk(player, Vector3(5.3, 0.15, 11.75), PI / 2.0, 3.5)
+	var mid := player.global_position
+	print("[probe] stairs: east flight leaves the player at (%.1f, %.2f, %.1f) — %s" % [
+		mid.x, mid.y, mid.z, "ON THE MID DECK" if mid.y > 2.9 and mid.x < 0.0 else "BLOCKED"])
+	await _walk(player, Vector3(-3.2, 3.2, 18.6), 0.0, 3.5)
+	var top := player.global_position
+	print("[probe] stairs: west flight leaves the player at (%.1f, %.2f, %.1f) — %s" % [
+		top.x, top.y, top.z, "ON THE TOP DECK" if top.y > 5.9 and top.z < 12.9 else "BLOCKED"])
+	# And Unit 100's flight, which used to run under the frame's beam.
+	await _walk(player, Vector3(16.5, 0.15, 3.3), 0.0, 3.5)
+	var u100 := player.global_position
+	print("[probe] stairs: Unit 100 flight leaves the player at (%.1f, %.2f, %.1f) — %s" % [
+		u100.x, u100.y, u100.z, "ON THE DECK" if u100.y > 2.9 and u100.z < -2.0 else "BLOCKED"])
 	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
 	print("[probe] vl_302: %s · %.1f kPa · condensate %.1f L · %d bursts" % [
 		lock.state, lock.press_pa / 1000.0, lock.condensate_l, lock.vent_bursts_done])
@@ -156,6 +180,28 @@ func _run(world: Node) -> void:
 func _shot(path: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(path)
+
+
+## Stand the player somewhere, face them a way, and hold forward for a
+## while: the same input the director gives, so a landing the geometry
+## says is flush is proven walkable rather than assumed.
+func _walk(player: Player, from: Vector3, facing: float, seconds: float) -> void:
+	player.global_position = from
+	player.velocity = Vector3.ZERO
+	player.rotation.y = facing
+	await get_tree().physics_frame
+	Input.action_press("move_forward")
+	var trail: Array[String] = []
+	var elapsed := 0.0
+	while elapsed < seconds:
+		await get_tree().create_timer(0.5).timeout
+		elapsed += 0.5
+		var p := player.global_position
+		trail.append("(%.1f, %.2f, %.1f)" % [p.x, p.y, p.z])
+	Input.action_release("move_forward")
+	await get_tree().create_timer(0.3).timeout
+	print("[probe] walk from (%.1f, %.1f, %.1f) facing %.2f: %s" % [
+		from.x, from.y, from.z, facing, " ".join(trail)])
 
 
 ## The gravity rig's honest state: three levels that should always add

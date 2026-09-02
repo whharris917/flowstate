@@ -185,28 +185,48 @@ static func _build_window(body: StructureView, size: Vector3) -> void:
 
 ## Open-riser stairs ascending toward local -Z: treads are visual, an
 ## invisible convex wedge does the climbing (the hall's proven trick).
+## A flight with a landing: the last LANDING metres at the top are flat
+## at full height. Without it the player's capsule reaches a deck edge
+## with its feet still a quarter metre down the slope, and the edge
+## beam and slab are a wall it cannot climb. Set the flight so its top
+## edge sits 0.1 m inside the deck: the landing then spans the edge
+## beam and the player walks straight off.
+const STAIR_LANDING := 0.6
+
+
 static func _build_stairs(body: StructureView, size: Vector3) -> void:
 	var half_h := size.y / 2.0
 	var half_d := size.z / 2.0
+	var landing := STAIR_LANDING
+	var run := size.z - landing
 	var steps := 15
 	var rise := size.y / steps
-	var tread := (size.z - 0.2) / steps
+	var tread := (run - 0.2) / steps
 	var tread_mat := ViewUtil.flat(COLORS["s_stairs"])
 	for i in range(steps):
 		ViewUtil.box(body, Vector3(size.x - 0.1, 0.06, tread),
 			Vector3(0, -half_h + rise * (i + 1) - 0.03, half_d - 0.1 - tread * (i + 0.5)),
 			tread_mat)
+	ViewUtil.box(body, Vector3(size.x - 0.1, 0.06, landing),
+		Vector3(0, half_h, -half_d + landing / 2.0), tread_mat)
+	# Handrails climb with the treads: the flight rises toward -z, so a
+	# positive pitch about x drops the +z end. A level rail guards the
+	# landing.
 	for side: float in [-1.0, 1.0]:
-		var rail_len := sqrt(size.y * size.y + size.z * size.z)
+		var rail_len := sqrt(size.y * size.y + run * run)
 		var rail := ViewUtil.box(body, Vector3(0.06, 0.06, rail_len),
-			Vector3(side * (size.x / 2.0 - 0.03), 0.55, 0), ViewUtil.flat(COL_STEEL))
-		rail.rotation.x = -atan2(size.y, size.z)
+			Vector3(side * (size.x / 2.0 - 0.03), 0.55, landing / 2.0), ViewUtil.flat(COL_STEEL))
+		rail.rotation.x = atan2(size.y, run)
+		ViewUtil.box(body, Vector3(0.06, 0.06, landing),
+			Vector3(side * (size.x / 2.0 - 0.03), half_h + 0.95, -half_d + landing / 2.0),
+			ViewUtil.flat(COL_STEEL))
 	var points := PackedVector3Array()
 	for side: float in [-1.0, 1.0]:
 		var x := side * size.x / 2.0
-		points.append(Vector3(x, half_h + 0.03, -half_d))       # top edge
-		points.append(Vector3(x, -half_h, -half_d))             # below top
-		points.append(Vector3(x, -half_h, half_d))              # bottom front
+		points.append(Vector3(x, half_h + 0.03, -half_d))            # landing, outer end
+		points.append(Vector3(x, half_h + 0.03, -half_d + landing))  # landing, top of the slope
+		points.append(Vector3(x, -half_h, -half_d))                  # below the landing
+		points.append(Vector3(x, -half_h, half_d))                   # bottom front
 	var hull := ConvexPolygonShape3D.new()
 	hull.points = points
 	var shape := CollisionShape3D.new()
