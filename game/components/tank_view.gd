@@ -109,7 +109,7 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	flange.rotation_degrees = Vector3(0, 0, 90)
 	var ring := ViewUtil.cylinder(body, neck_r * 1.35, 0.05, Vector3(0.155, 0, 0),
 		ViewUtil.flat(PlantFactory.KIND_COLORS[SimTypes.PortKind.PROCESS_LEVEL if is_level
-			else SimTypes.PortKind.PROCESS_FLOW]))
+			else SimTypes.PortKind.PROCESS_MATERIAL]))
 	ring.rotation_degrees = Vector3(0, 0, 90)
 	var tag := Label3D.new()
 	tag.text = port
@@ -123,7 +123,7 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	body.set_meta("port_name", port)
 	body.set_meta("is_input", port == "inlet")
 	body.set_meta("kind", SimTypes.PortKind.PROCESS_LEVEL if is_level
-		else SimTypes.PortKind.PROCESS_FLOW)
+		else SimTypes.PortKind.PROCESS_MATERIAL)
 	body.set_meta("owner_view", self)
 	body.set_meta("movable", true)
 	_built.add_child(body)

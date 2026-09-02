@@ -299,7 +299,7 @@ func _update_route_preview() -> void:
 	_route_mat.albedo_color = Color(base_color.r, base_color.g, base_color.b, 0.6)
 	if path != _last_route:
 		_last_route = path
-		var is_process := kind == SimTypes.PortKind.PROCESS_FLOW \
+		var is_process := kind == SimTypes.PortKind.PROCESS_MATERIAL \
 			or kind == SimTypes.PortKind.PROCESS_LEVEL
 		_rebuild_route(path, 0.07 if is_process else 0.025, "pipe")
 

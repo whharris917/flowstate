@@ -60,30 +60,18 @@ func open(plant: Plant, title: String, records: Array, pick: Callable) -> void:
 		var record := plant.sim.get_component(record_name)
 		if record == null:
 			continue
-		var type_id := str(plant.equip_types.get(record_name, ""))
 		for port_name: String in record.outputs:
-			if port_name == "draw":
-				continue  # the facade meters draw automatically
 			var port: SimOutputPort = record.outputs[port_name]
 			_list.add_child(_row(record_name, port_name, port.kind, port.spec, false,
-				"%.2f" % port.value, true))
+				port.reading(), true))
 		for port_name: String in record.inputs:
-			if port_name == "draw":
-				continue
 			var port: SimInputPort = record.inputs[port_name]
-			var kind := port.kind
-			if not PlantFactory.flow_inlet_spec(type_id, port_name).is_empty():
-				kind = SimTypes.PortKind.PROCESS_FLOW  # it's a pipe stub
 			var free := port.wire_count == 0 or SimTypes.allows_multiple_sources(port.kind)
-			_list.add_child(_row(record_name, port_name, kind, port.spec, true,
-				"wired" if port.wire_count > 0 else "open", free))
-		# Facade outlets (tank/source) are pipe connections, not kernel
-		# ports — list them with the availability value behind them.
-		for ui_port: String in PlantFactory.FLOW_OUTLETS.get(type_id, {}):
-			var spec: Dictionary = PlantFactory.FLOW_OUTLETS[type_id][ui_port]
-			var avail: SimOutputPort = record.outputs.get(str(spec["avail"]))
-			_list.add_child(_row(record_name, ui_port, SimTypes.PortKind.PROCESS_FLOW, "",
-				false, "%.1f avail" % avail.value if avail != null else "", true))
+			var state := "wired" if port.wire_count > 0 else "open"
+			if SimTypes.is_material(port.kind) and port.wire_count > 0:
+				state = port.reading()
+			_list.add_child(_row(record_name, port_name, port.kind, port.spec, true,
+				state, free))
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 

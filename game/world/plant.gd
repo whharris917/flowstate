@@ -6,7 +6,7 @@ extends Node3D
 ## the entire graph from a file.
 
 const SIM_DT := 0.05  # 20 Hz, decoupled from frame rate
-const SAVE_VERSION := 4  # v4 adds structures; v3 saves still load
+const SAVE_VERSION := 5  # v5: pressure kernel, no draw wires; v3/v4 saves still load
 
 var save_path: String = "user://save.json"
 var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox doesn't
@@ -35,6 +35,12 @@ var runs: Dictionary = {}          # name -> {kind, node, points (plant-local)}
 var _wire_visuals: Array[Dictionary] = []   # {node, a, b}
 
 var _accumulator: float = 0.0
+# One-off kernel cost report, taken over the first few hundred scans.
+var _cost_ticks: int = 0
+var _cost_total_us: int = 0
+var _cost_solve_ms: float = 0.0
+var _cost_newton_ms: float = 0.0
+var _cost_iterations: int = 0
 # Support re-validation runs a few physics frames after geometry
 # changes, once new/freed colliders have actually reached the space.
 var _revalidate_in: int = 0
@@ -248,7 +254,9 @@ func _exercise_build_api() -> void:
 func _physics_process(delta: float) -> void:
 	_accumulator += delta
 	while _accumulator >= SIM_DT:
+		var started := Time.get_ticks_usec()
 		sim.tick()
+		_note_cost(Time.get_ticks_usec() - started)
 		_accumulator -= SIM_DT
 	if _revalidate_in > 0:
 		_revalidate_in -= 1
@@ -260,6 +268,30 @@ func _physics_process(delta: float) -> void:
 			_exercise_supports()
 
 
+## The kernel budget is 50 ms per scan at 20 Hz, and the hydraulic
+## solve is the part that grows with the plant, so say once what a
+## scan actually costs on this plant.
+func _note_cost(elapsed_us: int) -> void:
+	if _cost_ticks < 0:
+		return
+	_cost_ticks += 1
+	_cost_total_us += elapsed_us
+	_cost_solve_ms += sim.solve_ms
+	_cost_newton_ms += sim.newton_ms
+	var net := sim.network()
+	_cost_iterations += net.iterations if net != null else 0
+	if _cost_ticks >= 150:
+		print("[flowstate] kernel cost: %.2f ms/scan; hydraulic pass %.2f ms, of which the Newton solve %.2f ms (%d nodes, %d branches, band %d, %.1f iterations a scan, residual %.6f L/s)" % [
+			_cost_total_us / 1000.0 / _cost_ticks, _cost_solve_ms / _cost_ticks,
+			_cost_newton_ms / _cost_ticks,
+			net.node_count() if net != null else 0,
+			net.branches.size() if net != null else 0,
+			net.bandwidth() if net != null else 0,
+			float(_cost_iterations) / _cost_ticks,
+			net.residual_lps if net != null else 0.0])
+		_cost_ticks = -1
+
+
 func _new_graph() -> void:
 	sim = Simulation.new(SIM_DT)
 	historian = sim.attach_historian(SimHistorian.new())
@@ -269,6 +301,13 @@ func _new_graph() -> void:
 
 func place(type_id: String, name_: String, params: Dictionary,
 		world_pos: Vector3, rot_y: float, is_protected: bool) -> SimComponent:
+	# Nozzle pressures are piezometric, so a vessel on a deck really
+	# does stand above one at grade: the placement height is its
+	# elevation, and it is re-derived from the saved position on load.
+	if type_id in ["tank", "reactor", "crystallizer", "source", "drain"] \
+			and not params.has("elevation_m"):
+		params = params.duplicate()
+		params["elevation_m"] = snappedf(to_local(world_pos).y, 0.01)
 	var record := PlantFactory.make_record(sim, type_id, name_, params)
 	if record == null:
 		return null
@@ -669,8 +708,7 @@ func refresh_wires_of(name_: String) -> void:
 			continue
 		(visual["node"] as Node).queue_free()
 		var pipe := _build_pipe(str(visual["a"]), str(visual["a_port"]),
-			str(visual["b"]), str(visual["b_port"]), visual["waypoints"],
-			bool(visual.get("pair", false)))
+			str(visual["b"]), str(visual["b_port"]), visual["waypoints"])
 		visual["node"] = pipe
 		if str(visual.get("color", "")) != "":
 			pipe.apply_service(Color.html(str(visual["color"])), str(visual.get("label", "")))
@@ -707,30 +745,8 @@ func connect_equipment(src_name: String, src_port: String,
 	var dst := sim.get_component(dst_name)
 	if src == null or dst == null:
 		return "component missing"
-	# Facade flow pairing: one player pipe from an outlet to an inlet
-	# becomes the availability wire plus the metered-draw wire.
-	var out_spec := PlantFactory.flow_outlet_spec(equip_types.get(src_name, ""), src_port)
-	var in_spec := PlantFactory.flow_inlet_spec(equip_types.get(dst_name, ""), dst_port)
-	if not out_spec.is_empty() and not in_spec.is_empty():
-		var avail_in: SimInputPort = dst.inputs.get(str(in_spec["avail_in"]))
-		if avail_in != null and avail_in.wire_count > 0:
-			return "%s.%s is already piped up" % [dst_name, dst_port]
-		if not sim.connect_ports(src, str(out_spec["avail"]), dst, str(in_spec["avail_in"])):
-			return "connection refused"
-		if not sim.connect_ports(dst, str(in_spec["draw_out"]), src, str(out_spec["draw_in"])):
-			sim.disconnect_ports(src, str(out_spec["avail"]), dst, str(in_spec["avail_in"]))
-			return "connection refused"
-		if visible:
-			_wire_visual(src_name, src_port, dst_name, dst_port, waypoints, true)
-		else:
-			_wire_visuals.append({"node": null, "a": src_name, "a_port": src_port,
-				"b": dst_name, "b_port": dst_port, "waypoints": [],
-				"color": "", "label": "", "hidden": true, "pair": true})
-		return ""
-	if not out_spec.is_empty():
-		return "an outlet connects to a pump, valve, or drain inlet"
-	if not in_spec.is_empty():
-		return "%s.%s connects to a tank or supply outlet" % [dst_name, dst_port]
+	# One player pipe is one kernel wire. A material nozzle may take
+	# several: that is a tee, and the network solves the split.
 	var out_port: SimOutputPort = src.outputs.get(src_port)
 	var in_port: SimInputPort = dst.inputs.get(dst_port)
 	if out_port == null or in_port == null:
@@ -885,21 +901,11 @@ func remove_run(view: PipeView) -> bool:
 	return false
 
 
-## Drop the kernel wire(s) behind a visual entry — both halves for a
-## facade pair.
+## Drop the kernel wire behind a visual entry.
 func _disconnect_visual(visual: Dictionary) -> void:
 	var src := sim.get_component(str(visual["a"]))
 	var dst := sim.get_component(str(visual["b"]))
 	if src == null or dst == null:
-		return
-	if bool(visual.get("pair", false)):
-		var out_spec := PlantFactory.flow_outlet_spec(
-			equip_types.get(str(visual["a"]), ""), str(visual["a_port"]))
-		var in_spec := PlantFactory.flow_inlet_spec(
-			equip_types.get(str(visual["b"]), ""), str(visual["b_port"]))
-		if not out_spec.is_empty() and not in_spec.is_empty():
-			sim.disconnect_ports(src, str(out_spec["avail"]), dst, str(in_spec["avail_in"]))
-			sim.disconnect_ports(dst, str(in_spec["draw_out"]), src, str(out_spec["draw_in"]))
 		return
 	sim.disconnect_ports(src, str(visual["a_port"]), dst, str(visual["b_port"]))
 
@@ -942,33 +948,38 @@ func _apply_support_path(view: PipeView, path: Array[Vector3],
 
 
 func _wire_visual(src_name: String, src_port: String,
-		dst_name: String, dst_port: String, waypoints: Array, pair := false) -> void:
-	var pipe := _build_pipe(src_name, src_port, dst_name, dst_port, waypoints, pair)
+		dst_name: String, dst_port: String, waypoints: Array) -> void:
+	var pipe := _build_pipe(src_name, src_port, dst_name, dst_port, waypoints)
 	_wire_visuals.append({
 		"node": pipe, "a": src_name, "a_port": src_port,
 		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
-		"color": "", "label": "", "pair": pair,
+		"color": "", "label": "",
 	})
 	_revalidate_in = 3
 
 
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
-		waypoints: Array, pair: bool) -> PipeView:
+		waypoints: Array) -> PipeView:
 	var from := _marker_pos(src_name, src_port)
 	var to := _marker_pos(dst_name, dst_port)
-	var kind := SimTypes.PortKind.PROCESS_FLOW
+	var src := sim.get_component(src_name)
+	var port: SimOutputPort = src.outputs[src_port]
+	var kind := port.kind
 	var getter: Callable
-	if pair:
-		# The honest live value of a supply pipe is the flow being
-		# drawn through it by the consumer.
-		var spec := PlantFactory.flow_inlet_spec(equip_types.get(dst_name, ""), dst_port)
-		var draw_port: SimOutputPort = sim.get_component(dst_name).outputs[str(spec["draw_out"])]
-		getter = func() -> float: return draw_port.value
+	if SimTypes.is_material(kind):
+		# The honest live value of a pipe is the flow the network solved
+		# through it. An instrument tap has no branch of its own and
+		# reads the line it is tapped into.
+		var wire := sim.find_wire(src, src_port, sim.get_component(dst_name), dst_port)
+		getter = func() -> float:
+			if wire == null:
+				return 0.0
+			if wire.branch != null:
+				return absf(wire.branch.flow_lps)
+			return wire.dst.stream.flow_lps
 	else:
-		var port: SimOutputPort = sim.get_component(src_name).outputs[src_port]
-		kind = port.kind
 		getter = func() -> float: return port.value
-	var is_process := kind == SimTypes.PortKind.PROCESS_FLOW \
+	var is_process := SimTypes.is_material(kind) \
 		or kind == SimTypes.PortKind.PROCESS_LEVEL
 	var pipe := PipeView.new()
 	add_child(pipe)
@@ -1073,25 +1084,194 @@ func _self_check() -> void:
 	var c_src := check.add(SimSource.new("bl")) as SimSource
 	var c_drn := check.add(SimDrain.new("d", 1.5)) as SimDrain
 	check.connect_ports(c_mains, "power", c_pump, "power")
-	check.connect_ports(c_src, "supply", c_pump, "inlet")
-	check.connect_ports(c_pump, "draw", c_src, "draw")
+	check.connect_ports(c_src, "outlet", c_pump, "inlet")
+	check.connect_ports(c_pump, "outlet", c_tank, "inlet")
 	check.connect_ports(c_tank, "outlet", c_drn, "inlet")
-	check.connect_ports(c_drn, "draw", c_tank, "draw")
 	check.connect_ports(c_tank, "level", c_switch, "level")
 	check.connect_ports(c_switch, "contact", c_relay, "coil")
 	check.connect_ports(c_relay, "contact", c_pump, "run")
-	check.connect_ports(c_pump, "outlet", c_tank, "inlet")
 	check.run_for(600.0)
+	# Mass closes across the loop: what the header delivered is either
+	# still in the tank or went down the drain.
+	var closure := absf(c_src.total_l - ((c_tank.level_l - 70.0) + c_drn.total_l))
 	var ok := c_tank.level_l >= 38.0 and c_tank.level_l <= 82.0 \
-		and c_tank.overflowed_l == 0.0 and c_relay.cycles < 15
+		and c_tank.overflowed_l == 0.0 and c_relay.cycles >= 1 and c_relay.cycles < 15 \
+		and closure < 0.5
 	if ok:
-		print("[flowstate] kernel self-check OK — 600 s: level %.1f L, %d relay cycles"
-			% [c_tank.level_l, c_relay.cycles])
+		print("[flowstate] kernel self-check OK — 600 s: level %.1f L, %d relay cycles, balance within %.3f L"
+			% [c_tank.level_l, c_relay.cycles, closure])
 	else:
-		push_warning("[flowstate] kernel self-check FAILED — level %.1f L, overflow %.1f L, %d cycles"
-			% [c_tank.level_l, c_tank.overflowed_l, c_relay.cycles])
+		push_warning("[flowstate] kernel self-check FAILED — level %.1f L, overflow %.1f L, %d cycles, balance off by %.2f L"
+			% [c_tank.level_l, c_tank.overflowed_l, c_relay.cycles, closure])
+	_hydraulics_self_check()
 	_control_self_check()
 	_stream_self_check()
+
+
+## Mirrors the Python hydraulics tests: the behaviours that separate a
+## solved network from asserted flow. If a pump does not dead-head, if
+## two in parallel double the flow, if a tee does not split by
+## resistance, or if a tank does not drain downhill on its own, then
+## pressure is decorative and we are back to bookkeeping.
+func _hydraulics_self_check() -> void:
+	var problems: Array[String] = []
+
+	# A tee is a node: the split falls out of the resistances, and the
+	# flow in equals the flows out. Warm-started, the next solve is
+	# nearly free.
+	var net := SimNetwork.new()
+	var supply := net.add_node(200000.0, true)
+	var tee := net.add_node()
+	var easy_end := net.add_node(0.0, true)
+	var hard_end := net.add_node(0.0, true)
+	var feed := net.add_branch(SimResistance.new(supply, tee, 500.0))
+	var easy := net.add_branch(SimResistance.new(tee, easy_end, 1000.0))
+	var hard := net.add_branch(SimResistance.new(tee, hard_end, 9000.0))
+	net.solve()
+	if absf(feed.flow_lps - (easy.flow_lps + hard.flow_lps)) > SimNetwork.TOLERANCE_LPS:
+		problems.append("tee does not conserve")
+	if absf(easy.flow_lps - 3.0 * hard.flow_lps) > 0.02 * easy.flow_lps:
+		problems.append("tee split is not by resistance")
+	net.solve()
+	if net.iterations > 3:
+		problems.append("warm start took %d iterations" % net.iterations)
+
+	# A pump makes its rating against a free discharge, dead-heads
+	# against too much head, and two in parallel do not double the flow.
+	if _pump_rig(300000.0, 4.0, 0.0) < 3.99:
+		problems.append("free discharge did not give the rated flow")
+	if _pump_rig(300000.0, 4.0, 320000.0) != 0.0:
+		problems.append("pump did not dead-head")
+	var one := _parallel_pumps(1)
+	var two := _parallel_pumps(2)
+	if not (two > one and two < 2.0 * one):
+		problems.append("parallel pumps: one %.2f, two %.2f" % [one, two])
+
+	# Two vessels and a pipe: the raised one empties into the low one
+	# with no pump anywhere, and nothing is lost on the way.
+	var sim := Simulation.new(SIM_DT)
+	var full := sim.add(SimTank.new("full", 2000.0, 1800.0, 0.0, 3.0, 0.0, 0.0, 5.0)) as SimTank
+	var low := sim.add(SimTank.new("low", 2000.0, 0.0, 0.0, 3.0)) as SimTank
+	sim.connect_ports(full, "outlet", low, "inlet")
+	sim.run_for(200.0)
+	if low.level_l < 50.0 or full.level_l >= 1800.0:
+		problems.append("raised tank did not drain into the low one")
+	if absf(full.level_l + low.level_l - 1800.0) > 0.5:
+		problems.append("gravity transfer lost material")
+
+	# Both at grade, the receiving nozzle above the source's level:
+	# nothing moves, and nothing should.
+	sim = Simulation.new(SIM_DT)
+	var src_t := sim.add(SimTank.new("a", 500.0, 400.0, 0.0, 2.0)) as SimTank
+	var dst_t := sim.add(SimTank.new("b", 500.0, 0.0, 0.0, 2.0)) as SimTank
+	sim.connect_ports(src_t, "outlet", dst_t, "inlet")
+	sim.run_for(200.0)
+	if dst_t.level_l > 0.1 or absf(src_t.level_l - 400.0) > 0.1:
+		problems.append("gravity ran uphill")
+
+	# Header -> pump -> tank -> drain: the header meters what was
+	# pulled, the drain runs faster under more head, and mass closes.
+	sim = Simulation.new(SIM_DT)
+	var header := sim.add(SimSource.new("hdr")) as SimSource
+	var pump := sim.add(SimPump.new("p", 3.0, "hand")) as SimPump
+	var tank_ := sim.add(SimTank.new("t", 4000.0, 0.0, 0.0, 3.0)) as SimTank
+	var drain := sim.add(SimDrain.new("d", 2.0)) as SimDrain
+	var mains := sim.add(SimMainsFeed.new("m")) as SimMainsFeed
+	sim.connect_ports(mains, "power", pump, "power")
+	sim.connect_ports(header, "outlet", pump, "inlet")
+	sim.connect_ports(pump, "outlet", tank_, "inlet")
+	sim.connect_ports(tank_, "outlet", drain, "inlet")
+	sim.run_for(20.0)
+	var shallow := drain.flow_lps
+	sim.run_for(400.0)
+	var deep := drain.flow_lps
+	if not (tank_.depth_m > 0.5 and deep > shallow * 1.5):
+		problems.append("drain did not run faster under more head (%.2f -> %.2f)" % [shallow, deep])
+	if header.total_l < 100.0 or absf(header.total_l - (tank_.level_l + drain.total_l)) > 0.5:
+		problems.append("header -> tank -> drain does not close (%.1f fed, %.1f accounted)"
+			% [header.total_l, tank_.level_l + drain.total_l])
+	if sim.network().residual_lps > SimNetwork.TOLERANCE_LPS:
+		problems.append("plant solve left a residual of %.5f L/s" % sim.network().residual_lps)
+
+	# A pump cannot fill a tank taller than its head: the motor turns
+	# and nothing moves.
+	sim = Simulation.new(SIM_DT)
+	var low_hdr := sim.add(SimSource.new("hdr", "water", 20.0, 0.0)) as SimSource
+	var weak := sim.add(SimPump.new("p", 3.0, "hand", 4.0)) as SimPump
+	var tower := sim.add(SimTank.new("tower", 8000.0, 0.0, 0.0, 20.0)) as SimTank
+	var mains2 := sim.add(SimMainsFeed.new("m")) as SimMainsFeed
+	sim.connect_ports(mains2, "power", weak, "power")
+	sim.connect_ports(low_hdr, "outlet", weak, "inlet")
+	sim.connect_ports(weak, "outlet", tower, "inlet")
+	sim.run_for(60.0)
+	if not (weak.running and weak.flow_lps < 0.01):
+		problems.append("pump lifted past its head (%.2f L/s)" % weak.flow_lps)
+
+	# The valve equation: half open is more than half the flow, because
+	# flow follows the square root of the drop, not the position.
+	var wide := _valve_flow(100.0)
+	var half := _valve_flow(50.0)
+	if not (wide > 0.5 and half > wide * 0.5 and half < wide):
+		problems.append("valve: wide open %.2f, half %.2f" % [wide, half])
+
+	# Composition follows flow: two headers into one vessel blend.
+	sim = Simulation.new(SIM_DT)
+	var hot := sim.add(SimSource.new("hot", "solvent", 80.0, 300.0)) as SimSource
+	var cold := sim.add(SimSource.new("cold", "water", 20.0, 300.0)) as SimSource
+	var blend := sim.add(SimTank.new("t", 8000.0, 0.0, 0.0, 4.0)) as SimTank
+	sim.connect_ports(hot, "outlet", blend, "inlet")
+	sim.connect_ports(cold, "outlet", blend, "inlet")
+	sim.run_for(120.0)
+	var x_solv := blend.contents.frac(SimSpecies.SOLVENT)
+	if not (x_solv > 0.2 and x_solv < 0.8 and blend.temp_c > 20.0 and blend.temp_c < 80.0):
+		problems.append("two headers did not blend (%.2f solvent, %.1f C)" % [x_solv, blend.temp_c])
+
+	if problems.is_empty():
+		print("[flowstate] hydraulics self-check OK — tees split, pumps dead-head, gravity drains, valves follow the square root, mass closes")
+	else:
+		push_warning("[flowstate] hydraulics self-check FAILED — %s" % "; ".join(problems))
+
+
+func _pump_rig(head_pa: float, max_lps: float, lift_pa: float) -> float:
+	var net := SimNetwork.new()
+	var suction := net.add_node(0.0, true)
+	var discharge := net.add_node(lift_pa, true)
+	var pump := net.add_branch(SimPumpCurve.new(suction, discharge, head_pa, max_lps)) as SimPumpCurve
+	pump.running = true
+	net.solve()
+	return pump.flow_lps
+
+
+## Both pumps ride up their curves against the extra line loss, so the
+## second one buys far less than the first.
+func _parallel_pumps(count: int) -> float:
+	var net := SimNetwork.new()
+	var suction := net.add_node(0.0, true)
+	var header := net.add_node()
+	var outlet := net.add_node(0.0, true)
+	for _i in count:
+		var pump := net.add_branch(SimPumpCurve.new(suction, header, 300000.0, 4.0)) as SimPumpCurve
+		pump.running = true
+	var line := net.add_branch(SimResistance.new(header, outlet, 20000.0))
+	net.solve()
+	return line.flow_lps
+
+
+## Header -> control valve -> tank, with the command wired from a hand
+## controller in manual, because an input port resets every scan.
+func _valve_flow(command: float) -> float:
+	var sim := Simulation.new(SIM_DT)
+	var header := sim.add(SimSource.new("hdr", "water", 20.0, 300.0)) as SimSource
+	var valve := sim.add(SimControlValve.new("v", 6.0, 0.2)) as SimControlValve
+	var tank_ := sim.add(SimTank.new("t", 9000.0, 0.0, 0.0, 4.0)) as SimTank
+	var hand := sim.add(SimPID.new("hic", 0.0, 0.0, 0.0, 0.0, 0.0, 100.0)) as SimPID
+	hand.set_mode("manual")
+	hand.manual_out = command
+	sim.connect_ports(hand, "out", valve, "cmd")
+	sim.connect_ports(header, "outlet", valve, "inlet")
+	sim.connect_ports(valve, "outlet", tank_, "inlet")
+	sim.run_for(20.0)
+	return valve.flow_lps
 
 
 ## Mirrors the Python stream tests: material has to be conserved when
@@ -1121,8 +1301,11 @@ func _stream_self_check() -> void:
 	var charge := SimStream.zero_amounts()
 	charge[SimSpecies.WATER] = 1.0
 	vessel.charge(1000.0, charge, 20.0)
-	for _i in 200:  # 10 s of hot solvent at 10 L/s
+	for _i in 200:  # 10 s of hot solvent at 10 L/s, stood at the nozzle
+		# the way the hydraulic pass leaves it: the node stream plus a
+		# signed rate into the vessel.
 		vessel.inlet.stream = SimStream.pure(SimSpecies.SOLVENT, 10.0, 80.0)
+		vessel.inlet.flow_lps = 10.0
 		vessel.tick(SIM_DT)
 	if absf(vessel.level_l - 1100.0) > 1.0:
 		problems.append("vessel inventory drifted while filling")
@@ -1159,8 +1342,7 @@ func _control_self_check() -> void:
 	var lic := check.add(SimPID.new("lic", 8.0, 1.5, 0.0, 15.0)) as SimPID
 	var lv := check.add(SimControlValve.new("lv", 6.0)) as SimControlValve
 	var header := check.add(SimSource.new("uh")) as SimSource
-	check.connect_ports(header, "supply", lv, "inlet")
-	check.connect_ports(lv, "draw", header, "draw")
+	check.connect_ports(header, "outlet", lv, "inlet")
 	check.connect_ports(tank_, "level", lt, "process")
 	check.connect_ports(lt, "signal", lic, "pv")
 	check.connect_ports(lic, "out", lv, "cmd")
@@ -1359,7 +1541,8 @@ func _params_for(record: SimComponent) -> Dictionary:
 		var tank_rec := record as SimTank
 		return {"height_m": tank_rec.height_m, "diameter_m": tank_rec.diameter_m}
 	if record is SimPump:
-		return {"rated_lps": (record as SimPump).rated_lps}
+		var pump_rec := record as SimPump
+		return {"rated_lps": pump_rec.rated_lps, "head_m": pump_rec.head_m}
 	if record is SimFloatSwitch:
 		var fs := record as SimFloatSwitch
 		return {"low_l": fs.low_l, "high_l": fs.high_l}
@@ -1382,7 +1565,8 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"rate_lps": (record as SimDrain).rate_lps}
 	if record is SimReactor:
 		var reac := record as SimReactor
-		return {"capacity_l": reac.capacity_l, "rate_lps": reac.rate_lps}
+		return {"capacity_l": reac.capacity_l, "rate_lps": reac.rate_lps,
+			"height_m": reac.height_m}
 	if record is SimCentrifuge:
 		return {"rate_lps": (record as SimCentrifuge).rate_lps}
 	if record is SimHeatExchanger:
@@ -1391,9 +1575,11 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"rated_kgps": (record as SimSteamGen).rated_kgps}
 	if record is SimSource:
 		var src := record as SimSource
-		return {"species": src.species_key(), "temp_c": src.temp_c}
+		return {"species": src.species_key(), "temp_c": src.temp_c,
+			"pressure_kpa": src.pressure_kpa}
 	if record is SimCrystallizer:
-		return {"capacity_l": (record as SimCrystallizer).capacity_l}
+		var cx := record as SimCrystallizer
+		return {"capacity_l": cx.capacity_l, "height_m": cx.height_m}
 	if record is SimDryer:
 		return {"rate_lps": (record as SimDryer).rate_lps}
 	if record is SimStill:
@@ -1409,7 +1595,7 @@ func load_game() -> bool:
 	if file == null:
 		return false
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if not parsed is Dictionary or not int((parsed as Dictionary).get("version", 0)) in [3, SAVE_VERSION]:
+	if not parsed is Dictionary or int((parsed as Dictionary).get("version", 0)) < 3:
 		return false
 	var payload := parsed as Dictionary
 

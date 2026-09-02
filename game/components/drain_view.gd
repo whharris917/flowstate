@@ -34,9 +34,9 @@ func _process(_delta: float) -> void:
 
 
 func describe() -> String:
-	return "%s — drain, %.1f L/s max (E opens/closes)\n%s · drawing %.2f L/s · total %.1f L" % [
+	return "%s — drain, Cv %.1f L/s at 1 bar (E opens/closes)\n%s · passing %.2f L/s · total %.1f L" % [
 		drain.comp_name, drain.rate_lps, "OPEN" if drain.is_open else "CLOSED",
-		drain.draw.value, drain.total_l]
+		drain.flow_lps, drain.total_l]
 
 
 func use() -> void:

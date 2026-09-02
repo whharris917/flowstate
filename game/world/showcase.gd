@@ -221,8 +221,8 @@ static func _unit_300(plant: Plant) -> void:
 	plant.place("gauge_level", "lt_300", {"liters_per_meter": 8042.5},
 		Vector3(51.6, 0.0, 1.4), 0.0, false)
 	plant.place("vialfill", "vf_310", {}, Vector3(52.6, 0.0, -2.6), 0.0, false)
-	# An analyser on the fill line: the AI cannot say anything true
-	# about quality until this is wired.
+	# An analyser on the fill line: until this is wired, nobody can say
+	# anything true about quality.
 	plant.place("gauge_conc", "aq_310", {"species": "product"},
 		Vector3(51.0, 0.0, -4.4), 0.0, false)
 
@@ -266,9 +266,9 @@ static func _unit_300(plant: Plant) -> void:
 		[plant.to_local(Vector3(31.6, 0.35, -3.5))])
 	plant.connect_equipment("e_301", "duty", "r_301", "heat_duty",
 		[plant.to_local(Vector3(31.9, 0.3, 0.4)), plant.to_local(Vector3(33.0, 0.3, -3.2))])
-	# Reactor -> crystallizer. Two vessels cannot be bolted together:
-	# one offers material and the other expects to be fed, so a
-	# transfer pump goes between them.
+	# Reactor -> crystallizer. Both vessels stand at grade, so the
+	# reactor's outlet cannot climb to the crystallizer's top nozzle on
+	# its own head: a transfer pump goes between them.
 	plant.connect_equipment("r_301", "outlet", "p_302", "inlet",
 		[plant.to_local(Vector3(35.4, 0.35, -4.5))])
 	plant.connect_equipment("p_302", "outlet", "cx_303", "inlet",
@@ -303,7 +303,7 @@ static func _unit_300(plant: Plant) -> void:
 		[plant.to_local(Vector3(46.0, 0.3, 5.6))])
 	plant.connect_equipment("st_307", "distillate", "sv_308", "inlet",
 		[plant.to_local(Vector3(45.6, 0.35, 6.9)), plant.to_local(Vector3(39.2, 0.35, 6.9))])
-	plant.connect_equipment("st_307", "bottoms", "du_301", "flow_in",
+	plant.connect_equipment("st_307", "bottoms", "du_301", "inlet",
 		[plant.to_local(Vector3(44.6, 0.35, 2.2)), plant.to_local(Vector3(35.2, 0.35, 2.2)),
 			plant.to_local(Vector3(35.2, 0.35, -6.9))])
 	plant.connect_equipment("p_solv", "outlet", "sv_308", "inlet",
@@ -316,9 +316,11 @@ static func _unit_300(plant: Plant) -> void:
 	# The lock keeps to itself.
 	plant.connect_equipment("vl_302", "press", "pi_302", "process",
 		[plant.to_local(Vector3(29.9, 0.35, -8.5))])
-	plant.connect_equipment("vl_302", "drain_flow", "du_302", "flow_in",
+	# Two lines land on one drain nozzle: a tee, which the network
+	# solves without a component.
+	plant.connect_equipment("vl_302", "drain_flow", "du_302", "inlet",
 		[plant.to_local(Vector3(31.7, 0.35, -8.15))])
-	plant.connect_equipment("e_301", "condensate", "du_302", "flow_in",
+	plant.connect_equipment("e_301", "condensate", "du_302", "inlet",
 		[plant.to_local(Vector3(30.8, 0.35, -3.0)), plant.to_local(Vector3(32.4, 0.35, -7.4))])
 
 	# ---- power: 480 V drops from the plant feeder along the rack ----

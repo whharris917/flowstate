@@ -95,7 +95,7 @@ func _run(world: Node) -> void:
 
 	var filler := plant.sim.get_component("vf_310") as SimVialFiller
 	print("[probe] vf_310: %s · %d vials · drawing %.4f L/s · filling at %.1f%% product" % [
-		filler.state, filler.vials_done, filler.draw.value, filler.fill_purity * 100.0])
+		filler.state, filler.vials_done, filler.draw_lps, filler.fill_purity * 100.0])
 	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
 	print("[probe] vl_302: %s · %.1f kPa · condensate %.1f L · %d bursts" % [
 		lock.state, lock.press_pa / 1000.0, lock.condensate_l, lock.vent_bursts_done])
@@ -124,6 +124,12 @@ func _run(world: Node) -> void:
 	var gained := _held(plant) - held_before
 	print("[probe] balance: fed %.1f L, accounted %.1f L (%.1f%% closed)" % [
 		fed, gained, 100.0 * (1.0 - absf(fed - gained) / maxf(fed, 1.0))])
+	print("[probe] boiler made %.1f L of steam from %.1f L of feedwater: the known gap, counted as fed above" % [
+		sg.steam_total_l, sg.feedwater_total_l])
+	var net := plant.sim.network()
+	print("[probe] hydraulics: %d nodes, %d branches, band %d, %d iterations, residual %.6f L/s, last pass %.2f ms (Newton %.2f ms)" % [
+		net.node_count(), net.branches.size(), net.bandwidth(), net.iterations, net.residual_lps,
+		plant.sim.solve_ms, plant.sim.newton_ms])
 
 	var bad: Array[String] = []
 	for visual: Dictionary in plant._wire_visuals:
@@ -154,6 +160,13 @@ func _fed_in(plant: Plant) -> float:
 	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
 	if lock != null:
 		total += lock.cycles * SimVacuumLock.CONDENSATE_PER_CYCLE_L + lock.condensate_l
+	# The steam drum is a pressure boundary, so it hands out whatever
+	# steam is drawn and makes up the difference from nowhere. That
+	# makeup is real material entering the plant, and the balance has
+	# to say so rather than hide it.
+	var sg := plant.sim.get_component("sg_301") as SimSteamGen
+	if sg != null:
+		total += sg.steam_total_l - sg.feedwater_total_l
 	return total
 
 

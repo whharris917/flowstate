@@ -131,8 +131,7 @@ const PORT_ANCHORS := {
 		"cmd": {"pos": Vector3(0, 0.98, 0.22), "dir": Vector3.BACK}},
 	"source": {"outlet": {"pos": Vector3(0.5, 1.55, 0), "dir": Vector3.RIGHT}},
 	"drain": {
-		"inlet": {"pos": Vector3(0.46, 0.52, 0), "dir": Vector3.RIGHT},
-		"flow_in": {"pos": Vector3(-0.46, 0.52, 0), "dir": Vector3.LEFT}},
+		"inlet": {"pos": Vector3(0.46, 0.52, 0), "dir": Vector3.RIGHT}},
 	"controller": {
 		"pv": {"pos": Vector3(-0.14, 1.12, 0.07), "dir": Vector3.BACK},
 		"out": {"pos": Vector3(0.14, 1.12, 0.07), "dir": Vector3.BACK}},
@@ -162,8 +161,7 @@ const PORT_ANCHORS := {
 		"inlet": {"pos": Vector3(-0.76, 1.05, 0), "dir": Vector3.LEFT},
 		"heat_duty": {"pos": Vector3(0.3, 0.35, 0.6), "dir": Vector3.BACK},
 		"power": {"pos": Vector3(-0.3, 0.35, 0.6), "dir": Vector3.BACK},
-		"product": {"pos": Vector3(0.76, 0.5, 0), "dir": Vector3.RIGHT},
-		"vapor": {"pos": Vector3(0, 1.62, 0), "dir": Vector3.UP}},
+		"product": {"pos": Vector3(0.76, 0.5, 0), "dir": Vector3.RIGHT}},
 	"still": {
 		"inlet": {"pos": Vector3(-0.68, 2.6, 0), "dir": Vector3.LEFT},
 		"heat_duty": {"pos": Vector3(0.6, 0.7, 0.2), "dir": Vector3.RIGHT},
@@ -205,41 +203,13 @@ const PORT_ANCHORS := {
 	},
 }
 
-# Facade flow ports: one player-visible pipe connection ("outlet" to
-# "inlet") that the plant expands into the availability + metered-draw
-# kernel wire pair. The player never touches "draw" directly.
-const FLOW_OUTLETS := {
-	"tank": {"outlet": {"avail": "outlet", "draw_in": "draw"}},
-	"source": {"outlet": {"avail": "supply", "draw_in": "draw"}},
-	"reactor": {"outlet": {"avail": "outlet", "draw_in": "draw"}},
-	"crystallizer": {"outlet": {"avail": "outlet", "draw_in": "draw"}},
-}
-const FLOW_INLETS := {
-	"pump": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
-	"valve": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
-	"drain": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
-	"steamgen": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
-	"centrifuge": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
-	"vialfill": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
-	"dryer": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
-	"still": {"inlet": {"avail_in": "inlet", "draw_out": "draw"}},
-}
-
-
-static func flow_outlet_spec(type_id: String, port: String) -> Dictionary:
-	return (FLOW_OUTLETS.get(type_id, {}) as Dictionary).get(port, {})
-
-
-static func flow_inlet_spec(type_id: String, port: String) -> Dictionary:
-	return (FLOW_INLETS.get(type_id, {}) as Dictionary).get(port, {})
-
-
+# One player pipe is one kernel wire: a material nozzle to a material
+# nozzle, and the network decides what moves through it and which way.
+# There is no facade pairing and no hidden draw wire any more.
 const KIND_COLORS := {
 	SimTypes.PortKind.SIGNAL_DISCRETE: Color(0.11, 0.69, 0.48),
 	SimTypes.PortKind.SIGNAL_ANALOG: Color(0.92, 0.60, 0.10),
-	SimTypes.PortKind.PROCESS_STREAM: Color(0.16, 0.47, 0.84),
-	SimTypes.PortKind.PROCESS_SUPPLY: Color(0.15, 0.65, 0.80),
-	SimTypes.PortKind.PROCESS_FLOW: Color(0.16, 0.47, 0.84),
+	SimTypes.PortKind.PROCESS_MATERIAL: Color(0.16, 0.47, 0.84),
 	SimTypes.PortKind.PROCESS_LEVEL: Color(0.15, 0.65, 0.80),
 	SimTypes.PortKind.PROCESS_PRESSURE: Color(0.58, 0.40, 0.85),
 	SimTypes.PortKind.POWER: Color(0.55, 0.15, 0.12),
@@ -260,9 +230,11 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimTank.new(name_,
 				params.get("capacity_l", 100.0),
 				params.get("level_l", 0.0), params.get("drain_lps", 0.0),
-				params.get("height_m", 0.0), params.get("diameter_m", 0.0)))
+				params.get("height_m", 0.0), params.get("diameter_m", 0.0),
+				params.get("headspace_kpa", 0.0), params.get("elevation_m", 0.0)))
 		"pump":
-			return sim.add(SimPump.new(name_, params.get("rated_lps", 4.0)))
+			return sim.add(SimPump.new(name_, params.get("rated_lps", 4.0),
+				params.get("mode", "auto"), params.get("head_m", 30.0)))
 		"relay":
 			return sim.add(SimRelay.new(name_))
 		"float_switch":
@@ -307,12 +279,15 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimPowerSupply.new(name_))
 		"source":
 			return sim.add(SimSource.new(name_,
-				params.get("species", "water"), params.get("temp_c", 20.0)))
+				params.get("species", "water"), params.get("temp_c", 20.0),
+				params.get("pressure_kpa", 400.0), params.get("elevation_m", 0.0)))
 		"drain":
-			return sim.add(SimDrain.new(name_, params.get("rate_lps", 1.0)))
+			return sim.add(SimDrain.new(name_, params.get("rate_lps", 1.0),
+				params.get("elevation_m", 0.0)))
 		"reactor":
 			return sim.add(SimReactor.new(name_,
-				params.get("capacity_l", 4000.0), params.get("rate_lps", 6.0)))
+				params.get("capacity_l", 4000.0), params.get("rate_lps", 6.0),
+				params.get("height_m", 2.4), params.get("elevation_m", 0.0)))
 		"centrifuge":
 			return sim.add(SimCentrifuge.new(name_, params.get("rate_lps", 4.0)))
 		"hx":
@@ -324,7 +299,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 		"vialfill":
 			return sim.add(SimVialFiller.new(name_))
 		"crystallizer":
-			return sim.add(SimCrystallizer.new(name_, params.get("capacity_l", 3000.0)))
+			return sim.add(SimCrystallizer.new(name_, params.get("capacity_l", 3000.0),
+				params.get("height_m", 2.2), params.get("elevation_m", 0.0)))
 		"dryer":
 			return sim.add(SimDryer.new(name_, params.get("rate_lps", 2.0)))
 		"still":
@@ -398,37 +374,24 @@ static func make_view(type_id: String, record: SimComponent,
 ## terminals). anchors_override positions ports the type table can't.
 static func attach_port_markers(view: Node3D, record: SimComponent, type_id: String,
 		anchors_override: Dictionary = {}) -> void:
+	# Every port on the record gets a fitting; there are no hidden
+	# kernel ports since the draw wires went.
 	var anchors: Dictionary = PORT_ANCHORS.get(type_id, {})
 	var markers: Dictionary = view.get_meta("port_markers", {})
 	for port_name: String in record.inputs:
-		if port_name == "draw":
-			continue  # the facade wires draw automatically
 		var kind: SimTypes.PortKind = (record.inputs[port_name] as SimInputPort).kind
-		if not flow_inlet_spec(type_id, port_name).is_empty():
-			kind = SimTypes.PortKind.PROCESS_STREAM  # a pipe stub: draw it blue
 		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name, kind,
 				_anchor_pos(raw), true, _anchor_dir(raw))
 	for port_name: String in record.outputs:
-		if port_name == "draw":
-			continue
 		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.8, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name,
 				(record.outputs[port_name] as SimOutputPort).kind,
 				_anchor_pos(raw), false, _anchor_dir(raw))
-	# Facade outlets (tank/source) are not kernel ports; give them a
-	# marker of their own unless the view builds custom nozzles.
-	for ui_port: String in FLOW_OUTLETS.get(type_id, {}):
-		if not anchors.has(ui_port) and not anchors_override.has(ui_port):
-			continue
-		var raw: Variant = anchors_override.get(ui_port, anchors.get(ui_port))
-		markers["%s:%s" % [record.comp_name, ui_port]] = \
-			make_marker(view, record.comp_name, ui_port,
-				SimTypes.PortKind.PROCESS_SUPPLY, _anchor_pos(raw), false, _anchor_dir(raw))
 	view.set_meta("port_markers", markers)
 
 
@@ -467,14 +430,13 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	body.add_child(shape)
 
 	var steel := ViewUtil.flat(Color(0.45, 0.47, 0.50))
-	var is_pipe := SimTypes.is_stream(kind) \
-		or kind == SimTypes.PortKind.PROCESS_FLOW \
+	var is_pipe := SimTypes.is_material(kind) \
 		or kind == SimTypes.PortKind.PROCESS_LEVEL \
 		or kind == SimTypes.PortKind.PROCESS_PRESSURE
 	if is_pipe:
 		ViewUtil.box(body, Vector3(0.06, 0.15, 0.15), Vector3(-0.02, 0, 0), steel)
 		var neck_r := 0.032
-		if SimTypes.is_stream(kind) or kind == SimTypes.PortKind.PROCESS_FLOW:
+		if SimTypes.is_material(kind):
 			neck_r = 0.05
 		var neck := ViewUtil.cylinder(body, neck_r, 0.15, Vector3(0.07, 0, 0), steel)
 		neck.rotation_degrees = Vector3(0, 0, 90)

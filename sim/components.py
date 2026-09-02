@@ -207,8 +207,8 @@ class Gauge(Component):
       - "flow": inline flow indication, L/s, off the stream in the pipe.
       - "temp_c": inline temperature, read off the same stream.
       - "conc_pct": inline composition — the percentage of one species
-        in the line. This is the analyser the AI needs before it can
-        say anything true about quality.
+        in the line. Until one of these is on the line, nobody can say
+        anything true about quality.
       - "dp_pa": differential pressure between two pressure taps
         (process_a - process_b), Pa — the cleanroom Magnehelic.
       - "press_kpa": a single pressure tap. PROCESS_PRESSURE ports
@@ -1156,8 +1156,8 @@ Gauge.SPEC = EquipmentSpec(
         ),
         Equation(
             "reading = x_species * 100        [conc_pct]",
-            "The analyser. This is what the AI needs before it can say "
-            "anything true about quality.",
+            "The analyser. Until one of these is on the line, nobody can "
+            "say anything true about quality.",
         ),
         Equation(
             "reading = P_a - P_b              [dp_pa]",

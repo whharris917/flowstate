@@ -7,14 +7,19 @@ extends SimComponent
 ##   "flow"      — inline flow indication, L/s, off the stream in the pipe
 ##   "temp_c"    — inline temperature, read off the same stream
 ##   "conc_pct"  — inline composition: the percentage of one species in
-##                 the line. The analyser the AI needs before it can say
-##                 anything true about quality.
+##                 the line. The analyser the player needs before anyone
+##                 can say anything true about quality.
 ##   "dp_pa"     — differential pressure across two taps, Pa
 ##   "press_kpa" — a single pressure tap; ports carry Pa, dial in kPa
 ## The reading is mirrored on an analog signal output so it can later
 ## feed controllers — a gauge today, a transmitter when wired.
+##
+## The inline kinds TAP a line rather than sit in it: piping a
+## thermowell into a header must not put a hole in it, so the tap
+## observes the node without carrying anything.
 
 const KINDS: Array[String] = ["level_kpa", "flow", "temp_c", "conc_pct", "dp_pa", "press_kpa"]
+const TAP_KINDS: Array[String] = ["flow", "temp_c", "conc_pct"]
 const WATER_KPA_PER_M := 9.81
 
 var kind: String
@@ -22,7 +27,7 @@ var liters_per_meter: float
 var species_index: int = SimSpecies.PRODUCT
 var reading: float = 0.0
 
-var process: SimInputPort        # level_kpa / flow kinds
+var process: SimInputPort        # every kind but dp_pa
 var process_a: SimInputPort      # dp_pa kind
 var process_b: SimInputPort
 var signal_out: SimOutputPort
@@ -42,13 +47,19 @@ func _init(name_: String, kind_: String, liters_per_meter_: float = 45.45,
 		process_b = add_input("process_b", SimTypes.PortKind.PROCESS_PRESSURE)
 	else:
 		var port_kind := SimTypes.PortKind.PROCESS_LEVEL
-		if kind == "flow" or kind == "temp_c" or kind == "conc_pct":
-			port_kind = SimTypes.PortKind.PROCESS_STREAM
+		if TAP_KINDS.has(kind):
+			port_kind = SimTypes.PortKind.PROCESS_MATERIAL
 		elif kind == "press_kpa":
 			port_kind = SimTypes.PortKind.PROCESS_PRESSURE
 		process = add_input("process", port_kind)
 	signal_out = add_output("signal", SimTypes.PortKind.SIGNAL_ANALOG)
 	add_observable("reading", &"reading")
+
+
+func tap_ports() -> Array[String]:
+	if TAP_KINDS.has(kind):
+		return ["process"]
+	return []
 
 
 func units() -> String:

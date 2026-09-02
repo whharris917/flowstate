@@ -6,11 +6,23 @@ class_name SimComponent
 ## read-only so the historian can record them. They are property names,
 ## not closures: a lambda here would capture self and leak the component
 ## through a RefCounted cycle.
+##
+## Hydraulics: every material port is a node in the network. A
+## component takes part in the solve in one or both of two ways.
+##   * It SETS A PRESSURE at a nozzle. A supply header holds its rated
+##     pressure; a vessel holds headspace plus static head. Such a node
+##     is a boundary: it absorbs whatever flow arrives and its inventory
+##     changes to match.
+##   * It CARRIES FLOW between its own nozzles — a pump adding head, a
+##     valve resisting. Those become branches.
+## A component that does neither has no nozzles and never appears.
 
 var comp_name: String
 var inputs: Dictionary = {}       # String -> SimInputPort
 var outputs: Dictionary = {}      # String -> SimOutputPort
 var observables: Dictionary = {}  # String tag -> StringName property
+var material: Dictionary = {}     # String -> SimPort, every PROCESS_MATERIAL port
+var node_map: Dictionary = {}     # String -> int, laid out by the simulation
 
 
 func _init(name_: String) -> void:
@@ -20,17 +32,56 @@ func _init(name_: String) -> void:
 func add_input(name_: String, kind: SimTypes.PortKind, spec: String = "") -> SimInputPort:
 	var port := SimInputPort.new(comp_name, name_, kind, spec)
 	inputs[name_] = port
+	if SimTypes.is_material(kind):
+		material[name_] = port
 	return port
 
 
 func add_output(name_: String, kind: SimTypes.PortKind, spec: String = "") -> SimOutputPort:
 	var port := SimOutputPort.new(comp_name, name_, kind, spec)
 	outputs[name_] = port
+	if SimTypes.is_material(kind):
+		material[name_] = port
 	return port
 
 
 func add_observable(name_: String, property: StringName) -> void:
 	observables[name_] = property
+
+
+## Every material nozzle, by name.
+func material_ports() -> Dictionary:
+	return material
+
+
+## Declare internal branches. Called when topology changes, not every
+## scan; keep references to what you add so you can adjust it in
+## update_hydraulics.
+func build_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
+	pass
+
+
+## Refresh boundary pressures and branch settings before each solve —
+## a vessel's head as it fills, a valve's opening, whether a pump is
+## turning.
+func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
+	pass
+
+
+## Nozzles that observe without carrying anything: a thermowell, an
+## analyser tapping. A run to a tap creates no branch, so the
+## instrument reads the line without being a hole in it.
+func tap_ports() -> Array[String]:
+	return []
+
+
+## What this component pushes out of that nozzle, when it is a source
+## of material rather than a pass-through. A vessel supplies its
+## contents; a header supplies what it carries. Returning null means
+## "whatever the network brings me", which is right for a pump, a
+## valve, or a length of pipe.
+func supplied_stream(_port_name: String) -> SimStream:
+	return null
 
 
 func tick(_dt: float) -> void:

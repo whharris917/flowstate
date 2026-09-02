@@ -3,9 +3,10 @@ extends SimComponent
 ## Cyclic vacuum transfer lock: pulls down to rough vacuum, dwells,
 ## re-pressurizes through the main air valve in discrete bursts, then
 ## dumps the cycle's knocked-out condensate through an automatic
-## drainer. press is gauge-able; drain_flow is a real stream to pipe
-## to a drain. Needs 480 V; is_on starts the cycle.
-## Mirrors sim/process.py VacuumLock.
+## drainer. press is gauge-able; drain_flow is a real water nozzle to
+## pipe to a drain — the drainer pushes condensate out at its own rate,
+## and where it goes is the plant's problem. Needs 480 V; is_on starts
+## the cycle. Mirrors sim/process.py VacuumLock.
 
 const PRESS_ATM_PA := 101300.0
 const PRESS_VAC_PA := 18000.0
@@ -21,6 +22,7 @@ var is_on: bool = false
 var state: String = "idle"          # idle/evacuate/hold/vent/drain
 var press_pa: float = PRESS_ATM_PA
 var condensate_l: float = 0.0
+var draining_lps: float = 0.0
 var cycles: int = 0
 var vent_bursts_done: int = 0       # lifetime counter; views watch edges
 var timer_s: float = 0.0
@@ -29,15 +31,33 @@ var power: SimInputPort
 var press: SimOutputPort
 var drain_flow: SimOutputPort
 
+var _drainer: SimFixedFlow = null
+var _condensate: SimStream = SimStream.pure(SimSpecies.WATER, 1.0, 40.0)
+
 
 func _init(name_: String) -> void:
 	super(name_)
 	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
 	press = add_output("press", SimTypes.PortKind.PROCESS_PRESSURE)
-	drain_flow = add_output("drain_flow", SimTypes.PortKind.PROCESS_STREAM)
+	drain_flow = add_output("drain_flow", SimTypes.PortKind.PROCESS_MATERIAL)
 	add_observable("press_pa", &"press_pa")
 	add_observable("condensate_l", &"condensate_l")
 	add_observable("cycles", &"cycles")
+
+
+func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
+	var chamber := net.add_node(0.0, true)
+	_drainer = net.add_branch(SimFixedFlow.new(chamber, node["drain_flow"], 0.0,
+		comp_name + ".drainer")) as SimFixedFlow
+
+
+func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
+	if _drainer != null:
+		_drainer.lps = draining_lps
+
+
+func supplied_stream(_port_name: String) -> SimStream:
+	return _condensate
 
 
 func tick(dt: float) -> void:
@@ -76,7 +96,7 @@ func tick(dt: float) -> void:
 					cycles += 1
 					state = "evacuate"
 	press.value = press_pa
-	drain_flow.stream = SimStream.pure(SimSpecies.WATER, rate, 40.0)
+	draining_lps = rate
 
 
 func state_dict() -> Dictionary:

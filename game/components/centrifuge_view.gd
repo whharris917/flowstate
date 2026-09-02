@@ -56,7 +56,7 @@ func _process(delta: float) -> void:
 			Vector3(0, 1.6, 0), -8.0, 1.1 if fuge.spinning else 0.85)
 	_label.text = "%s · %.1f L/s" % [
 		"SPINNING" if fuge.spinning else ("ON, waiting" if fuge.is_on else "stopped"),
-		fuge.draw.value]
+		fuge.draw_lps]
 
 
 func describe() -> String:

@@ -3,11 +3,15 @@ class_name SimPort
 ## for tag paths, never the owner object — a back-reference would make
 ## a component<->port RefCounted cycle and leak the whole graph.
 ##
-## Scalar kinds use `value`. Material kinds (PROCESS_STREAM and
-## PROCESS_SUPPLY) use `stream`, which carries rate, temperature,
-## composition and phase together. Keeping them in separate typed fields
-## rather than one Variant is what lets the whole kernel stay statically
-## typed.
+## Scalar kinds use `value`. A material nozzle uses `stream` and
+## `flow_lps` together: the stream is what is present at the node
+## (composition and temperature, with its rate set to |flow_lps|), and
+## flow_lps is signed from the component's point of view — positive is
+## material coming IN through this nozzle, negative is going out.
+## Direction is an answer from the hydraulic solve, not something
+## declared, so a nozzle that normally discharges can genuinely run
+## backwards. Keeping these in separate typed fields rather than one
+## Variant is what lets the whole kernel stay statically typed.
 
 var owner_name: String
 var port_name: String
@@ -15,6 +19,8 @@ var kind: SimTypes.PortKind
 var spec: String = ""   # voltage class for POWER ports ("480VAC", "24VDC")
 var value: float = 0.0
 var stream: SimStream = null
+var flow_lps: float = 0.0
+var node: int = -1      # index into the hydraulic network
 
 
 func _init(owner_name_: String, name_: String, kind_: SimTypes.PortKind,
@@ -23,7 +29,7 @@ func _init(owner_name_: String, name_: String, kind_: SimTypes.PortKind,
 	port_name = name_
 	kind = kind_
 	spec = spec_
-	if SimTypes.is_stream(kind_):
+	if SimTypes.is_material(kind_):
 		stream = SimStream.empty()
 
 
@@ -33,8 +39,13 @@ func path() -> String:
 
 ## What this port is carrying, for a describe() panel or an I/O menu.
 func reading() -> String:
-	if SimTypes.is_stream(kind):
-		return stream.describe()
+	if SimTypes.is_material(kind):
+		var text := stream.describe()
+		if flow_lps > 1e-9:
+			return text + " (in)"
+		if flow_lps < -1e-9:
+			return text + " (out)"
+		return text
 	if kind == SimTypes.PortKind.SIGNAL_DISCRETE:
 		return "ON" if value > 0.5 else "OFF"
 	if kind == SimTypes.PortKind.POWER:

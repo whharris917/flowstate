@@ -44,8 +44,8 @@ func _process(_delta: float) -> void:
 
 
 func describe() -> String:
-	return "%s — supply header (utility tie-in)\nunlimited · drawing %.2f L/s · total %.1f L" % [
-		source.comp_name, source.draw.value, source.total_l]
+	return "%s — supply header (utility tie-in)\n%.0f kPa · delivering %.2f L/s · total %.1f L" % [
+		source.comp_name, source.pressure_kpa, source.delivered_lps, source.total_l]
 
 
 func use() -> void:
