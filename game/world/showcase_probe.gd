@@ -96,6 +96,16 @@ func _run(world: Node) -> void:
 	var filler := plant.sim.get_component("vf_310") as SimVialFiller
 	print("[probe] vf_310: %s · %d vials · drawing %.4f L/s · filling at %.1f%% product" % [
 		filler.state, filler.vials_done, filler.draw_lps, filler.fill_purity * 100.0])
+
+	# Unit 400: the gravity rig, seen from the south-east.
+	player.global_position = Vector3(4.5, 0.15, 20.5)
+	player.rotation.y = 0.45
+	player.zoom_t = 0.95
+	player._zoom_now = 0.95
+	player.camera.rotation.x = 0.02
+	await get_tree().create_timer(0.6).timeout
+	await _shot("user://probe_showcase_u400.png")
+	_print_rig(plant, "u400 at start")
 	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
 	print("[probe] vl_302: %s · %.1f kPa · condensate %.1f L · %d bursts" % [
 		lock.state, lock.press_pa / 1000.0, lock.condensate_l, lock.vent_bursts_done])
@@ -131,6 +141,8 @@ func _run(world: Node) -> void:
 		net.node_count(), net.branches.size(), net.bandwidth(), net.iterations, net.residual_lps,
 		plant.sim.solve_ms, plant.sim.newton_ms])
 
+	_print_rig(plant, "u400 after 20 min")
+
 	var bad: Array[String] = []
 	for visual: Dictionary in plant._wire_visuals:
 		var node: Node = visual["node"]
@@ -144,6 +156,28 @@ func _run(world: Node) -> void:
 func _shot(path: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(path)
+
+
+## The gravity rig's honest state: three levels that should always add
+## up to what was charged, the lift pump under its switch, and the pump
+## that cannot make the lift.
+func _print_rig(plant: Plant, label: String) -> void:
+	var t401 := plant.sim.get_component("t_401") as SimTank
+	var t402 := plant.sim.get_component("t_402") as SimTank
+	var t403 := plant.sim.get_component("t_403") as SimTank
+	var p401 := plant.sim.get_component("p_401") as SimPump
+	var p402 := plant.sim.get_component("p_402") as SimPump
+	var k401 := plant.sim.get_component("k_401") as SimRelay
+	var fi := plant.sim.get_component("fi_401") as SimGauge
+	if t401 == null or p401 == null:
+		return
+	print("[probe] %s: T-401 %.0f L (%.2f m) · T-402 %.0f L · T-403 %.0f L · total %.1f L of 1700" % [
+		label, t401.level_l, t401.depth_m, t402.level_l, t403.level_l,
+		t401.level_l + t402.level_l + t403.level_l])
+	print("[probe] %s: P-401 %s %.2f L/s (FI-401 %.2f, %d starts, K-401 %d cycles) · P-402 %s %.2f L/s, %.0f s dry, suction %.0f kPa discharge %.0f kPa" % [
+		label, "RUN" if p401.running else "stop", p401.flow_lps, fi.reading, p401.starts, k401.cycles,
+		"RUN" if p402.running else "stop", p402.flow_lps, p402.dry_run_s,
+		p402.suction_pa / 1000.0, p402.discharge_pa / 1000.0])
 
 
 ## Fresh material crossing the plant boundary. Mostly the headers, plus

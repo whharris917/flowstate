@@ -87,6 +87,8 @@ func disconnect_ports(src: SimComponent, out_name: String, dst: SimComponent, in
 
 
 func find_wire(src: SimComponent, out_name: String, dst: SimComponent, in_name: String) -> SimWire:
+	if src == null or dst == null:
+		return null
 	var out_port: SimOutputPort = src.outputs.get(out_name)
 	var in_port: SimInputPort = dst.inputs.get(in_name)
 	if out_port == null or in_port == null:
@@ -95,6 +97,14 @@ func find_wire(src: SimComponent, out_name: String, dst: SimComponent, in_name: 
 		if wire.src == out_port and wire.dst == in_port:
 			return wire
 	return null
+
+
+## Size a pipe run: Pa per (L/s)^2, so a long or thin line genuinely
+## costs more pressure. Takes effect at the next scan.
+func set_wire_resistance(wire: SimWire, k_pa_per_lps2: float) -> void:
+	wire.k_pa_per_lps2 = maxf(k_pa_per_lps2, SimHydraulics.EPS)
+	if wire.branch is SimResistance:
+		(wire.branch as SimResistance).set_k(wire.k_pa_per_lps2)
 
 
 ## ---- the hydraulic pass ---------------------------------------------------

@@ -770,6 +770,18 @@ func connect_equipment(src_name: String, src_port: String,
 	return ""
 
 
+## Size a routed pipe run, in Pa per (L/s)^2: a short generous line is
+## 5000, a long thin one tens of thousands. Saved with the wire.
+func set_pipe_resistance(src_name: String, src_port: String, dst_name: String,
+		dst_port: String, k_pa_per_lps2: float) -> bool:
+	var wire := sim.find_wire(sim.get_component(src_name), src_port,
+		sim.get_component(dst_name), dst_port)
+	if wire == null or not wire.is_material():
+		return false
+	sim.set_wire_resistance(wire, k_pa_per_lps2)
+	return true
+
+
 ## ---- structure ----------------------------------------------------------
 
 func unique_struct_name(prefix: String) -> String:
@@ -1476,13 +1488,18 @@ func save_game() -> bool:
 		var path_out: Array = []
 		for point: Vector3 in visual["waypoints"]:
 			path_out.append([point.x, point.y, point.z])
-		wire_list.append({
+		var wire_entry := {
 			"src": visual["a"], "src_port": visual["a_port"],
 			"dst": visual["b"], "dst_port": visual["b_port"],
 			"waypoints": path_out,
 			"color": visual.get("color", ""), "label": visual.get("label", ""),
 			"hidden": visual.get("hidden", false),
-		})
+		}
+		var wire := sim.find_wire(sim.get_component(str(visual["a"])), str(visual["a_port"]),
+			sim.get_component(str(visual["b"])), str(visual["b_port"]))
+		if wire != null and wire.is_material() and wire.k_pa_per_lps2 != SimWire.DEFAULT_K:
+			wire_entry["k"] = wire.k_pa_per_lps2
+		wire_list.append(wire_entry)
 	var struct_list: Array = []
 	for name_: String in structures:
 		var entry: Dictionary = structures[name_]
@@ -1675,6 +1692,9 @@ func load_game() -> bool:
 		if error == "" and str(wire_entry.get("color", "")) != "":
 			set_run_service((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
 				Color.html(str(wire_entry["color"])), str(wire_entry.get("label", "")))
+		if error == "" and wire_entry.has("k"):
+			set_pipe_resistance(wire_entry["src"], wire_entry["src_port"],
+				wire_entry["dst"], wire_entry["dst_port"], float(wire_entry["k"]))
 	sim.time = float(payload.get("time", 0.0))
 
 	tank = sim.get_component("supply_tank") as SimTank
