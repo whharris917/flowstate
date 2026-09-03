@@ -74,8 +74,8 @@ static func _unit_100(plant: Plant) -> void:
 	plant.place("tank", "ft_100", {"height_m": 2.4, "diameter_m": 1.1, "level_l": 1100.0},
 		Vector3(17.0, 0.0, -3.5), 0.0, false)
 	plant.place("drain", "du_101", {"rate_lps": 2.5}, Vector3(17.0, 0.0, -6.1), 0.0, false)
-	plant.place("gauge_level", "lt_101", {"liters_per_meter": 950.4},
-		Vector3(18.9, 0.0, -2.6), 0.0, false)
+	# LT-101 is on the tank's shell, ranged to its geometry by being there.
+	plant.mount_instrument("gauge_level", "lt_101", {}, "ft_100", 0.3, 0.4, false)
 	plant.place("controller", "lic_101", {"kp": 8.0, "ki": 1.5, "sp": 15.0},
 		Vector3(13.2, 0.0, -5.8), 0.0, false)
 	plant.connect_equipment("supply_101", "outlet", "lv_101", "inlet",
@@ -83,7 +83,6 @@ static func _unit_100(plant: Plant) -> void:
 	plant.connect_equipment("lv_101", "outlet", "ft_100", "inlet",
 		[plant.to_local(Vector3(15.4, 0.3, -3.5))])
 	plant.connect_equipment("ft_100", "outlet", "du_101", "inlet")
-	plant.connect_equipment("ft_100", "level", "lt_101", "process")
 	plant.connect_equipment("lt_101", "signal", "lic_101", "pv",
 		[plant.to_local(Vector3(18.9, 0.3, -5.4)), plant.to_local(Vector3(14.6, 0.3, -5.8))])
 	plant.connect_equipment("lic_101", "out", "lv_101", "cmd",
@@ -138,22 +137,23 @@ static func _mcc_and_batch(plant: Plant) -> void:
 	plant.place("tank", "bt_200", {"height_m": 2.0, "diameter_m": 1.0, "level_l": 480.0},
 		Vector3(19.0, 0.0, 8.2), 0.0, false)
 	plant.place("drain", "du_201", {"rate_lps": 1.2}, Vector3(20.8, 0.0, 9.4), 0.0, false)
-	plant.place("float_switch", "ls_201", {"low_l": 500.0, "high_l": 1100.0},
-		Vector3(17.6, 1.1, 8.2), 0.0, false)
+	plant.mount_instrument("float_switch", "ls_201", {"low_l": 500.0, "high_l": 1100.0},
+		"bt_200", 0.5, PI, false)
 	plant.place("pump", "feed_pump", {"rated_lps": 3.0}, Vector3(15.4, 0.0, 8.4), 0.0, false)
-	plant.place("gauge_flow", "fi_201", {}, Vector3(16.6, 0.0, 9.6), 0.0, false)
+	# FI-201 sits in the discharge line: the pump's whole flow runs
+	# through its element.
+	plant.place("gauge_flow", "fi_201", {}, Vector3(16.6, 0.0, 8.4), 0.0, false)
 	plant.connect_equipment("supply_201", "outlet", "feed_pump", "inlet",
 		[plant.to_local(Vector3(14.2, 0.3, 9.2))])
 	plant.connect_equipment("bt_200", "outlet", "du_201", "inlet")
-	plant.connect_equipment("bt_200", "level", "ls_201", "level")
 	plant.connect_equipment("ls_201", "contact", t + "1", "in",
 		[plant.to_local(Vector3(17.3, 0.3, 7.2)), plant.to_local(Vector3(15.2, 0.3, 6.8))])
 	plant.connect_equipment(t + "2", "out", "feed_pump", "run",
 		[plant.to_local(Vector3(15.3, 0.3, 7.4))])
-	plant.connect_equipment("feed_pump", "outlet", "bt_200", "inlet",
+	plant.connect_equipment("feed_pump", "outlet", "fi_201", "inlet")
+	plant.connect_equipment("fi_201", "outlet", "bt_200", "inlet",
 		[plant.to_local(Vector3(17.2, 0.3, 8.6))])
-	plant.connect_equipment("feed_pump", "outlet", "fi_201", "process")
-	_service_wire(plant, "feed_pump", "bt_200", Color(0.15, 0.35, 0.75), "PW-201")
+	_service_wire(plant, "fi_201", "bt_200", Color(0.15, 0.35, 0.75), "PW-201")
 
 	# Power: 480 V from the plant feeder, through the doorway, to the
 	# cabinet PSU and the pump starter.
@@ -227,8 +227,7 @@ static func _unit_300(plant: Plant) -> void:
 		Vector3(46.2, 0.0, -7.0), 0.0, false)
 	plant.place("tank", "pt_300", {"height_m": 7.0, "diameter_m": 3.2},
 		Vector3(49.2, 0.0, -1.0), 0.0, false)
-	plant.place("gauge_level", "lt_300", {"liters_per_meter": 8042.5},
-		Vector3(51.6, 0.0, 1.4), 0.0, false)
+	plant.mount_instrument("gauge_level", "lt_300", {}, "pt_300", 0.22, 0.53, false)
 	plant.place("vialfill", "vf_310", {}, Vector3(52.6, 0.0, -2.6), 0.0, false)
 	# An analyser on the fill line: until this is wired, nobody can say
 	# anything true about quality.
@@ -254,11 +253,9 @@ static func _unit_300(plant: Plant) -> void:
 	plant.place("drain", "du_302", {"rate_lps": 1.5}, Vector3(32.8, 0.0, -8.3), 0.0, false)
 
 	# Nozzles where a real tank has them: fill low on the south face
-	# (a 6 m riser to the top head would be an unsupported span), level
-	# tap low on the east face, toward its transmitter.
+	# (a 6 m riser to the top head would be an unsupported span).
 	var pt_view := plant.views["pt_300"] as TankView
 	pt_view.set_nozzle("inlet", 0.10, -1.9)
-	pt_view.set_nozzle("level", 0.22, 0.53)
 
 	# ---- process path ----------------------------------------------
 	plant.connect_equipment("supply_301a", "outlet", "p_301a", "inlet")
@@ -298,7 +295,6 @@ static func _unit_300(plant: Plant) -> void:
 		[plant.to_local(Vector3(46.5, 0.3, -6.0))])
 	plant.connect_equipment("dr_305", "product", "pt_300", "inlet",
 		[plant.to_local(Vector3(47.6, 0.35, -4.2)), plant.to_local(Vector3(47.6, 0.35, -2.9))])
-	plant.connect_equipment("pt_300", "level", "lt_300", "process")
 	plant.connect_equipment("pt_300", "outlet", "vf_310", "inlet",
 		[plant.to_local(Vector3(50.9, 0.35, -1.0)), plant.to_local(Vector3(50.9, 0.35, -2.6))])
 	plant.connect_equipment("dr_305", "product", "aq_310", "process",
@@ -462,21 +458,38 @@ static func _unit_400(plant: Plant) -> void:
 	# Three vessels at three heights. Placement height is elevation, so
 	# the top tank's floor really is six metres above the sump's. The
 	# mid tank keeps to the north-east corner, clear of both landings.
-	plant.place("tank", "t_403", {"height_m": 2.0, "diameter_m": 1.13},
+	# The sump is big enough to take its makeup setpoint plus everything
+	# the two tanks above can send back down when the lift pump stops.
+	plant.place("tank", "t_403", {"height_m": 2.0, "diameter_m": 1.6},
 		Vector3(-2.0, 0.0, 11.0), 0.0, false)
 	plant.place("tank", "t_402", {"height_m": 1.6, "diameter_m": 0.9},
 		Vector3(-0.9, 3.025, 9.9), 0.0, false)
 	plant.place("tank", "t_401", {"height_m": 1.6, "diameter_m": 0.9},
 		Vector3(-1.4, 6.025, 11.4), 0.0, false)
+	# Two pumps that look alike and are not: P-401 is rated to lift
+	# 30 m, P-402 only 5 m, and the top tank's inlet is 7.5 m up.
 	plant.place("pump", "p_401", {"rated_lps": 3.0, "head_m": 30.0}, Vector3(-5.8, 0.0, 9.6), 0.0, false)
 	plant.place("pump", "p_402", {"rated_lps": 3.0, "head_m": 5.0}, Vector3(-5.8, 0.0, 12.4), 0.0, false)
-	plant.place("float_switch", "ls_401", {"low_l": 300.0, "high_l": 650.0},
-		Vector3(-2.9, 6.8, 9.9), 0.0, false)
 	plant.place("relay", "k_401", {}, Vector3(-7.6, 0.0, 11.0), 0.0, false)
-	plant.place("gauge_flow", "fi_401", {}, Vector3(-6.6, 0.0, 7.6), 0.0, false)
-	# Ranged to the top tank's cross-section: 636 L per metre of head.
-	plant.place("gauge_level", "li_401", {"liters_per_meter": 636.2},
-		Vector3(-0.5, 6.025, 9.8), 0.0, false)
+	# FI-401 sits in P-401's discharge line: an inline element the whole
+	# flow runs through, not a tapping.
+	plant.place("gauge_flow", "fi_401", {}, Vector3(-4.6, 0.0, 9.6), 0.0, false)
+	# Level instruments are on the vessels they read: the switch and a
+	# local indicator on the top tank, the makeup transmitter on the sump.
+	plant.mount_instrument("float_switch", "ls_401", {"low_l": 300.0, "high_l": 650.0},
+		"t_401", 0.55, -PI / 2.0, false)
+	plant.mount_instrument("gauge_level", "li_401", {}, "t_401", 0.4, PI / 2.0, false)
+	plant.mount_instrument("gauge_level", "lt_403", {}, "t_403", 0.5, 0.0, false)
+	# Makeup water: a header through LV-401 into the sump, held at level
+	# by LIC-403. This is where the rig's water comes from; it starts
+	# empty and fills from here.
+	plant.place("source", "supply_401", {"species": "water"}, Vector3(3.6, 0.0, 15.0), PI, false)
+	plant.place("valve", "lv_401", {"cv_lps": 6.0}, Vector3(1.6, 0.0, 15.0), PI, false)
+	# 0.8 m of water in the sump (1600 L) is 7.8 kPa on LT-403. A
+	# proportional-heavy loop: the fill is long and a wound-up
+	# integrator would carry the level over the top.
+	plant.place("controller", "lic_403", {"kp": 25.0, "ki": 0.1, "sp": 7.8},
+		Vector3(3.6, 0.0, 17.4), 0.0, false)
 
 	# Nozzles face their runs. Outlets sit a little higher than the
 	# default so their lines clear the railing toe boards.
@@ -489,7 +502,6 @@ static func _unit_400(plant: Plant) -> void:
 	var top := plant.views["t_401"] as TankView
 	top.set_nozzle("inlet", 0.92, PI)
 	top.set_nozzle("outlet", 0.16, PI / 4.0)
-	top.set_nozzle("level", 0.55, -PI / 2.0)
 
 	# ---- process path ------------------------------------------------
 	# Both pumps draw off the sump: a tee at its outlet nozzle.
@@ -497,9 +509,10 @@ static func _unit_400(plant: Plant) -> void:
 		_local(plant, [Vector3(-4.0, 0.35, 10.7), Vector3(-6.6, 0.35, 10.7)]))
 	plant.connect_equipment("t_403", "outlet", "p_402", "inlet",
 		_local(plant, [Vector3(-4.0, 0.3, 11.3), Vector3(-6.7, 0.3, 11.3), Vector3(-6.7, 0.3, 12.4)]))
-	# Risers hug the west columns up past the top-deck railing to the
-	# top tank's inlet; the two meet at its nozzle.
-	plant.connect_equipment("p_401", "outlet", "t_401", "inlet",
+	# P-401 through the meter, then up the west column past the top-deck
+	# railing to the top tank's inlet; P-402's riser meets it there.
+	plant.connect_equipment("p_401", "outlet", "fi_401", "inlet")
+	plant.connect_equipment("fi_401", "outlet", "t_401", "inlet",
 		_local(plant, [Vector3(-4.4, 0.42, 9.0), Vector3(-4.4, 7.35, 9.0), Vector3(-4.4, 7.35, 11.4)]))
 	plant.connect_equipment("p_402", "outlet", "t_401", "inlet",
 		_local(plant, [Vector3(-4.4, 0.42, 13.0), Vector3(-4.4, 7.55, 13.0), Vector3(-4.4, 7.55, 11.6)]))
@@ -516,6 +529,11 @@ static func _unit_400(plant: Plant) -> void:
 	plant.connect_equipment("t_402", "outlet", "t_403", "inlet",
 		_local(plant, [Vector3(-0.9, 3.28, 8.55), Vector3(0.4, 3.28, 8.55), Vector3(0.4, 2.45, 8.55),
 			Vector3(0.4, 2.45, 13.6), Vector3(-2.0, 2.45, 13.6)]))
+	# Makeup: header, valve, and a line in under the platform to the
+	# sump's inlet, which is a tee with the two gravity returns.
+	plant.connect_equipment("supply_401", "outlet", "lv_401", "inlet")
+	plant.connect_equipment("lv_401", "outlet", "t_403", "inlet",
+		_local(plant, [Vector3(-2.0, 0.35, 15.0)]))
 	# The gravity lines are long and thin, so the top tank fills faster
 	# than it drains and the switch gets to cycle the pump, and the mid
 	# tank's drain is sized so its level follows the top tank's with a
@@ -524,17 +542,17 @@ static func _unit_400(plant: Plant) -> void:
 	plant.set_pipe_resistance("t_401", "outlet", "t_403", "inlet", 80000.0)
 	plant.set_pipe_resistance("t_402", "outlet", "t_403", "inlet", 32000.0)
 
-	# ---- signals: level switch -> relay -> P-401 in Auto --------------
-	plant.connect_equipment("t_401", "level", "ls_401", "level")
-	plant.connect_equipment("t_401", "level", "li_401", "process",
-		_local(plant, [Vector3(-0.5, 6.4, 10.5)]))
+	# ---- signals ------------------------------------------------------
+	# LS-401 -> K-401 -> P-401 in Auto; LT-403 -> LIC-403 -> LV-401.
 	plant.connect_equipment("ls_401", "contact", "k_401", "coil",
 		_local(plant, [Vector3(-4.45, 6.3, 8.6), Vector3(-4.45, 0.3, 8.6),
 			Vector3(-7.9, 0.3, 8.6), Vector3(-7.9, 0.3, 11.44)]))
 	plant.connect_equipment("k_401", "contact", "p_401", "run",
 		_local(plant, [Vector3(-7.3, 0.3, 11.6), Vector3(-7.3, 0.3, 10.3)]))
-	plant.connect_equipment("p_401", "outlet", "fi_401", "process",
-		_local(plant, [Vector3(-5.0, 0.35, 8.3)]))
+	plant.connect_equipment("lt_403", "signal", "lic_403", "pv",
+		_local(plant, [Vector3(-1.0, 0.12, 11.0), Vector3(-1.0, 0.12, 17.8), Vector3(3.46, 0.12, 17.8)]))
+	plant.connect_equipment("lic_403", "out", "lv_401", "cmd",
+		_local(plant, [Vector3(3.74, 0.3, 18.2), Vector3(1.6, 0.3, 18.2), Vector3(1.6, 0.3, 14.43)]))
 
 	# ---- power: 480 V from the plant feeder, low along the ground ----
 	plant.connect_equipment("plant_mains", "power", "p_401", "power",
@@ -545,24 +563,22 @@ static func _unit_400(plant: Plant) -> void:
 			Vector3(-3.2, 0.1, 5.8), Vector3(-7.4, 0.1, 5.8), Vector3(-7.4, 0.1, 11.8)]))
 
 	# ---- commissioned state ------------------------------------------
-	# P-401 is in Auto and belongs to the switch; P-402 is left in Hand
-	# so the lesson is always running. The sump holds the rig's water.
+	# P-401 is in Auto and belongs to the switch; P-402 is left in
+	# Manual On so the lesson is always running. Nothing is charged:
+	# the sump fills from the header when the plant starts.
 	(plant.sim.get_component("p_402") as SimPump).mode = "hand"
-	var water := SimStream.zero_amounts()
-	water[SimSpecies.WATER] = 1.0
-	(plant.sim.get_component("t_403") as SimTank).charge(1600.0, water, 20.0)
-	(plant.sim.get_component("t_402") as SimTank).charge(100.0, water, 20.0)
 
-	_service_wire(plant, "p_401", "t_401", Color(0.13, 0.55, 0.28), "PW-401")
+	_service_wire(plant, "fi_401", "t_401", Color(0.13, 0.55, 0.28), "PW-401")
 	_service_wire(plant, "p_402", "t_401", Color(0.13, 0.55, 0.28), "PW-402")
 	_service_wire(plant, "t_401", "t_402", Color(0.20, 0.45, 0.75), "GR-402")
 	_service_wire(plant, "t_401", "t_403", Color(0.20, 0.45, 0.75), "GR-403")
 	_service_wire(plant, "t_402", "t_403", Color(0.20, 0.45, 0.75), "GR-404")
+	_service_wire(plant, "lv_401", "t_403", Color(0.13, 0.55, 0.28), "MU-401")
 
 	plant.place_structure("s_sign", "sign_u400", Vector3(3.2, 0.0, 8.6), 0.0)
 	plant.set_sign_text("sign_u400", "UNIT 400\nGRAVITY RIG")
 	plant.place_structure("s_sign", "sign_p402", Vector3(-7.6, 0.0, 13.7), 0.0)
-	plant.set_sign_text("sign_p402", "P-402: 5 m HEAD\nT-401 INLET AT 7.5 m")
+	plant.set_sign_text("sign_p402", "P-402: 5 m HEAD\nLIFT TO T-401 IS 7.5 m\nDEAD-HEADED")
 
 
 ## World-space waypoints to plant-local, for the routed runs.

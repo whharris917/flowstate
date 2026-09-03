@@ -60,11 +60,16 @@ func open(plant: Plant, title: String, records: Array, pick: Callable) -> void:
 		var record := plant.sim.get_component(record_name)
 		if record == null:
 			continue
+		var hidden := record.hidden_ports()
 		for port_name: String in record.outputs:
+			if hidden.has(port_name):
+				continue
 			var port: SimOutputPort = record.outputs[port_name]
 			_list.add_child(_row(record_name, port_name, port.kind, port.spec, false,
 				port.reading(), true))
 		for port_name: String in record.inputs:
+			if hidden.has(port_name):
+				continue
 			var port: SimInputPort = record.inputs[port_name]
 			var free := port.wire_count == 0 or SimTypes.allows_multiple_sources(port.kind)
 			var state := "wired" if port.wire_count > 0 else "open"

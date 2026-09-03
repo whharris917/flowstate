@@ -24,16 +24,16 @@ class TestGauge:
         assert gauge.units() == "kPa"
 
     def test_flow_gauge_reads_the_flow_that_was_solved(self) -> None:
-        """An inline FI reads the line, and the line is running at
+        """An inline FI sits in the line, and the line is running at
         whatever the network worked out — not at the pump's rating."""
         sim = Simulation(dt=0.05)
         pump = sim.add(Pump("pump", rated_lps=4.0, mode="hand"))
         wire_power(sim, pump)
         wire_supply(sim, pump)
         tank = sim.add(Tank("tank", capacity_l=4000.0, height_m=3.0))
-        sim.connect(pump, "outlet", tank, "inlet")
         gauge = sim.add(Gauge("fi_1", "flow"))
-        sim.connect(pump, "outlet", gauge, "process")
+        sim.connect(pump, "outlet", gauge, "inlet")
+        sim.connect(gauge, "outlet", tank, "inlet")
         sim.run(5.0)
         assert gauge.reading > 0.0
         assert gauge.reading == pytest.approx(pump.flow_lps, rel=1e-6)
@@ -50,7 +50,7 @@ class TestGauge:
             tank = sim.add(Tank("tank", capacity_l=4000.0, height_m=3.0))
             sim.connect(pump, "outlet", tank, "inlet")
             if with_gauge:
-                gauge = sim.add(Gauge("fi_1", "flow"))
+                gauge = sim.add(Gauge("ti_1", "temp_c"))
                 sim.connect(pump, "outlet", gauge, "process")
             sim.run(20.0)
             return tank.level_l

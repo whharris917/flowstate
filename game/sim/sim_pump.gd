@@ -68,6 +68,33 @@ var head_pa: float:
 		return discharge_pa - suction_pa
 
 
+## How the selector position reads to the player (director's call,
+## 2026-09-02: "Manual On", never "Hand"). The kernel keeps the short
+## internal names.
+static func mode_label(mode_: String) -> String:
+	match mode_:
+		"hand": return "MANUAL ON"
+		"off": return "OFF"
+	return "AUTO"
+
+
+## One honest word for what the pump is doing, for a label or a hover:
+## a running pump that moves nothing is either dead-headed (the system
+## asks more lift than its curve has) or cavitating (its suction has
+## fallen toward vacuum).
+func status() -> String:
+	if not running:
+		return "STOPPED"
+	if flow_lps > 1e-6:
+		return "RUNNING"
+	if cavitating:
+		return "RUNNING · CAVITATING"
+	if head_pa >= SimHydraulics.static_head_pa(head_m) - 1.0:
+		return "RUNNING · DEAD-HEADED (needs %.1f m, has %.0f m)" % [
+			head_pa / SimHydraulics.HEAD_PA_PER_M, head_m]
+	return "RUNNING · NO FLOW"
+
+
 func set_mode(mode_: String) -> void:
 	if not MODES.has(mode_):
 		push_error("mode must be one of %s" % str(MODES))

@@ -30,6 +30,7 @@ var equip_types: Dictionary = {}   # record name -> type_id
 var protected: Dictionary = {}     # record name -> true (not deletable)
 var cabinets: Dictionary = {}      # name -> {node, plc, terminals}
 var member_of: Dictionary = {}     # record name -> cabinet name
+var mounted: Dictionary = {}       # instrument name -> {host, frac, angle}
 var structures: Dictionary = {}    # name -> {type, node}
 var runs: Dictionary = {}          # name -> {kind, node, points (plant-local)}
 var _wire_visuals: Array[Dictionary] = []   # {node, a, b}
@@ -63,19 +64,18 @@ func _ready() -> void:
 ## directly: place, connect, mis-wire, remove, save/load round-trip.
 func _exercise_build_api() -> void:
 	var problems: Array[String] = []
-	var gauge := place_new("gauge_level", _world(Vector3(5.0, 0.0, -1.0)), 0.0)
+	# A level transmitter mounts on the tank's shell and is ranged to it.
+	var gauge := mount_new("gauge_level", "supply_tank", 0.3, -0.7)
 	if gauge == null:
-		problems.append("place gauge failed")
-	elif connect_equipment("supply_tank", "level", gauge.comp_name, "process",
-			[Vector3(4.0, 0.35, -1.5)]) != "":
-		problems.append("gauge connect refused")
+		problems.append("mount gauge failed")
 	if connect_equipment(gauge.comp_name, "signal", "fill_pump", "run") == "":
 		problems.append("kind mismatch was NOT refused")
 	for _i in 40:
 		sim.tick()
 	var reading := (gauge as SimGauge).reading
-	if reading < 10.0 or reading > 20.0:
-		problems.append("gauge reading %.2f kPa outside expected range" % reading)
+	var expected := tank.level_l / (tank.cross_section_m2 * 1000.0) * SimGauge.WATER_KPA_PER_M
+	if absf(reading - expected) > 0.3:
+		problems.append("gauge reading %.2f kPa, tank head is %.2f" % [reading, expected])
 	var pump2 := place_new("pump", _world(Vector3(6.0, 0.0, -1.0)), 0.0)
 	if pump2 == null or not remove_equipment(pump2.comp_name):
 		problems.append("place/remove pump failed")
@@ -128,22 +128,16 @@ func _exercise_build_api() -> void:
 		cascade.set_door("al2_core", false)
 	if remove_equipment("supply_tank"):
 		problems.append("protected equipment was removable")
-	# Disconnect: pull the gauge's run, then wire it again — the
+	# Disconnect: pull the gauge's mount wire, then land it again — the
 	# single-source slot must free up.
 	if not sim.disconnect_ports(sim.get_component("supply_tank"), "level",
 			sim.get_component(gauge.comp_name), "process"):
 		problems.append("disconnect refused")
 	else:
-		var stale: PipeView = null
-		for visual in _wire_visuals:
+		for visual in _wire_visuals.duplicate():
 			if visual["b"] == gauge.comp_name:
-				stale = visual["node"] as PipeView
-		if stale == null or not remove_run(stale):
-			# remove_run also disconnects; here the wire is already gone,
-			# so only the visual bookkeeping path is exercised.
-			pass
-		if connect_equipment("supply_tank", "level", gauge.comp_name, "process",
-				[Vector3(4.0, 0.35, -1.5)]) != "":
+				_wire_visuals.erase(visual)
+		if connect_equipment("supply_tank", "level", gauge.comp_name, "process", [], false) != "":
 			problems.append("rewire after disconnect refused")
 	# Cabinet: starts empty, gets a panel built module by module, then a
 	# field signal traverses terminal -> PLC rung -> terminal, and
@@ -312,14 +306,13 @@ func place(type_id: String, name_: String, params: Dictionary,
 	if record == null:
 		return null
 	sim.register_with_historian(record)
-	var extra: SimComponent = switch if (type_id == "tank" and is_protected) else null
-	var view := PlantFactory.make_view(type_id, record, extra)
+	var view := PlantFactory.make_view(type_id, record)
 	view.position = to_local(world_pos) + Vector3(0, PlantFactory.Y_OFFSETS.get(type_id, 0.0), 0)
 	view.rotation.y = rot_y
 	add_child(view)
 	match type_id:
 		"tank":
-			(view as TankView).setup(record as SimTank, extra as SimFloatSwitch)
+			(view as TankView).setup(record as SimTank)
 		"pump":
 			(view as PumpView).setup(record as SimPump)
 		"relay":
@@ -376,6 +369,59 @@ func place(type_id: String, name_: String, params: Dictionary,
 
 func place_new(type_id: String, world_pos: Vector3, rot_y: float) -> SimComponent:
 	return place(type_id, sim.unique_name(type_id), {}, world_pos, rot_y, false)
+
+
+## ---- instruments on vessels ------------------------------------------------
+## A level switch or level transmitter is not placed on the floor and
+## piped to a "level" nozzle (director's call, 2026-09-02): it is
+## mounted on a vessel's shell, and the plant lands the kernel wire
+## from the vessel's internal tap for it. frac is the height up the
+## shell, angle the bearing round it.
+
+func mount_instrument(type_id: String, name_: String, params: Dictionary,
+		host_name: String, frac: float, angle: float, is_protected: bool) -> SimComponent:
+	var host_view := views.get(host_name) as TankView
+	var host := sim.get_component(host_name) as SimTank
+	if host_view == null or host == null or not PlantFactory.MOUNTABLE.has(type_id):
+		return null
+	params = params.duplicate()
+	if type_id == "gauge_level" and not params.has("liters_per_meter"):
+		# A transmitter is ranged to the vessel it is on.
+		params["liters_per_meter"] = host.cross_section_m2 * 1000.0
+	var record := PlantFactory.make_record(sim, type_id, name_, params)
+	if record == null:
+		return null
+	sim.register_with_historian(record)
+	var view := PlantFactory.make_view(type_id, record)
+	if type_id == "float_switch":
+		(view as FloatSwitchView).setup(record as SimFloatSwitch, true)
+	else:
+		(view as GaugeView).setup(record as SimGauge, true)
+	host_view.mount(view, frac, angle)
+	var skip: Array[String] = [str(PlantFactory.MOUNTED_INPUT[type_id])]
+	PlantFactory.attach_port_markers(view, record, type_id,
+		PlantFactory.MOUNTED_ANCHORS.get(type_id, {}), skip)
+	views[record.comp_name] = view
+	equip_types[record.comp_name] = type_id
+	mounted[record.comp_name] = {"host": host_name, "frac": frac, "angle": angle}
+	if is_protected:
+		protected[record.comp_name] = true
+	connect_equipment(host_name, "level", record.comp_name,
+		str(PlantFactory.MOUNTED_INPUT[type_id]), [], false)
+	return record
+
+
+## Mount with default sizing: a switch trips around the height it is
+## mounted at, a transmitter is ranged to the vessel.
+func mount_new(type_id: String, host_name: String, frac: float, angle: float) -> SimComponent:
+	var params := {}
+	var host := sim.get_component(host_name) as SimTank
+	if type_id == "float_switch" and host != null:
+		var trip := host.capacity_l * clampf(frac, 0.04, 0.97)
+		params = {"low_l": maxf(trip - 0.15 * host.capacity_l, 0.0),
+			"high_l": minf(trip + 0.15 * host.capacity_l, host.capacity_l)}
+	return mount_instrument(type_id, sim.unique_name(type_id), params,
+		host_name, frac, angle, false)
 
 
 ## ---- control cabinets -----------------------------------------------------
@@ -695,6 +741,10 @@ func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
 	record.set_size(height_m, diameter_m)
 	view.rebuild()
 	refresh_wires_of(name_)
+	# Instruments on the shell moved with it; their cables follow.
+	for inst_name: String in mounted:
+		if str((mounted[inst_name] as Dictionary)["host"]) == name_:
+			refresh_wires_of(inst_name)
 	_revalidate_in = 3
 
 
@@ -718,6 +768,15 @@ func refresh_wires_of(name_: String) -> void:
 func remove_equipment(name_: String) -> bool:
 	if protected.has(name_) or not views.has(name_):
 		return false
+	# Instruments mounted on a vessel go with it.
+	for inst_name: String in mounted.keys():
+		if inst_name != name_ and str((mounted[inst_name] as Dictionary)["host"]) == name_:
+			remove_equipment(inst_name)
+	if mounted.has(name_):
+		var host_view := views.get(str((mounted[name_] as Dictionary)["host"])) as TankView
+		if host_view != null:
+			host_view.unmount(views[name_] as Node3D)
+		mounted.erase(name_)
 	sim.remove_component(name_)
 	var keep: Array[Dictionary] = []
 	for visual in _wire_visuals:
@@ -978,11 +1037,12 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	var port: SimOutputPort = src.outputs[src_port]
 	var kind := port.kind
 	var getter: Callable
+	var wire: SimWire = null
 	if SimTypes.is_material(kind):
 		# The honest live value of a pipe is the flow the network solved
 		# through it. An instrument tap has no branch of its own and
 		# reads the line it is tapped into.
-		var wire := sim.find_wire(src, src_port, sim.get_component(dst_name), dst_port)
+		wire = sim.find_wire(src, src_port, sim.get_component(dst_name), dst_port)
 		getter = func() -> float:
 			if wire == null:
 				return 0.0
@@ -1000,6 +1060,13 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 		PlantFactory.KIND_COLORS[kind], 0.07 if is_process else 0.025,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	pipe.config_cb = _configure_run
+	if wire != null:
+		# A line can be pressurised without moving: a dead-headed
+		# discharge, a full riser under a stopped pump. Show that too.
+		var live := wire
+		var kernel := sim
+		pipe.set_pressure_getter(func() -> float:
+			return maxf(kernel.pressure_at(live.src), kernel.pressure_at(live.dst)))
 	return pipe
 
 
@@ -1025,12 +1092,12 @@ func _marker_dir(record_name: String, port_name: String) -> Vector3:
 ## ---- the commissioned starting loop -------------------------------------
 
 func _build_initial_plant() -> void:
-	# Switch first: the tank view draws its trip rings from it.
-	switch = place("float_switch", "level_switch", {"low_l": 40.0, "high_l": 80.0},
-		_world(Vector3(1.55, 0.45, -2.0)), 0.0, true) as SimFloatSwitch
 	tank = place("tank", "supply_tank",
 		{"capacity_l": 100.0, "level_l": 70.0},
 		_world(Vector3(2.5, 0, -2.0)), 0.0, true) as SimTank
+	# The level switch is on the tank's shell, not beside it.
+	switch = mount_instrument("float_switch", "level_switch", {"low_l": 40.0, "high_l": 80.0},
+		"supply_tank", 0.6, 0.9, true) as SimFloatSwitch
 	relay = place("relay", "pump_relay", {},
 		_world(Vector3(-2.5, 1.5, -4.74)) - Vector3(0, PlantFactory.Y_OFFSETS["relay"], 0),
 		0.0, true) as SimRelay
@@ -1050,7 +1117,6 @@ func _build_initial_plant() -> void:
 	connect_equipment("supply_tank", "outlet", "du_100", "inlet")
 	# Signal runs drop to the floor and run along it — the support rule
 	# applies to the commissioned loop too.
-	connect_equipment("supply_tank", "level", "level_switch", "level")
 	connect_equipment("level_switch", "contact", "pump_relay", "coil",
 		[Vector3(1.7, 0.3, -3.4), Vector3(-2.7, 0.3, -4.3)])
 	connect_equipment("pump_relay", "contact", "fill_pump", "run",
@@ -1482,6 +1548,8 @@ func save_game() -> bool:
 		}
 		if view is TankView:
 			comp_entry["nozzles"] = (view as TankView).get_nozzles()
+		if mounted.has(name_):
+			comp_entry["mount"] = (mounted[name_] as Dictionary).duplicate()
 		comps.append(comp_entry)
 	var wire_list: Array = []
 	for visual in _wire_visuals:
@@ -1635,6 +1703,7 @@ func load_game() -> bool:
 	runs.clear()
 	cabinets.clear()
 	member_of.clear()
+	mounted.clear()
 	_wire_visuals.clear()
 	_new_graph()
 
@@ -1671,6 +1740,8 @@ func load_game() -> bool:
 			set_sign_text(entry["name"], str(entry["text"]))
 
 	for entry: Dictionary in payload["components"]:
+		if entry.has("mount"):
+			continue  # after its host
 		var pos_arr: Array = entry["pos"]
 		var record := place(entry["type"], entry["name"], entry.get("params", {}),
 			Vector3(pos_arr[0], pos_arr[1], pos_arr[2]),
@@ -1682,6 +1753,15 @@ func load_game() -> bool:
 				(loaded_view as TankView).rebuild()  # sized by restored state
 				if entry.has("nozzles"):
 					(loaded_view as TankView).apply_nozzles(entry["nozzles"])
+	for entry: Dictionary in payload["components"]:
+		if not entry.has("mount"):
+			continue
+		var spot: Dictionary = entry["mount"]
+		var record := mount_instrument(entry["type"], entry["name"], entry.get("params", {}),
+			str(spot["host"]), float(spot["frac"]), float(spot["angle"]),
+			bool(entry.get("protected", false)))
+		if record != null:
+			record.apply_state(entry.get("state", {}))
 	for wire_entry: Dictionary in payload["wires"]:
 		var waypoints: Array = []
 		for point: Array in wire_entry.get("waypoints", []):

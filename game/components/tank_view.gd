@@ -10,12 +10,16 @@ extends Node3D
 var tank: SimTank
 var switch: SimFloatSwitch
 var config_cb: Callable = Callable()
+## Instruments on the shell (level switches, transmitters). Children of
+## this view, so they follow a resize; their local +x is the outward
+## normal at the mount, the same frame a nozzle gets.
+var mounted: Array[Node3D] = []
 
-# port -> {"frac": 0..1 height fraction, "angle": radians}
+# port -> {"frac": 0..1 height fraction, "angle": radians}. There is no
+# level nozzle: a level instrument is mounted on the shell instead.
 var nozzles := {
 	"inlet": {"frac": 0.92, "angle": 2.4},
 	"outlet": {"frac": 0.10, "angle": -0.7},
-	"level": {"frac": 0.55, "angle": 0.9},
 }
 
 var _strips: Array[MeshInstance3D] = []
@@ -72,8 +76,9 @@ func rebuild() -> void:
 		liquid.set_meta("strip_h", strip_h)
 		_strips.append(liquid)
 
-	if switch != null:
-		for trip_l: float in [switch.low_l, switch.high_l]:
+	# Trip rings for every switch on the shell.
+	for trip_switch in _trip_switches():
+		for trip_l: float in [trip_switch.low_l, trip_switch.high_l]:
 			ViewUtil.cylinder(_built, r + 0.02, 0.02,
 				Vector3(0, h * clampf(trip_l / tank.capacity_l, 0.0, 1.0), 0),
 				ViewUtil.flat(Color(0.54, 0.53, 0.51)))
@@ -85,6 +90,47 @@ func rebuild() -> void:
 	for port: String in nozzles:
 		markers["%s:%s" % [tank.comp_name, port]] = _build_nozzle(port)
 	set_meta("port_markers", markers)
+	for inst in mounted:
+		_place_mounted(inst)
+
+
+## Put an instrument on the shell at a height fraction and a bearing.
+func mount(view: Node3D, frac: float, angle: float) -> void:
+	if view.get_parent() != self:
+		add_child(view)
+	view.set_meta("mount_frac", clampf(frac, 0.04, 0.97))
+	view.set_meta("mount_angle", angle)
+	if not mounted.has(view):
+		mounted.append(view)
+	_place_mounted(view)
+	if view is FloatSwitchView:
+		rebuild()  # its trip rings
+
+
+func unmount(view: Node3D) -> void:
+	mounted.erase(view)
+	if view is FloatSwitchView:
+		rebuild()
+
+
+func _place_mounted(view: Node3D) -> void:
+	var r := tank.diameter_m / 2.0
+	var angle := float(view.get_meta("mount_angle", 0.0))
+	var dir := Vector3(cos(angle), 0, sin(angle))
+	view.position = dir * r + Vector3(0, tank.height_m * float(view.get_meta("mount_frac", 0.5)), 0)
+	view.basis = Basis(dir, Vector3.UP, dir.cross(Vector3.UP))
+
+
+func _trip_switches() -> Array[SimFloatSwitch]:
+	var out: Array[SimFloatSwitch] = []
+	if switch != null:
+		out.append(switch)
+	for inst in mounted:
+		if inst is FloatSwitchView:
+			var record := (inst as FloatSwitchView).switch
+			if not out.has(record):
+				out.append(record)
+	return out
 
 
 ## A flanged stub welded to the shell: pipe neck + flange + bolts
@@ -182,12 +228,21 @@ func _process(delta: float) -> void:
 		_alarm_t = 0.0
 
 
+## What a person at the vessel can see: its size, the sight glass, and
+## the face of every instrument mounted on it. Nothing else.
 func describe() -> String:
-	var trips := "trips %.0f/%.0f L · " % [switch.low_l, switch.high_l] \
-		if switch != null else ""
-	return "%s — %.1f / %.0f L (%.1f m × ⌀%.1f m, E resizes)\n%soverflowed %.1f L · ran dry %.1f s" % [
-		tank.comp_name, tank.level_l, tank.capacity_l, tank.height_m, tank.diameter_m,
-		trips, tank.overflowed_l, tank.ran_dry_ticks * 0.05]
+	var lines: Array[String] = ["%s — %.0f L vessel, %.1f m × ⌀%.1f m (E resizes)" % [
+		tank.comp_name, tank.capacity_l, tank.height_m, tank.diameter_m]]
+	lines.append("sight glass reads %.0f L" % tank.level_l)
+	var faces: Array[String] = []
+	for inst in mounted:
+		if inst.has_method("summary"):
+			faces.append(str(inst.call("summary")))
+	if not faces.is_empty():
+		lines.append(" · ".join(faces))
+	if tank.overflowed_l > 0.0:
+		lines.append("overflowed %.1f L" % tank.overflowed_l)
+	return "\n".join(lines)
 
 
 func use() -> void:

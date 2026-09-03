@@ -109,8 +109,10 @@ const PORT_ANCHORS := {
 	"gauge_level": {
 		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
 		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
+	# An inline meter: the line runs through the spool at its base.
 	"gauge_flow": {
-		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
+		"inlet": {"pos": Vector3(-0.25, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.25, 0.32, 0), "dir": Vector3.RIGHT},
 		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
 	"gauge_dp": {
 		"process_a": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
@@ -202,6 +204,17 @@ const PORT_ANCHORS := {
 		"p_iso": Vector3(-35.3, 2.3, -5.6),
 	},
 }
+
+# Instruments that mount on a vessel's shell rather than stand on the
+# floor. Their process input is the vessel's internal level tap, wired
+# by the plant when they are mounted, so only the signal side gets a
+# fitting. Anchors are in the mount frame: +x is outward from the shell.
+const MOUNTABLE: Array[String] = ["float_switch", "gauge_level"]
+const MOUNTED_ANCHORS := {
+	"float_switch": {"contact": {"pos": Vector3(0.12, 0.05, 0), "dir": Vector3.RIGHT}},
+	"gauge_level": {"signal": {"pos": Vector3(0.1, -0.2, 0), "dir": Vector3.DOWN}},
+}
+const MOUNTED_INPUT := {"float_switch": "level", "gauge_level": "process"}
 
 # One player pipe is one kernel wire: a material nozzle to a material
 # nozzle, and the network decides what moves through it and which way.
@@ -373,12 +386,16 @@ static func make_view(type_id: String, record: SimComponent,
 ## view (a cabinet) can carry markers for several records (its
 ## terminals). anchors_override positions ports the type table can't.
 static func attach_port_markers(view: Node3D, record: SimComponent, type_id: String,
-		anchors_override: Dictionary = {}) -> void:
-	# Every port on the record gets a fitting; there are no hidden
-	# kernel ports since the draw wires went.
+		anchors_override: Dictionary = {}, skip: Array[String] = []) -> void:
+	# Every port the player can pipe gets a fitting. A record's hidden
+	# ports (a vessel's internal level tap) and a mounted instrument's
+	# process side (wired by the plant when it was mounted) get none.
 	var anchors: Dictionary = PORT_ANCHORS.get(type_id, {})
 	var markers: Dictionary = view.get_meta("port_markers", {})
+	var hidden := record.hidden_ports()
 	for port_name: String in record.inputs:
+		if hidden.has(port_name) or skip.has(port_name):
+			continue
 		var kind: SimTypes.PortKind = (record.inputs[port_name] as SimInputPort).kind
 		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
@@ -386,6 +403,8 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 			make_marker(view, record.comp_name, port_name, kind,
 				_anchor_pos(raw), true, _anchor_dir(raw))
 	for port_name: String in record.outputs:
+		if hidden.has(port_name) or skip.has(port_name):
+			continue
 		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.8, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \

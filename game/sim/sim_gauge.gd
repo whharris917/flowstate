@@ -4,32 +4,39 @@ extends SimComponent
 ## honest derivations of existing process state:
 ##   "level_kpa" — hydrostatic head at a vessel bottom: liters become
 ##                 height via liters_per_meter, P = rho*g*h in kPa
-##   "flow"      — inline flow indication, L/s, off the stream in the pipe
-##   "temp_c"    — inline temperature, read off the same stream
-##   "conc_pct"  — inline composition: the percentage of one species in
-##                 the line. The analyser the player needs before anyone
-##                 can say anything true about quality.
+##   "flow"      — an inline meter the line runs through: inlet and
+##                 outlet nozzles, a little resistance, and the flow
+##                 that actually passes as the reading
+##   "temp_c"    — a thermowell tapped into a line, reading its temperature
+##   "conc_pct"  — an analyser tapped into a line: the percentage of one
+##                 species in it. Until one of these is on the line,
+##                 nobody can say anything true about quality.
 ##   "dp_pa"     — differential pressure across two taps, Pa
 ##   "press_kpa" — a single pressure tap; ports carry Pa, dial in kPa
 ## The reading is mirrored on an analog signal output so it can later
 ## feed controllers — a gauge today, a transmitter when wired.
 ##
-## The inline kinds TAP a line rather than sit in it: piping a
-## thermowell into a header must not put a hole in it, so the tap
-## observes the node without carrying anything.
+## The tapped kinds observe a node without carrying anything: a
+## thermowell in a header must not be a hole in it. The flow kind is
+## the exception, because a flow element has to sit in the line.
 
 const KINDS: Array[String] = ["level_kpa", "flow", "temp_c", "conc_pct", "dp_pa", "press_kpa"]
-const TAP_KINDS: Array[String] = ["flow", "temp_c", "conc_pct"]
+const TAP_KINDS: Array[String] = ["temp_c", "conc_pct"]
 const WATER_KPA_PER_M := 9.81
+## What an inline meter costs the line, Pa per (L/s)^2: a short spool
+## with an element in it.
+const METER_K := 1000.0
 
 var kind: String
 var liters_per_meter: float
 var species_index: int = SimSpecies.PRODUCT
 var reading: float = 0.0
 
-var process: SimInputPort        # every kind but dp_pa
+var process: SimInputPort        # every kind but dp_pa and flow
 var process_a: SimInputPort      # dp_pa kind
 var process_b: SimInputPort
+var inlet: SimInputPort          # flow kind
+var outlet: SimOutputPort
 var signal_out: SimOutputPort
 
 
@@ -45,6 +52,9 @@ func _init(name_: String, kind_: String, liters_per_meter_: float = 45.45,
 	if kind == "dp_pa":
 		process_a = add_input("process_a", SimTypes.PortKind.PROCESS_PRESSURE)
 		process_b = add_input("process_b", SimTypes.PortKind.PROCESS_PRESSURE)
+	elif kind == "flow":
+		inlet = add_input("inlet", SimTypes.PortKind.PROCESS_MATERIAL)
+		outlet = add_output("outlet", SimTypes.PortKind.PROCESS_MATERIAL)
 	else:
 		var port_kind := SimTypes.PortKind.PROCESS_LEVEL
 		if TAP_KINDS.has(kind):
@@ -60,6 +70,11 @@ func tap_ports() -> Array[String]:
 	if TAP_KINDS.has(kind):
 		return ["process"]
 	return []
+
+
+func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
+	if kind == "flow":
+		net.add_branch(SimResistance.new(node["inlet"], node["outlet"], METER_K, comp_name))
 
 
 func units() -> String:
@@ -85,6 +100,8 @@ func full_scale() -> float:
 func is_wired() -> bool:
 	if kind == "dp_pa":
 		return process_a.wire_count > 0 and process_b.wire_count > 0
+	if kind == "flow":
+		return inlet.wire_count > 0
 	return process.wire_count > 0
 
 
@@ -96,7 +113,8 @@ func tick(_dt: float) -> void:
 	elif kind == "press_kpa":
 		reading = process.value / 1000.0
 	elif kind == "flow":
-		reading = process.stream.flow_lps
+		# Signed: positive is forward through the meter, inlet to outlet.
+		reading = inlet.flow_lps
 	elif kind == "temp_c":
 		reading = process.stream.temp_c
 	elif kind == "conc_pct":
@@ -111,7 +129,7 @@ func species_key() -> String:
 
 
 func state_dict() -> Dictionary:
-	return {"species": species_key()}
+	return {"species": species_key(), "liters_per_meter": liters_per_meter}
 
 
 func apply_state(state: Dictionary) -> void:
@@ -119,3 +137,4 @@ func apply_state(state: Dictionary) -> void:
 		var index := SimSpecies.index_of(state["species"])
 		if index >= 0:
 			species_index = index
+	liters_per_meter = maxf(float(state.get("liters_per_meter", liters_per_meter)), 1e-6)

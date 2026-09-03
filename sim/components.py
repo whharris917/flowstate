@@ -12,7 +12,7 @@ import math
 
 from sim.core import Component, PortKind
 from sim.hydraulics import (
-    CheckResistance, ControlResistance, PumpCurve, static_head_pa,
+    CheckResistance, ControlResistance, PumpCurve, Resistance, static_head_pa,
 )
 from sim.library import Equation, EquipmentSpec, Param
 from sim.stream import AMBIENT_C, Stream
@@ -204,7 +204,9 @@ class Gauge(Component):
       - "level_kpa": hydrostatic head at a vessel bottom. The process
         level (liters) becomes height via liters_per_meter, and
         P = rho*g*h (water) in kPa.
-      - "flow": inline flow indication, L/s, off the stream in the pipe.
+      - "flow": an inline meter the line runs through: inlet and outlet
+        nozzles, a little resistance, and the flow that passes as the
+        reading. A flow element has to sit in the line.
       - "temp_c": inline temperature, read off the same stream.
       - "conc_pct": inline composition — the percentage of one species
         in the line. Until one of these is on the line, nobody can say
@@ -237,8 +239,11 @@ class Gauge(Component):
     WATER_KPA_PER_M = 9.81
     #: The kinds that tap a line rather than a signal. A tap observes
     #: without carrying: piping a thermowell into a header must not put
-    #: a hole in it.
-    TAP_KINDS = {"flow", "temp_c", "conc_pct"}
+    #: a hole in it. The flow kind is not one: its element sits in the
+    #: line, so it has an inlet and an outlet and costs a little head.
+    TAP_KINDS = {"temp_c", "conc_pct"}
+    #: What an inline meter costs the line, Pa per (L/s)^2.
+    METER_K = 1000.0
 
     def __init__(
         self,
@@ -259,6 +264,9 @@ class Gauge(Component):
         if kind == "dp_pa":
             self.process_a = self.add_input("process_a", self.KINDS[kind])
             self.process_b = self.add_input("process_b", self.KINDS[kind])
+        elif kind == "flow":
+            self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
+            self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         else:
             self.process = self.add_input("process", self.KINDS[kind])
         self.signal = self.add_output("signal", PortKind.SIGNAL_ANALOG)
@@ -266,6 +274,11 @@ class Gauge(Component):
 
     def tap_ports(self) -> set[str]:
         return {"process"} if self.kind in self.TAP_KINDS else set()
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        if self.kind == "flow":
+            net.add_branch(Resistance(node["inlet"], node["outlet"],
+                                      self.METER_K, self.name))
 
     def units(self) -> str:
         return self.UNITS[self.kind]
@@ -280,7 +293,8 @@ class Gauge(Component):
         elif self.kind == "press_kpa":
             self.reading = float(self.process.value) / 1000.0
         elif self.kind == "flow":
-            self.reading = self.process.stream.flow_lps
+            # Signed: positive is forward through the meter.
+            self.reading = self.inlet.flow_lps
         elif self.kind == "temp_c":
             self.reading = self.process.stream.temp_c
         else:  # conc_pct
@@ -1136,7 +1150,11 @@ Gauge.SPEC = EquipmentSpec(
         "of real sim state; nothing is smoothed or invented."
     ),
     ports={
-        "process": "The tap. What it means depends on the kind of gauge.",
+        "process": "The tap, for the tapped kinds: a level, a thermowell, "
+                   "an analyser sample, a pressure tapping.",
+        "inlet": "Inline flow meter, upstream side. The line runs through "
+                 "the element.",
+        "outlet": "Inline flow meter, downstream side.",
         "process_a": "High-side tap on a differential gauge.",
         "process_b": "Low-side tap on a differential gauge.",
         "signal": "The reading, mirrored as a 4-20 mA analog output.",
@@ -1148,7 +1166,13 @@ Gauge.SPEC = EquipmentSpec(
         ),
         Equation(
             "reading = F                      [flow]",
-            "Rate straight off the stream in the line.",
+            "The flow that actually passes through the element, signed "
+            "forward.",
+        ),
+        Equation(
+            "dP = K * F^2                     [flow]",
+            "An inline element costs the line a little pressure, like "
+            "any fitting.",
         ),
         Equation(
             "reading = T                      [temp_c]",

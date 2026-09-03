@@ -27,6 +27,7 @@ def _by_class() -> dict[type, list[Component]]:
         Gauge("g_level", "level_kpa"),
         Gauge("g_dp", "dp_pa"),
         Gauge("g_conc", "conc_pct"),
+        Gauge("g_flow", "flow"),
     ]
     return grouped
 

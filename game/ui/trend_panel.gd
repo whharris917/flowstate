@@ -86,5 +86,5 @@ func _draw() -> void:
 		HORIZONTAL_ALIGNMENT_RIGHT, 110, 15, COL_INK)
 	draw_string(font, Vector2(6, size.y - 5),
 		"relay %d cyc · pump %d starts · pump %s" % [
-			relay.cycles, pump.starts, pump.mode.to_upper()],
+			relay.cycles, pump.starts, SimPump.mode_label(pump.mode)],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, COL_MUTED)

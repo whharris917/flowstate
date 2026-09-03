@@ -476,18 +476,30 @@ class Network:
                 break
             saved = [self.pressures[node] for node in free]
             scale = 1.0
+            improved = False
             for _attempt in range(self.MAX_HALVINGS):
                 for slot, node in enumerate(free):
                     move = step[slot] * scale
                     move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
                     self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
                 if _norm(self._residuals(index_of, n)) < before:
+                    improved = True
                     break
                 scale *= 0.5
+            if not improved:
+                # No scale of this step helps, so re-linearising will
+                # not either: a trickle into a shut check valve, whose
+                # crack point is tens of kPa away and whose slope says
+                # otherwise. The imbalance is below anything the plant
+                # can see; stop rather than grind out the cap every scan.
+                break
 
-
-        self._settle_islands(free, index_of, n)
+        # Flows are what the converged pressures say, recorded BEFORE
+        # any island is settled: settling averages stale pressures, and
+        # reading a check valve at the average can open it on paper and
+        # push material into a vessel from nowhere.
         self._record_flows()
+        self._settle_islands(free, index_of, n)
         self.residual_lps = self._worst_imbalance(index_of, len(free))
 
     def _settle_islands(self, free: list[int], index_of: dict[int, int],
@@ -529,6 +541,14 @@ class Network:
             for node in island:
                 self.pressures[node] = common
         self._islanded = settled
+        # Nothing inside an island can be flowing. An island is cut off
+        # from every fixed pressure, so there is nowhere for material to
+        # come from or go to -- and settling it to one common pressure
+        # leaves a *running* pump reading its shutoff flow, which is a
+        # litre a second of nothing arriving from nowhere.
+        for branch in self.branches:
+            if branch.node_a in settled and branch.node_b in settled:
+                branch.flow_lps = 0.0
 
     def _reachable_from_fixed(self, index_of: dict[int, int]):
         """Which free nodes can actually feel a fixed pressure, through
@@ -571,20 +591,12 @@ class Network:
         return residual
 
     def _record_flows(self) -> None:
-        island = self._islanded
+        """Every branch's flow at the current pressures. Called before
+        islands are settled, so a shut check valve stays shut in the
+        record."""
         for branch in self.branches:
-            a, b = branch.node_a, branch.node_b
-            if a in island and b in island:
-                # Nothing inside an island can be flowing. An island is
-                # cut off from every fixed pressure, so there is nowhere
-                # for material to come from or go to -- and settling it
-                # to one common pressure leaves a *running* pump reading
-                # its shutoff flow, which is a litre a second of nothing
-                # arriving from nowhere, and an imbalance the solve can
-                # never clear.
-                branch.flow_lps = 0.0
-                continue
-            branch.flow_lps = branch.flow_at(self.pressures[a], self.pressures[b])
+            branch.flow_lps = branch.flow_at(
+                self.pressures[branch.node_a], self.pressures[branch.node_b])
 
     def _worst_imbalance(self, index_of: dict[int, int], n: int) -> float:
         """The largest flow imbalance left at any free node, reported

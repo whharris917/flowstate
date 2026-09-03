@@ -138,8 +138,25 @@ func _run(world: Node) -> void:
 	# this is where the recycle either works or does not.
 	var fed_before := _fed_in(plant)
 	var held_before := _held(plant)
-	plant.sim.run_for(1200.0)
-	print("[probe] --- after a simulated 20 minutes ---")
+	# Soak one scan at a time so the worst Newton residual and the
+	# scans that hit the iteration cap are on record.
+	var worst_residual := 0.0
+	var capped_scans := 0
+	var reported := 0
+	for _i in roundi(1200.0 / Plant.SIM_DT):
+		plant.sim.tick()
+		var net := plant.sim.network()
+		worst_residual = maxf(worst_residual, net.residual_lps)
+		var capped := net.iterations >= SimNetwork.MAX_ITERATIONS
+		if capped:
+			capped_scans += 1
+		if reported < 6 and (net.residual_lps > 0.05 or (capped and capped_scans <= 3)):
+			reported += 1
+			print("[probe] %s scan at t=%.1f s, %d iterations, residual %.4f L/s: %s" % [
+				"capped" if capped else "unconverged", plant.sim.time, net.iterations,
+				net.residual_lps, net.describe_node(net.worst_node)])
+	print("[probe] --- after a simulated 20 minutes (worst residual %.5f L/s, %d scans hit the iteration cap) ---" % [
+		worst_residual, capped_scans])
 	print("[probe] reactor %.0f L %.1f C · %.1f%% product %.1f%% impurity" % [
 		reac.volume_l, reac.temp_c, reac.purity_frac * 100.0, reac.impurity_frac * 100.0])
 	print("[probe] crystallizer %.0f L %.1f C · %.1f%% solids (%s)" % [
@@ -217,9 +234,13 @@ func _print_rig(plant: Plant, label: String) -> void:
 	var fi := plant.sim.get_component("fi_401") as SimGauge
 	if t401 == null or p401 == null:
 		return
-	print("[probe] %s: T-401 %.0f L (%.2f m) · T-402 %.0f L · T-403 %.0f L · total %.1f L of 1700" % [
+	var header := plant.sim.get_component("supply_401") as SimSource
+	var lv := plant.sim.get_component("lv_401") as SimControlValve
+	print("[probe] %s: T-401 %.0f L (%.2f m) · T-402 %.0f L · T-403 %.0f L · in the rig %.1f L, header delivered %.1f L · LV-401 %.0f %%" % [
 		label, t401.level_l, t401.depth_m, t402.level_l, t403.level_l,
-		t401.level_l + t402.level_l + t403.level_l])
+		t401.level_l + t402.level_l + t403.level_l, header.total_l, lv.position])
+	print("[probe] %s: sump ran dry %d scans, overflowed %.1f L · T-402 overflowed %.1f L · T-401 overflowed %.1f L" % [
+		label, t403.ran_dry_ticks, t403.overflowed_l, t402.overflowed_l, t401.overflowed_l])
 	print("[probe] %s: P-401 %s %.2f L/s (FI-401 %.2f, %d starts, K-401 %d cycles) · P-402 %s %.2f L/s, %.0f s dry, suction %.0f kPa discharge %.0f kPa" % [
 		label, "RUN" if p401.running else "stop", p401.flow_lps, fi.reading, p401.starts, k401.cycles,
 		"RUN" if p402.running else "stop", p402.flow_lps, p402.dry_run_s,

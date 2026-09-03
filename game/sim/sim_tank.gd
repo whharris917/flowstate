@@ -97,6 +97,13 @@ var depth_m: float:
 		return (level_l / 1000.0) / maxf(cross_section_m2, 1e-9)
 
 
+## A tank does not come with a level port (director's call, 2026-09-02):
+## the level tap exists for instruments mounted on the shell, and the
+## plant wires it for them.
+func hidden_ports() -> Array[String]:
+	return ["level"]
+
+
 ## Put a charge in the vessel directly — a commissioning fill, or a
 ## save being restored.
 func charge(volume_l: float, comp: PackedFloat32Array, temp_c_: float) -> void:

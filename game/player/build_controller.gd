@@ -33,6 +33,11 @@ var _ghost_type := ""
 var _ghost_mat: StandardMaterial3D
 var _ghost_valid := false
 var _ghost_pos := Vector3.ZERO
+# Where a shell-mounted instrument would go: the vessel under the
+# crosshair, and the height and bearing on its shell.
+var _mount_host := ""
+var _mount_frac := 0.5
+var _mount_angle := 0.0
 var _guide_mesh: MeshInstance3D
 var _align_targets: Array[Vector3] = []
 var _beam_ghost: MeshInstance3D
@@ -431,6 +436,9 @@ func _update_ghost() -> void:
 	_refresh_ghost_asset()
 	if _ghost == null:
 		return
+	if _is_mountable():
+		_update_mount_ghost()
+		return
 	var space := player.camera.get_world_3d().direct_space_state
 	var hit := _place_hit()
 	if hit.is_empty() or (hit["normal"] as Vector3).y < 0.6:
@@ -462,6 +470,33 @@ func _update_ghost() -> void:
 		_ghost_valid = StructureFactory.placement_ok(type_id, _ghost_pos, rot_y, space) == ""
 	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
 		else Color(0.9, 0.25, 0.2, 0.45)
+
+
+## A level instrument goes on a vessel: the ghost sticks to the shell
+## under the crosshair, at that height and bearing, facing out.
+func _update_mount_ghost() -> void:
+	(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
+	var host := player.look_view() as TankView
+	if host == null or not player.ray.is_colliding():
+		_ghost.visible = false
+		_ghost_valid = false
+		_mount_host = ""
+		return
+	var local := host.to_local(player.ray.get_collision_point())
+	_mount_angle = atan2(local.z, local.x)
+	_mount_frac = clampf(local.y / host.tank.height_m, 0.06, 0.94)
+	_mount_host = host.tank.comp_name
+	var dir := Vector3(cos(_mount_angle), 0, sin(_mount_angle))
+	_ghost.global_position = host.to_global(dir * (host.tank.diameter_m / 2.0)
+		+ Vector3(0, host.tank.height_m * _mount_frac, 0))
+	_ghost.global_basis = host.global_basis * Basis(dir, Vector3.UP, dir.cross(Vector3.UP))
+	_ghost.visible = true
+	_ghost_valid = true
+	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45)
+
+
+func _is_mountable() -> bool:
+	return _is_equipment_page() and PlantFactory.MOUNTABLE.has(_current_type())
 
 
 ## Pull the ghost onto a neighbor's x or z axis when close, and draw
@@ -603,6 +638,14 @@ func _try_place() -> void:
 			return
 		_run_points.append(aim)
 		_update_hud()
+		return
+	if _is_mountable():
+		if not _ghost_valid or _mount_host == "":
+			hud.toast("aim at a tank shell — level instruments mount on the vessel")
+			return
+		var inst := plant.mount_new(_current_type(), _mount_host, _mount_frac, _mount_angle)
+		if inst != null:
+			hud.toast("mounted %s on %s" % [inst.comp_name, _mount_host])
 		return
 	if _ghost == null or not _ghost.visible or not _ghost_valid:
 		var reason := "can't place here"

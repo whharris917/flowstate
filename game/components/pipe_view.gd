@@ -27,8 +27,10 @@ var _meshes: Array[MeshInstance3D] = []
 var _brackets: Array[Node3D] = []
 var _label_nodes: Array[Label3D] = []
 var _collider_rids: Array[RID] = []
-var _was_hot := false
+var _state := 0  # 0 cold, 1 pressurised but still, 2 flowing
 var _unsupported := false
+var _pressure_getter: Callable = Callable()
+var _charged: StandardMaterial3D
 
 
 func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
@@ -83,6 +85,7 @@ func service_color() -> Color:
 
 func _set_service_color(color: Color) -> void:
 	_hot = ViewUtil.glow(color, 1.1)
+	_charged = ViewUtil.glow(color, 0.35)
 	_cold = ViewUtil.flat(color.lerp(Color(0.35, 0.35, 0.37), 0.55)) if _style == "pipe" \
 		else ViewUtil.flat(color)
 
@@ -262,21 +265,44 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 
 
 func describe() -> String:
-	var state := "UNSUPPORTED SPAN — add structure" if _unsupported else "supported"
+	# The support rule only speaks up when it fails (director's call,
+	# 2026-09-02).
 	var tag := "" if service_label == "" else " · %s" % service_label
-	return "%s%s\n%s (E color/label · X removes)" % [_desc, tag, state]
+	var alarm := "\nUNSUPPORTED SPAN — add structure" if _unsupported else ""
+	return "%s%s%s\n(E color/label · X removes)" % [_desc, tag, alarm]
+
+
+## What the run is doing: flowing, pressurised but still (a dead-headed
+## discharge, a full riser under a stopped pump), or cold. A signal run
+## only knows live or dead.
+func _live_state() -> int:
+	if _getter.call() > 0.05:
+		return 2
+	if _pressure_getter.is_valid() and _pressure_getter.call() > 5000.0:
+		return 1
+	return 0
+
+
+func set_pressure_getter(getter: Callable) -> void:
+	_pressure_getter = getter
+	_repaint()
 
 
 func _process(_delta: float) -> void:
-	var hot: bool = _getter.call() > 0.5
-	if hot == _was_hot:
+	if _live_state() == _state:
 		return
 	_repaint()
 
 
 func _repaint() -> void:
-	_was_hot = _getter.call() > 0.5
-	var mat := _bad if _unsupported else (_hot if _was_hot else _cold)
+	_state = _live_state()
+	var mat := _cold
+	if _unsupported:
+		mat = _bad
+	elif _state == 2:
+		mat = _hot
+	elif _state == 1:
+		mat = _charged
 	for inst in _meshes:
 		if is_instance_valid(inst):
 			inst.material_override = mat

@@ -54,6 +54,14 @@ func material_ports() -> Dictionary:
 	return material
 
 
+## Ports the kernel needs that are not something the player pipes: a
+## vessel's internal level tap, which an instrument mounted on the
+## shell reads through a wire the plant lands for it. Hidden from the
+## port menu and given no fitting.
+func hidden_ports() -> Array[String]:
+	return []
+
+
 ## Declare internal branches. Called when topology changes, not every
 ## scan; keep references to what you add so you can adjust it in
 ## update_hydraulics.

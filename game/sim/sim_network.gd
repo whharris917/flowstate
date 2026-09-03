@@ -38,6 +38,9 @@ var fixed: Array[bool] = []
 var branches: Array[SimBranch] = []
 var iterations: int = 0
 var residual_lps: float = 0.0
+## The node carrying residual_lps, for diagnosing a solve that did
+## not land.
+var worst_node: int = -1
 
 var _solved_once: bool = false
 var _islanded: Dictionary = {}       # node -> true
@@ -200,17 +203,30 @@ func solve() -> void:
 		for slot in n:
 			saved[slot] = pressures[free[slot]]
 		var scale := 1.0
+		var improved := false
 		for _attempt in MAX_HALVINGS:
 			for slot in n:
 				var move := clampf(rhs[_perm[slot]] * scale, -MAX_STEP_PA, MAX_STEP_PA)
 				pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
 			_evaluate_all()
 			if _norm(_residuals(index_of, n)) < before:
+				improved = true
 				break
 			scale *= 0.5
+		if not improved:
+			# No scale of this step helps, so re-linearising will not
+			# either: a trickle into a shut check valve, whose crack
+			# point is tens of kPa away and whose slope says otherwise.
+			# The imbalance is below anything the plant can see; stop
+			# rather than grind out the cap every scan.
+			break
 
-	_settle_islands(free, index_of, n)
+	# Flows are what the converged pressures say, recorded BEFORE any
+	# island is settled: settling averages stale pressures, and reading
+	# a check valve at the average can open it on paper and push
+	# material into a vessel from nowhere.
 	_record_flows()
+	_settle_islands(free, index_of, n)
 	residual_lps = _worst_imbalance(index_of, n)
 
 
@@ -312,6 +328,14 @@ func _settle_islands(free: PackedInt32Array, index_of: PackedInt32Array, n: int)
 		for node in island:
 			pressures[node] = common
 	_islanded = settled
+	# Nothing inside an island can be flowing. An island is cut off
+	# from every fixed pressure, so there is nowhere for material to
+	# come from or go to -- and settling it to one common pressure
+	# leaves a RUNNING pump reading its shutoff flow, which is a litre
+	# a second of nothing arriving from nowhere.
+	for branch in branches:
+		if settled.has(branch.node_a) and settled.has(branch.node_b):
+			branch.flow_lps = 0.0
 
 
 ## Which free nodes can actually feel a fixed pressure, through
@@ -380,20 +404,11 @@ func _evaluate_all() -> void:
 		branch.evaluate(pressures[branch.node_a], pressures[branch.node_b])
 
 
+## Every branch's flow at the current pressures. Called before islands
+## are settled, so a shut check valve stays shut in the record.
 func _record_flows() -> void:
 	for branch in branches:
-		var a := branch.node_a
-		var b := branch.node_b
-		if _islanded.has(a) and _islanded.has(b):
-			# Nothing inside an island can be flowing. An island is cut
-			# off from every fixed pressure, so there is nowhere for
-			# material to come from or go to -- and settling it to one
-			# common pressure leaves a RUNNING pump reading its shutoff
-			# flow, which is a litre a second of nothing arriving from
-			# nowhere, and an imbalance the solve can never clear.
-			branch.flow_lps = 0.0
-			continue
-		branch.flow_lps = branch.flow_at(pressures[a], pressures[b])
+		branch.flow_lps = branch.flow_at(pressures[branch.node_a], pressures[branch.node_b])
 
 
 ## The largest flow imbalance left at any free node, reported after
@@ -413,9 +428,28 @@ func _worst_imbalance(index_of: PackedInt32Array, n: int) -> float:
 		if ib >= 0:
 			totals[ib] += branch.flow_lps
 	var worst := 0.0
+	worst_node = -1
 	for i in n:
-		worst = maxf(worst, absf(totals[i]))
+		if absf(totals[i]) > worst:
+			worst = absf(totals[i])
+			for node in pressures.size():
+				if index_of[node] == i:
+					worst_node = node
 	return worst
+
+
+## The branches meeting at a node, with their solved flows and the
+## node's pressure: what to read when a scan hits the iteration cap.
+func describe_node(node: int) -> String:
+	if node < 0 or node >= pressures.size():
+		return "no node"
+	var parts: Array[String] = []
+	for branch in branches:
+		if branch.node_a == node:
+			parts.append("%s ->%.3f" % [branch.branch_name, branch.flow_lps])
+		elif branch.node_b == node:
+			parts.append("%s <-%.3f" % [branch.branch_name, branch.flow_lps])
+	return "node %d at %.0f Pa: %s" % [node, pressures[node], ", ".join(parts)]
 
 
 static func _norm(values: PackedFloat64Array) -> float:
