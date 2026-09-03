@@ -130,6 +130,23 @@ func _run(world: Node) -> void:
 	var u100 := player.global_position
 	print("[probe] stairs: Unit 100 flight leaves the player at (%.1f, %.2f, %.1f) — %s" % [
 		u100.x, u100.y, u100.z, "ON THE DECK" if u100.y > 2.9 and u100.z < -2.0 else "BLOCKED"])
+	# Unit 500, the gallery, which sits south (+z) of everything else.
+	# rotation.y for a forward direction (fx, fz) is atan2(-fx, -fz).
+	# The row from the north-east, high up; the bioreactor whole from
+	# the south-east and its head from the catwalk; then each exhibit
+	# from where a visitor would stand.
+	await _vantage(player, Vector3(16.0, 0.15, 19.0), Vector2(-11.0, 13.0), 1.6, -0.78)
+	await _shot("user://probe_gallery_row.png")
+	await _vantage(player, Vector3(2.5, 0.15, 45.5), Vector2(-12.1, -8.5), 0.5, 0.22)
+	await _shot("user://probe_gallery_bioreactor.png")
+	await _vantage(player, Vector3(-7.2, 9.2, 37.0), Vector2(-1.0, 0.0), 0.0, -0.35)
+	await _shot("user://probe_gallery_bioreactor_head.png")
+	await _vantage(player, Vector3(6.8, 0.15, 25.2), Vector2(-2.5, 3.5), 0.0, -0.02)
+	await _shot("user://probe_gallery_autoclave.png")
+	await _vantage(player, Vector3(12.6, 0.15, 26.6), Vector2(-2.0, 3.0), 0.0, -0.02)
+	await _shot("user://probe_gallery_isolator.png")
+	await _vantage(player, Vector3(14.8, 0.15, 27.8), Vector2(3.7, 4.7), 0.0, -0.06)
+	await _shot("user://probe_gallery_lab.png")
 	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
 	print("[probe] vl_302: %s · %.1f kPa · condensate %.1f L · %d bursts" % [
 		lock.state, lock.press_pa / 1000.0, lock.condensate_l, lock.vent_bursts_done])
@@ -197,6 +214,19 @@ func _run(world: Node) -> void:
 func _shot(path: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(path)
+
+
+## Stand the player at `at`, facing along `forward` (xz), with the
+## zoom track at `zoom` and the camera pitched `pitch`, then let the
+## camera settle. Velocity is cleared so a walk test cannot carry on.
+func _vantage(player: Player, at: Vector3, forward: Vector2, zoom: float, pitch: float) -> void:
+	player.global_position = at
+	player.velocity = Vector3.ZERO
+	player.rotation.y = atan2(-forward.x, -forward.y)
+	player.zoom_t = zoom
+	player._zoom_now = zoom
+	player.camera.rotation.x = pitch
+	await get_tree().create_timer(0.6).timeout
 
 
 ## Stand the player somewhere, face them a way, and hold forward for a

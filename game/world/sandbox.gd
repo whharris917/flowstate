@@ -100,6 +100,8 @@ func _after_plant() -> void:
 	# The full unit-area showcase: pipe rack, Unit 100 PID loop, MCC
 	# room with a PLC-run batch tank, signage.
 	Showcase.build(plant)
+	# Unit 500: the geometry gallery, art only, nothing simulated.
+	Gallery.build(plant, self)
 
 
 func _process(delta: float) -> void:
