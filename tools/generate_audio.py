@@ -5,8 +5,9 @@ Run from the project root:
     .venv\\Scripts\\python.exe tools\\generate_audio.py
 
 Writes to game/audio/:
-  music_loop.wav  32 s seamless ambient pad — D minor palette over a
-                  constant D drone; lonely, sacred, slow
+  music_loop.wav  40 s seamless clockwork sequencer piece in D minor:
+                  a tick on every beat, a sixteenth-note pluck arpeggio,
+                  a pulsing sub bass, detuned pads, a sparse lead
   hum_loop.wav    8 s seamless ship hum — 55 Hz fundamental + harmonics
                   and a whisper of low noise
   step_1..4.wav   footstep thumps (pitch-swept sine + noise burst)
@@ -101,32 +102,184 @@ def loop_crossfade(buf: list[float], fade_s: float) -> list[float]:
     return body
 
 
+# ---- music ----------------------------------------------------------------
+# A clockwork sequencer piece (director's brief, 2026-09-02: the vibe of
+# Daniel Pemberton's "Clock Numbers" from Project Hail Mary — an
+# original piece in that analog-sequencer lineage, not a copy). A tick
+# on every beat, a sixteenth-note pluck arpeggio rolling through the
+# chord with its filter opening across each four-bar phrase, a pulsing
+# sub bass, soft detuned pads, and a sparse descending lead in the
+# second half. 96 BPM makes a sixteenth exactly 5000 samples; 16 bars
+# is 40 s, and every event that runs past the end wraps to the start,
+# so the loop is seamless by construction.
+MUSIC_BPM = 96
+SIXTEENTH = int(SR * 60 / MUSIC_BPM / 4)   # 5000 samples
+BAR = SIXTEENTH * 16
+MUSIC_BARS = 16
+MUSIC_N = BAR * MUSIC_BARS
+
+# Chord slots: (first bar, bars, pad tones, arpeggio pitches, bass root).
+# D minor throughout: i, VI, III, VII, v — the v pulls back to i at the seam.
+MUSIC_CHORDS = [
+    (0, 4, [146.83, 174.61, 220.00], [146.83, 174.61, 220.00, 293.66, 349.23], 73.42),   # Dm
+    (4, 4, [116.54, 146.83, 174.61], [146.83, 174.61, 233.08, 293.66, 349.23], 58.27),   # Bb
+    (8, 4, [174.61, 220.00, 261.63], [174.61, 220.00, 261.63, 349.23, 440.00], 87.31),   # F
+    (12, 2, [130.81, 164.81, 196.00], [164.81, 196.00, 261.63, 329.63, 392.00], 65.41),  # C
+    (14, 2, [110.00, 130.81, 164.81], [164.81, 220.00, 261.63, 329.63, 440.00], 55.00),  # Am
+]
+ARP_PATTERN = [0, 1, 2, 3, 4, 3, 2, 1, 0, 1, 2, 3, 4, 3, 2, 1]
+# (bar, sixteenth, pitch Hz, sixteenths held): a lead that steps down
+# from the fifth to the root over the second half and is gone by the seam.
+MUSIC_LEAD = [
+    (8, 0, 440.00, 30), (10, 0, 392.00, 14), (11, 0, 349.23, 14),
+    (12, 0, 329.63, 30), (14, 0, 293.66, 26),
+]
+
+
+def _add_wrapped(buf: list[float], start: int, samples: list[float], gain: float) -> None:
+    """Mix samples into the loop from start, wrapping past the seam."""
+    n = len(buf)
+    for j, v in enumerate(samples):
+        buf[(start + j) % n] += v * gain
+
+
+def _pluck(freq: float, length: int, bright: float) -> list[float]:
+    """Sequencer pluck: four harmonics, the upper ones decaying faster
+    so the note darkens as it rings; bright (0..1) is the filter."""
+    out = [0.0] * length
+    w = 2.0 * math.pi * freq / SR
+    for k, base in ((1, 1.0), (2, 0.55), (3, 0.30), (4, 0.16)):
+        amp = base if k == 1 else base * (0.25 + 0.75 * bright)
+        tau = 0.26 / (k ** 0.9)
+        wk = w * k
+        for i in range(length):
+            e = math.exp(-i / SR / tau)
+            if i < 64:
+                e *= i / 64.0
+            out[i] += amp * e * math.sin(wk * i)
+    return out
+
+
+def _tick(freq: float, length: int, noise: float, r: random.Random) -> list[float]:
+    """A clock escapement: a short ringing ping under a burst of noise."""
+    out = [0.0] * length
+    w = 2.0 * math.pi * freq / SR
+    for i in range(length):
+        t = i / SR
+        out[i] = (0.7 * math.exp(-t / 0.0045) * math.sin(w * i)
+                  + noise * math.exp(-t / 0.0012) * (r.random() * 2.0 - 1.0))
+    return out
+
+
+def _bass_pulse(freq: float, length: int) -> list[float]:
+    out = [0.0] * length
+    w = 2.0 * math.pi * freq / SR
+    for i in range(length):
+        e = math.exp(-i / SR / 0.22) * min(1.0, i / 160.0)
+        out[i] = e * (math.sin(w * i) + 0.35 * math.sin(2.0 * w * i))
+    return out
+
+
+def _pad_voice(freq: float, length: int, edge: int, detune: float,
+               harmonics: tuple[tuple[int, float], ...]) -> list[float]:
+    """A sustained voice with raised-cosine edges of `edge` samples at
+    both ends; two of these a slot apart cross at equal gain."""
+    out = [0.0] * length
+    w = 2.0 * math.pi * freq * (1.0 + detune) / SR
+    for k, amp in harmonics:
+        wk = w * k
+        for i in range(length):
+            out[i] += amp * math.sin(wk * i)
+    for i in range(edge):
+        g = 0.5 * (1.0 - math.cos(math.pi * i / edge))
+        out[i] *= g
+        out[length - 1 - i] *= g
+    return out
+
+
+def _lead_note(freq: float, length: int) -> list[float]:
+    """A soft lead with vibrato that arrives after the note settles."""
+    out = [0.0] * length
+    attack = int(0.35 * SR)
+    release = int(0.6 * SR)
+    phase = 0.0
+    for i in range(length):
+        t = i / SR
+        vib = 1.0 + 0.0035 * min(1.0, max(0.0, (t - 0.4) / 0.6)) * math.sin(2.0 * math.pi * 4.6 * t)
+        phase += 2.0 * math.pi * freq * vib / SR
+        v = math.sin(phase) + 0.35 * math.sin(2.0 * phase) + 0.12 * math.sin(3.0 * phase)
+        if i < attack:
+            v *= 0.5 * (1.0 - math.cos(math.pi * i / attack))
+        if i > length - release:
+            v *= 0.5 * (1.0 - math.cos(math.pi * (length - i) / release))
+        out[i] = v
+    return out
+
+
 def make_music() -> None:
-    duration = 32.0
-    n = int(duration * SR)
+    n = MUSIC_N
     left = [0.0] * n
     right = [0.0] * n
+    local = random.Random(20260902)   # own stream: the other files stay byte-identical
 
-    # Constant drone: D2 and its fifth. The room never goes silent.
-    for freq, amp in ((73.42, 0.050), (110.0, 0.022)):
-        for mult, ha in ((1, 1.0), (2, 0.30), (3, 0.10)):
-            add_partial(left, freq * mult, amp * ha, duration)
-            add_partial(right, freq * mult, amp * ha, duration)
+    # The clock: tock on beats 1 and 3 to the right, tick on 2 and 4 to
+    # the left, 96 to the minute.
+    tock = _tick(1900.0, int(0.03 * SR), 0.9, local)
+    tick = _tick(2600.0, int(0.03 * SR), 0.7, local)
+    for beat in range(MUSIC_BARS * 4):
+        at = beat * SIXTEENTH * 4
+        if beat % 2 == 0:
+            _add_wrapped(right, at, tock, 0.085)
+            _add_wrapped(left, at, tock, 0.045)
+        else:
+            _add_wrapped(left, at, tick, 0.065)
+            _add_wrapped(right, at, tick, 0.035)
 
-    chords = [
-        (0.0,  [146.83, 174.61, 220.00]),          # D minor
-        (8.0,  [116.54, 146.83, 174.61]),          # Bb major
-        (16.0, [87.31, 130.81, 220.00]),           # F major
-        (24.0, [130.81, 164.81, 196.00]),          # C major -> back to Dm
-    ]
-    detune = 0.0006
-    for start, tones in chords:
-        env = chord_env(start, 8.0, 2.5, 2.5, duration)
-        for freq in tones:
-            for mult, ha in ((1, 1.0), (2, 0.28), (3, 0.09)):
-                amp = 0.042 * ha
-                add_partial(left, freq * mult * (1.0 - detune), amp, duration, env)
-                add_partial(right, freq * mult * (1.0 + detune), amp, duration, env)
+    pad_h = ((1, 1.0), (2, 0.42), (3, 0.16))
+    edge = int(1.0 * SR)   # the crossfade: each slot starts a second early and ends a second late
+    pluck_len = int(0.34 * SR)
+    pulse_len = SIXTEENTH * 2
+    for first_bar, bars, tones, arp, root in MUSIC_CHORDS:
+        slot_start = first_bar * BAR
+        slot_len = bars * BAR
+        # Pads: chord tones detuned apart left and right, the root an
+        # octave down in the middle.
+        for f in tones:
+            _add_wrapped(left, slot_start - edge,
+                         _pad_voice(f, slot_len + 2 * edge, edge, -0.0025, pad_h), 0.075)
+            _add_wrapped(right, slot_start - edge,
+                         _pad_voice(f, slot_len + 2 * edge, edge, 0.0025, pad_h), 0.075)
+        low = _pad_voice(root, slot_len + 2 * edge, edge, 0.0, ((1, 1.0), (2, 0.2)))
+        _add_wrapped(left, slot_start - edge, low, 0.06)
+        _add_wrapped(right, slot_start - edge, low, 0.06)
+        # Bass: an eighth-note pulse on the root, leaning on the downbeat.
+        for eighth in range(bars * 8):
+            at = slot_start + eighth * SIXTEENTH * 2
+            g = 0.30 if eighth % 8 == 0 else 0.22
+            pulse = _bass_pulse(root, pulse_len)
+            _add_wrapped(left, at, pulse, g)
+            _add_wrapped(right, at, pulse, g)
+        # Arpeggio: sixteenths through the pattern, ping-ponging left and
+        # right, accented on the beat, the filter opening over each
+        # four-bar phrase, and a breath at the end of every fourth bar.
+        for bar in range(bars):
+            phrase_pos = ((first_bar + bar) % 4 + 0.5) / 4.0
+            for step in range(16):
+                if (first_bar + bar) % 4 == 3 and step >= 14:
+                    continue
+                bright = 0.35 + 0.65 * (phrase_pos * 0.7 + 0.3 * step / 16.0)
+                note = _pluck(arp[ARP_PATTERN[step]], pluck_len, bright)
+                accent = 1.0 if step % 4 == 0 else (0.8 if step % 2 == 0 else 0.66)
+                pan = 0.35 if step % 2 == 0 else -0.35
+                at = slot_start + bar * BAR + step * SIXTEENTH
+                _add_wrapped(left, at, note, 0.21 * accent * math.sqrt((1.0 - pan) / 2.0))
+                _add_wrapped(right, at, note, 0.21 * accent * math.sqrt((1.0 + pan) / 2.0))
+
+    for bar, step, freq, held in MUSIC_LEAD:
+        note = _lead_note(freq, held * SIXTEENTH)
+        at = bar * BAR + step * SIXTEENTH
+        _add_wrapped(left, at, note, 0.13)
+        _add_wrapped(right, at, note, 0.13)
 
     write_wav(OUT_DIR / "music_loop.wav", [left, right])
 
