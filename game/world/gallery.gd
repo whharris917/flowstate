@@ -208,20 +208,26 @@ static func build(plant: Plant, world: Node3D) -> void:
 
 # ---- the bioreactor and its stair tower -----------------------------------
 
-## Three levels on a 4 m bay grid, each flight climbing to the level
-## above under the stair rule (top edge 0.1 m inside the deck, foot
-## with floor behind it), and a catwalk from the top level to the
-## vessel's head.
+## A four-bay frame along z (A 27..31, B 31..35, C 35..39, D 39..43):
+## L1 over A and B, L2 over C and D, L3 over B, so every flight climbs
+## under open sky. A bay is 4 m and a flight is 4.4 m plus 0.4 m of
+## foot, so a flight can never climb inside the footprint of the deck
+## it serves: the deck above it has to be missing (found the hard way,
+## 2026-09-02, when the first tower stopped the player a metre up with
+## their head against L2). Flight 1 comes in from the aisle onto L1's
+## east edge; flight 2 climbs south up bay B's west strip onto L2;
+## flight 3 climbs north up bay C's east strip onto L3; the catwalk
+## leaves L3 westward to the vessel head.
 static func _stair_tower(plant: Plant) -> void:
-	for z: float in [27.0, 31.0, 35.0, 39.0]:
+	for z: float in [27.0, 31.0, 35.0, 39.0, 43.0]:
 		for x: float in [-4.0, 0.0]:
 			plant.place_structure("s_column", "u500_col_%d_%d" % [int(-x), int(z)],
 				Vector3(x, 0.0, z), 0.0)
-			if z >= 35.0:
+			if z == 31.0 or z == 35.0:
 				plant.place_structure("s_column", "u500_col_%d_%d_up" % [int(-x), int(z)],
 					Vector3(x, 6.0, z), 0.0)
 	# Beams under each level's bays, decks on them.
-	var levels := {2.7: [29.0, 33.0], 5.7: [29.0, 33.0, 37.0], 8.7: [37.0]}
+	var levels := {2.7: [29.0, 33.0], 5.7: [37.0, 41.0], 8.7: [33.0]}
 	for tier: float in levels:
 		var centers: Array = levels[tier]
 		var t := int(tier * 10.0)
@@ -237,45 +243,51 @@ static func _stair_tower(plant: Plant) -> void:
 			plant.place_structure("s_beam", "u500_beam_%d_w%d" % [t, int(c)], Vector3(-4, tier, c), PI / 2.0, 4.0)
 			plant.place_structure("s_beam", "u500_beam_%d_e%d" % [t, int(c)], Vector3(0, tier, c), PI / 2.0, 4.0)
 			plant.place_structure("s_deck", "u500_deck_%d_%d" % [t, int(c)], Vector3(-2, tier + 0.175, c), 0.0)
-	# Top ring for the frame's look.
-	plant.place_structure("s_beam", "u500_beam_top_n", Vector3(-2, 11.7, 35), 0.0, 4.0)
-	plant.place_structure("s_beam", "u500_beam_top_s", Vector3(-2, 11.7, 39), 0.0, 4.0)
-	plant.place_structure("s_beam", "u500_beam_top_w", Vector3(-4, 11.7, 37), PI / 2.0, 4.0)
-	plant.place_structure("s_beam", "u500_beam_top_e", Vector3(0, 11.7, 37), PI / 2.0, 4.0)
-	# Flights: grade to L1 from the east; L1 to L2 up the west strip,
-	# north, onto L2's north edge; L2 to L3 up the east strip, south,
-	# onto L3's north edge.
+	# Top ring over bay B for the frame's look.
+	plant.place_structure("s_beam", "u500_beam_top_n", Vector3(-2, 11.7, 31), 0.0, 4.0)
+	plant.place_structure("s_beam", "u500_beam_top_s", Vector3(-2, 11.7, 35), 0.0, 4.0)
+	plant.place_structure("s_beam", "u500_beam_top_w", Vector3(-4, 11.7, 33), PI / 2.0, 4.0)
+	plant.place_structure("s_beam", "u500_beam_top_e", Vector3(0, 11.7, 33), PI / 2.0, 4.0)
+	# Flights. A flight ascends toward its local -z and its top edge sits
+	# 0.1 m inside the deck edge it lands on.
 	plant.place_structure("s_stairs", "u500_stairs_1", Vector3(2.1, 0.0, 29.75), PI / 2.0)
-	plant.place_structure("s_stairs", "u500_stairs_2", Vector3(-3.2, 3.025, 29.3), 0.0)
-	plant.place_structure("s_stairs", "u500_stairs_3", Vector3(-0.8, 6.025, 32.9), PI)
-	# Railings, leaving landings and flight feet open.
+	plant.place_structure("s_stairs", "u500_stairs_2", Vector3(-3.2, 3.025, 32.9), PI)
+	plant.place_structure("s_stairs", "u500_stairs_3", Vector3(-0.8, 6.025, 37.1), 0.0)
+	# Railings, leaving flight feet and landings open.
 	var rails := [
+		# L1, z 27..35: flight 1 enters the east edge at z 29..30.5;
+		# flight 2's hull takes the west strip from z 30.7 south.
 		["u500_r1_n", Vector3(-2, 3.025, 27.05), 0.0, 4.0],
 		["u500_r1_e1", Vector3(-0.05, 3.025, 28.0), PI / 2.0, 2.0],
 		["u500_r1_e2", Vector3(-0.05, 3.025, 32.75), PI / 2.0, 4.5],
-		["u500_r1_s", Vector3(-2, 3.025, 34.95), 0.0, 4.0],
-		["u500_r1_w", Vector3(-3.95, 3.025, 33.45), PI / 2.0, 3.1],
-		["u500_r2_n", Vector3(-1.2, 6.025, 27.05), 0.0, 2.4],
-		["u500_r2_e1", Vector3(-0.05, 6.025, 28.85), PI / 2.0, 3.7],
-		["u500_r2_e2", Vector3(-0.05, 6.025, 37.05), PI / 2.0, 3.9],
-		["u500_r2_s", Vector3(-2, 6.025, 38.95), 0.0, 4.0],
-		["u500_r2_w", Vector3(-3.95, 6.025, 33.0), PI / 2.0, 12.0],
-		["u500_r3_n", Vector3(-2.8, 9.025, 35.05), 0.0, 2.4],
-		["u500_r3_e", Vector3(-0.05, 9.025, 37.0), PI / 2.0, 4.0],
-		["u500_r3_s", Vector3(-2, 9.025, 38.95), 0.0, 4.0],
-		["u500_r3_w1", Vector3(-3.95, 9.025, 35.65), PI / 2.0, 1.3],
-		["u500_r3_w2", Vector3(-3.95, 9.025, 38.35), PI / 2.0, 1.3],
+		["u500_r1_s", Vector3(-1.225, 3.025, 34.95), 0.0, 2.45],
+		["u500_r1_w", Vector3(-3.95, 3.025, 28.85), PI / 2.0, 3.7],
+		# L2, z 35..43: flight 2 lands on the north edge's west strip;
+		# flight 3 leaves from bay D's north side up bay C's east strip.
+		["u500_r2_n", Vector3(-1.225, 6.025, 35.05), 0.0, 2.45],
+		["u500_r2_e", Vector3(-0.05, 6.025, 39.0), PI / 2.0, 8.0],
+		["u500_r2_s", Vector3(-2, 6.025, 42.95), 0.0, 4.0],
+		["u500_r2_w", Vector3(-3.95, 6.025, 39.0), PI / 2.0, 8.0],
+		# L3, z 31..35: flight 3 lands on the south edge's east strip;
+		# the catwalk leaves the west edge at z 32.35..33.65.
+		["u500_r3_n", Vector3(-2, 9.025, 31.05), 0.0, 4.0],
+		["u500_r3_e", Vector3(-0.05, 9.025, 33.0), PI / 2.0, 4.0],
+		["u500_r3_s", Vector3(-2.775, 9.025, 34.95), 0.0, 2.45],
+		["u500_r3_w1", Vector3(-3.95, 9.025, 31.675), PI / 2.0, 1.35],
+		["u500_r3_w2", Vector3(-3.95, 9.025, 34.325), PI / 2.0, 1.35],
+		# The catwalk ends above the vessel head, 1.1 m down: rail it.
+		["u500_catwalk_end", Vector3(-8.0, 9.025, 33.0), PI / 2.0, 1.3],
 	]
 	for r: Array in rails:
 		plant.place_structure("s_railing", str(r[0]), r[1] as Vector3, float(r[2]), float(r[3]))
 	# The catwalk to the vessel head: its deck top is 0.1 m above its
 	# base, flush with L3.
-	plant.place_structure("s_catwalk", "u500_catwalk", Vector3(-6.0, 8.925, 37.0), 0.0)
+	plant.place_structure("s_catwalk", "u500_catwalk", Vector3(-6.0, 8.925, 33.0), 0.0)
 
 
 static func _bioreactor(root: Node3D) -> void:
 	var g := Node3D.new()
-	g.position = Vector3(-9.6, 0.0, 37.0)
+	g.position = Vector3(-9.6, 0.0, 33.0)
 	root.add_child(g)
 	var R := 1.4
 	# Skirt with a doorway, anchor bolts, and a base ring.
@@ -412,8 +424,10 @@ static func _bioreactor(root: Node3D) -> void:
 # ---- the autoclave ------------------------------------------------------
 
 static func _autoclave(root: Node3D) -> void:
+	# East of the stair tower's first flight, whose foot reaches x 4.3
+	# and needs the aisle beyond it clear.
 	var g := Node3D.new()
-	g.position = Vector3(4.5, 0.0, 30.0)
+	g.position = Vector3(8.0, 0.0, 30.0)
 	root.add_child(g)
 	# Cabinet on feet, chamber inside, the door on the north face.
 	for i in 4:
@@ -488,7 +502,7 @@ static func _autoclave(root: Node3D) -> void:
 
 static func _isolator(root: Node3D) -> void:
 	var g := Node3D.new()
-	g.position = Vector3(10.6, 0.0, 30.0)
+	g.position = Vector3(12.6, 0.0, 30.0)
 	root.add_child(g)
 	# Frame, lower shelf with supplies, chamber, glass front and ends.
 	for i in 4:
@@ -568,12 +582,12 @@ static func _isolator(root: Node3D) -> void:
 static func _lab(plant: Plant, root: Node3D) -> void:
 	# The room: south wall, east wall with a window, an open west and
 	# north side so the gallery reads as a cutaway.
-	plant.place_structure("s_wall", "u500_lab_wall_s1", Vector3(16.0, 0.0, 35.0), 0.0)
-	plant.place_structure("s_wall", "u500_lab_wall_s2", Vector3(20.0, 0.0, 35.0), 0.0)
-	plant.place_structure("s_window", "u500_lab_window_e", Vector3(22.0, 0.0, 29.0), PI / 2.0)
-	plant.place_structure("s_wall", "u500_lab_wall_e", Vector3(22.0, 0.0, 33.0), PI / 2.0)
+	plant.place_structure("s_wall", "u500_lab_wall_s1", Vector3(18.4, 0.0, 35.0), 0.0)
+	plant.place_structure("s_wall", "u500_lab_wall_s2", Vector3(22.4, 0.0, 35.0), 0.0)
+	plant.place_structure("s_window", "u500_lab_window_e", Vector3(24.4, 0.0, 29.0), PI / 2.0)
+	plant.place_structure("s_wall", "u500_lab_wall_e", Vector3(24.4, 0.0, 33.0), PI / 2.0)
 	var g := Node3D.new()
-	g.position = Vector3(18.0, 0.0, 31.0)
+	g.position = Vector3(20.4, 0.0, 31.0)
 	root.add_child(g)
 	# Floor: a slab with grout lines, a coved skirting along the walls.
 	_box(g, Vector3(8.0, 0.06, 8.0), Vector3(0, 0.03, 0), _mat(Color(0.86, 0.86, 0.82), 0.0, 0.3))

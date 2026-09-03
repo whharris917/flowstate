@@ -135,18 +135,35 @@ func _run(world: Node) -> void:
 	# The row from the north-east, high up; the bioreactor whole from
 	# the south-east and its head from the catwalk; then each exhibit
 	# from where a visitor would stand.
-	await _vantage(player, Vector3(16.0, 0.15, 19.0), Vector2(-11.0, 13.0), 1.6, -0.78)
+	await _vantage(player, Vector3(17.0, 0.15, 18.0), Vector2(-11.0, 14.0), 1.7, -0.78)
 	await _shot("user://probe_gallery_row.png")
-	await _vantage(player, Vector3(2.5, 0.15, 45.5), Vector2(-12.1, -8.5), 0.5, 0.22)
+	await _vantage(player, Vector3(-15.0, 0.15, 44.0), Vector2(5.4, -11.0), 0.5, 0.22)
 	await _shot("user://probe_gallery_bioreactor.png")
-	await _vantage(player, Vector3(-7.2, 9.2, 37.0), Vector2(-1.0, 0.0), 0.0, -0.35)
+	await _vantage(player, Vector3(-7.2, 9.2, 33.0), Vector2(-1.0, 0.0), 0.0, -0.35)
 	await _shot("user://probe_gallery_bioreactor_head.png")
-	await _vantage(player, Vector3(6.8, 0.15, 25.2), Vector2(-2.5, 3.5), 0.0, -0.02)
+	await _vantage(player, Vector3(10.3, 0.15, 25.2), Vector2(-2.5, 3.5), 0.0, -0.02)
 	await _shot("user://probe_gallery_autoclave.png")
-	await _vantage(player, Vector3(12.6, 0.15, 26.6), Vector2(-2.0, 3.0), 0.0, -0.02)
+	await _vantage(player, Vector3(14.6, 0.15, 26.6), Vector2(-2.0, 3.0), 0.0, -0.02)
 	await _shot("user://probe_gallery_isolator.png")
-	await _vantage(player, Vector3(14.8, 0.15, 27.8), Vector2(3.7, 4.7), 0.0, -0.06)
+	await _vantage(player, Vector3(17.2, 0.15, 27.8), Vector2(3.7, 4.7), 0.0, -0.06)
 	await _shot("user://probe_gallery_lab.png")
+	# The gallery's stair tower, with real input: three flights, then
+	# the catwalk to the bioreactor head. The first flight's foot is
+	# out in the aisle at x 4.3, so this also proves nothing is parked
+	# on it (the autoclave was, 2026-09-02).
+	await _walk(player, Vector3(6.2, 0.15, 29.75), PI / 2.0, 3.5)
+	var l1 := player.global_position
+	await _walk(player, Vector3(-3.2, 3.2, 29.0), PI, 3.5)
+	var l2 := player.global_position
+	await _walk(player, Vector3(-0.8, 6.2, 41.5), 0.0, 3.5)
+	var l3 := player.global_position
+	await _walk(player, Vector3(-1.0, 9.2, 33.0), PI / 2.0, 3.0)
+	var head := player.global_position
+	print("[probe] stairs: Unit 500 tower — L1 %s · L2 %s · L3 %s · catwalk %s" % [
+		_landed(l1, l1.y > 2.9 and l1.x < 0.0),
+		_landed(l2, l2.y > 5.9 and l2.z > 35.0),
+		_landed(l3, l3.y > 8.9 and l3.z < 35.0),
+		_landed(head, head.y > 8.9 and head.x < -7.0)])
 	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
 	print("[probe] vl_302: %s · %.1f kPa · condensate %.1f L · %d bursts" % [
 		lock.state, lock.press_pa / 1000.0, lock.condensate_l, lock.vent_bursts_done])
@@ -214,6 +231,12 @@ func _run(world: Node) -> void:
 func _shot(path: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(path)
+
+
+func _landed(p: Vector3, ok: bool) -> String:
+	if ok:
+		return "OK"
+	return "BLOCKED at (%.1f, %.2f, %.1f)" % [p.x, p.y, p.z]
 
 
 ## Stand the player at `at`, facing along `forward` (xz), with the
