@@ -481,6 +481,70 @@ class ControlValve(Component):
         self.position += (target - self.position) * dt / self.tau_s
 
 
+class BlockValve(Component):
+    """On/off block valve with a stroking actuator: one discrete command,
+    a fixed travel time from seat to full open, and a trim that follows
+    the valve equation the whole way.
+
+        Q = Cv * (x/100) * sqrt(dP / dP_ref)
+
+    This is the valve a sequence uses -- open it, wait for it to
+    travel, move to the next step -- rather than one a controller
+    throttles. For stroke_s after the command changes it is neither open
+    nor shut, and a sequence that does not wait for that has a leak in
+    it.
+    """
+
+    def __init__(self, name: str, cv_lps: float = 20.0, stroke_s: float = 4.0) -> None:
+        super().__init__(name)
+        if cv_lps <= 0.0:
+            raise ValueError("cv_lps must be positive")
+        if stroke_s <= 0.0:
+            raise ValueError("stroke_s must be positive")
+        self.cv_lps = cv_lps
+        self.stroke_s = stroke_s
+        self.position = 0.0  # percent of travel: 0 shut, 100 open
+        self.open_cmd = self.add_input("open", PortKind.SIGNAL_DISCRETE)
+        self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
+        self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
+        self._branch = None
+        self.add_observable("position", "position")
+        self.add_observable("flow_lps", "flow_lps")
+
+    @property
+    def flow_lps(self) -> float:
+        return max(self.inlet.flow_lps, 0.0)
+
+    @property
+    def commanded_open(self) -> bool:
+        return float(self.open_cmd.value) > 0.5
+
+    @property
+    def state(self) -> str:
+        if self.position >= 99.5:
+            return "OPEN"
+        if self.position <= 0.5:
+            return "CLOSED"
+        return "OPENING" if self.commanded_open else "CLOSING"
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        self._branch = net.add_branch(ControlResistance(
+            node["inlet"], node["outlet"], self.cv_lps, self.name))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        if self._branch is not None:
+            self._branch.cv_lps = self.cv_lps
+            self._branch.opening = self.position / 100.0
+
+    def tick(self, dt: float) -> None:
+        target = 100.0 if self.commanded_open else 0.0
+        step = 100.0 * dt / self.stroke_s
+        if self.position < target:
+            self.position = min(target, self.position + step)
+        elif self.position > target:
+            self.position = max(target, self.position - step)
+
+
 class Terminal(Component):
     """One terminal block: in to out, one scan late — the honest cost
     of landing a wire on a strip. kind is "discrete" or "analog".
@@ -1029,6 +1093,62 @@ ControlValve.SPEC = EquipmentSpec(
         "reverse flow.",
         "No actuator fail position: cut the command and it goes to zero, "
         "rather than to fail-open or fail-closed.",
+    ),
+)
+
+BlockValve.SPEC = EquipmentSpec(
+    key="block_valve",
+    title="Block Valve",
+    tier="control",
+    summary=(
+        "An on/off valve with a stroking actuator: one discrete command, "
+        "a fixed travel time from seat to full open, and a trim that "
+        "follows the valve equation the whole way. It is the valve a "
+        "sequence uses -- open it, wait for it to travel, move to the "
+        "next step -- rather than one a controller throttles. Its "
+        "position and flow are historized, so a valve that was told to "
+        "open and did not is a fact on a trend rather than a mystery."
+    ),
+    ports={
+        "open": "Discrete command: energized opens, de-energized closes. "
+                "Land a PLC output, a relay contact or a switch here.",
+        "inlet": "Upstream nozzle.",
+        "outlet": "Downstream nozzle, at the same temperature and "
+                  "composition -- a valve changes rate, not material.",
+    },
+    equations=(
+        Equation(
+            "dx/dt = +100/stroke_s opening, -100/stroke_s closing",
+            "The actuator travels at a fixed rate, so for stroke_s after "
+            "the command changes the valve is neither open nor shut. A "
+            "sequence that does not wait for that has a leak in it.",
+        ),
+        Equation(
+            "Q = Cv * (x/100) * sqrt(dP / 100 kPa)",
+            "The valve equation with the travel fraction as the opening. "
+            "The head across it decides what flows, not the command.",
+        ),
+        Equation(
+            "Q = 0 when x = 0",
+            "Shut is shut: it holds against any drop the network puts "
+            "across it.",
+        ),
+    ),
+    params=(
+        Param("cv_lps", "L/s", "The size of the valve: what it passes "
+                               "wide open across a 1 bar drop. Not US Cv "
+                               "(gpm at 1 psi) and not metric Kv."),
+        Param("stroke_s", "s", "Seat to full open, and back."),
+    ),
+    assumptions=(
+        "Linear travel and a linear trim: a real ball or gate valve "
+        "passes most of its flow in the first part of its travel.",
+        "No limit switches, so a sequence trusts the stroke time rather "
+        "than an open or closed contact.",
+        "No seat leakage, no stiction, and no fail position: lose the "
+        "signal and it closes at stroke speed.",
+        "It resists in both directions equally and will not check "
+        "reverse flow.",
     ),
 )
 

@@ -39,6 +39,7 @@ const CATALOG_INSTRUMENTS: Array[Dictionary] = [
 
 const CATALOG_CONTROL: Array[Dictionary] = [
 	{"type": "valve", "label": "Control valve"},
+	{"type": "block_valve", "label": "Block valve (on/off)"},
 	{"type": "relay", "label": "Relay cabinet"},
 	{"type": "cabinet", "label": "Control cabinet"},
 	{"type": "mains", "label": "Mains feeder 480VAC"},
@@ -58,6 +59,7 @@ const FOOTPRINTS := {
 	"column": Vector3(1.7, 11.2, 1.7),
 	"float_switch": Vector3(0.25, 0.6, 0.25),
 	"valve": Vector3(0.7, 1.3, 0.55),
+	"block_valve": Vector3(0.7, 1.1, 0.55),
 	"controller": Vector3(0.5, 1.9, 0.5),
 	"cabinet": Vector3(1.4, 2.1, 0.75),
 	"mains": Vector3(0.85, 1.85, 0.65),
@@ -81,7 +83,7 @@ const Y_OFFSETS := {
 	"gauge_level": 0.0, "gauge_flow": 0.0, "gauge_dp": 0.0,
 	"gauge_press": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
-	"valve": 0.0, "controller": 0.0, "cabinet": 0.0,
+	"valve": 0.0, "block_valve": 0.0, "controller": 0.0, "cabinet": 0.0,
 	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
 	"reactor": 0.0, "centrifuge": 0.0, "hx": 0.0, "steamgen": 0.0,
 	"vaclock": 0.0, "vialfill": 0.0,
@@ -131,6 +133,10 @@ const PORT_ANCHORS := {
 		"inlet": {"pos": Vector3(-0.31, 0.32, 0), "dir": Vector3.LEFT},
 		"outlet": {"pos": Vector3(0.31, 0.32, 0), "dir": Vector3.RIGHT},
 		"cmd": {"pos": Vector3(0, 0.98, 0.22), "dir": Vector3.BACK}},
+	"block_valve": {
+		"inlet": {"pos": Vector3(-0.31, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.31, 0.32, 0), "dir": Vector3.RIGHT},
+		"open": {"pos": Vector3(0, 0.72, 0.2), "dir": Vector3.BACK}},
 	"source": {"outlet": {"pos": Vector3(0.5, 1.55, 0), "dir": Vector3.RIGHT}},
 	"drain": {
 		"inlet": {"pos": Vector3(0.46, 0.52, 0), "dir": Vector3.RIGHT}},
@@ -275,6 +281,9 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 		"valve":
 			return sim.add(SimControlValve.new(name_,
 				params.get("cv_lps", 6.0), params.get("tau_s", 1.0)))
+		"block_valve":
+			return sim.add(SimBlockValve.new(name_,
+				params.get("cv_lps", 20.0), params.get("stroke_s", 4.0)))
 		"controller":
 			return sim.add(SimPID.new(name_,
 				params.get("kp", 8.0), params.get("ki", 1.5), params.get("kd", 0.0),
@@ -342,6 +351,8 @@ static func make_view(type_id: String, record: SimComponent,
 			view = ColumnView.new()
 		"valve":
 			view = ControlValveView.new()
+		"block_valve":
+			view = BlockValveView.new()
 		"controller":
 			view = PIDView.new()
 		"mains":

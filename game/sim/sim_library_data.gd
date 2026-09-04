@@ -424,6 +424,31 @@ const PAGES := {
 			"No actuator fail position: cut the command and it goes to zero, rather than to fail-open or fail-closed.",
 		],
 	},
+	"block_valve": {
+		"title": "Block Valve",
+		"tier": "control",
+		"summary": "An on/off valve with a stroking actuator: one discrete command, a fixed travel time from seat to full open, and a trim that follows the valve equation the whole way. It is the valve a sequence uses -- open it, wait for it to travel, move to the next step -- rather than one a controller throttles. Its position and flow are historized, so a valve that was told to open and did not is a fact on a trend rather than a mystery.",
+		"ports": {
+			"open": "Discrete command: energized opens, de-energized closes. Land a PLC output, a relay contact or a switch here.",
+			"inlet": "Upstream nozzle.",
+			"outlet": "Downstream nozzle, at the same temperature and composition -- a valve changes rate, not material.",
+		},
+		"equations": [
+			["dx/dt = +100 / stroke_s opening, -100 / stroke_s closing", "The actuator travels at a fixed rate, so for stroke_s after the command changes the valve is neither open nor shut. A sequence that does not wait for that has a leak in it."],
+			["Q = Cv * (x/100) * sqrt(dP / 100 kPa)", "The valve equation with the travel fraction as the opening. The head across it decides what flows, not the command."],
+			["Q = 0 when x = 0", "Shut is shut: it holds against any drop the network puts across it."],
+		],
+		"params": [
+			["cv_lps", "L/s", "20", "The size of the valve: what it passes wide open across a 1 bar drop. Not US Cv (gpm at 1 psi) and not metric Kv."],
+			["stroke_s", "s", "4", "Seat to full open, and back."],
+		],
+		"assumptions": [
+			"Linear travel and a linear trim: a real ball or gate valve passes most of its flow in the first part of its travel.",
+			"No limit switches, so a sequence trusts the stroke time rather than an open or closed contact.",
+			"No seat leakage, no stiction, and no fail position: lose the signal and it closes at stroke speed.",
+			"It resists in both directions equally and will not check reverse flow.",
+		],
+	},
 	"float_switch": {
 		"title": "Level Switch",
 		"tier": "control",

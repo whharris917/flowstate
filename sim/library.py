@@ -206,6 +206,7 @@ def sample_components() -> list[Component]:
         comp.Tank("tank", capacity_l=4000.0),
         comp.Pump("pump", rated_lps=4.0),
         comp.ControlValve("valve"),
+        comp.BlockValve("block_valve"),
         comp.Source("header"),
         comp.Drain("drain"),
         comp.Gauge("gauge", "level_kpa"),

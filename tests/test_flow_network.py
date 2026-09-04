@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import Duty, wire_power
-from sim.components import ControlValve, Drain, Pump, Source, Tank
+from conftest import Contact, Duty, wire_power
+from sim.components import BlockValve, ControlValve, Drain, Pump, Source, Tank
 from sim.core import PortKind, Simulation
 from sim.hydraulics import Network
 
@@ -197,6 +197,54 @@ class TestValveAuthority:
         sim.run(20.0)
         half = valve.flow_lps
         assert half > wide * 0.5
+
+
+class TestBlockValve:
+    """An on/off valve strokes: for stroke_s after the command changes it
+    is neither open nor shut, and only then does it pass what the head
+    across it allows."""
+
+    def _line(self):
+        sim = Simulation(dt=0.05)
+        header = sim.add(Source("hdr", pressure_kpa=300.0))
+        valve = sim.add(BlockValve("xv", cv_lps=10.0, stroke_s=4.0))
+        tank = sim.add(Tank("t", capacity_l=9000.0, level_l=0.0, height_m=4.0))
+        switch = sim.add(Contact("hs", closed=False))
+        sim.connect(switch, "out", valve, "open")
+        sim.connect(header, "outlet", valve, "inlet")
+        sim.connect(valve, "outlet", tank, "inlet")
+        return sim, valve, tank, switch
+
+    def test_shut_it_passes_nothing(self) -> None:
+        sim, valve, tank, switch = self._line()
+        sim.run(10.0)
+        assert valve.state == "CLOSED"
+        assert valve.flow_lps == pytest.approx(0.0)
+        assert tank.level_l == pytest.approx(0.0)
+
+    def test_it_strokes_open_over_its_travel_time_then_passes_flow(self) -> None:
+        sim, valve, tank, switch = self._line()
+        switch.closed = True
+        sim.run(2.0)
+        assert 40.0 < valve.position < 60.0
+        assert valve.state == "OPENING"
+        sim.run(3.0)
+        assert valve.position == pytest.approx(100.0)
+        assert valve.state == "OPEN"
+        assert valve.flow_lps > 1.0
+        assert tank.level_l > 0.0
+
+    def test_dropping_the_command_closes_it_at_stroke_speed(self) -> None:
+        sim, valve, tank, switch = self._line()
+        switch.closed = True
+        sim.run(6.0)
+        switch.closed = False
+        sim.run(2.0)
+        assert 40.0 < valve.position < 60.0
+        assert valve.state == "CLOSING"
+        sim.run(3.0)
+        assert valve.state == "CLOSED"
+        assert valve.flow_lps == pytest.approx(0.0)
 
 
 class TestTeesNeedNoComponent:

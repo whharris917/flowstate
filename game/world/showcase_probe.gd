@@ -177,8 +177,18 @@ func _run(world: Node) -> void:
 	var worst_residual := 0.0
 	var capped_scans := 0
 	var reported := 0
+	# The Unit 400 sequence, as a timeline of its step changes.
+	var u400_step := _u400_step(plant)
+	var u400_timeline: Array[String] = []
+	if u400_step >= 0:
+		u400_timeline.append("%s %s" % [_clock(plant.sim.time), U400_STEPS[u400_step]])
 	for _i in roundi(1200.0 / Plant.SIM_DT):
 		plant.sim.tick()
+		var step_now := _u400_step(plant)
+		if step_now != u400_step:
+			u400_step = step_now
+			if step_now >= 0:
+				u400_timeline.append("%s %s" % [_clock(plant.sim.time), U400_STEPS[step_now]])
 		var net := plant.sim.network()
 		worst_residual = maxf(worst_residual, net.residual_lps)
 		var capped := net.iterations >= SimNetwork.MAX_ITERATIONS
@@ -191,6 +201,7 @@ func _run(world: Node) -> void:
 				net.residual_lps, net.describe_node(net.worst_node)])
 	print("[probe] --- after a simulated 20 minutes (worst residual %.5f L/s, %d scans hit the iteration cap) ---" % [
 		worst_residual, capped_scans])
+	print("[probe] u400 sequence: %s" % " → ".join(u400_timeline))
 	print("[probe] reactor %.0f L %.1f C · %.1f%% product %.1f%% impurity" % [
 		reac.volume_l, reac.temp_c, reac.purity_frac * 100.0, reac.impurity_frac * 100.0])
 	print("[probe] crystallizer %.0f L %.1f C · %.1f%% solids (%s)" % [
@@ -277,6 +288,27 @@ func _walk(player: Player, from: Vector3, facing: float, seconds: float) -> void
 ## The gravity rig's honest state: three levels that should always add
 ## up to what was charged, the lift pump under its switch, and the pump
 ## that cannot make the lift.
+const U400_STEPS: Array[String] = ["FILL", "LIFT", "DRAIN T-401", "DRAIN T-402", "SEWER"]
+
+
+## Which step of the Unit 400 sequence is sealed in, or -1.
+func _u400_step(plant: Plant) -> int:
+	var plc_name := plant.cabinet_plc("u400_cab")
+	if plc_name == "":
+		return -1
+	var plc := plant.sim.get_component(plc_name) as SimPLC
+	for i in 5:
+		if plc.mem[i]:
+			return i
+	return -1
+
+
+func _clock(t: float) -> String:
+	var total := int(t)
+	@warning_ignore("integer_division")
+	return "%d:%02d" % [total / 60, total % 60]
+
+
 func _print_rig(plant: Plant, label: String) -> void:
 	var t401 := plant.sim.get_component("t_401") as SimTank
 	var t402 := plant.sim.get_component("t_402") as SimTank
@@ -288,13 +320,24 @@ func _print_rig(plant: Plant, label: String) -> void:
 	if t401 == null or p401 == null:
 		return
 	var header := plant.sim.get_component("supply_401") as SimSource
-	var lv := plant.sim.get_component("lv_401") as SimControlValve
-	print("[probe] %s: T-401 %.0f L (%.2f m) · T-402 %.0f L · T-403 %.0f L · in the rig %.1f L, header delivered %.1f L · LV-401 %.0f %%" % [
-		label, t401.level_l, t401.depth_m, t402.level_l, t403.level_l,
-		t401.level_l + t402.level_l + t403.level_l, header.total_l, lv.position])
+	var sewer := plant.sim.get_component("du_401") as SimDrain
+	var in_rig := t401.level_l + t402.level_l + t403.level_l
+	var step := _u400_step(plant)
+	print("[probe] %s: step %s · T-401 %.0f L · T-402 %.0f L · T-403 %.0f L · in the rig %.1f L against header %.1f L less sewer %.1f L (%+.1f L)" % [
+		label, U400_STEPS[step] if step >= 0 else "none", t401.level_l, t402.level_l, t403.level_l,
+		in_rig, header.total_l, sewer.total_l, in_rig - (header.total_l - sewer.total_l)])
+	var switches: Array[String] = []
+	for switch_name: String in ["lsl_401", "lsh_401", "lsl_402", "lsl_403", "lsh_403"]:
+		var ls := plant.sim.get_component(switch_name) as SimFloatSwitch
+		switches.append("%s %s" % [switch_name.to_upper().replace("_", "-"), "closed" if ls.closed else "open"])
+	var valves: Array[String] = []
+	for valve_name: String in ["xv_401", "xv_402", "xv_403", "xv_404"]:
+		var xv := plant.sim.get_component(valve_name) as SimBlockValve
+		valves.append("%s %s" % [valve_name.to_upper().replace("_", "-"), xv.state()])
+	print("[probe] %s: %s · %s" % [label, " · ".join(switches), " · ".join(valves)])
 	print("[probe] %s: sump ran dry %d scans, overflowed %.1f L · T-402 overflowed %.1f L · T-401 overflowed %.1f L" % [
 		label, t403.ran_dry_ticks, t403.overflowed_l, t402.overflowed_l, t401.overflowed_l])
-	print("[probe] %s: P-401 %s %.2f L/s (FI-401 %.2f, %d starts, K-401 %d cycles) · P-402 %s %.2f L/s, %.0f s dry, suction %.0f kPa discharge %.0f kPa" % [
+	print("[probe] %s: P-401 %s %.2f L/s (FI-401 %.2f, %d starts, K-401 %d cycles) · P-402 %s %.2f L/s, %.0f s at no flow, suction %.0f kPa discharge %.0f kPa" % [
 		label, "RUN" if p401.running else "stop", p401.flow_lps, fi.reading, p401.starts, k401.cycles,
 		"RUN" if p402.running else "stop", p402.flow_lps, p402.dry_run_s,
 		p402.suction_pa / 1000.0, p402.discharge_pa / 1000.0])

@@ -326,6 +326,8 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as ColumnView).setup(record as SimColumn)
 		"valve":
 			(view as ControlValveView).setup(record as SimControlValve)
+		"block_valve":
+			(view as BlockValveView).setup(record as SimBlockValve)
 		"controller":
 			(view as PIDView).setup(record as SimPID)
 		"mains":
@@ -1640,6 +1642,9 @@ func _params_for(record: SimComponent) -> Dictionary:
 	if record is SimControlValve:
 		var cvalve := record as SimControlValve
 		return {"cv_lps": cvalve.cv_lps, "tau_s": cvalve.tau_s}
+	if record is SimBlockValve:
+		var xv := record as SimBlockValve
+		return {"cv_lps": xv.cv_lps, "stroke_s": xv.stroke_s}
 	if record is SimPID:
 		var pid := record as SimPID
 		return {"kp": pid.kp, "ki": pid.ki, "kd": pid.kd, "sp": pid.sp,

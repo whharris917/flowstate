@@ -45,6 +45,8 @@ static func build(type_id: String) -> Node3D:
 				(node as ColumnView).setup(record as SimColumn)
 			"valve":
 				(node as ControlValveView).setup(record as SimControlValve)
+			"block_valve":
+				(node as BlockValveView).setup(record as SimBlockValve)
 			"controller":
 				(node as PIDView).setup(record as SimPID)
 			"mains":
