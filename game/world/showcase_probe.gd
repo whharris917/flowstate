@@ -228,6 +228,10 @@ func _run(world: Node) -> void:
 		plant.sim.solve_ms, plant.sim.newton_ms])
 
 	_print_rig(plant, "u400 after 20 min")
+	# The operator screen, photographed mid-cycle so it can be read
+	# against the numbers just printed.
+	await _vantage(player, Vector3(2.9, 0.15, 10.4), Vector2(0.0, -1.0), 0.0, 0.05)
+	await _shot("user://probe_showcase_u400_hmi.png")
 
 	var bad: Array[String] = []
 	for visual: Dictionary in plant._wire_visuals:

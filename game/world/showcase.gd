@@ -709,7 +709,17 @@ static func _unit_400(plant: Plant) -> void:
 	_service_wire(plant, "xv_403", "du_401", Color(0.45, 0.30, 0.15), "SW-403")
 	_service_wire(plant, "xv_404", "t_403", Color(0.13, 0.55, 0.28), "MU-404")
 
-	plant.place_structure("s_sign", "sign_u400", Vector3(2.4, 0.0, 7.6), 0.0)
+	# The operator screen: a simplified P&ID of the unit with every
+	# reading live from the records, facing the rig beside the cabinet.
+	var hmi := HmiScreenView.new()
+	plant.add_child(hmi)
+	hmi.position = plant.to_local(Vector3(2.9, 1.68, 8.4))
+	var overview := UnitHmiPanel.new()
+	overview.setup(plant, cab)
+	hmi.setup(overview, "HMI-400", Vector2i(1024, 640), 1.2,
+		"HMI-400 — Unit 400 overview\nLevels, switches, valves and pumps read live from the records; the step from the PLC; the trend from the historian.")
+
+	plant.place_structure("s_sign", "sign_u400", Vector3(1.5, 0.0, 7.6), 0.0)
 	plant.set_sign_text("sign_u400", "UNIT 400\nSTAGED TRANSFER")
 	# A sign board takes four lines of about eight characters, so the
 	# sequence reads across three boards.
