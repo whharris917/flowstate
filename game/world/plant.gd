@@ -13,7 +13,6 @@ var build_suite: bool = true   # the hall builds the aseptic annex; the sandbox 
 var config_panel: RunConfigPanel = null   # injected by the world after _ready
 var cabinet_editor: CabinetEditor = null  # injected by the world after _ready
 var ladder_panel: LadderPanel = null      # injected by the world after _ready
-var tank_panel: TankConfigPanel = null    # injected by the world after _ready
 
 var sim: Simulation
 var historian: SimHistorian
@@ -117,6 +116,17 @@ func _exercise_build_api() -> void:
 			problems.append("the moved tank's run was not re-laid")
 		if movable("supply_tank") == "":
 			problems.append("commissioned tank was movable")
+		# CONFIGURE: sizing edits land on the record, out-of-schema keys
+		# and commissioned equipment are refused.
+		if configure_equipment(mv_tank.comp_name, {"height_m": 2.0, "diameter_m": 1.2,
+				"nozzle_cv_lps": 60.0}) != "":
+			problems.append("configure_equipment refused a placed tank")
+		if absf(mv_tank.height_m - 2.0) > 1e-6 or absf(mv_tank.nozzle_cv_lps - 60.0) > 1e-6:
+			problems.append("configured tank size did not land on the record")
+		if configure_equipment(mv_tank.comp_name, {"bogus": 1.0}) == "":
+			problems.append("configure_equipment accepted an unknown key")
+		if configure_equipment("supply_tank", {"height_m": 3.0}) == "":
+			problems.append("commissioned tank was configurable")
 		# The crosshair asks the interact body for its view: a tank's
 		# must answer with the TankView, or hover, E, X and G miss it.
 		var tank_view := views[mv_tank.comp_name] as Node3D
@@ -414,9 +424,7 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as StillView).setup(record as SimStill)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
-	if type_id == "tank":
-		(view as TankView).config_cb = _configure_tank  # nozzles are its own
-	else:
+	if type_id != "tank":  # a tank's nozzles are its own
 		PlantFactory.attach_port_markers(view, record, type_id)
 	views[record.comp_name] = view
 	equip_types[record.comp_name] = type_id
@@ -786,11 +794,6 @@ func remove_internal_wire(visual: Dictionary) -> void:
 
 ## ---- tank configuration ---------------------------------------------------
 
-func _configure_tank(view: TankView) -> void:
-	if tank_panel != null:
-		tank_panel.open(self, view.tank.comp_name)
-
-
 func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
 	var record := sim.get_component(name_) as SimTank
 	var view := views.get(name_) as TankView
@@ -856,6 +859,61 @@ func move_equipment(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 		if str((mounted[inst_name] as Dictionary)["host"]) == name_:
 			refresh_wires_of(inst_name)
 	return true
+
+
+## Sizing from the device menu's CONFIGURE tab (director, 2026-09-05:
+## every modification to equipment goes through that menu). Values
+## are keyed like the record's constructor params, which is what
+## _params_for saves, so a change survives a reload. The plant owns
+## what a change means: a tank re-renders and re-anchors its runs, a
+## switch redraws its trip rings on the host, and anything hydraulic
+## rebuilds the network. Returns "" or why not.
+func configure_equipment(name_: String, values: Dictionary) -> String:
+	var record := sim.get_component(name_)
+	if record == null or not views.has(name_):
+		return "no such equipment"
+	if protected.has(name_):
+		return "%s is commissioned equipment — its sizing is fixed" % name_
+	var allowed := {}
+	for field: Dictionary in PlantFactory.CONFIG.get(str(equip_types.get(name_, "")), []):
+		allowed[str(field["key"])] = field
+	for key: String in values:
+		if not allowed.has(key):
+			return "%s has no %s" % [name_, key]
+		var field: Dictionary = allowed[key]
+		if field.has("options"):
+			if SimSpecies.index_of(str(values[key])) < 0:
+				return "unknown species"
+		elif float(values[key]) < float(field["min"]) or float(values[key]) > float(field["max"]):
+			return "%s must be %s to %s" % [field["label"], field["min"], field["max"]]
+	if record is SimTank:
+		var tank_rec := record as SimTank
+		if values.has("nozzle_cv_lps"):
+			tank_rec.nozzle_cv_lps = float(values["nozzle_cv_lps"])
+		if values.has("height_m") or values.has("diameter_m"):
+			resize_tank(name_, float(values.get("height_m", tank_rec.height_m)),
+				float(values.get("diameter_m", tank_rec.diameter_m)))
+	elif record is SimFloatSwitch:
+		var fs := record as SimFloatSwitch
+		var low := float(values.get("low_l", fs.low_l))
+		var high := float(values.get("high_l", fs.high_l))
+		if low > high:
+			return "the low trip must not be above the high trip"
+		fs.set_band(low, high)
+		if mounted.has(name_):
+			var host_view := views.get(str((mounted[name_] as Dictionary)["host"])) as TankView
+			if host_view != null:
+				host_view.rebuild()  # its trip rings
+	else:
+		for key: String in values:
+			if key != "species":
+				record.set(key, float(values[key]))
+			elif record is SimSource:
+				(record as SimSource).set_species(str(values[key]))
+			elif record is SimGauge:
+				(record as SimGauge).species_index = SimSpecies.index_of(str(values[key]))
+	sim.invalidate_network()
+	return ""
 
 
 func remove_equipment(name_: String) -> bool:

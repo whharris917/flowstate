@@ -27,7 +27,7 @@ var plant: Plant
 var hud: Hud
 var menu: BuildMenu
 var icons: AssetIcons
-var port_menu: PortMenu
+var port_menu: DeviceMenu
 
 var _ghost: Node3D = null
 var _ghost_type := ""
@@ -95,7 +95,7 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	menu = BuildMenu.new()
 	menu.visible = false
 	hud.add_child(menu)
-	port_menu = PortMenu.new()
+	port_menu = DeviceMenu.new()
 	hud.add_child(port_menu)
 	_update_hud()
 
@@ -132,7 +132,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_update_hud()
 	elif event.is_action_pressed("move_port") and mode == Mode.CONNECT:
 		_toggle_nozzle_grab()
-	elif event.is_action_pressed("move_port"):
+	elif event.is_action_pressed("move_item"):
 		_try_pick_up()
 	elif mode == Mode.CONNECT and not _nozzle_grab.is_empty() \
 			and event.is_action_pressed("place"):
@@ -191,7 +191,7 @@ func _update_hud() -> void:
 	match mode:
 		Mode.NORMAL:
 			menu.visible = false
-			hud.set_mode_text("B build · C connect · G move · X remove")
+			hud.set_mode_text("B build · C connect · M move · X remove · right-click: I/O & configure")
 		Mode.PLACE:
 			if _move_name != "":
 				menu.visible = false
@@ -827,9 +827,11 @@ func _open_port_menu() -> void:
 		return
 	var records: Array = []
 	var title := ""
+	var type_id := ""
 	if view is CabinetView:
 		var cab := (view as CabinetView).cabinet_name
 		title = "%s — field terminations" % cab
+		type_id = "cabinet"
 		for record_name in plant.cabinet_field_records(cab):
 			records.append(record_name)
 		if records.is_empty():
@@ -837,12 +839,18 @@ func _open_port_menu() -> void:
 			return
 	elif view.has_meta("record_name"):
 		var record_name := str(view.get_meta("record_name"))
-		title = "%s — I/O" % record_name
+		type_id = str(plant.equip_types.get(record_name, ""))
+		title = "%s — %s" % [record_name, type_id if type_id != "" else "device"]
 		records.append(record_name)
 	else:
 		hud.toast("no ports here")
 		return
-	port_menu.open(plant, title, records, _port_picked)
+	port_menu.open(plant, title, records, type_id, _port_picked,
+		func(record_name: String, values: Dictionary) -> String:
+			var why := plant.configure_equipment(record_name, values)
+			if why == "":
+				hud.toast("%s configured" % record_name)
+			return why)
 
 
 func _port_picked(record_name: String, port_name: String, is_input: bool) -> void:
@@ -869,7 +877,29 @@ func _port_picked(record_name: String, port_name: String, is_input: bool) -> voi
 		% [record_name, port_name])
 
 
-## G on placed equipment: pick it up. The ghost becomes its type at
+## Headless smoke: the device menu's CONFIGURE path, which no script
+## can click. Place a tank, open its menu, change a field, apply, and
+## read the record back.
+func exercise_device_menu() -> void:
+	var record := plant.place_new("tank", plant.to_global(Vector3(12.0, 0.0, 4.0)), 0.0) as SimTank
+	if record == null:
+		print("[flowstate] device menu exercise FAILED — could not place a tank")
+		return
+	port_menu.open(plant, "%s — tank" % record.comp_name, [record.comp_name], "tank",
+		_port_picked, func(name_: String, values: Dictionary) -> String:
+			return plant.configure_equipment(name_, values))
+	var fields := port_menu._fields.size()
+	var io_rows := port_menu._io_list.get_child_count()
+	(port_menu._fields["height_m"] as SpinBox).value = 2.5
+	port_menu._apply()
+	var ok := absf(record.height_m - 2.5) < 1e-6 and not port_menu.visible \
+		and fields == 3 and io_rows == 2
+	plant.remove_equipment(record.comp_name)
+	print("[flowstate] device menu exercise %s — %d I/O rows, %d fields, height %.2f m after apply"
+		% ["OK" if ok else "FAILED", io_rows, fields, record.height_m])
+
+
+## M on placed equipment: pick it up. The ghost becomes its type at
 ## its current rotation; the next click sets it down and its runs
 ## follow. Esc or B puts it back untouched.
 func _try_pick_up() -> void:

@@ -60,9 +60,6 @@ func _ready() -> void:
 	var ladder_panel := LadderPanel.new()
 	layer.add_child(ladder_panel)
 	plant.ladder_panel = ladder_panel
-	var tank_panel := TankConfigPanel.new()
-	layer.add_child(tank_panel)
-	plant.tank_panel = tank_panel
 	library = LibraryPanel.new()
 	layer.add_child(library)
 	settings = SettingsPanel.new()
@@ -77,6 +74,8 @@ func _ready() -> void:
 	add_child(builder)
 	builder.setup(player, plant, hud)
 	_after_plant()
+	if DisplayServer.get_name() == "headless" and with_home:
+		builder.exercise_device_menu()
 	_load_settings()
 	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
 

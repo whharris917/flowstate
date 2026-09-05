@@ -517,3 +517,88 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	body.set_meta("owner_view", view)
 	view.add_child(body)
 	return body
+
+
+## What a device's right-click CONFIGURE tab lets you size: the
+## constructor parameters it was placed with, under the same keys the
+## save file carries (Plant._params_for), so an edit survives a reload.
+## min/max are the game's sane range, not physics. A type with
+## constructor params and no row here cannot be resized in play.
+const CONFIG := {
+	"tank": [
+		{"key": "height_m", "label": "Height", "unit": "m", "min": 0.5, "max": 12.0, "step": 0.1},
+		{"key": "diameter_m", "label": "Diameter", "unit": "m", "min": 0.4, "max": 6.0, "step": 0.1},
+		{"key": "nozzle_cv_lps", "label": "Nozzle Cv", "unit": "L/s at 1 bar", "min": 1.0, "max": 500.0, "step": 1.0},
+	],
+	"pump": [
+		{"key": "rated_lps", "label": "Rated flow", "unit": "L/s", "min": 0.1, "max": 200.0, "step": 0.1},
+		{"key": "head_m", "label": "Shutoff head", "unit": "m", "min": 1.0, "max": 150.0, "step": 1.0},
+	],
+	"float_switch": [
+		{"key": "low_l", "label": "Trips low at", "unit": "L", "min": 0.0, "max": 100000.0, "step": 1.0},
+		{"key": "high_l", "label": "Trips high at", "unit": "L", "min": 0.0, "max": 100000.0, "step": 1.0},
+	],
+	"gauge_level": [
+		{"key": "liters_per_meter", "label": "Range", "unit": "L per m", "min": 1.0, "max": 100000.0, "step": 1.0},
+	],
+	"gauge_flow": [
+		{"key": "meter_k", "label": "Element loss", "unit": "Pa per (L/s)²", "min": 1.0, "max": 100000.0, "step": 10.0},
+	],
+	"gauge_conc": [
+		{"key": "species", "label": "Species", "options": "species"},
+	],
+	"column": [
+		{"key": "charge_l", "label": "Charge", "unit": "L", "min": 10.0, "max": 20000.0, "step": 10.0},
+		{"key": "max_duty_kw", "label": "Reboiler duty", "unit": "kW", "min": 1.0, "max": 1000.0, "step": 1.0},
+	],
+	"valve": [
+		{"key": "cv_lps", "label": "Cv", "unit": "L/s at 1 bar", "min": 0.1, "max": 500.0, "step": 0.1},
+		{"key": "tau_s", "label": "Actuator time constant", "unit": "s", "min": 0.1, "max": 60.0, "step": 0.1},
+	],
+	"block_valve": [
+		{"key": "cv_lps", "label": "Cv", "unit": "L/s at 1 bar", "min": 0.1, "max": 500.0, "step": 0.1},
+		{"key": "stroke_s", "label": "Stroke time", "unit": "s", "min": 0.5, "max": 60.0, "step": 0.5},
+	],
+	"controller": [
+		{"key": "sp", "label": "Setpoint", "unit": "", "min": -1000000.0, "max": 1000000.0, "step": 0.1},
+		{"key": "kp", "label": "Gain Kp", "unit": "", "min": -1000.0, "max": 1000.0, "step": 0.01},
+		{"key": "ki", "label": "Integral Ki", "unit": "1/s", "min": -1000.0, "max": 1000.0, "step": 0.001},
+		{"key": "kd", "label": "Derivative Kd", "unit": "s", "min": -1000.0, "max": 1000.0, "step": 0.01},
+		{"key": "out_min", "label": "Output low", "unit": "", "min": -1000000.0, "max": 1000000.0, "step": 0.1},
+		{"key": "out_max", "label": "Output high", "unit": "", "min": -1000000.0, "max": 1000000.0, "step": 0.1},
+	],
+	"drain": [
+		{"key": "rate_lps", "label": "Cv to sewer", "unit": "L/s at 1 bar", "min": 0.1, "max": 500.0, "step": 0.1},
+	],
+	"reactor": [
+		{"key": "capacity_l", "label": "Capacity", "unit": "L", "min": 100.0, "max": 50000.0, "step": 10.0},
+		{"key": "height_m", "label": "Height", "unit": "m", "min": 0.5, "max": 8.0, "step": 0.1},
+		{"key": "rate_lps", "label": "Rated throughput", "unit": "L/s", "min": 0.1, "max": 100.0, "step": 0.1},
+	],
+	"centrifuge": [
+		{"key": "rate_lps", "label": "Rated feed", "unit": "L/s", "min": 0.1, "max": 100.0, "step": 0.1},
+	],
+	"hx": [
+		{"key": "max_duty_kw", "label": "Maximum duty", "unit": "kW", "min": 1.0, "max": 5000.0, "step": 1.0},
+	],
+	"steamgen": [
+		{"key": "rated_kgps", "label": "Rated steam", "unit": "kg/s", "min": 0.01, "max": 20.0, "step": 0.01},
+	],
+	"source": [
+		{"key": "species", "label": "Species", "options": "species"},
+		{"key": "pressure_kpa", "label": "Header pressure", "unit": "kPa", "min": 0.0, "max": 2000.0, "step": 10.0},
+		{"key": "temp_c", "label": "Temperature", "unit": "°C", "min": -20.0, "max": 200.0, "step": 1.0},
+	],
+	"crystallizer": [
+		{"key": "capacity_l", "label": "Capacity", "unit": "L", "min": 100.0, "max": 50000.0, "step": 10.0},
+		{"key": "height_m", "label": "Height", "unit": "m", "min": 0.5, "max": 8.0, "step": 0.1},
+	],
+	"dryer": [
+		{"key": "rate_lps", "label": "Rated feed", "unit": "L/s", "min": 0.1, "max": 100.0, "step": 0.1},
+	],
+	"still": [
+		{"key": "rate_lps", "label": "Boilup", "unit": "L/s", "min": 0.1, "max": 100.0, "step": 0.1},
+		{"key": "cut_c", "label": "Cut temperature", "unit": "°C", "min": 20.0, "max": 250.0, "step": 1.0},
+		{"key": "sharpness", "label": "Cut sharpness", "unit": "", "min": 0.1, "max": 50.0, "step": 0.1},
+	],
+}
