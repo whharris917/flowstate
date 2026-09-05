@@ -14,6 +14,8 @@ const ALARM := Color(0.9, 0.2, 0.15)
 
 var config_cb: Callable = Callable()
 var service_label := ""
+var fitting := "flange"   # "flange" or "clamp" (sanitary tri-clamp)
+var _fitting_nodes: Array[Node3D] = []
 
 var _getter: Callable
 var _desc: String
@@ -62,21 +64,66 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 		_end_fitting(path[path.size() - 1], path[path.size() - 2])
 
 
-## Flange disc where the run terminates — pipes bolt on, they don't
-## just touch.
+## Where the run terminates, pipes bolt on, they don't just touch: a
+## flange disc, or on a sanitary line a tri-clamp — two ferrules and
+## the clamp band over them, the fitting a pharmaceutical plant uses
+## wherever a line has to come apart to be cleaned.
 func _end_fitting(at: Vector3, toward: Vector3) -> void:
 	var direction := (toward - at).normalized()
+	var basis := _segment_basis(direction) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
+	if fitting == "clamp":
+		var bright := ViewUtil.flat(Color(0.80, 0.82, 0.85))
+		var band := ViewUtil.flat(Color(0.30, 0.31, 0.34))
+		for offset: float in [0.02, 0.075]:
+			var ferrule := _fitting_disc(_radius * 1.45, 0.02, bright)
+			ferrule.position = at + direction * offset
+			ferrule.basis = basis
+		var clamp := _fitting_disc(_radius * 1.75, 0.05, band)
+		clamp.position = at + direction * 0.0475
+		clamp.basis = basis
+		# The wing nut that closes the band, on top.
+		var nut := MeshInstance3D.new()
+		var nut_mesh := BoxMesh.new()
+		nut_mesh.size = Vector3(0.02, _radius * 0.9, 0.05)
+		nut.mesh = nut_mesh
+		nut.material_override = band
+		nut.position = at + direction * 0.0475 + Vector3(0, _radius * 1.75 + _radius * 0.4, 0)
+		add_child(nut)
+		_fitting_nodes.append(nut)
+		return
+	var disc := _fitting_disc(_radius * 1.8, 0.045, _cold)
+	disc.position = at + direction * 0.03
+	disc.basis = basis
+	_meshes.append(disc)
+
+
+func _fitting_disc(radius: float, height: float, mat: StandardMaterial3D) -> MeshInstance3D:
 	var disc := MeshInstance3D.new()
 	var mesh := CylinderMesh.new()
-	mesh.top_radius = _radius * 1.8
-	mesh.bottom_radius = _radius * 1.8
-	mesh.height = 0.045
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = height
 	disc.mesh = mesh
-	disc.material_override = _cold
-	disc.position = at + direction * 0.03
-	disc.basis = _segment_basis(direction) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
+	disc.material_override = mat
 	add_child(disc)
-	_meshes.append(disc)
+	_fitting_nodes.append(disc)
+	return disc
+
+
+## Swap the end fittings: "flange" or "clamp". The run itself is the
+## same; only what it terminates in changes.
+func set_fitting(style: String) -> void:
+	if style == fitting:
+		return
+	fitting = style
+	for node in _fitting_nodes:
+		_meshes.erase(node)
+		node.queue_free()
+	_fitting_nodes.clear()
+	if _style == "pipe" and _path.size() >= 2:
+		_end_fitting(_path[0], _path[1])
+		_end_fitting(_path[_path.size() - 1], _path[_path.size() - 2])
+		_repaint()
 
 
 func service_color() -> Color:

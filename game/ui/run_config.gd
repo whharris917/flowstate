@@ -22,6 +22,7 @@ var _title: Label
 var _grid: GridContainer
 var _swatches: Array[Button] = []
 var _line: LineEdit
+var _clamp: CheckBox
 
 
 func _ready() -> void:
@@ -77,6 +78,9 @@ func _ready() -> void:
 	_line.custom_minimum_size = Vector2(340, 0)
 	_line.text_submitted.connect(func(_t: String) -> void: _ok())
 	column.add_child(_line)
+	_clamp = CheckBox.new()
+	_clamp.text = "sanitary tri-clamp fittings"
+	column.add_child(_clamp)
 
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -106,11 +110,13 @@ func _pick(color: Color) -> void:
 
 
 ## Color + label editor for a run.
-func open_for_run(current: Color, label_text: String, apply: Callable) -> void:
+func open_for_run(current: Color, label_text: String, apply: Callable, fitting: String = "flange") -> void:
 	_apply = apply
 	_picked = current
 	_title.text = "Run service — pick a color, name the line"
 	_grid.visible = true
+	_clamp.visible = true
+	_clamp.button_pressed = fitting == "clamp"
 	_line.text = label_text
 	_open()
 
@@ -120,6 +126,7 @@ func open_for_sign(text: String, apply: Callable) -> void:
 	_apply = apply
 	_title.text = "Sign text"
 	_grid.visible = false
+	_clamp.visible = false
 	_line.text = text
 	_open()
 
@@ -133,7 +140,7 @@ func _open() -> void:
 func _ok() -> void:
 	if _apply.is_valid():
 		if _grid.visible:
-			_apply.call(_picked, _line.text)
+			_apply.call(_picked, _line.text, "clamp" if _clamp.button_pressed else "flange")
 		else:
 			_apply.call(_line.text)
 	close()

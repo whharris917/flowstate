@@ -30,6 +30,7 @@ var views: Dictionary = {}         # record name -> Node3D view
 var equip_types: Dictionary = {}   # record name -> type_id
 var protected: Dictionary = {}     # record name -> true (not deletable)
 var cabinets: Dictionary = {}      # name -> {node, plc, terminals}
+var junction_boxes: Dictionary = {}  # name -> {node, records, channels, on_post}
 var member_of: Dictionary = {}     # record name -> cabinet name
 var mounted: Dictionary = {}       # instrument name -> {host, frac, angle}
 var structures: Dictionary = {}    # name -> {type, node}
@@ -765,6 +766,8 @@ func refresh_wires_of(name_: String) -> void:
 		visual["node"] = pipe
 		if str(visual.get("color", "")) != "":
 			pipe.apply_service(Color.html(str(visual["color"])), str(visual.get("label", "")))
+		if str(visual.get("fitting", "")) != "":
+			pipe.set_fitting(str(visual["fitting"]))
 	_revalidate_in = 3
 
 
@@ -884,6 +887,92 @@ func remove_structure(name_: String) -> bool:
 	return true
 
 
+## ---- junction boxes and multicores ---------------------------------------
+## A junction box owns terminal records (one scan late, like any
+## terminal) and stands where an area's circuits gather; a multicore
+## is the one cable that carries them to the cabinet: a hidden kernel
+## wire per circuit, and a single run to look at that the support rule
+## checks like any other. This is how a real plant wires a field, and
+## why it does not look like ten conduits home.
+
+func unique_jb_name() -> String:
+	var index := 1
+	while junction_boxes.has("jb_%d" % index):
+		index += 1
+	return "jb_%d" % index
+
+
+func place_junction_box(name_: String, world_pos: Vector3, rot_y: float, channels: int = 12,
+		on_post: bool = true) -> bool:
+	if junction_boxes.has(name_) or channels < 1:
+		return false
+	var view := JunctionBoxView.new()
+	view.position = to_local(world_pos) + Vector3(0, JunctionBoxView.POST_H if on_post else 0.0, 0)
+	view.rotation.y = rot_y
+	add_child(view)
+	view.setup(name_, channels, on_post)
+	var records: Array[String] = []
+	for i in channels:
+		var record_name := "%s_t%d" % [name_, i + 1]
+		var record := PlantFactory.make_record(sim, "terminal", record_name, {"kind": "discrete"})
+		sim.register_with_historian(record)
+		views[record_name] = view
+		equip_types[record_name] = "terminal"
+		protected[record_name] = true
+		member_of[record_name] = name_
+		records.append(record_name)
+	junction_boxes[name_] = {"node": view, "records": records, "channels": channels, "on_post": on_post}
+	# Field circuits land on the left flank, the multicore on the right,
+	# one row per terminal down the box.
+	var y := JunctionBoxView.BOX.y - 0.08
+	var step := (JunctionBoxView.BOX.y - 0.14) / maxf(channels - 1, 1)
+	for record_name in records:
+		PlantFactory.attach_port_markers(view, sim.get_component(record_name), "terminal",
+			{"in": Vector3(-0.25, y, 0.06), "out": Vector3(0.25, y, 0.06)})
+		y -= step
+	_revalidate_in = 3
+	return true
+
+
+## Wire several circuits between two enclosures through one cable. A
+## pair is [src_record, src_port, dst_record, dst_port]; each becomes a
+## hidden kernel wire, and the cable is a standalone run named `label`
+## from the first pair's source marker to its destination marker
+## through the plant-local waypoints. It lights while any circuit in
+## it is live. Returns "" or the refusal.
+func connect_multicore(label: String, pairs: Array, waypoints: Array) -> String:
+	if pairs.is_empty():
+		return "nothing to carry"
+	if runs.has(label):
+		return "a run named %s exists" % label
+	var live: Array[SimOutputPort] = []
+	for pair_v: Variant in pairs:
+		var pair := pair_v as Array
+		var err := connect_equipment(str(pair[0]), str(pair[1]), str(pair[2]), str(pair[3]), [], false)
+		if err != "":
+			return err
+		var src := sim.get_component(str(pair[0]))
+		live.append(src.outputs[str(pair[1])] as SimOutputPort)
+	var first := pairs[0] as Array
+	var points: Array = [_marker_pos(str(first[0]), str(first[1]))]
+	points.append_array(waypoints)
+	points.append(_marker_pos(str(first[2]), str(first[3])))
+	var getter := func() -> float:
+		var count := 0.0
+		for port in live:
+			if port.value > 0.5:
+				count += 1.0
+		return count
+	if not place_run("run_cable", label, points, getter):
+		return "could not lay the cable"
+	var entry: Dictionary = runs[label]
+	var text := "%s · %d circuits" % [label, pairs.size()]
+	(entry["node"] as PipeView).apply_service(StructureFactory.RUNS["run_cable"]["color"], text)
+	entry["label"] = text
+	entry["circuits"] = pairs.duplicate(true)
+	return ""
+
+
 ## ---- standalone infrastructure runs --------------------------------------
 
 func unique_run_name(prefix: String) -> String:
@@ -897,13 +986,14 @@ func unique_run_name(prefix: String) -> String:
 ## tray laid ahead of the equipment it will one day serve. sparse
 ## points are plant-local; colliders go on layer 1, so the run is real
 ## support for whatever gets routed along it later.
-func place_run(kind: String, name_: String, sparse_local: Array) -> bool:
+func place_run(kind: String, name_: String, sparse_local: Array, getter: Callable = Callable()) -> bool:
 	if runs.has(name_) or not StructureFactory.RUNS.has(kind):
 		return false
 	var spec: Dictionary = StructureFactory.RUNS[kind]
 	var view := PipeView.new()
 	add_child(view)
-	view.setup(PipeRoute.orthogonalize(sparse_local), func() -> float: return 0.0,
+	var live := getter if getter.is_valid() else func() -> float: return 0.0
+	view.setup(PipeRoute.orthogonalize(sparse_local), live,
 		spec["color"], spec["radius"], name_, spec["style"], 1)
 	view.config_cb = _configure_run
 	runs[name_] = {"kind": kind, "node": view, "points": sparse_local,
@@ -917,15 +1007,20 @@ func _configure_run(view: PipeView) -> void:
 	if config_panel == null:
 		return
 	config_panel.open_for_run(view.service_color(), view.service_label,
-		func(color: Color, label_: String) -> void: set_run_service(view, color, label_))
+		func(color: Color, label_: String, fitting: String = "") -> void:
+			set_run_service(view, color, label_, fitting),
+		view.fitting)
 
 
-func set_run_service(view: PipeView, color: Color, label_: String) -> void:
+func set_run_service(view: PipeView, color: Color, label_: String, fitting: String = "") -> void:
 	for visual in _wire_visuals:
 		if visual["node"] == view:
 			visual["color"] = color.to_html(false)
 			visual["label"] = label_
 			view.apply_service(color, label_)
+			if fitting != "":
+				visual["fitting"] = fitting
+				view.set_fitting(fitting)
 			return
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
@@ -933,6 +1028,9 @@ func set_run_service(view: PipeView, color: Color, label_: String) -> void:
 			entry["color"] = color.to_html(false)
 			entry["label"] = label_
 			view.apply_service(color, label_)
+			if fitting != "":
+				entry["fitting"] = fitting
+				view.set_fitting(fitting)
 			return
 
 
@@ -1574,6 +1672,7 @@ func save_game() -> bool:
 			"dst": visual["b"], "dst_port": visual["b_port"],
 			"waypoints": path_out,
 			"color": visual.get("color", ""), "label": visual.get("label", ""),
+			"fitting": visual.get("fitting", ""),
 			"hidden": visual.get("hidden", false),
 		}
 		var wire := sim.find_wire(sim.get_component(str(visual["a"])), str(visual["a_port"]),
@@ -1599,7 +1698,8 @@ func save_game() -> bool:
 		for point: Vector3 in entry["points"]:
 			pts.append([point.x, point.y, point.z])
 		run_list.append({"kind": entry["kind"], "name": name_, "points": pts,
-			"color": entry.get("color", ""), "label": entry.get("label", "")})
+			"color": entry.get("color", ""), "label": entry.get("label", ""),
+			"fitting": entry.get("fitting", "")})
 	var cab_list: Array = []
 	for name_: String in cabinets:
 		var entry: Dictionary = cabinets[name_]
@@ -1622,8 +1722,24 @@ func save_game() -> bool:
 			"rot_y": node.rotation.y,
 			"modules": module_list, "states": states,
 		})
+	var jb_list: Array = []
+	for name_: String in junction_boxes:
+		var entry: Dictionary = junction_boxes[name_]
+		var node := entry["node"] as Node3D
+		var states := {}
+		for record_name: String in entry["records"]:
+			var record := sim.get_component(record_name)
+			if record != null and not record.state_dict().is_empty():
+				states[record_name] = record.state_dict()
+		jb_list.append({
+			"name": name_,
+			"pos": [node.global_position.x, node.global_position.y - (JunctionBoxView.POST_H if entry["on_post"] else 0.0),
+				node.global_position.z],
+			"rot_y": node.rotation.y, "channels": entry["channels"], "on_post": entry["on_post"],
+			"states": states,
+		})
 	var payload := {
-		"version": SAVE_VERSION, "time": sim.time,
+		"version": SAVE_VERSION, "time": sim.time, "junction_boxes": jb_list,
 		"components": comps, "wires": wire_list, "structures": struct_list,
 		"runs": run_list, "cabinets": cab_list,
 	}
@@ -1739,6 +1855,16 @@ func load_game() -> bool:
 			if record != null:
 				record.apply_state(states[record_name])
 
+	for entry: Dictionary in payload.get("junction_boxes", []):
+		var pos_arr: Array = entry["pos"]
+		place_junction_box(entry["name"], Vector3(pos_arr[0], pos_arr[1], pos_arr[2]),
+			float(entry.get("rot_y", 0.0)), int(entry.get("channels", 12)), bool(entry.get("on_post", true)))
+		var jb_states: Dictionary = entry.get("states", {})
+		for record_name: String in jb_states:
+			var record := sim.get_component(record_name)
+			if record != null:
+				record.apply_state(jb_states[record_name])
+
 	for entry: Dictionary in payload.get("runs", []):
 		var pts: Array = []
 		for point: Array in entry["points"]:
@@ -1746,7 +1872,7 @@ func load_game() -> bool:
 		place_run(entry["kind"], entry["name"], pts)
 		if str(entry.get("color", "")) != "":
 			set_run_service((runs[entry["name"]] as Dictionary)["node"] as PipeView,
-				Color.html(str(entry["color"])), str(entry.get("label", "")))
+				Color.html(str(entry["color"])), str(entry.get("label", "")), str(entry.get("fitting", "")))
 
 	for entry: Dictionary in payload.get("structures", []):
 		var pos_arr: Array = entry["pos"]
@@ -1788,7 +1914,8 @@ func load_game() -> bool:
 			not bool(wire_entry.get("hidden", false)))
 		if error == "" and str(wire_entry.get("color", "")) != "":
 			set_run_service((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
-				Color.html(str(wire_entry["color"])), str(wire_entry.get("label", "")))
+				Color.html(str(wire_entry["color"])), str(wire_entry.get("label", "")),
+				str(wire_entry.get("fitting", "")))
 		if error == "" and wire_entry.has("k"):
 			set_pipe_resistance(wire_entry["src"], wire_entry["src_port"],
 				wire_entry["dst"], wire_entry["dst_port"], float(wire_entry["k"]))

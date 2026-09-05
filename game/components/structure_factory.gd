@@ -30,6 +30,9 @@ const RUNS := {
 	"run_pipe": {"radius": 0.07, "style": "pipe", "color": Color(0.65, 0.67, 0.70)},
 	"run_conduit": {"radius": 0.025, "style": "pipe", "color": Color(0.72, 0.72, 0.75)},
 	"run_tray": {"radius": 0.20, "style": "tray", "color": Color(0.55, 0.57, 0.60)},
+	# A multicore cable: many circuits in one sheath, from a junction
+	# box to a cabinet. Placed by Plant.connect_multicore, not by hand.
+	"run_cable": {"radius": 0.04, "style": "pipe", "color": Color(0.14, 0.14, 0.16)},
 }
 
 # Two-click stretch tools: start point, end point, exact length.

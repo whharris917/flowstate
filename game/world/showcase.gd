@@ -403,11 +403,17 @@ static func _unit_300(plant: Plant) -> void:
 	(plant.sim.get_component("pt_300") as SimTank).charge(1500.0, dry, 24.0)
 
 	_service_wire(plant, "sg_301", "e_301", Color(0.78, 0.79, 0.82), "ST-301")
-	_service_wire(plant, "cf_301", "ht_304", Color(0.13, 0.55, 0.28), "CK-301")
-	_service_wire(plant, "cf_301", "lt_306", Color(0.45, 0.36, 0.25), "ML-301")
-	_service_wire(plant, "st_307", "sv_308", Color(0.20, 0.45, 0.75), "SR-307")
-	_service_wire(plant, "p_309", "r_301", Color(0.20, 0.45, 0.75), "SR-309")
+	# Product-side lines are sanitary: tri-clamp fittings wherever a line
+	# has to come apart to be cleaned (director, 2026-09-04).
+	_service_wire(plant, "cf_301", "ht_304", Color(0.13, 0.55, 0.28), "CK-301", "clamp")
+	_service_wire(plant, "cf_301", "lt_306", Color(0.45, 0.36, 0.25), "ML-301", "clamp")
+	_service_wire(plant, "st_307", "sv_308", Color(0.20, 0.45, 0.75), "SR-307", "clamp")
+	_service_wire(plant, "p_309", "r_301", Color(0.20, 0.45, 0.75), "SR-309", "clamp")
 	_service_wire(plant, "st_307", "du_301", Color(0.45, 0.36, 0.25), "WS-307")
+	_service_wire(plant, "cx_303", "cf_301", Color(0.60, 0.25, 0.60), "PR-303", "clamp")
+	_service_wire(plant, "ht_304", "dr_305", Color(0.60, 0.25, 0.60), "PR-304", "clamp")
+	_service_wire(plant, "dr_305", "pt_300", Color(0.60, 0.25, 0.60), "PR-305", "clamp")
+	_service_wire(plant, "pt_300", "vf_310", Color(0.60, 0.25, 0.60), "PR-310", "clamp")
 
 
 ## ---- Unit 400: the gravity rig ---------------------------------------------
@@ -660,43 +666,59 @@ static func _unit_400(plant: Plant) -> void:
 		{"coil": "do_4", "logic": [[{"ref": "m_0"}]]},
 	])
 
-	# ---- field wiring, all 24 V --------------------------------------
+	# ---- field wiring: two junction boxes, two multicores --------------
+	# The way a real field is wired (director, 2026-09-04): the switches
+	# and the east-side valves land on JB-401 beside the north-east
+	# column, the starter and the sewer valve on JB-402 beside the
+	# north-west column, and each box sends one multicore to the
+	# cabinet instead of ten conduits home. Every circuit is still its
+	# own kernel wire, one scan late at each terminal.
+	plant.place_junction_box("jb_401", Vector3(0.6, 0.0, 9.3), PI / 2.0, 8)
+	plant.place_junction_box("jb_402", Vector3(-4.6, 0.0, 8.6), -PI / 2.0, 4)
 	# Switch conduits leave each tank's east face, drop through the deck
-	# beside its edge beam, and come down the east side of the platform
-	# in a bank beside the north-east column, north of the landing.
-	# Outputs go back out along the ground to the starter and the valves.
-	plant.connect_equipment("lsl_401", "contact", di + "1", "in",
+	# beside its edge beam, and come down beside the north-east column
+	# to the box, north of the landing.
+	plant.connect_equipment("lsl_401", "contact", "jb_401_t1", "in",
 		_local(plant, [Vector3(-0.6, 6.4, 11.6), Vector3(-0.6, 5.3, 11.6), Vector3(-0.6, 5.3, 10.5),
-			Vector3(0.45, 5.3, 10.5), Vector3(0.45, 0.12, 10.5), Vector3(2.8, 0.12, 10.5),
-			Vector3(2.8, 0.12, 9.2), Vector3(3.6, 0.12, 9.2)]))
-	plant.connect_equipment("lsh_401", "contact", di + "2", "in",
+			Vector3(0.45, 5.3, 10.5), Vector3(0.45, 1.7, 10.5)]))
+	plant.connect_equipment("lsh_401", "contact", "jb_401_t2", "in",
 		_local(plant, [Vector3(-0.6, 7.1, 11.4), Vector3(-0.6, 5.3, 11.4), Vector3(-0.6, 5.3, 10.8),
-			Vector3(0.45, 5.3, 10.8), Vector3(0.45, 0.12, 10.8), Vector3(2.6, 0.12, 10.8),
-			Vector3(2.6, 0.12, 9.25), Vector3(3.6, 0.12, 9.25)]))
-	plant.connect_equipment("lsl_402", "contact", di + "3", "in",
+			Vector3(0.45, 5.3, 10.8), Vector3(0.45, 1.8, 10.8)]))
+	plant.connect_equipment("lsl_402", "contact", "jb_401_t3", "in",
 		_local(plant, [Vector3(-0.2, 3.35, 9.9), Vector3(-0.2, 2.3, 9.9), Vector3(0.45, 2.3, 9.9),
-			Vector3(0.45, 0.12, 9.9), Vector3(3.0, 0.12, 9.9), Vector3(3.0, 0.12, 9.1),
-			Vector3(3.6, 0.12, 9.1)]))
-	plant.connect_equipment("lsl_403", "contact", di + "4", "in",
-		_local(plant, [Vector3(-0.8, 0.12, 11.3), Vector3(3.2, 0.12, 11.3), Vector3(3.2, 0.12, 9.0),
-			Vector3(3.7, 0.12, 9.0)]))
-	plant.connect_equipment("lsh_403", "contact", di + "5", "in",
-		_local(plant, [Vector3(-0.8, 0.12, 11.0), Vector3(3.3, 0.12, 11.0), Vector3(3.3, 0.12, 8.95),
-			Vector3(3.7, 0.12, 8.95)]))
-	plant.connect_equipment(do + "1", "out", "k_401", "coil",
-		_local(plant, [Vector3(3.6, 0.2, 8.9), Vector3(-7.9, 0.2, 8.9), Vector3(-7.9, 0.2, 11.44)]))
+			Vector3(0.45, 1.6, 9.9)]))
+	plant.connect_equipment("lsl_403", "contact", "jb_401_t4", "in",
+		_local(plant, [Vector3(-0.8, 0.12, 11.3), Vector3(0.6, 0.12, 11.3), Vector3(0.6, 0.12, 9.95)]))
+	plant.connect_equipment("lsh_403", "contact", "jb_401_t5", "in",
+		_local(plant, [Vector3(-0.8, 0.12, 11.0), Vector3(0.75, 0.12, 11.0), Vector3(0.75, 0.12, 9.95)]))
+	# Outputs leave the boxes to the valves and the starter.
+	plant.connect_equipment("jb_401_t6", "out", "xv_401", "open",
+		_local(plant, [Vector3(0.45, 1.9, 9.5), Vector3(0.45, 5.3, 9.5), Vector3(-0.6, 5.3, 9.5),
+			Vector3(-0.6, 5.3, 9.7), Vector3(-0.6, 6.75, 9.7)]))
+	plant.connect_equipment("jb_401_t7", "out", "xv_402", "open",
+		_local(plant, [Vector3(1.3, 0.2, 9.3)]))
+	plant.connect_equipment("jb_401_t8", "out", "xv_404", "open",
+		_local(plant, [Vector3(1.0, 0.2, 9.0), Vector3(1.0, 0.2, 14.2), Vector3(1.6, 0.2, 14.2)]))
+	plant.connect_equipment("jb_402_t1", "out", "k_401", "coil",
+		_local(plant, [Vector3(-4.7, 0.2, 9.8), Vector3(-7.9, 0.2, 9.8), Vector3(-7.9, 0.2, 11.44)]))
 	plant.connect_equipment("k_401", "contact", "p_401", "run",
 		_local(plant, [Vector3(-7.3, 0.3, 11.6), Vector3(-7.3, 0.3, 10.3)]))
-	plant.connect_equipment(do + "2", "out", "xv_401", "open",
-		_local(plant, [Vector3(4.0, 0.2, 9.5), Vector3(0.45, 0.2, 9.5), Vector3(0.45, 5.3, 9.5),
-			Vector3(-0.6, 5.3, 9.5), Vector3(-0.6, 5.3, 9.7), Vector3(-0.6, 6.75, 9.7)]))
-	plant.connect_equipment(do + "3", "out", "xv_402", "open",
-		_local(plant, [Vector3(3.8, 0.2, 9.3), Vector3(1.3, 0.2, 9.3)]))
-	plant.connect_equipment(do + "4", "out", "xv_403", "open",
-		_local(plant, [Vector3(3.6, 0.2, 8.7), Vector3(-4.2, 0.2, 8.7), Vector3(-4.2, 0.2, 13.6),
-			Vector3(-4.2, 0.72, 13.6)]))
-	plant.connect_equipment(do + "5", "out", "xv_404", "open",
-		_local(plant, [Vector3(3.5, 0.2, 9.2), Vector3(3.5, 0.2, 14.2), Vector3(1.6, 0.2, 14.2)]))
+	plant.connect_equipment("jb_402_t2", "out", "xv_403", "open",
+		_local(plant, [Vector3(-4.4, 0.2, 9.9), Vector3(-4.4, 0.2, 13.6), Vector3(-4.4, 0.72, 13.6)]))
+	# The multicores: MC-401 carries five switches to the input strip
+	# and three valve commands back; MC-402 carries the starter and the
+	# sewer valve. One cable each, along the ground to the cabinet.
+	var mc401: Array = []
+	for i in 5:
+		mc401.append(["jb_401_t%d" % (i + 1), "out", di + str(i + 1), "in"])
+	mc401.append([do + "2", "out", "jb_401_t6", "in"])
+	mc401.append([do + "3", "out", "jb_401_t7", "in"])
+	mc401.append([do + "5", "out", "jb_401_t8", "in"])
+	plant.connect_multicore("MC-401", mc401,
+		_local(plant, [Vector3(0.9, 0.3, 8.9), Vector3(5.8, 0.3, 8.9), Vector3(5.8, 0.3, 8.2)]))
+	plant.connect_multicore("MC-402",
+		[[do + "1", "out", "jb_402_t1", "in"], [do + "4", "out", "jb_402_t2", "in"]],
+		_local(plant, [Vector3(3.5, 0.3, 8.75), Vector3(-4.9, 0.3, 8.75), Vector3(-4.9, 0.3, 8.35)]))
 
 	# ---- power: 480 V from the plant feeder, low along the ground ----
 	plant.connect_equipment("plant_mains", "power", "p_401", "power",
@@ -772,10 +794,11 @@ static func _signage(plant: Plant) -> void:
 
 ## ---- helpers --------------------------------------------------------------
 
-static func _service_wire(plant: Plant, a: String, b: String, color: Color, label: String) -> void:
+static func _service_wire(plant: Plant, a: String, b: String, color: Color, label: String,
+		fitting: String = "") -> void:
 	for visual: Dictionary in plant._wire_visuals:
 		if str(visual["a"]) == a and str(visual["b"]) == b and visual["node"] != null:
-			plant.set_run_service(visual["node"] as PipeView, color, label)
+			plant.set_run_service(visual["node"] as PipeView, color, label, fitting)
 			return
 
 

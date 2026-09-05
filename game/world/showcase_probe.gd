@@ -258,7 +258,7 @@ func _run(world: Node) -> void:
 	await _shot("user://probe_showcase_u400_hmi.png")
 	var hmi := plant.get_node_or_null("hmi_400") as HmiScreenView
 	if hmi != null:
-		for page_name: String in ["hydraulics", "balance"]:
+		for page_name: String in ["hydraulics", "balance", "loops"]:
 			hmi.use()
 			await get_tree().create_timer(0.4).timeout
 			await _shot("user://probe_showcase_u400_hmi_%s.png" % page_name)

@@ -818,4 +818,21 @@ const PAGES := {
 			"The enclosure itself has no thermal, ingress or space limit: any module fits anywhere on the rail.",
 		],
 	},
+	"junction_box": {
+		"title": "Junction Box",
+		"tier": "control",
+		"summary": "A field enclosure on a post where an area's instrument and valve circuits land on terminals and leave together in one multicore cable to the cabinet, the way a real plant gathers its field wiring instead of running every conduit home. Each terminal is a real record, one scan late like any terminal; the multicore is a hidden kernel wire per circuit and one cable to look at, which the support rule checks like any run.",
+		"ports": {
+		},
+		"equations": [
+			["out = in   (one scan later, per terminal)", "A terminal block. The scan is the honest cost of landing a wire on a strip."],
+		],
+		"params": [
+			["channels", "-", "12", "Terminals in the box: one per circuit that passes through."],
+		],
+		"assumptions": [
+			"Discrete terminals only for now: 4-20 mA circuits still run their own conduit.",
+			"No gland count limit, no ingress rating, no segregation of power from signal.",
+		],
+	},
 }

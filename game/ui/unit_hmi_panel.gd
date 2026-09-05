@@ -40,7 +40,7 @@ const TREND_S := 600.0
 const FLOWING_LPS := 0.05
 const G_PER_M := 9810.0   # Pa per metre of water
 const STEPS: Array[String] = ["FILL", "LIFT", "DRAIN T-401", "DRAIN T-402", "SEWER"]
-const PAGES: Array[String] = ["OVERVIEW", "HYDRAULICS", "BALANCE"]
+const PAGES: Array[String] = ["OVERVIEW", "HYDRAULICS", "BALANCE", "LOOP SHEET"]
 
 var plant: Plant
 var cab: String
@@ -140,6 +140,8 @@ func _draw() -> void:
 			_draw_hydraulics()
 		2:
 			_draw_balance()
+		3:
+			_draw_loop_sheet()
 
 
 func _draw_header() -> void:
@@ -505,6 +507,113 @@ func _residual_trend(rect: Rect2, names: Array, h0: float) -> void:
 			mid - clampf(p.y / span, -1.0, 1.0) * plot.size.y / 2.0))
 	if packed.size() >= 2:
 		draw_polyline(packed, COL_FLOW, 2.0)
+
+
+# ---- page 4: loop sheet ---------------------------------------------------
+## Every PLC channel traced through the real wiring: cabinet terminal,
+## multicore, junction box terminal, field device, with the live state
+## at both ends. Nothing is drawn from a drawing; it is the kernel's
+## wire list, walked.
+
+func _draw_loop_sheet() -> void:
+	var plc_name := plant.cabinet_plc(cab)
+	if plc_name == "":
+		_text(Vector2(size.x / 2.0, size.y / 2.0), "NO PLC IN %s" % cab.to_upper(), 24, COL_ALARM, HORIZONTAL_ALIGNMENT_CENTER)
+		return
+	var plc := _rec(plc_name) as SimPLC
+	var x0 := 16.0
+	var cols := [x0, x0 + 90, x0 + 300, x0 + 470, x0 + 590, x0 + 760, x0 + 900]
+	var y := 112.0
+	_text(Vector2(x0, y), "%s · every channel with a wire, traced through the terminals it lands on" % cab.to_upper(), 12, COL_MUTED)
+	y += 20
+	var heads := ["PLC", "FIELD DEVICE", "JB TERMINAL", "CABLE", "CABINET TB", "PLC", "STATE"]
+	for i in heads.size():
+		_text(Vector2(float(cols[i]), y), heads[i], 11, COL_MUTED)
+	y += 6
+	draw_line(Vector2(x0, y), Vector2(size.x - 16, y), COL_LINE, 1.0)
+	y += 18
+	var rows: Array = []
+	for i in plc.n_di:
+		var chain := _trace(plc_name, "di_%d" % i, true)
+		if not chain.is_empty():
+			rows.append(["di_%d" % i, chain, plc.di_ports[i].value > 0.5])
+	for i in plc.n_do:
+		var chain := _trace(plc_name, "do_%d" % i, false)
+		if not chain.is_empty():
+			rows.append(["do_%d" % i, chain, plc.do_ports[i].value > 0.5])
+	for row: Array in rows:
+		if y > size.y - 30:
+			_text(Vector2(x0, y), "…", 12, COL_MUTED)
+			break
+		var chain := row[1] as Dictionary
+		var live := bool(row[2])
+		_text(Vector2(float(cols[0]), y), str(row[0]), 12, COL_INK)
+		_text(Vector2(float(cols[1]), y), str(chain.get("device", "—")), 12, COL_INK)
+		_text(Vector2(float(cols[2]), y), str(chain.get("jb", "—")), 12, COL_MUTED)
+		_text(Vector2(float(cols[3]), y), str(chain.get("cable", "direct")), 12, COL_MUTED)
+		_text(Vector2(float(cols[4]), y), str(chain.get("tb", "—")), 12, COL_MUTED)
+		_text(Vector2(float(cols[5]), y), str(row[0]), 12, COL_MUTED)
+		draw_circle(Vector2(float(cols[6]) + 6, y - 4), 5, COL_RUN if live else COL_PANEL)
+		draw_arc(Vector2(float(cols[6]) + 6, y - 4), 5, 0.0, TAU, 16, COL_INK, 1.0)
+		_text(Vector2(float(cols[6]) + 18, y), "ON" if live else "off", 12, COL_RUN if live else COL_MUTED)
+		y += 18
+	if rows.is_empty():
+		_text(Vector2(x0, y), "no channel has a wire", 12, COL_MUTED)
+	y += 10
+	_text(Vector2(x0, size.y - 14), "A row is a circuit: the PLC channel, the terminals it passes, the cable that carries it, and the device at the far end. Each terminal costs a scan.",
+		11, COL_MUTED)
+
+
+## Walk a channel's circuit through terminal records to whatever is at
+## the far end. Inputs are walked upstream from the PLC, outputs down.
+func _trace(plc_name: String, port_name: String, upstream: bool) -> Dictionary:
+	var out := {}
+	var record := plc_name
+	var port := port_name
+	var hops := 0
+	while hops < 12:
+		hops += 1
+		var wire := _wire_at(record, port, upstream)
+		if wire.is_empty():
+			return out if out.has("device") else {}
+		var next_record := str(wire["a"] if upstream else wire["b"])
+		var next_port := str(wire["a_port"] if upstream else wire["b_port"])
+		var cable := _cable_of(wire)
+		if cable != "":
+			out["cable"] = cable
+		var comp := _rec(next_record)
+		if comp is SimTerminal:
+			var owner := str(plant.member_of.get(next_record, ""))
+			var short := next_record.trim_prefix(owner + "_").to_upper()
+			if plant.junction_boxes.has(owner):
+				out["jb"] = "%s %s" % [owner.to_upper().replace("_", "-"), short]
+			else:
+				out["tb"] = short
+			record = next_record
+			port = "in" if upstream else "out"
+			continue
+		out["device"] = "%s.%s" % [next_record, next_port]
+		return out
+	return out
+
+
+func _wire_at(record: String, port: String, upstream: bool) -> Dictionary:
+	for visual: Dictionary in plant._wire_visuals:
+		if upstream and str(visual["b"]) == record and str(visual["b_port"]) == port:
+			return visual
+		if not upstream and str(visual["a"]) == record and str(visual["a_port"]) == port:
+			return visual
+	return {}
+
+
+func _cable_of(wire: Dictionary) -> String:
+	for run_name: String in plant.runs:
+		var entry: Dictionary = plant.runs[run_name]
+		for pair: Array in entry.get("circuits", []):
+			if str(pair[0]) == str(wire["a"]) and str(pair[1]) == str(wire["a_port"]) \
+					and str(pair[2]) == str(wire["b"]) and str(pair[3]) == str(wire["b_port"]):
+				return run_name
+	return ""
 
 
 # ---- helpers ---------------------------------------------------------------

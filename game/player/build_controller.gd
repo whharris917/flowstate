@@ -666,6 +666,11 @@ func _try_place() -> void:
 		if plant.place_cabinet(cab_name, _ghost_pos, rot_y):
 			hud.toast("placed %s — open it and press EDIT to build the panel" % cab_name)
 		return
+	if _current_type() == "junction_box":
+		var jb_name := plant.unique_jb_name()
+		if plant.place_junction_box(jb_name, _ghost_pos, rot_y):
+			hud.toast("placed %s — land field circuits on its left flank" % jb_name)
+		return
 	var record := plant.place_new(_current_type(), _ghost_pos, rot_y)
 	if record != null:
 		hud.toast("placed %s" % record.comp_name)

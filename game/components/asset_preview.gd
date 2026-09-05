@@ -22,6 +22,10 @@ static func build(type_id: String) -> Node3D:
 		var cab := CabinetView.new()
 		cab.setup("cabinet")
 		node = cab
+	elif type_id == "junction_box":
+		var jb := JunctionBoxView.new()
+		jb.setup("junction box", 12, true)
+		node = jb
 	else:
 		# A scratch sim graph backs the preview records; it is never
 		# ticked and dies with the preview node (kept alive via meta).
