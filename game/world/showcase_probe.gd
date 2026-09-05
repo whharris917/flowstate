@@ -190,7 +190,13 @@ func _run(world: Node) -> void:
 	var u400_timeline: Array[String] = []
 	if u400_step >= 0:
 		u400_timeline.append("%s %s" % [_clock(plant.sim.time), U400_STEPS[u400_step]])
-	var scans := roundi(1200.0 / Plant.SIM_DT)
+	# Twenty simulated minutes by default; FLOWSTATE_SOAK_MIN shortens it
+	# for a quick visual check (the director, 2026-09-05: the full probe
+	# after every change is overkill).
+	var soak_min := 20.0
+	if OS.has_environment("FLOWSTATE_SOAK_MIN"):
+		soak_min = maxf(float(OS.get_environment("FLOWSTATE_SOAK_MIN")), 0.5)
+	var scans := roundi(soak_min * 60.0 / Plant.SIM_DT)
 	for i in scans:
 		# Let a frame through each simulated minute so the window's HUD
 		# clock shows the soak advancing instead of freezing on the last
@@ -213,8 +219,8 @@ func _run(world: Node) -> void:
 			print("[probe] %s scan at t=%.1f s, %d iterations, residual %.4f L/s: %s" % [
 				"capped" if capped else "unconverged", plant.sim.time, net.iterations,
 				net.residual_lps, net.describe_node(net.worst_node)])
-	print("[probe] --- after a simulated 20 minutes (worst residual %.5f L/s, %d scans hit the iteration cap) ---" % [
-		worst_residual, capped_scans])
+	print("[probe] --- after a simulated %.0f minutes (worst residual %.5f L/s, %d scans hit the iteration cap) ---" % [
+		soak_min, worst_residual, capped_scans])
 	print("[probe] u400 sequence: %s" % " → ".join(u400_timeline))
 	print("[probe] reactor %.0f L %.1f C · %.1f%% product %.1f%% impurity" % [
 		reac.volume_l, reac.temp_c, reac.purity_frac * 100.0, reac.impurity_frac * 100.0])
