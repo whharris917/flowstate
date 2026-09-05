@@ -5,12 +5,13 @@ extends Node
 ## pick, R rotates, click places), C toggles connect (click an output
 ## port, lay waypoints, finish on an input port — the kernel's wiring
 ## rules and the support rule both get a veto), X removes player-placed
-## equipment, structure, or a routed run, G picks placed equipment up
-## to set it down elsewhere (its runs follow). The placement ghost is
-## the asset's real geometry, tinted by validity; the route preview is
-## real translucent pipe.
+## equipment, structure, or a routed run, M puts placed equipment into
+## edit mode: in-world handles on the real thing (EditGizmo) for its
+## size and its spot, dragged by aiming at one and holding click. The
+## placement ghost is the asset's real geometry, tinted by validity;
+## the route preview is real translucent pipe.
 
-enum Mode { NORMAL, PLACE, CONNECT }
+enum Mode { NORMAL, PLACE, CONNECT, EDIT }
 
 const GRID := 0.5
 const REACH := 7.0
@@ -54,9 +55,12 @@ var _last_route: Array[Vector3] = []
 var _route_ok := true
 var _route_span := 0.0
 var _nozzle_grab: Dictionary = {}   # {view, port, was: {frac, angle}}
-# Equipment picked up with G: the ghost is its type until it is set down.
-var _move_name := ""
-var _move_type := ""
+# Edit mode: the equipment under the handles, and the handle being dragged.
+var _edit_name := ""
+var _gizmo: EditGizmo = null
+var _drag := ""
+var _drag_offset_f := 0.0          # size the grab started at, less the raw hit
+var _drag_offset_v := Vector3.ZERO  # base less the grab point, so it stays under the crosshair
 
 
 func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
@@ -133,7 +137,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("move_port") and mode == Mode.CONNECT:
 		_toggle_nozzle_grab()
 	elif event.is_action_pressed("move_item"):
-		_try_pick_up()
+		_toggle_edit()
+	elif mode == Mode.EDIT and event.is_action_pressed("place"):
+		_begin_drag()
+	elif mode == Mode.EDIT and event.is_action_released("place"):
+		_drag = ""
+		if _gizmo != null:
+			_gizmo.set_blocked(false)
+	elif mode == Mode.EDIT and event.is_action_pressed("rotate_item"):
+		_rotate_edited()
 	elif mode == Mode.CONNECT and not _nozzle_grab.is_empty() \
 			and event.is_action_pressed("place"):
 		_commit_nozzle_grab()
@@ -169,8 +181,7 @@ func _set_mode(new_mode: Mode) -> void:
 	if not _nozzle_grab.is_empty():
 		_toggle_nozzle_grab()  # cancel and restore
 	mode = new_mode
-	_move_name = ""
-	_move_type = ""
+	_end_edit()
 	_clear_ghost()
 	_beam_anchor = Vector3.INF
 	_beam_ghost.visible = false
@@ -180,8 +191,13 @@ func _set_mode(new_mode: Mode) -> void:
 	_waypoints.clear()
 	_clear_route()
 	# Connect mode lets the interact ray see port markers (layer 2)
-	# alongside the world (1), interact volumes (4), and runs (8).
-	player.ray.collision_mask = (1 | 2 | 4 | 8) if mode == Mode.CONNECT else (1 | 4 | 8)
+	# alongside the world (1), interact volumes (4), and runs (8); edit
+	# mode, the gizmo's handles.
+	player.ray.collision_mask = 1 | 4 | 8
+	if mode == Mode.CONNECT:
+		player.ray.collision_mask |= 2
+	elif mode == Mode.EDIT:
+		player.ray.collision_mask |= EditGizmo.LAYER
 	_route_ok = true
 	_route_span = 0.0
 	_update_hud()
@@ -191,12 +207,15 @@ func _update_hud() -> void:
 	match mode:
 		Mode.NORMAL:
 			menu.visible = false
-			hud.set_mode_text("B build · C connect · M move · X remove · right-click: I/O & configure")
+			hud.set_mode_text("B build · C connect · M modify · X remove · right-click: I/O & configure")
+		Mode.EDIT:
+			menu.visible = false
+			var handles := "arrows move it (red X, blue Z, gold cube free)"
+			if plant.sim.get_component(_edit_name) is SimTank:
+				handles = "ring = diameter · post = height · " + handles
+			hud.set_mode_text("MODIFY %s — aim at a handle, hold click and look: %s · R rotate · M/Esc done"
+				% [_edit_name, handles])
 		Mode.PLACE:
-			if _move_name != "":
-				menu.visible = false
-				hud.set_mode_text("MOVE %s — click to set it down · R rotate · Esc cancel" % _move_name)
-				return
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
 				"ROUTING & SIGNS", "CONTROL", "UTILITIES"]
 			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 7]],
@@ -235,6 +254,9 @@ func _physics_process(_delta: float) -> void:
 		_update_ghost()
 	elif mode == Mode.CONNECT and _pending_marker != null:
 		_update_route_preview()
+	elif mode == Mode.EDIT:
+		if _drag != "":
+			_update_drag()
 	else:
 		_clear_route()
 
@@ -467,24 +489,7 @@ func _update_ghost() -> void:
 	_ghost.rotation.y = rot_y
 	_ghost.visible = true
 
-	var shape := BoxShape3D.new()
-	shape.size = footprint * 0.9
-	var overlap := PhysicsShapeQueryParameters3D.new()
-	overlap.shape = shape
-	overlap.transform = Transform3D(Basis.from_euler(Vector3(0, rot_y, 0)),
-		_ghost_pos + Vector3(0, footprint.y / 2.0 + 0.06, 0))
-	# World geometry (1) plus interact volumes (4), which stand in for
-	# the space equipment occupies.
-	overlap.collision_mask = 1 | 4
-	var excluded: Array[RID] = [player.get_rid()]
-	if _move_name != "":
-		# Equipment being moved must not block its own new spot.
-		var moved: Node3D = plant.views.get(_move_name)
-		if moved != null:
-			for body in moved.find_children("*", "CollisionObject3D", true, false):
-				excluded.append((body as CollisionObject3D).get_rid())
-	overlap.exclude = excluded
-	_ghost_valid = space.intersect_shape(overlap, 1).is_empty()
+	_ghost_valid = _footprint_clear(footprint, _ghost_pos, rot_y, null)
 	if _ghost_valid and not _is_equipment_page():
 		_ghost_valid = StructureFactory.placement_ok(type_id, _ghost_pos, rot_y, space) == ""
 	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
@@ -632,12 +637,10 @@ func _catalog() -> Array[Dictionary]:
 
 ## Pages 0, 1, 2, 5, and 6 place sim equipment; 3 and 4 place structure.
 func _is_equipment_page() -> bool:
-	return _move_name != "" or page in [0, 1, 2, 5, 6]
+	return page in [0, 1, 2, 5, 6]
 
 
 func _current_type() -> String:
-	if _move_name != "":
-		return _move_type
 	return _catalog()[catalog_index]["type"]
 
 
@@ -659,17 +662,6 @@ func _try_place() -> void:
 			return
 		_run_points.append(aim)
 		_update_hud()
-		return
-	if _move_name != "":
-		if _ghost == null or not _ghost.visible or not _ghost_valid:
-			hud.toast("can't set it down here")
-			return
-		var moved := _move_name
-		if plant.move_equipment(moved, _ghost_pos, rot_y):
-			hud.toast("moved %s" % moved)
-		else:
-			hud.toast("could not move %s" % moved)
-		_set_mode(Mode.NORMAL)
 		return
 	if _is_mountable():
 		if not _ghost_valid or _mount_host == "":
@@ -894,29 +886,181 @@ func exercise_device_menu() -> void:
 	port_menu._apply()
 	var ok := absf(record.height_m - 2.5) < 1e-6 and not port_menu.visible \
 		and fields == 3 and io_rows == 2
-	plant.remove_equipment(record.comp_name)
 	print("[flowstate] device menu exercise %s — %d I/O rows, %d fields, height %.2f m after apply"
 		% ["OK" if ok else "FAILED", io_rows, fields, record.height_m])
+	# Edit mode: a tank grows five handles, and the drag maths snap to
+	# the grid and the size step.
+	var gizmo := EditGizmo.new()
+	add_child(gizmo)
+	gizmo.setup(plant.views[record.comp_name] as Node3D, record)
+	var handles := 0
+	for body in gizmo.find_children("*", "StaticBody3D", true, false):
+		if body.has_meta("handle"):
+			handles += 1
+	var base := Vector3(4.0, 0.0, 4.0)
+	var d := EditGizmo.diameter_from(base, base + Vector3(0.8, 1.0, 0.0))
+	var h := EditGizmo.height_from(base, base + Vector3(0.0, 2.44, 0.0))
+	var m := EditGizmo.move_target(base, Vector3(5.3, 0.0, 7.1), Vector3.ZERO, "move_x")
+	var gizmo_ok := handles == 5 and absf(d - 1.6) < 1e-6 and absf(h - 2.4) < 1e-6 \
+		and m.is_equal_approx(Vector3(5.5, 0.0, 4.0))
+	gizmo.queue_free()
+	plant.remove_equipment(record.comp_name)
+	print("[flowstate] edit gizmo exercise %s — %d handles, ring 0.8 m out reads %.1f m, post at 2.44 reads %.1f m, X arrow lands at %s"
+		% ["OK" if gizmo_ok else "FAILED", handles, d, h, str(m)])
 
 
-## M on placed equipment: pick it up. The ghost becomes its type at
-## its current rotation; the next click sets it down and its runs
-## follow. Esc or B puts it back untouched.
-func _try_pick_up() -> void:
+## Is a footprint free of world geometry (1) and interact volumes (4),
+## which stand in for the space equipment occupies? moved is left out
+## so equipment being edited does not block its own next spot.
+func _footprint_clear(footprint: Vector3, pos: Vector3, rot: float, moved: Node3D) -> bool:
+	var space := player.camera.get_world_3d().direct_space_state
+	var shape := BoxShape3D.new()
+	shape.size = footprint * 0.9
+	var overlap := PhysicsShapeQueryParameters3D.new()
+	overlap.shape = shape
+	overlap.transform = Transform3D(Basis.from_euler(Vector3(0, rot, 0)),
+		pos + Vector3(0, footprint.y / 2.0 + 0.06, 0))
+	overlap.collision_mask = 1 | 4
+	var excluded: Array[RID] = [player.get_rid()]
+	if moved != null:
+		for body in moved.find_children("*", "CollisionObject3D", true, false):
+			excluded.append((body as CollisionObject3D).get_rid())
+	overlap.exclude = excluded
+	return space.intersect_shape(overlap, 1).is_empty()
+
+
+## ---- edit mode (M) ---------------------------------------------------------
+## The equipment stays where and as it is and grows handles. Aim at a
+## handle, hold click, and look: the ring sets a tank's diameter, the
+## post its height, the arrows move it along an axis, the cube freely.
+
+func _toggle_edit() -> void:
+	if mode == Mode.EDIT:
+		_set_mode(Mode.NORMAL)
+		return
 	var view := player.look_view()
 	if view == null or not view.has_meta("record_name"):
-		hud.toast("aim at equipment to move it")
+		hud.toast("aim at equipment to modify it")
 		return
 	var name_ := str(view.get_meta("record_name"))
 	var why := plant.movable(name_)
 	if why != "":
 		hud.toast(why)
 		return
-	_set_mode(Mode.PLACE)
-	_move_name = name_
-	_move_type = str(plant.equip_types[name_])
-	rot_y = (plant.views[name_] as Node3D).rotation.y
+	_set_mode(Mode.EDIT)
+	_edit_name = name_
+	_gizmo = EditGizmo.new()
+	add_child(_gizmo)
+	_gizmo.setup(plant.views[name_] as Node3D, plant.sim.get_component(name_) as SimTank,
+		float(PlantFactory.Y_OFFSETS.get(plant.equip_types[name_], 0.0)))
 	_update_hud()
+
+
+func _end_edit() -> void:
+	_edit_name = ""
+	_drag = ""
+	if _gizmo != null:
+		_gizmo.queue_free()
+		_gizmo = null
+
+
+func _edit_footprint() -> Vector3:
+	var tank := plant.sim.get_component(_edit_name) as SimTank
+	if tank != null:
+		return Vector3(tank.diameter_m * 1.1, tank.height_m, tank.diameter_m * 1.1)
+	return PlantFactory.FOOTPRINTS[plant.equip_types[_edit_name]]
+
+
+## Where the crosshair ray meets the plane the dragged handle lives on:
+## the ring's horizontal plane, a vertical plane through the axis
+## facing the camera for the post, the ground for the arrows.
+func _drag_hit(base: Vector3) -> Vector3:
+	var camera := player.camera
+	var origin := camera.global_position
+	var dir := -camera.global_basis.z
+	var plane: Plane
+	match _drag:
+		"ring":
+			var tank := plant.sim.get_component(_edit_name) as SimTank
+			var ring_y := tank.height_m * 0.5 if tank != null else 0.0
+			plane = Plane(Vector3.UP, base + Vector3(0, ring_y, 0))
+		"post":
+			var toward := origin - base
+			toward.y = 0.0
+			plane = Plane(toward.normalized(), base)
+		_:
+			plane = Plane(Vector3.UP, base)
+	var hit: Variant = plane.intersects_ray(origin, dir)
+	if hit == null:
+		return Vector3.INF
+	return hit as Vector3
+
+
+func _begin_drag() -> void:
+	if _gizmo == null or not player.ray.is_colliding():
+		return
+	var collider := player.ray.get_collider() as Node
+	if collider == null or not collider.has_meta("handle"):
+		return
+	_drag = str(collider.get_meta("handle"))
+	var base := _gizmo.base()
+	var hit := _drag_hit(base)
+	if hit == Vector3.INF:
+		_drag = ""
+		return
+	var tank := plant.sim.get_component(_edit_name) as SimTank
+	match _drag:
+		"ring":
+			_drag_offset_f = tank.diameter_m - EditGizmo.raw_diameter(base, hit)
+		"post":
+			_drag_offset_f = tank.height_m - EditGizmo.raw_height(base, hit)
+		_:
+			_drag_offset_v = base - hit
+
+
+func _update_drag() -> void:
+	var view := plant.views.get(_edit_name) as Node3D
+	if view == null or _gizmo == null:
+		_drag = ""
+		return
+	var base := _gizmo.base()
+	var hit := _drag_hit(base)
+	if hit == Vector3.INF:
+		return
+	var tank := plant.sim.get_component(_edit_name) as SimTank
+	match _drag:
+		"ring":
+			var d := EditGizmo.diameter_from(base, hit, _drag_offset_f)
+			if tank != null and not is_equal_approx(d, tank.diameter_m):
+				plant.resize_tank(_edit_name, tank.height_m, d)
+				_gizmo.refresh()
+		"post":
+			var h := EditGizmo.height_from(base, hit, _drag_offset_f)
+			if tank != null and not is_equal_approx(h, tank.height_m):
+				plant.resize_tank(_edit_name, h, tank.diameter_m)
+				_gizmo.refresh()
+		_:
+			var target := EditGizmo.move_target(base, hit, _drag_offset_v, _drag)
+			if target.is_equal_approx(base):
+				return
+			if _footprint_clear(_edit_footprint(), target, view.rotation.y, view):
+				plant.move_equipment(_edit_name, target, view.rotation.y)
+				_gizmo.refresh()
+				_gizmo.set_blocked(false)
+			else:
+				_gizmo.set_blocked(true)
+
+
+func _rotate_edited() -> void:
+	var view := plant.views.get(_edit_name) as Node3D
+	if view == null or _gizmo == null:
+		return
+	var rot := wrapf(view.rotation.y + PI / 2.0, 0.0, TAU)
+	if _footprint_clear(_edit_footprint(), _gizmo.base(), rot, view):
+		plant.move_equipment(_edit_name, _gizmo.base(), rot)
+		_gizmo.refresh()
+	else:
+		hud.toast("no room to turn it")
 
 
 func _try_delete() -> void:

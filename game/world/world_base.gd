@@ -172,7 +172,10 @@ func set_music(on: bool) -> void:
 	if music_player == null:
 		return
 	if on and not music_player.playing:
-		music_player.play()
+		# Headless runs never start a stream (see _looping_player): a
+		# saved "music on" would otherwise leak its playback at exit.
+		if DisplayServer.get_name() != "headless":
+			music_player.play()
 	elif not on and music_player.playing:
 		music_player.stop()
 
