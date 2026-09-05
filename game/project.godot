@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="flowstate"
-run/main_scene="res://world/sandbox.tscn"
+run/main_scene="res://world/blank.tscn"
 config/features=PackedStringArray("4.7")
 
 [display]

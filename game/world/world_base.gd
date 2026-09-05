@@ -15,6 +15,7 @@ var library: LibraryPanel
 var plant_height := 0.0
 var plant_save_path := "user://save.json"
 var with_suite := true            # build the aseptic annex + air cascade
+var with_home := true             # the commissioned starting loop and its HMI
 var with_hum := true              # machine-room ambience loop
 var reverb_room_size := 0.85
 var reverb_wet := 0.25
@@ -44,6 +45,7 @@ func _ready() -> void:
 	plant.position.y = plant_height
 	plant.save_path = plant_save_path
 	plant.build_suite = with_suite
+	plant.build_home = with_home
 	add_child(plant)
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -96,6 +98,10 @@ func _process(_delta: float) -> void:
 		hud.set_look_text(str(view.call("describe")))
 	else:
 		hud.set_look_text("")
+	if plant.tank == null:
+		# A blank map has no starting loop to report on: just the clock.
+		hud.set_readout_text("t %s" % _fmt_time(plant.sim.time))
+		return
 	hud.set_readout_text("t %s   level %.1f L   relay %d cyc   pump %s" % [
 		_fmt_time(plant.sim.time), plant.tank.level_l, plant.relay.cycles,
 		"RUN" if plant.pump.running else "stop"])

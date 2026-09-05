@@ -52,12 +52,20 @@ var _support_exercise_phase: int = 0
 var _support_exercise_wait: int = 0
 
 
+## The commissioned starting loop and its HMI. A blank map (the
+## director's stress test, 2026-09-05) sets this false and starts with
+## nothing placed; the headless build exercises need the loop, so they
+## run only with it.
+var build_home := true
+
+
 func _ready() -> void:
 	_new_graph()
 	_self_check()
-	_build_initial_plant()
+	if build_home:
+		_build_initial_plant()
 	_build_hmi()
-	if DisplayServer.get_name() == "headless":
+	if DisplayServer.get_name() == "headless" and build_home:
 		_exercise_build_api()
 		_support_exercise_phase = 1
 		_support_exercise_wait = 4
@@ -1312,12 +1320,15 @@ func _world(local: Vector3) -> Vector3:
 
 
 func _build_hmi() -> void:
-	hmi_view = HmiView.new()
-	hmi_view.position = Vector3(-4.6, 1.6, -4.75)
-	add_child(hmi_view)
-	hmi_view.setup(historian, tank, switch, relay, pump)
+	if build_home:
+		hmi_view = HmiView.new()
+		hmi_view.position = Vector3(-4.6, 1.6, -4.75)
+		add_child(hmi_view)
+		hmi_view.setup(historian, tank, switch, relay, pump)
 	# The material balance by unit, beside it: the standing proof that
 	# what the headers fed is still somewhere, from the records' meters.
+	# A blank map gets it too: it is the one display that needs nothing
+	# placed to be right.
 	var balance_screen := HmiScreenView.new()
 	balance_screen.name = "hmi_balance"
 	balance_screen.position = Vector3(-6.9, 1.6, -4.75)
