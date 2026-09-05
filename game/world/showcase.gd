@@ -678,17 +678,20 @@ static func _unit_400(plant: Plant) -> void:
 		{"coil": "do_5", "logic": [[{"ref": "m_5"}]]},
 		{"coil": "do_6", "logic": [[{"ref": "m_5", "nc": true}]]},
 	])
-	# The local control station east of the cabinet: START and STOP to
-	# the input strip, RUNNING and STOPPED from the output strip.
-	plant.place_control_station("lcs_401", Vector3(6.6, 0.0, 9.4), PI, Plant.default_station_devices())
+	# The local control station beside the HMI-400 screen, facing the
+	# walkway like the screen does (the first version stood behind the
+	# sequence signs facing a sign's back, and the director could not
+	# find it). START and STOP to the input strip, RUNNING and STOPPED
+	# from the output strip, all along the ground to the cabinet.
+	plant.place_control_station("lcs_401", Vector3(1.9, 0.0, 9.0), 0.0, Plant.default_station_devices())
 	plant.connect_equipment("lcs_401_start", "contact", di + "6", "in",
-		_local(plant, [Vector3(6.05, 0.25, 9.4), Vector3(6.05, 0.25, 8.45)]))
+		_local(plant, [Vector3(2.4, 0.18, 9.05), Vector3(5.9, 0.18, 9.05), Vector3(5.9, 0.18, 8.5)]))
 	plant.connect_equipment("lcs_401_stop", "contact", di + "7", "in",
-		_local(plant, [Vector3(5.95, 0.25, 9.5), Vector3(5.95, 0.25, 8.5)]))
+		_local(plant, [Vector3(2.4, 0.18, 9.15), Vector3(6.0, 0.18, 9.15), Vector3(6.0, 0.18, 8.55)]))
 	plant.connect_equipment(do + "6", "out", "lcs_401_running", "lamp",
-		_local(plant, [Vector3(3.7, 0.2, 8.75), Vector3(6.15, 0.2, 8.75), Vector3(6.15, 0.2, 9.3)]))
+		_local(plant, [Vector3(3.7, 0.2, 8.75), Vector3(2.5, 0.2, 8.75), Vector3(2.5, 0.2, 8.95)]))
 	plant.connect_equipment(do + "7", "out", "lcs_401_stopped", "lamp",
-		_local(plant, [Vector3(3.7, 0.24, 8.7), Vector3(6.25, 0.24, 8.7), Vector3(6.25, 0.24, 9.35)]))
+		_local(plant, [Vector3(3.7, 0.24, 8.7), Vector3(2.6, 0.24, 8.7), Vector3(2.6, 0.24, 9.0)]))
 	# Commissioned running: START pressed once at handover, so the rig
 	# is cycling when the director arrives. STOP on the station holds
 	# it wherever it is; START resumes.
