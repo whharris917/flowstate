@@ -215,6 +215,8 @@ def sample_components() -> list[Component]:
         comp.MainsFeed("mains"),
         comp.PowerSupply("psu"),
         comp.Terminal("terminal"),
+        comp.Pushbutton("pushbutton"),
+        comp.PilotLight("pilot_light"),
         comp.Column("column"),
         proc.SteamGen("boiler"),
         proc.HeatExchanger("exchanger"),

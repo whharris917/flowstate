@@ -160,9 +160,11 @@ func _draw_header() -> void:
 			draw_rect(pill, COL_LINE, false, 1.0)
 		_text(pill.get_center() + Vector2(0, 6), "%d %s" % [i + 1, STEPS[i]], 14,
 			COL_BG if active else COL_MUTED, HORIZONTAL_ALIGNMENT_CENTER)
+	var running := plc_on and (_rec(plc_name) as SimPLC).mem.size() > 5 and (_rec(plc_name) as SimPLC).mem[5]
 	var step_text := "PLC UNPOWERED" if not plc_on else (
-		"no step" if _step < 0 else "in step %s" % _clock(plant.sim.time - _step_since))
-	_text(Vector2(700, 77), step_text, 14, COL_ALARM if not plc_on else COL_MUTED)
+		"STOPPED at LCS-401 · START to resume" if not running else (
+		"no step" if _step < 0 else "in step %s" % _clock(plant.sim.time - _step_since)))
+	_text(Vector2(700, 77), step_text, 14, COL_ALARM if (not plc_on or not running) else COL_MUTED)
 	_text(Vector2(size.x - 16, 77), "page %d/%d · E next" % [page + 1, PAGES.size()], 12, COL_MUTED,
 		HORIZONTAL_ALIGNMENT_RIGHT)
 

@@ -43,6 +43,7 @@ const CATALOG_CONTROL: Array[Dictionary] = [
 	{"type": "relay", "label": "Relay cabinet"},
 	{"type": "cabinet", "label": "Control cabinet"},
 	{"type": "junction_box", "label": "Junction box"},
+	{"type": "control_station", "label": "Control station"},
 	{"type": "mains", "label": "Mains feeder 480VAC"},
 	{"type": "psu", "label": "Power supply 24VDC"},
 ]
@@ -64,6 +65,7 @@ const FOOTPRINTS := {
 	"controller": Vector3(0.5, 1.9, 0.5),
 	"cabinet": Vector3(1.4, 2.1, 0.75),
 	"junction_box": Vector3(0.5, 1.7, 0.3),
+	"control_station": Vector3(0.6, 1.6, 0.3),
 	"mains": Vector3(0.85, 1.85, 0.65),
 	"psu": Vector3(0.65, 1.6, 0.45),
 	"source": Vector3(0.75, 1.9, 0.75),
@@ -86,6 +88,7 @@ const Y_OFFSETS := {
 	"gauge_press": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
 	"valve": 0.0, "block_valve": 0.0, "controller": 0.0, "cabinet": 0.0, "junction_box": 0.0,
+	"control_station": 0.0,
 	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
 	"reactor": 0.0, "centrifuge": 0.0, "hx": 0.0, "steamgen": 0.0,
 	"vaclock": 0.0, "vialfill": 0.0,
@@ -304,6 +307,11 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 				params.get("ai", 4), params.get("ao", 4)))
 		"terminal":
 			return sim.add(SimTerminal.new(name_, params.get("kind", "discrete")))
+		"pushbutton":
+			return sim.add(SimPushbutton.new(name_, params.get("momentary", true),
+				params.get("normally_closed", false)))
+		"pilot_light":
+			return sim.add(SimPilotLight.new(name_, params.get("color", "green")))
 		"mains":
 			return sim.add(SimMainsFeed.new(name_, params.get("spec", "480VAC")))
 		"psu":

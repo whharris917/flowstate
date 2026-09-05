@@ -4,7 +4,9 @@ from __future__ import annotations
 import pytest
 
 from conftest import wire_supply
-from sim.components import ControlValve, Gauge, Tank, Terminal
+from sim.components import (
+    ControlValve, Gauge, MainsFeed, PilotLight, PowerSupply, Pushbutton, Tank, Terminal,
+)
 from sim.control import PID, PLC
 from sim.core import Simulation
 
@@ -18,6 +20,52 @@ def _plc() -> tuple[Simulation, PLC]:
 
 def _press(plc: PLC, channel: int, value: bool) -> None:
     plc.di_ports[channel].value = value
+
+
+class TestControlStation:
+    """START and STOP buttons and a pilot light through a PLC latch: the
+    start/stop station every motor in a plant is run from."""
+
+    def test_a_stop_button_is_made_until_pressed(self) -> None:
+        sim = Simulation(dt=0.05)
+        stop = sim.add(Pushbutton("stop", normally_closed=True))
+        sim.run(0.5)
+        assert stop.contact.value == 1.0
+        stop.press()
+        sim.run(0.1)
+        assert stop.contact.value == 0.0
+        sim.run(1.0)
+        assert stop.contact.value == 1.0  # released again: a momentary hold
+
+    def test_start_seals_in_and_stop_drops_it_and_the_light_follows(self) -> None:
+        sim = Simulation(dt=0.05)
+        plc = sim.add(PLC("plc"))
+        # Powered for real: a poked port value is gone by the next scan.
+        mains = sim.add(MainsFeed("mains"))
+        psu = sim.add(PowerSupply("psu"))
+        sim.connect(mains, "power", psu, "ac_in")
+        sim.connect(psu, "dc_out", plc, "power")
+        start = sim.add(Pushbutton("start"))
+        stop = sim.add(Pushbutton("stop", normally_closed=True))
+        light = sim.add(PilotLight("running"))
+        sim.connect(start, "contact", plc, "di_0")
+        sim.connect(stop, "contact", plc, "di_1")
+        sim.connect(plc, "do_0", light, "lamp")
+        plc.set_program([
+            {"coil": "m_0", "logic": [[{"ref": "di_0"}, {"ref": "di_1"}],
+                                      [{"ref": "m_0"}, {"ref": "di_1"}]]},
+            {"coil": "do_0", "logic": [[{"ref": "m_0"}]]},
+        ])
+        sim.run(0.5)
+        assert not light.lit
+        start.press()
+        sim.run(2.0)  # long after the finger has left the button
+        assert light.lit
+        stop.press()
+        sim.run(0.5)
+        assert not light.lit
+        sim.run(2.0)  # STOP released: it stays stopped until START again
+        assert not light.lit
 
 
 class TestLadder:

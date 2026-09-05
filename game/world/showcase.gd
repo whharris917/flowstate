@@ -634,13 +634,24 @@ static func _unit_400(plant: Plant) -> void:
 	var di := "%s_m5_t" % cab   # inputs strip
 	var do := "%s_m6_t" % cab   # outputs strip
 	plant.connect_equipment(psu_name, "dc_out", plc_name, "power", [], false)
-	for i in 5:
+	for i in 7:
 		plant.connect_equipment(di + str(i + 1), "out", plc_name, "di_%d" % i, [], false)
 		plant.connect_equipment(plc_name, "do_%d" % i, do + str(i + 1), "in", [], false)
 	# di_0 LSL-401, di_1 LSH-401, di_2 LSL-402, di_3 LSL-403, di_4
 	# LSH-403; a contact is closed while the level is at or below its
-	# line. do_0 K-401, do_1..do_4 XV-401..XV-404.
+	# line. di_5 START, di_6 STOP (normally closed) from the local
+	# control station. do_0 K-401, do_1..do_4 XV-401..XV-404, do_5 the
+	# RUNNING lamp, do_6 the STOPPED lamp.
+	#
+	# m_5 is the run latch: START sets it, STOP drops it, and it holds
+	# itself through STOP's made contact in between. The step bits keep
+	# their place while stopped; only the outputs are gated, so a
+	# stopped sequence closes its valves, stops its pump, and resumes
+	# where it was on START.
 	plc.set_program([
+		{"coil": "m_5", "logic": [
+			[{"ref": "di_5"}, {"ref": "di_6"}],
+			[{"ref": "m_5"}, {"ref": "di_6"}]]},
 		{"coil": "m_0", "logic": [
 			[{"ref": "m_4"}, {"ref": "di_3"}],
 			[{"ref": "m_0"}, {"ref": "m_1", "nc": true}],
@@ -659,12 +670,29 @@ static func _unit_400(plant: Plant) -> void:
 		{"coil": "m_4", "logic": [
 			[{"ref": "m_3"}, {"ref": "di_2"}],
 			[{"ref": "m_4"}, {"ref": "m_0", "nc": true}]]},
-		{"coil": "do_0", "logic": [[{"ref": "m_1"}]]},
-		{"coil": "do_1", "logic": [[{"ref": "m_2"}]]},
-		{"coil": "do_2", "logic": [[{"ref": "m_3"}]]},
-		{"coil": "do_3", "logic": [[{"ref": "m_4"}]]},
-		{"coil": "do_4", "logic": [[{"ref": "m_0"}]]},
+		{"coil": "do_0", "logic": [[{"ref": "m_1"}, {"ref": "m_5"}]]},
+		{"coil": "do_1", "logic": [[{"ref": "m_2"}, {"ref": "m_5"}]]},
+		{"coil": "do_2", "logic": [[{"ref": "m_3"}, {"ref": "m_5"}]]},
+		{"coil": "do_3", "logic": [[{"ref": "m_4"}, {"ref": "m_5"}]]},
+		{"coil": "do_4", "logic": [[{"ref": "m_0"}, {"ref": "m_5"}]]},
+		{"coil": "do_5", "logic": [[{"ref": "m_5"}]]},
+		{"coil": "do_6", "logic": [[{"ref": "m_5", "nc": true}]]},
 	])
+	# The local control station east of the cabinet: START and STOP to
+	# the input strip, RUNNING and STOPPED from the output strip.
+	plant.place_control_station("lcs_401", Vector3(6.6, 0.0, 9.4), PI, Plant.default_station_devices())
+	plant.connect_equipment("lcs_401_start", "contact", di + "6", "in",
+		_local(plant, [Vector3(6.05, 0.25, 9.4), Vector3(6.05, 0.25, 8.45)]))
+	plant.connect_equipment("lcs_401_stop", "contact", di + "7", "in",
+		_local(plant, [Vector3(5.95, 0.25, 9.5), Vector3(5.95, 0.25, 8.5)]))
+	plant.connect_equipment(do + "6", "out", "lcs_401_running", "lamp",
+		_local(plant, [Vector3(3.7, 0.2, 8.75), Vector3(6.15, 0.2, 8.75), Vector3(6.15, 0.2, 9.3)]))
+	plant.connect_equipment(do + "7", "out", "lcs_401_stopped", "lamp",
+		_local(plant, [Vector3(3.7, 0.24, 8.7), Vector3(6.25, 0.24, 8.7), Vector3(6.25, 0.24, 9.35)]))
+	# Commissioned running: START pressed once at handover, so the rig
+	# is cycling when the director arrives. STOP on the station holds
+	# it wherever it is; START resumes.
+	(plant.sim.get_component("lcs_401_start") as SimPushbutton).press()
 
 	# ---- field wiring: two junction boxes, two multicores --------------
 	# The way a real field is wired (director, 2026-09-04): the switches

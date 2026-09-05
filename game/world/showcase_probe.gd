@@ -263,6 +263,20 @@ func _run(world: Node) -> void:
 			await get_tree().create_timer(0.4).timeout
 			await _shot("user://probe_showcase_u400_hmi_%s.png" % page_name)
 		hmi.use()
+	# The local control station: STOP holds the sequence where it is
+	# with everything shut, START resumes it. Six seconds each way,
+	# long enough for every valve to finish its stroke.
+	var start := plant.sim.get_component("lcs_401_start") as SimPushbutton
+	var stop := plant.sim.get_component("lcs_401_stop") as SimPushbutton
+	if start != null and stop != null:
+		stop.press()
+		for _i in roundi(6.0 / Plant.SIM_DT):
+			plant.sim.tick()
+		print("[probe] u400 after STOP: %s" % _station_state(plant))
+		start.press()
+		for _i in roundi(6.0 / Plant.SIM_DT):
+			plant.sim.tick()
+		print("[probe] u400 after START: %s" % _station_state(plant))
 	# The plant-wide balance screen beside the home HMI.
 	await _vantage(player, Vector3(-6.9, 0.15, -2.6), Vector2(0.0, -1.0), 0.0, 0.05)
 	await _shot("user://probe_showcase_balance.png")
@@ -339,6 +353,22 @@ func _u400_step(plant: Plant) -> int:
 		if plc.mem[i]:
 			return i
 	return -1
+
+
+func _station_state(plant: Plant) -> String:
+	var parts: Array[String] = []
+	var step := _u400_step(plant)
+	parts.append("step %s" % (U400_STEPS[step] if step >= 0 else "none"))
+	for lamp_name: String in ["lcs_401_running", "lcs_401_stopped"]:
+		var lamp := plant.sim.get_component(lamp_name) as SimPilotLight
+		if lamp != null:
+			parts.append("%s %s" % [lamp_name.trim_prefix("lcs_401_").to_upper(), "LIT" if lamp.lit else "dark"])
+	var p401 := plant.sim.get_component("p_401") as SimPump
+	parts.append("P-401 %s" % ("RUN" if p401.running else "stop"))
+	for valve_name: String in ["xv_401", "xv_402", "xv_403", "xv_404"]:
+		var xv := plant.sim.get_component(valve_name) as SimBlockValve
+		parts.append("%s %s" % [valve_name.to_upper().replace("_", "-"), xv.state()])
+	return " · ".join(parts)
 
 
 func _clock(t: float) -> String:

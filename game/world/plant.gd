@@ -31,6 +31,7 @@ var equip_types: Dictionary = {}   # record name -> type_id
 var protected: Dictionary = {}     # record name -> true (not deletable)
 var cabinets: Dictionary = {}      # name -> {node, plc, terminals}
 var junction_boxes: Dictionary = {}  # name -> {node, records, channels, on_post}
+var control_stations: Dictionary = {}  # name -> {node, records, devices, on_post}
 var member_of: Dictionary = {}     # record name -> cabinet name
 var mounted: Dictionary = {}       # instrument name -> {host, frac, angle}
 var structures: Dictionary = {}    # name -> {type, node}
@@ -973,6 +974,70 @@ func connect_multicore(label: String, pairs: Array, waypoints: Array) -> String:
 	return ""
 
 
+## ---- local control stations -----------------------------------------------
+## A station is an enclosure on a post holding pushbutton and pilot
+## light records; each is a real component the ladder sees, and each
+## button is its own interaction target. devices is a list of
+## {"kind": "button"|"light", "id", "legend", "color", "momentary",
+## "nc"}; the records are named "<station>_<id>".
+
+func unique_station_name() -> String:
+	var index := 1
+	while control_stations.has("lcs_%d" % index):
+		index += 1
+	return "lcs_%d" % index
+
+
+static func default_station_devices() -> Array:
+	return [
+		{"kind": "button", "id": "start", "legend": "START", "color": "green", "momentary": true, "nc": false},
+		{"kind": "button", "id": "stop", "legend": "STOP", "color": "red", "momentary": true, "nc": true},
+		{"kind": "light", "id": "running", "legend": "RUNNING", "color": "green"},
+		{"kind": "light", "id": "stopped", "legend": "STOPPED", "color": "red"},
+	]
+
+
+func place_control_station(name_: String, world_pos: Vector3, rot_y: float, devices: Array,
+		on_post: bool = true) -> bool:
+	if control_stations.has(name_) or devices.is_empty():
+		return false
+	var view := ControlStationView.new()
+	view.position = to_local(world_pos) + Vector3(0, ControlStationView.POST_H if on_post else 0.0, 0)
+	view.rotation.y = rot_y
+	add_child(view)
+	var records: Array[String] = []
+	var built: Array = []
+	for d_v: Variant in devices:
+		var d := d_v as Dictionary
+		var record_name := "%s_%s" % [name_, str(d["id"])]
+		var is_button := str(d.get("kind", "button")) == "button"
+		var record := PlantFactory.make_record(sim, "pushbutton" if is_button else "pilot_light", record_name,
+			{"momentary": bool(d.get("momentary", true)), "normally_closed": bool(d.get("nc", false)),
+			"color": str(d.get("color", "green"))})
+		sim.register_with_historian(record)
+		views[record_name] = view
+		equip_types[record_name] = "pushbutton" if is_button else "pilot_light"
+		protected[record_name] = true
+		member_of[record_name] = name_
+		records.append(record_name)
+		built.append({"record": record, "legend": str(d.get("legend", str(d["id"]).to_upper())),
+			"color": str(d.get("color", "green"))})
+	view.setup(name_, built, on_post)
+	control_stations[name_] = {"node": view, "records": records, "devices": devices.duplicate(true),
+		"on_post": on_post}
+	# Circuits leave on the right flank, one row per device.
+	var y := ControlStationView.BOX.y - 0.06
+	var step := (ControlStationView.BOX.y - 0.12) / maxf(records.size() - 1, 1)
+	for record_name in records:
+		var record := sim.get_component(record_name)
+		var port_name := "contact" if record is SimPushbutton else "lamp"
+		PlantFactory.attach_port_markers(view, record, str(equip_types[record_name]),
+			{port_name: Vector3(0.26, y, 0.03)})
+		y -= step
+	_revalidate_in = 3
+	return true
+
+
 ## ---- standalone infrastructure runs --------------------------------------
 
 func unique_run_name(prefix: String) -> String:
@@ -1738,8 +1803,25 @@ func save_game() -> bool:
 			"rot_y": node.rotation.y, "channels": entry["channels"], "on_post": entry["on_post"],
 			"states": states,
 		})
+	var station_list: Array = []
+	for name_: String in control_stations:
+		var entry: Dictionary = control_stations[name_]
+		var node := entry["node"] as Node3D
+		var states := {}
+		for record_name: String in entry["records"]:
+			var record := sim.get_component(record_name)
+			if record != null and not record.state_dict().is_empty():
+				states[record_name] = record.state_dict()
+		station_list.append({
+			"name": name_,
+			"pos": [node.global_position.x, node.global_position.y - (ControlStationView.POST_H if entry["on_post"] else 0.0),
+				node.global_position.z],
+			"rot_y": node.rotation.y, "devices": entry["devices"], "on_post": entry["on_post"],
+			"states": states,
+		})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time, "junction_boxes": jb_list,
+		"control_stations": station_list,
 		"components": comps, "wires": wire_list, "structures": struct_list,
 		"runs": run_list, "cabinets": cab_list,
 	}
@@ -1864,6 +1946,17 @@ func load_game() -> bool:
 			var record := sim.get_component(record_name)
 			if record != null:
 				record.apply_state(jb_states[record_name])
+
+	for entry: Dictionary in payload.get("control_stations", []):
+		var pos_arr: Array = entry["pos"]
+		place_control_station(entry["name"], Vector3(pos_arr[0], pos_arr[1], pos_arr[2]),
+			float(entry.get("rot_y", 0.0)), entry.get("devices", default_station_devices()),
+			bool(entry.get("on_post", true)))
+		var station_states: Dictionary = entry.get("states", {})
+		for record_name: String in station_states:
+			var record := sim.get_component(record_name)
+			if record != null:
+				record.apply_state(station_states[record_name])
 
 	for entry: Dictionary in payload.get("runs", []):
 		var pts: Array = []

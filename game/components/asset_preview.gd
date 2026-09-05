@@ -26,6 +26,17 @@ static func build(type_id: String) -> Node3D:
 		var jb := JunctionBoxView.new()
 		jb.setup("junction box", 12, true)
 		node = jb
+	elif type_id == "control_station":
+		var scratch_station := Simulation.new(0.05)
+		var lcs := ControlStationView.new()
+		lcs.setup("control station", [
+			{"record": scratch_station.add(SimPushbutton.new("start")), "legend": "START", "color": "green"},
+			{"record": scratch_station.add(SimPushbutton.new("stop", true, true)), "legend": "STOP", "color": "red"},
+			{"record": scratch_station.add(SimPilotLight.new("running")), "legend": "RUNNING", "color": "green"},
+			{"record": scratch_station.add(SimPilotLight.new("stopped", "red")), "legend": "STOPPED", "color": "red"},
+		], true)
+		lcs.set_meta("scratch_sim", scratch_station)
+		node = lcs
 	else:
 		# A scratch sim graph backs the preview records; it is never
 		# ticked and dies with the preview node (kept alive via meta).

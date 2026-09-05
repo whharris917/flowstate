@@ -671,6 +671,11 @@ func _try_place() -> void:
 		if plant.place_junction_box(jb_name, _ghost_pos, rot_y):
 			hud.toast("placed %s — land field circuits on its left flank" % jb_name)
 		return
+	if _current_type() == "control_station":
+		var lcs_name := plant.unique_station_name()
+		if plant.place_control_station(lcs_name, _ghost_pos, rot_y, Plant.default_station_devices()):
+			hud.toast("placed %s — START, STOP, RUNNING, STOPPED; wire its right flank" % lcs_name)
+		return
 	var record := plant.place_new(_current_type(), _ghost_pos, rot_y)
 	if record != null:
 		hud.toast("placed %s" % record.comp_name)

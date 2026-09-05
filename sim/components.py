@@ -566,6 +566,67 @@ class BlockValve(Component):
             self.position = max(target, self.position - step)
 
 
+class Pushbutton(Component):
+    """A pushbutton on a local control station. Momentary by default:
+    the contact follows the button while it is held, which in a scanned
+    plant means for a short hold after a press. A maintained button (a
+    selector) toggles on each press. Normally closed for a STOP, so the
+    circuit is made until someone presses it -- the seal-in a start/stop
+    station relies on.
+    """
+
+    HOLD_S = 0.6
+
+    def __init__(self, name: str, momentary: bool = True,
+                 normally_closed: bool = False) -> None:
+        super().__init__(name)
+        self.momentary = momentary
+        self.normally_closed = normally_closed
+        self.pressed = False       # maintained: the latched position
+        self._hold_left = 0.0      # momentary: seconds still held
+        self.contact = self.add_output("contact", PortKind.SIGNAL_DISCRETE)
+        self.add_observable("pressed", "pressed")
+        self.presses = 0
+        self.add_observable("presses", "presses")
+        self.tick(0.0)
+
+    def press(self) -> None:
+        """A finger on the button: a hold for a momentary one, a toggle
+        for a maintained one."""
+        self.presses += 1
+        if self.momentary:
+            self._hold_left = self.HOLD_S
+            self.pressed = True
+        else:
+            self.pressed = not self.pressed
+
+    def tick(self, dt: float) -> None:
+        if self.momentary:
+            self._hold_left = max(0.0, self._hold_left - dt)
+            self.pressed = self._hold_left > 0.0
+        made = self.pressed != self.normally_closed
+        self.contact.value = 1.0 if made else 0.0
+
+
+class PilotLight(Component):
+    """A pilot light: lit while its lamp circuit is energized, nothing
+    more. The thing on a station that tells an operator what the PLC
+    believes without a screen."""
+
+    def __init__(self, name: str, color: str = "green") -> None:
+        super().__init__(name)
+        self.color = color
+        self.lamp = self.add_input("lamp", PortKind.SIGNAL_DISCRETE)
+        self.add_observable("lit", "lit")
+
+    @property
+    def lit(self) -> bool:
+        return float(self.lamp.value) > 0.5
+
+    def tick(self, dt: float) -> None:
+        pass
+
+
 class Terminal(Component):
     """One terminal block: in to out, one scan late — the honest cost
     of landing a wire on a strip. kind is "discrete" or "analog".
@@ -1460,6 +1521,70 @@ PowerSupply.SPEC = EquipmentSpec(
                                                "does not."),
     ),
     assumptions=("No current rating, no ride-through, no inrush.",),
+)
+
+Pushbutton.SPEC = EquipmentSpec(
+    key="pushbutton",
+    title="Pushbutton",
+    tier="control",
+    summary=(
+        "A pushbutton on a local control station. Momentary by default: "
+        "the contact follows the button while it is held, which in a "
+        "scanned plant means for a short hold after a press. A maintained "
+        "button, a selector, toggles on each press. Normally closed for "
+        "a STOP, so the circuit is made until someone presses it, which "
+        "is the seal-in a start/stop station relies on."
+    ),
+    ports={
+        "contact": "Dry contact: made while pressed (normally open) or "
+                   "while not pressed (normally closed).",
+    },
+    equations=(
+        Equation(
+            "contact = pressed XOR normally_closed",
+            "A normally-open button makes on a press; a normally-closed "
+            "one breaks on a press.",
+        ),
+        Equation(
+            "pressed holds 0.6 s after a momentary press",
+            "A finger stays on a button longer than one scan, so a "
+            "momentary press is a short hold, not a single-scan blip a "
+            "seal-in could miss.",
+        ),
+    ),
+    params=(
+        Param("momentary", "-", "True for a pushbutton that releases, "
+                                "False for a selector that stays."),
+        Param("normally_closed", "-", "True for a STOP-style button whose "
+                                      "contact is made until pressed."),
+    ),
+    assumptions=(
+        "No contact bounce, no wear, no illuminated buttons.",
+    ),
+)
+
+PilotLight.SPEC = EquipmentSpec(
+    key="pilot_light",
+    title="Pilot Light",
+    tier="control",
+    summary=(
+        "A pilot light: lit while its lamp circuit is energized, nothing "
+        "more. The thing on a station that tells an operator what the "
+        "PLC believes without a screen."
+    ),
+    ports={
+        "lamp": "The lamp circuit, from a PLC output or a relay contact.",
+    },
+    equations=(
+        Equation("lit = lamp > 0.5", "Energized is lit."),
+    ),
+    params=(
+        Param("color", "-", "Lens colour: green, red, amber or white. "
+                            "Meaning is convention, not the kernel's."),
+    ),
+    assumptions=(
+        "The lamp never burns out and draws no accounted power.",
+    ),
 )
 
 Terminal.SPEC = EquipmentSpec(

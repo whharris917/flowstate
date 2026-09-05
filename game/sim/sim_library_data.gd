@@ -818,6 +818,57 @@ const PAGES := {
 			"The enclosure itself has no thermal, ingress or space limit: any module fits anywhere on the rail.",
 		],
 	},
+	"control_station": {
+		"title": "Local Control Station",
+		"tier": "control",
+		"summary": "An enclosure on a post with a row of pushbuttons and a row of pilot lights: the station a plant runs a motor or a sequence from without a screen. Each button and light is a real record the ladder sees; each button is its own target, E presses it. The circuits leave on the right flank and land in the cabinet like any other. Placed with START, STOP, RUNNING and STOPPED.",
+		"ports": {
+		},
+		"equations": [
+			["START makes on a press, STOP breaks on a press", "A normally-open and a normally-closed contact, which is what a seal-in rung needs: START sets the latch, STOP drops it, and the latch holds itself through STOP's made contact in between."],
+		],
+		"params": [
+		],
+		"assumptions": [
+			"Four devices in the default station; the layout is fixed once placed.",
+		],
+	},
+	"pushbutton": {
+		"title": "Pushbutton",
+		"tier": "control",
+		"summary": "A pushbutton on a local control station. Momentary by default: the contact follows the button while it is held, which in a scanned plant means for a short hold after a press. A maintained button, a selector, toggles on each press. Normally closed for a STOP, so the circuit is made until someone presses it, which is the seal-in a start/stop station relies on.",
+		"ports": {
+			"contact": "Dry contact: made while pressed (normally open) or while not pressed (normally closed).",
+		},
+		"equations": [
+			["contact = pressed XOR normally_closed", "A normally-open button makes on a press; a normally-closed one breaks on a press."],
+			["pressed holds 0.6 s after a momentary press", "A finger stays on a button longer than one scan, so a momentary press is a short hold, not a single-scan blip a seal-in could miss."],
+		],
+		"params": [
+			["momentary", "-", "true", "True for a pushbutton that releases, false for a selector that stays."],
+			["normally_closed", "-", "false", "True for a STOP-style button whose contact is made until pressed."],
+		],
+		"assumptions": [
+			"No contact bounce, no wear, no illuminated buttons.",
+		],
+	},
+	"pilot_light": {
+		"title": "Pilot Light",
+		"tier": "control",
+		"summary": "A pilot light: lit while its lamp circuit is energized, nothing more. The thing on a station that tells an operator what the PLC believes without a screen.",
+		"ports": {
+			"lamp": "The lamp circuit, from a PLC output or a relay contact.",
+		},
+		"equations": [
+			["lit = lamp > 0.5", "Energized is lit."],
+		],
+		"params": [
+			["color", "-", "green", "Lens colour: green, red, amber, white or blue. Meaning is convention, not the kernel's."],
+		],
+		"assumptions": [
+			"The lamp never burns out and draws no accounted power.",
+		],
+	},
 	"junction_box": {
 		"title": "Junction Box",
 		"tier": "control",
