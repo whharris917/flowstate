@@ -130,14 +130,33 @@ static func _build_basic(body: StructureView, type_id: String, size: Vector3) ->
 	_collide(body, size, Vector3.ZERO)
 	ViewUtil.box(body, size, Vector3.ZERO, ViewUtil.flat(COLORS[type_id]))
 	# Flange lines on steel members so they read as sections, not slabs.
+	var steel := ViewUtil.flat(COLORS[type_id])
+	var bolt := ViewUtil.flat(Color(0.35, 0.36, 0.38))
 	if type_id == "s_column":
+		# Base and cap plates with anchor bolts, and the section's two
+		# flanges standing proud of the web on either face.
 		for face_y: float in [-size.y / 2.0 + 0.02, size.y / 2.0 - 0.02]:
-			ViewUtil.box(body, Vector3(0.5, 0.03, 0.5), Vector3(0, face_y, 0),
-				ViewUtil.flat(COLORS[type_id]))
+			ViewUtil.box(body, Vector3(0.5, 0.03, 0.5), Vector3(0, face_y, 0), steel)
+		for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+			ViewUtil.cylinder(body, 0.018, 0.05, Vector3(corner.x * 0.2, -size.y / 2.0 + 0.05, corner.y * 0.2), bolt)
+		for face_z: float in [-1.0, 1.0]:
+			ViewUtil.box(body, Vector3(size.x + 0.04, size.y - 0.1, 0.03),
+				Vector3(0, 0, face_z * (size.z / 2.0 - 0.005)), steel)
 	elif type_id == "s_beam":
+		# Top and bottom flanges, and a web stiffener every metre and a half.
 		for flange_y: float in [-size.y / 2.0 + 0.015, size.y / 2.0 - 0.015]:
-			ViewUtil.box(body, Vector3(size.x, 0.03, size.z + 0.1), Vector3(0, flange_y, 0),
-				ViewUtil.flat(COLORS[type_id]))
+			ViewUtil.box(body, Vector3(size.x, 0.03, size.z + 0.1), Vector3(0, flange_y, 0), steel)
+		var count := maxi(1, int(size.x / 1.5))
+		for i in count:
+			var x := -size.x / 2.0 + size.x * (i + 0.5) / count
+			ViewUtil.box(body, Vector3(0.02, size.y - 0.06, size.z + 0.08), Vector3(x, 0, 0), steel)
+	elif type_id == "s_deck":
+		# Grating lines across the top so a deck reads as walkway.
+		var lines := int(size.x / 0.25)
+		for i in lines:
+			ViewUtil.box(body, Vector3(0.012, 0.006, size.z - 0.04),
+				Vector3(-size.x / 2.0 + 0.125 + i * 0.25, size.y / 2.0 + 0.003, 0),
+				ViewUtil.flat(Color(0.22, 0.23, 0.25)))
 
 
 ## Doorway frame with a sliding leaf. Opening 1.24 x 2.05; the leaf
