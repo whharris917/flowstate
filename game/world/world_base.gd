@@ -135,11 +135,18 @@ func set_time_of_day(hours: float) -> void:
 	var up := day_frac >= 0.0 and day_frac <= 1.0
 	var azimuth := 90.0 + clampf(day_frac, 0.0, 1.0) * 180.0
 	sun.rotation_degrees = Vector3(-(elevation if up else 8.0), azimuth, 0)
-	var horizon := clampf(elevation / 20.0, 0.0, 1.0) if up else 0.0
+	# Twilight: an hour either side of the horizon, night fades in and
+	# out instead of switching.
+	var twilight := 1.0
+	if day_frac < 0.0:
+		twilight = clampf(1.0 + day_frac / 0.085, 0.0, 1.0)
+	elif day_frac > 1.0:
+		twilight = clampf(1.0 - (day_frac - 1.0) / 0.085, 0.0, 1.0)
+	var horizon := clampf(elevation / 20.0, 0.0, 1.0)
 	var warm := Color(1.0, 0.62, 0.35).lerp(_sun_base_color, horizon)
 	var night := Color(0.45, 0.55, 0.80)
-	sun.light_color = warm if up else night
-	sun.light_energy = _sun_base_energy * (0.25 + 0.75 * horizon) if up else 0.12
+	sun.light_color = night.lerp(warm, twilight)
+	sun.light_energy = lerpf(0.12, _sun_base_energy * (0.25 + 0.75 * horizon), twilight)
 	if sky_mat != null:
 		var day_top := Color(0.30, 0.48, 0.72)
 		var day_horizon := Color(0.72, 0.78, 0.84)
@@ -147,15 +154,11 @@ func set_time_of_day(hours: float) -> void:
 		var dusk_horizon := Color(0.95, 0.55, 0.32)
 		var night_top := Color(0.03, 0.04, 0.08)
 		var night_horizon := Color(0.10, 0.12, 0.18)
-		if up:
-			sky_mat.sky_top_color = dusk_top.lerp(day_top, horizon)
-			sky_mat.sky_horizon_color = dusk_horizon.lerp(day_horizon, horizon)
-		else:
-			sky_mat.sky_top_color = night_top
-			sky_mat.sky_horizon_color = night_horizon
+		sky_mat.sky_top_color = night_top.lerp(dusk_top.lerp(day_top, horizon), twilight)
+		sky_mat.sky_horizon_color = night_horizon.lerp(dusk_horizon.lerp(day_horizon, horizon), twilight)
 		sky_mat.ground_horizon_color = sky_mat.sky_horizon_color.darkened(0.15)
 	if sky_env != null:
-		sky_env.ambient_light_energy = (0.35 + 0.45 * horizon) if up else 0.15
+		sky_env.ambient_light_energy = lerpf(0.15, 0.35 + 0.45 * horizon, twilight)
 		sky_env.fog_light_color = sky_mat.sky_horizon_color if sky_mat != null else sky_env.fog_light_color
 
 
