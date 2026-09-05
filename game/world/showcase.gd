@@ -722,6 +722,7 @@ static func _unit_400(plant: Plant) -> void:
 	# The operator screen: a simplified P&ID of the unit with every
 	# reading live from the records, facing the rig beside the cabinet.
 	var hmi := HmiScreenView.new()
+	hmi.name = "hmi_400"
 	plant.add_child(hmi)
 	hmi.position = plant.to_local(Vector3(2.9, 1.68, 8.4))
 	var overview := UnitHmiPanel.new()

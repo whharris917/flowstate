@@ -37,6 +37,7 @@ func _init(name_: String) -> void:
 	add_observable("vials_done", &"vials_done")
 	add_observable("fill_purity", &"fill_purity")
 	add_observable("product_filled_l", &"product_filled_l")
+	add_observable("filled_l", &"filled_l")
 
 
 var needed_lps: float:

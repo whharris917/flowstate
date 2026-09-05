@@ -18,6 +18,7 @@ var tank_panel: TankConfigPanel = null    # injected by the world after _ready
 var sim: Simulation
 var historian: SimHistorian
 var hmi_view: HmiView
+var balance_panel: PlantBalancePanel
 
 # Convenience refs to the commissioned loop (refreshed after load).
 var tank: SimTank
@@ -1152,6 +1153,16 @@ func _build_hmi() -> void:
 	hmi_view.position = Vector3(-4.6, 1.6, -4.75)
 	add_child(hmi_view)
 	hmi_view.setup(historian, tank, switch, relay, pump)
+	# The material balance by unit, beside it: the standing proof that
+	# what the headers fed is still somewhere, from the records' meters.
+	var balance_screen := HmiScreenView.new()
+	balance_screen.name = "hmi_balance"
+	balance_screen.position = Vector3(-6.9, 1.6, -4.75)
+	add_child(balance_screen)
+	balance_panel = PlantBalancePanel.new()
+	balance_panel.setup(self)
+	balance_screen.setup(balance_panel, "MATERIAL BALANCE", Vector2i(1024, 640), 1.2,
+		"Material balance by unit: fed, out, held against held at build, and the residual, all from the records' own meters; the plant residual trended from the historian.")
 
 
 func _self_check() -> void:

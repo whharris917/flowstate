@@ -1,17 +1,27 @@
 class_name UnitHmiPanel
 extends Control
-## An operator overview of Unit 400: a simplified P&ID with every
-## reading taken live from the records it names — vessel levels,
-## switch states, valve travel, pumps running and their flow, the
-## sequence step from the PLC's memories — and a ten-minute trend of
-## the three levels from the historian. Nothing here is inferred or
-## smoothed; a line is drawn as flowing only when the record it stands
-## for is passing material. Renders inside a SubViewport that an
-## HmiScreenView displays in the world.
+## An operator screen for Unit 400 in three pages, every reading taken
+## live from the records it names, nothing inferred or smoothed.
 ##
-## The drawing helpers (vessel with switch marks, pump, block valve,
-## line, header, sewer) are general; another unit's overview would be
-## another layout over the same helpers.
+## OVERVIEW: a simplified P&ID — vessel levels with each switch marked
+## at the level it trips at, block valves coloured by travel, pumps
+## green when moving material and red when running against nothing,
+## the sequence step from the PLC's memories, header and sewer totals,
+## and a ten-minute trend of the three levels from the historian.
+##
+## HYDRAULICS: the proof that the flows and pressures are sensible.
+## Both pump curves with their operating points and the static lift
+## drawn across them, so P-402's dead-head is a picture; the hydraulic
+## grade line along the lift path from node pressures the solver just
+## produced; and each transfer checked against the valve equation.
+##
+## BALANCE: the proof that mass is conserved. Fed by the header, out to
+## the sewer, held now against held at build, the residual, and that
+## residual replayed from the historian over ten minutes.
+##
+## Renders inside a SubViewport that an HmiScreenView displays; E on
+## the screen turns the page. The drawing helpers are general; another
+## unit's screen is another layout over them.
 
 const COL_BG := Color(0.09, 0.10, 0.11)
 const COL_PANEL := Color(0.13, 0.14, 0.15)
@@ -28,13 +38,18 @@ const COL_T402 := Color(0.30, 0.78, 0.95)
 const COL_T403 := Color(0.22, 0.53, 0.90)
 const TREND_S := 600.0
 const FLOWING_LPS := 0.05
+const G_PER_M := 9810.0   # Pa per metre of water
 const STEPS: Array[String] = ["FILL", "LIFT", "DRAIN T-401", "DRAIN T-402", "SEWER"]
+const PAGES: Array[String] = ["OVERVIEW", "HYDRAULICS", "BALANCE"]
 
 var plant: Plant
 var cab: String
+var page: int = 0
 var _step: int = -1
 var _step_since: float = 0.0
 var _font: Font
+var _held0: float = NAN
+var _since_redraw: float = 0.0
 
 
 func setup(plant_: Plant, cab_: String) -> void:
@@ -43,18 +58,40 @@ func setup(plant_: Plant, cab_: String) -> void:
 	_font = ThemeDB.fallback_font
 
 
-func _process(_delta: float) -> void:
+func next_page() -> void:
+	page = (page + 1) % PAGES.size()
+	queue_redraw()
+
+
+func page_name() -> String:
+	return PAGES[page]
+
+
+func _process(delta: float) -> void:
 	var step := _current_step()
 	if step != _step:
 		_step = step
 		_step_since = plant.sim.time
-	queue_redraw()
+	if is_nan(_held0):
+		var names := _unit_names()
+		if not names.is_empty():
+			var acc := SimBalance.accounts(plant.sim, names)
+			_held0 = float(acc["held"]) - (float(acc["fed"]) - float(acc["out"]))
+	# The balance page replays historian samples; five times a second is plenty.
+	_since_redraw += delta
+	if page != 2 or _since_redraw >= 0.2:
+		_since_redraw = 0.0
+		queue_redraw()
 
 
 ## ---- data ------------------------------------------------------------------
 
 func _rec(name_: String) -> SimComponent:
 	return plant.sim.get_component(name_)
+
+
+func _unit_names() -> Array[String]:
+	return SimBalance.names_in(plant.sim, 400)
 
 
 func _current_step() -> int:
@@ -70,6 +107,18 @@ func _current_step() -> int:
 	return -1
 
 
+func _pressure(comp_name: String, port_name: String) -> float:
+	var comp := _rec(comp_name)
+	if comp == null:
+		return 0.0
+	var port: SimPort = comp.outputs.get(port_name)
+	if port == null:
+		port = comp.inputs.get(port_name)
+	if port == null:
+		return 0.0
+	return plant.sim.pressure_at(port)
+
+
 static func _clock(t: float) -> String:
 	var total := int(t)
 	@warning_ignore("integer_division")
@@ -80,28 +129,25 @@ static func _clock(t: float) -> String:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), COL_BG)
-	var t401 := _rec("t_401") as SimTank
-	var t402 := _rec("t_402") as SimTank
-	var t403 := _rec("t_403") as SimTank
-	var p401 := _rec("p_401") as SimPump
-	var p402 := _rec("p_402") as SimPump
-	var k401 := _rec("k_401") as SimRelay
-	var fi := _rec("fi_401") as SimGauge
-	var xv401 := _rec("xv_401") as SimBlockValve
-	var xv402 := _rec("xv_402") as SimBlockValve
-	var xv403 := _rec("xv_403") as SimBlockValve
-	var xv404 := _rec("xv_404") as SimBlockValve
-	var header := _rec("supply_401") as SimSource
-	var sewer := _rec("du_401") as SimDrain
-	if t401 == null or t403 == null or p401 == null or xv401 == null or header == null:
+	if _rec("t_401") == null or _rec("p_401") == null or _rec("xv_401") == null:
 		_text(Vector2(size.x / 2.0, size.y / 2.0), "NO DATA", 28, COL_ALARM, HORIZONTAL_ALIGNMENT_CENTER)
 		return
+	_draw_header()
+	match page:
+		0:
+			_draw_overview()
+		1:
+			_draw_hydraulics()
+		2:
+			_draw_balance()
 
-	# ---- header bar and the sequence ----
+
+func _draw_header() -> void:
 	draw_rect(Rect2(0, 0, size.x, 46), COL_PANEL)
-	_text(Vector2(16, 31), "UNIT 400 · STAGED TRANSFER", 22, COL_INK)
+	_text(Vector2(16, 31), "UNIT 400 · STAGED TRANSFER · %s" % PAGES[page], 22, COL_INK)
 	_text(Vector2(size.x - 16, 31), "t %s" % _clock(plant.sim.time), 18, COL_MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
-	var plc_on := plant.cabinet_plc(cab) != "" and (_rec(plant.cabinet_plc(cab)) as SimPLC).power.value > 0.5
+	var plc_name := plant.cabinet_plc(cab)
+	var plc_on := plc_name != "" and (_rec(plc_name) as SimPLC).power.value > 0.5
 	for i in STEPS.size():
 		var pill := Rect2(16 + i * 136, 56, 128, 30)
 		var active := i == _step
@@ -115,8 +161,27 @@ func _draw() -> void:
 	var step_text := "PLC UNPOWERED" if not plc_on else (
 		"no step" if _step < 0 else "in step %s" % _clock(plant.sim.time - _step_since))
 	_text(Vector2(700, 77), step_text, 14, COL_ALARM if not plc_on else COL_MUTED)
+	_text(Vector2(size.x - 16, 77), "page %d/%d · E next" % [page + 1, PAGES.size()], 12, COL_MUTED,
+		HORIZONTAL_ALIGNMENT_RIGHT)
 
-	# ---- the P&ID ----
+
+# ---- page 1: overview ----------------------------------------------------
+
+func _draw_overview() -> void:
+	var t401 := _rec("t_401") as SimTank
+	var t402 := _rec("t_402") as SimTank
+	var t403 := _rec("t_403") as SimTank
+	var p401 := _rec("p_401") as SimPump
+	var p402 := _rec("p_402") as SimPump
+	var k401 := _rec("k_401") as SimRelay
+	var fi := _rec("fi_401") as SimGauge
+	var xv401 := _rec("xv_401") as SimBlockValve
+	var xv402 := _rec("xv_402") as SimBlockValve
+	var xv403 := _rec("xv_403") as SimBlockValve
+	var xv404 := _rec("xv_404") as SimBlockValve
+	var header := _rec("supply_401") as SimSource
+	var sewer := _rec("du_401") as SimDrain
+
 	# Riser and header lines first, so symbols paint over them.
 	var riser_x := 96.0
 	var tee := Vector2(200, 566)
@@ -134,14 +199,12 @@ func _draw() -> void:
 	_dot(tee)
 	_dot(Vector2(riser_x, 446))
 
-	# Vessels, with their switches marked at the level each trips at.
 	_vessel(Rect2(300, 110, 80, 120), t401, "T-401", [
 		[_rec("lsh_401"), "LSH-401"], [_rec("lsl_401"), "LSL-401"]])
 	_vessel(Rect2(300, 292, 80, 120), t402, "T-402", [[_rec("lsl_402"), "LSL-402"]])
 	_vessel(Rect2(270, 476, 140, 100), t403, "T-403 SUMP", [
 		[_rec("lsh_403"), "LSH-403"], [_rec("lsl_403"), "LSL-403"]])
 
-	# Valves, pumps, meter, header, sewer.
 	_valve(Vector2(340, 261), xv401, "XV-401", true)
 	_valve(Vector2(340, 444), xv402, "XV-402", true)
 	_valve(Vector2(150, 600), xv403, "XV-403", false)
@@ -170,7 +233,7 @@ func _draw() -> void:
 		_text(Vector2(150, 402), "K-401 %s · %d cycles" % ["ON" if k401.energized else "off", k401.cycles], 11,
 			COL_RUN if k401.energized else COL_MUTED, HORIZONTAL_ALIGNMENT_CENTER)
 
-	# ---- right panel: the lists and the trend ----
+	# Right panel: the lists and the trend.
 	var panel := Rect2(700, 100, size.x - 716, size.y - 116)
 	draw_rect(panel, COL_PANEL)
 	var y := 122.0
@@ -220,8 +283,231 @@ func _draw() -> void:
 		_text(Vector2(x0, y), str(row[0]), 13, COL_INK)
 		_text(Vector2(x1, y), str(row[1]), 13, COL_INK, HORIZONTAL_ALIGNMENT_RIGHT)
 		y += 17
-	_trend(Rect2(x0, y + 14, x1 - x0, panel.end.y - y - 22), [t401, t402, t403], [COL_T401, COL_T402, COL_T403])
+	_level_trend(Rect2(x0, y + 14, x1 - x0, panel.end.y - y - 22), [t401, t402, t403], [COL_T401, COL_T402, COL_T403])
 
+
+# ---- page 2: hydraulics --------------------------------------------------
+
+func _draw_hydraulics() -> void:
+	var t401 := _rec("t_401") as SimTank
+	var t403 := _rec("t_403") as SimTank
+	var p401 := _rec("p_401") as SimPump
+	var p402 := _rec("p_402") as SimPump
+	# Static lift: from the sump's surface to the top tank's top nozzle.
+	var static_m := (t401.elevation_m + t401.height_m) - (t403.elevation_m + t403.depth_m)
+	_pump_chart(Rect2(16, 100, 484, 290), [p401, p402], ["P-401", "P-402"], [COL_RUN, COL_STROKE], static_m)
+	_grade_line(Rect2(520, 100, size.x - 536, 290))
+	_transfer_table(Rect2(16, 404, size.x - 32, size.y - 416))
+
+
+## Both pump curves, H = H0 (1 - (Q/Qr)^2), each operating point from
+## the record, and the static lift the system asks of them.
+func _pump_chart(rect: Rect2, pumps: Array, tags: Array, colors: Array, static_m: float) -> void:
+	draw_rect(rect, COL_PANEL)
+	_text(Vector2(rect.position.x + 8, rect.position.y + 16), "PUMP CURVES · operating points from the records", 12, COL_MUTED)
+	var plot := Rect2(rect.position.x + 44, rect.position.y + 28, rect.size.x - 56, rect.size.y - 52)
+	var q_max := 1.0
+	var h_max := static_m * 1.2
+	for p_v: Variant in pumps:
+		var p := p_v as SimPump
+		q_max = maxf(q_max, p.rated_lps * 1.05)
+		h_max = maxf(h_max, p.head_m * 1.1)
+	var q_step := 5.0 if q_max > 12.0 else 1.0
+	var h_step := 10.0 if h_max > 25.0 else 2.0
+	var q := 0.0
+	while q <= q_max:
+		var x := plot.position.x + plot.size.x * q / q_max
+		draw_line(Vector2(x, plot.position.y), Vector2(x, plot.end.y), COL_LINE, 1.0)
+		_text(Vector2(x, plot.end.y + 14), "%.0f" % q, 10, COL_MUTED, HORIZONTAL_ALIGNMENT_CENTER)
+		q += q_step
+	var h := 0.0
+	while h <= h_max:
+		var y := plot.end.y - plot.size.y * h / h_max
+		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), COL_LINE, 1.0)
+		_text(Vector2(plot.position.x - 4, y + 4), "%.0f m" % h, 10, COL_MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+		h += h_step
+	_text(Vector2(plot.end.x, plot.end.y + 14), "L/s", 10, COL_MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+	# The static lift: what the system asks before any friction.
+	var ys := plot.end.y - plot.size.y * static_m / h_max
+	draw_dashed_line(Vector2(plot.position.x, ys), Vector2(plot.end.x, ys), COL_INK, 1.0, 6.0)
+	_text(Vector2(plot.end.x - 4, ys - 4), "static lift %.1f m" % static_m, 10, COL_INK, HORIZONTAL_ALIGNMENT_RIGHT)
+	for k in pumps.size():
+		var p := pumps[k] as SimPump
+		var col := colors[k] as Color
+		var curve := PackedVector2Array()
+		for i in 41:
+			var qq := p.rated_lps * i / 40.0
+			var hh := p.head_m * (1.0 - pow(qq / p.rated_lps, 2.0))
+			curve.append(Vector2(plot.position.x + plot.size.x * qq / q_max, plot.end.y - plot.size.y * hh / h_max))
+		draw_polyline(curve, col, 2.0)
+		var op := Vector2(plot.position.x + plot.size.x * clampf(p.flow_lps / q_max, 0.0, 1.0),
+			plot.end.y - plot.size.y * clampf(p.head_pa / G_PER_M / h_max, 0.0, 1.0))
+		if p.running:
+			draw_circle(op, 6, col)
+			draw_arc(op, 6, 0.0, TAU, 20, COL_INK, 1.5)
+		else:
+			draw_arc(op, 6, 0.0, TAU, 20, col, 1.5)
+		var label := "%s %s · %.1f L/s at %.1f m" % [tags[k], "RUN" if p.running else "STOP", p.flow_lps, p.head_pa / G_PER_M]
+		if p.running and p.flow_lps <= FLOWING_LPS:
+			label += " · needs %.1f, has %.1f" % [p.head_pa / G_PER_M, p.head_m]
+		_text(Vector2(plot.position.x + 6, plot.position.y + 14 + k * 15), label, 11, col)
+
+
+## Piezometric head at each nozzle along the lift path, straight from
+## the solver's node pressures.
+func _grade_line(rect: Rect2) -> void:
+	draw_rect(rect, COL_PANEL)
+	_text(Vector2(rect.position.x + 8, rect.position.y + 16), "HYDRAULIC GRADE LINE · lift path, node pressures this scan", 12, COL_MUTED)
+	var stations := [["t_403", "outlet", "SUMP OUT"], ["p_401", "inlet", "P-401 IN"], ["p_401", "outlet", "P-401 OUT"],
+		["fi_401", "inlet", "FI IN"], ["fi_401", "outlet", "FI OUT"], ["t_401", "inlet", "T-401 IN"]]
+	var plot := Rect2(rect.position.x + 44, rect.position.y + 28, rect.size.x - 56, rect.size.y - 60)
+	var heads: Array[float] = []
+	var h_max := 10.0
+	for st: Array in stations:
+		var m := _pressure(str(st[0]), str(st[1])) / G_PER_M
+		heads.append(m)
+		h_max = maxf(h_max, m * 1.15)
+	var h_step := 10.0 if h_max > 25.0 else 2.0
+	var h := 0.0
+	while h <= h_max:
+		var y := plot.end.y - plot.size.y * h / h_max
+		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), COL_LINE, 1.0)
+		_text(Vector2(plot.position.x - 4, y + 4), "%.0f m" % h, 10, COL_MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+		h += h_step
+	var points := PackedVector2Array()
+	for i in stations.size():
+		var x := plot.position.x + plot.size.x * (i + 0.5) / stations.size()
+		var y := plot.end.y - plot.size.y * clampf(heads[i] / h_max, -0.05, 1.0)
+		points.append(Vector2(x, y))
+		_text(Vector2(x, plot.end.y + 14), str(stations[i][2]), 10, COL_MUTED, HORIZONTAL_ALIGNMENT_CENTER)
+		_text(Vector2(x, y - 10), "%.0f kPa" % (heads[i] * G_PER_M / 1000.0), 10, COL_INK, HORIZONTAL_ALIGNMENT_CENTER)
+	var p401 := _rec("p_401") as SimPump
+	draw_polyline(points, COL_FLOW if p401.flow_lps > FLOWING_LPS else COL_LINE, 2.0)
+	for p in points:
+		draw_circle(p, 3.5, COL_INK)
+	_text(Vector2(plot.end.x, plot.position.y + 14), "piezometric: elevation is in the number", 10, COL_MUTED,
+		HORIZONTAL_ALIGNMENT_RIGHT)
+
+
+## Each transfer against the valve equation: Q should equal
+## Cv * (x/100) * sqrt(dP / 1 bar) with dP read across the valve.
+func _transfer_table(rect: Rect2) -> void:
+	draw_rect(rect, COL_PANEL)
+	var x0 := rect.position.x + 12
+	var cols := [x0, x0 + 190, x0 + 340, x0 + 480, x0 + 640, x0 + 800, x0 + 960]
+	var y := rect.position.y + 18
+	_text(Vector2(x0, y), "TRANSFERS · the valve equation, checked live", 12, COL_MUTED)
+	y += 20
+	var heads := ["VALVE", "TRAVEL", "dP ACROSS kPa", "Q L/s", "Cv·x·√(dP/1bar)", "Q / THAT", "LINE"]
+	for i in heads.size():
+		_text(Vector2(float(cols[i]), y), heads[i], 11, COL_MUTED, HORIZONTAL_ALIGNMENT_LEFT if i == 0 else HORIZONTAL_ALIGNMENT_RIGHT)
+	y += 6
+	draw_line(Vector2(x0, y), Vector2(rect.end.x - 12, y), COL_LINE, 1.0)
+	y += 18
+	for row: Array in [["XV-404", "xv_404", "header to sump"], ["XV-401", "xv_401", "T-401 to T-402"],
+			["XV-402", "xv_402", "T-402 to sump"], ["XV-403", "xv_403", "sump to sewer"]]:
+		var xv := _rec(str(row[1])) as SimBlockValve
+		if xv == null:
+			continue
+		var dp := (plant.sim.pressure_at(xv.inlet) - plant.sim.pressure_at(xv.outlet))
+		var q := xv.flow_lps
+		var expected := xv.cv_lps * (xv.position / 100.0) * sqrt(maxf(dp, 0.0) / 100000.0)
+		_text(Vector2(float(cols[0]), y), "%s (Cv %.0f)" % [row[0], xv.cv_lps], 13, COL_INK)
+		var st := xv.state()
+		_text(Vector2(float(cols[1]), y), "%.0f %% %s" % [xv.position, st.to_lower()], 13,
+			COL_RUN if st == "OPEN" else (COL_MUTED if st == "CLOSED" else COL_STROKE), HORIZONTAL_ALIGNMENT_RIGHT)
+		_text(Vector2(float(cols[2]), y), "%.1f" % (dp / 1000.0), 13, COL_INK, HORIZONTAL_ALIGNMENT_RIGHT)
+		_text(Vector2(float(cols[3]), y), "%.2f" % q, 13, COL_FLOW if q > FLOWING_LPS else COL_MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+		_text(Vector2(float(cols[4]), y), "%.2f" % expected, 13, COL_INK, HORIZONTAL_ALIGNMENT_RIGHT)
+		var ratio_text := "—"
+		var ratio_col := COL_MUTED
+		if expected > 0.02 and q > FLOWING_LPS:
+			var ratio := q / expected
+			ratio_text = "%.3f" % ratio
+			ratio_col = COL_RUN if absf(ratio - 1.0) < 0.02 else COL_STROKE
+		elif st == "CLOSED":
+			ratio_text = "shut, holds %.1f kPa" % (dp / 1000.0)
+		_text(Vector2(float(cols[5]), y), ratio_text, 13, ratio_col, HORIZONTAL_ALIGNMENT_RIGHT)
+		_text(Vector2(float(cols[6]), y), str(row[2]), 12, COL_MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+		y += 20
+	y += 6
+	_text(Vector2(x0, y), "A ratio of 1.000 is the valve equation holding to the solver's tolerance; dP is read across the valve's own two nozzles.", 11, COL_MUTED)
+
+
+# ---- page 3: balance -----------------------------------------------------
+
+func _draw_balance() -> void:
+	var names := _unit_names()
+	var acc := SimBalance.accounts(plant.sim, names)
+	var h0 := 0.0 if is_nan(_held0) else _held0
+	var res := SimBalance.residual(acc, h0)
+	var fed := float(acc["fed"])
+	var out := float(acc["out"])
+	var held := float(acc["held"])
+	# Four tiles.
+	var tiles := [
+		["FED BY HEADER", "%.1f L" % fed, "supply_401 total", COL_INK],
+		["OUT TO SEWER", "%.1f L" % out, "du_401 total", COL_INK],
+		["HELD IN VESSELS", "%.1f L" % held, "was %.1f L at build" % h0, COL_INK],
+		["RESIDUAL", "%+.2f L" % res, "fed - out - (held - built) · %.2f %% closed" % SimBalance.closure_pct(acc, h0),
+			COL_RUN if absf(res) <= maxf(1.0, 0.005 * fed) else COL_ALARM],
+	]
+	for i in tiles.size():
+		var tile := Rect2(16 + (i % 2) * 246, 100 + int(i / 2.0) * 118, 236, 106)
+		draw_rect(tile, COL_PANEL)
+		_text(tile.position + Vector2(12, 22), str(tiles[i][0]), 12, COL_MUTED)
+		_text(tile.position + Vector2(12, 62), str(tiles[i][1]), 30, tiles[i][3] as Color)
+		_text(tile.position + Vector2(12, 90), str(tiles[i][2]), 11, COL_MUTED)
+	# The bar: fed on top, out + change in held below it; equal lengths close.
+	var bar := Rect2(16, 348, 482, 70)
+	draw_rect(bar, COL_PANEL)
+	var scale := bar.size.x - 24
+	var denom := maxf(maxf(fed, out + maxf(held - h0, 0.0)), 1.0)
+	_text(Vector2(28, 366), "fed", 11, COL_MUTED)
+	draw_rect(Rect2(28, 370, scale * fed / denom, 12), COL_FLOW)
+	_text(Vector2(28, 398), "out + change in held", 11, COL_MUTED)
+	draw_rect(Rect2(28, 402, scale * out / denom, 12), COL_STROKE)
+	draw_rect(Rect2(28 + scale * out / denom, 402, scale * maxf(held - h0, 0.0) / denom, 12), COL_LEVEL)
+	_text(Vector2(16, 440), "Every number is a record's own meter: the header's total, the sewer's total, the three levels. Nothing here integrates a flow.", 11, COL_MUTED)
+	_text(Vector2(16, 458), "The residual is what a closed balance keeps at zero, scan after scan, through two pumps, four valves, two tees and three vessels.", 11, COL_MUTED)
+	# The residual over ten minutes, from the historian.
+	_residual_trend(Rect2(520, 100, size.x - 536, 360), names, h0)
+
+
+func _residual_trend(rect: Rect2, names: Array, h0: float) -> void:
+	draw_rect(rect, COL_PANEL)
+	_text(Vector2(rect.position.x + 8, rect.position.y + 16), "RESIDUAL, LAST 10 MIN · replayed from historian samples", 12, COL_MUTED)
+	var historian := plant.historian
+	if historian == null or historian.sample_count() < 2:
+		return
+	var plot := Rect2(rect.position.x + 50, rect.position.y + 30, rect.size.x - 60, rect.size.y - 46)
+	var times := historian.time
+	var t1 := times[times.size() - 1]
+	var t0 := maxf(times[0], t1 - TREND_S)
+	var count := 0
+	var i := times.size() - 1
+	while i > 0 and times[i - 1] >= t0:
+		i -= 1
+		count += 1
+	var stride := maxi(1, ceili(count / (plot.size.x * 0.5)))
+	var points := SimBalance.residual_points(historian, SimBalance.tags(plant.sim, names), h0, t0, stride)
+	var span := 2.0
+	for p in points:
+		span = maxf(span, absf(p.y) * 1.2)
+	var mid := plot.position.y + plot.size.y / 2.0
+	for frac: float in [-1.0, -0.5, 0.0, 0.5, 1.0]:
+		var yy := mid - frac * plot.size.y / 2.0
+		draw_line(Vector2(plot.position.x, yy), Vector2(plot.end.x, yy), COL_INK if frac == 0.0 else COL_LINE, 1.0)
+		_text(Vector2(plot.position.x - 6, yy + 4), "%+.1f L" % (frac * span), 10, COL_MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+	var packed := PackedVector2Array()
+	for p in points:
+		packed.append(Vector2(plot.position.x + plot.size.x * (p.x - t0) / (t1 - t0 + 0.001),
+			mid - clampf(p.y / span, -1.0, 1.0) * plot.size.y / 2.0))
+	if packed.size() >= 2:
+		draw_polyline(packed, COL_FLOW, 2.0)
+
+
+# ---- helpers ---------------------------------------------------------------
 
 func _pump_state(pump: SimPump) -> String:
 	if not pump.running:
@@ -330,7 +616,7 @@ func _pump(center: Vector2, pump: SimPump, tag: String) -> void:
 
 
 ## The three levels over the last ten minutes, from the historian.
-func _trend(rect: Rect2, tanks: Array, colors: Array) -> void:
+func _level_trend(rect: Rect2, tanks: Array, colors: Array) -> void:
 	var historian := plant.historian
 	draw_rect(rect, COL_BG)
 	if historian == null or historian.sample_count() < 2:

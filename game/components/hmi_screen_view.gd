@@ -8,6 +8,8 @@ extends Node3D
 
 var panel: Control
 var _describe: String
+var _title_label: Label3D
+var _title: String
 
 
 func setup(panel_: Control, title: String, px: Vector2i, width_m: float, describe_text: String) -> void:
@@ -37,7 +39,9 @@ func setup(panel_: Control, title: String, px: Vector2i, width_m: float, describ
 	screen.material_override = mat
 	add_child(screen)
 
-	ViewUtil.label(self, title, Vector3(0, h / 2.0 + 0.22, 0))
+	_title = title
+	_title_label = ViewUtil.label(self, title, Vector3(0, h / 2.0 + 0.22, 0))
+	_refresh_title()
 	ViewUtil.interact_body(self, Vector3(width_m + 0.15, h + 0.15, 0.2), Vector3.ZERO)
 	var stand := ViewUtil.flat(Color(0.16, 0.17, 0.19))
 	ViewUtil.box(self, Vector3(width_m + 0.3, h + 0.3, 0.08), Vector3(0, 0, -0.10), stand)
@@ -45,9 +49,21 @@ func setup(panel_: Control, title: String, px: Vector2i, width_m: float, describ
 		ViewUtil.box(self, Vector3(0.12, 2.45, 0.12), Vector3(post_x, -0.46, -0.10), stand)
 
 
+func _refresh_title() -> void:
+	if panel != null and panel.has_method("page_name"):
+		_title_label.text = "%s · %s · E next page" % [_title, str(panel.call("page_name"))]
+	else:
+		_title_label.text = _title
+
+
 func describe() -> String:
+	if panel != null and panel.has_method("page_name"):
+		return "%s\nShowing %s. E turns the page." % [_describe, str(panel.call("page_name"))]
 	return _describe
 
 
+## A screen with pages turns to the next one; a one-page screen does nothing.
 func use() -> void:
-	pass
+	if panel != null and panel.has_method("next_page"):
+		panel.call("next_page")
+		_refresh_title()

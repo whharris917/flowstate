@@ -170,8 +170,8 @@ func _run(world: Node) -> void:
 	# Soak: advance the kernel twenty minutes at once and report again.
 	# A train can look right in the first seconds and still not close;
 	# this is where the recycle either works or does not.
-	var fed_before := _fed_in(plant)
-	var held_before := _held(plant)
+	var u300 := SimBalance.names_in(plant.sim, 300)
+	var acc_before := SimBalance.accounts(plant.sim, u300)
 	# Soak one scan at a time so the worst Newton residual and the
 	# scans that hit the iteration cap are on record.
 	var worst_residual := 0.0
@@ -222,10 +222,20 @@ func _run(world: Node) -> void:
 		product_tank.level_l, product_tank.purity_frac() * 100.0, filler.vials_done])
 	# Material balance around the whole unit: what came in across the
 	# plant boundary has to still be somewhere.
-	var fed := _fed_in(plant) - fed_before
-	var gained := _held(plant) - held_before
+	var acc_after := SimBalance.accounts(plant.sim, u300)
+	var fed := float(acc_after["fed"]) - float(acc_before["fed"])
+	var gained := (float(acc_after["out"]) + float(acc_after["held"])) \
+		- (float(acc_before["out"]) + float(acc_before["held"]))
 	print("[probe] balance: fed %.1f L, accounted %.1f L (%.1f%% closed)" % [
 		fed, gained, 100.0 * (1.0 - absf(fed - gained) / maxf(fed, 1.0))])
+	# Every unit since the plant started, the way the balance screen
+	# shows it: the residual is what a closed balance keeps at zero.
+	for unit in SimBalance.units(plant.sim):
+		var acc := SimBalance.accounts(plant.sim, SimBalance.names_in(plant.sim, unit))
+		var h0 := plant.balance_panel.held0(unit)
+		print("[probe] %s since start: fed %.1f · out %.1f · held %.1f from %.1f · residual %+.2f L · %.2f%% closed" % [
+			SimBalance.unit_label(unit), acc["fed"], acc["out"], acc["held"], h0,
+			SimBalance.residual(acc, h0), SimBalance.closure_pct(acc, h0)])
 	print("[probe] boiler made %.1f L of steam from %.1f L of feedwater: the known gap, counted as fed above" % [
 		sg.steam_total_l, sg.feedwater_total_l])
 	var net := plant.sim.network()
@@ -238,6 +248,16 @@ func _run(world: Node) -> void:
 	# against the numbers just printed.
 	await _vantage(player, Vector3(2.9, 0.15, 10.4), Vector2(0.0, -1.0), 0.0, 0.05)
 	await _shot("user://probe_showcase_u400_hmi.png")
+	var hmi := plant.get_node_or_null("hmi_400") as HmiScreenView
+	if hmi != null:
+		for page_name: String in ["hydraulics", "balance"]:
+			hmi.use()
+			await get_tree().create_timer(0.4).timeout
+			await _shot("user://probe_showcase_u400_hmi_%s.png" % page_name)
+		hmi.use()
+	# The plant-wide balance screen beside the home HMI.
+	await _vantage(player, Vector3(-6.9, 0.15, -2.6), Vector2(0.0, -1.0), 0.0, 0.05)
+	await _shot("user://probe_showcase_balance.png")
 
 	var bad: Array[String] = []
 	for visual: Dictionary in plant._wire_visuals:
@@ -351,56 +371,3 @@ func _print_rig(plant: Plant, label: String) -> void:
 		label, "RUN" if p401.running else "stop", p401.flow_lps, fi.reading, p401.starts, k401.cycles,
 		"RUN" if p402.running else "stop", p402.flow_lps, p402.dry_run_s,
 		p402.suction_pa / 1000.0, p402.discharge_pa / 1000.0])
-
-
-## Fresh material crossing the plant boundary. Mostly the headers, plus
-## one input that is easy to miss: the transfer lock knocks condensate
-## out of the humid air it vents, and that water is real material
-## entering from outside the modelled system. Leave it out and the
-## balance looks like the plant is manufacturing water.
-func _fed_in(plant: Plant) -> float:
-	var total := 0.0
-	for header: String in ["supply_301a", "supply_301b", "supply_bfw", "supply_solv"]:
-		var src := plant.sim.get_component(header) as SimSource
-		if src != null:
-			total += src.total_l
-	var lock := plant.sim.get_component("vl_302") as SimVacuumLock
-	if lock != null:
-		total += lock.cycles * SimVacuumLock.CONDENSATE_PER_CYCLE_L + lock.condensate_l
-	# The steam drum is a pressure boundary, so it hands out whatever
-	# steam is drawn and makes up the difference from nowhere. That
-	# makeup is real material entering the plant, and the balance has
-	# to say so rather than hide it.
-	var sg := plant.sim.get_component("sg_301") as SimSteamGen
-	if sg != null:
-		total += sg.steam_total_l - sg.feedwater_total_l
-	return total
-
-
-## Everything currently inside Unit 300, plus everything that has left
-## it. The two together are what the headers fed in.
-func _held(plant: Plant) -> float:
-	var total := 0.0
-	for vessel: String in ["r_301", "cx_303"]:
-		var comp := plant.sim.get_component(vessel)
-		if comp is SimReactor:
-			var r := comp as SimReactor
-			total += r.volume_l + r.boiled_off_l + r.overflowed_l
-		elif comp is SimCrystallizer:
-			var c := comp as SimCrystallizer
-			total += c.volume_l + c.overflowed_l
-	for tank_name: String in ["ht_304", "pt_300", "lt_306", "sv_308"]:
-		var tank := plant.sim.get_component(tank_name) as SimTank
-		if tank != null:
-			total += tank.level_l + tank.overflowed_l
-	for drain_name: String in ["du_301", "du_302"]:
-		var drain := plant.sim.get_component(drain_name) as SimDrain
-		if drain != null:
-			total += drain.total_l
-	var dryer := plant.sim.get_component("dr_305") as SimDryer
-	if dryer != null:
-		total += dryer.dried_l          # left as vapour
-	var filler := plant.sim.get_component("vf_310") as SimVialFiller
-	if filler != null:
-		total += filler.filled_l        # left in vials
-	return total
