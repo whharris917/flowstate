@@ -250,7 +250,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 				params.get("capacity_l", 100.0),
 				params.get("level_l", 0.0), params.get("drain_lps", 0.0),
 				params.get("height_m", 0.0), params.get("diameter_m", 0.0),
-				params.get("headspace_kpa", 0.0), params.get("elevation_m", 0.0)))
+				params.get("headspace_kpa", 0.0), params.get("elevation_m", 0.0),
+				params.get("nozzle_cv_lps", SimTank.OUTLET_CV_LPS)))
 		"pump":
 			return sim.add(SimPump.new(name_, params.get("rated_lps", 4.0),
 				params.get("mode", "auto"), params.get("head_m", 30.0)))
@@ -263,7 +264,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimGauge.new(name_, "level_kpa",
 				params.get("liters_per_meter", 45.45)))
 		"gauge_flow":
-			return sim.add(SimGauge.new(name_, "flow"))
+			return sim.add(SimGauge.new(name_, "flow", 45.45, "product",
+				params.get("meter_k", SimGauge.METER_K)))
 		"gauge_dp":
 			return sim.add(SimGauge.new(name_, "dp_pa"))
 		"gauge_press":

@@ -199,6 +199,34 @@ class TestValveAuthority:
         assert half > wide * 0.5
 
 
+class TestVesselNozzleSize:
+    """A vessel's nozzles are sized like its lines. The default passes a
+    few litres a second before it costs real head; a bigger nozzle lets
+    the same head move more."""
+
+    def _drain(self, nozzle_cv_lps: float):
+        sim = Simulation(dt=0.05)
+        high = sim.add(Tank("high", capacity_l=2000.0, level_l=1500.0, height_m=2.0,
+                            elevation_m=3.0, nozzle_cv_lps=nozzle_cv_lps))
+        low = sim.add(Tank("low", capacity_l=4000.0, level_l=0.0, height_m=2.0,
+                           nozzle_cv_lps=nozzle_cv_lps))
+        # A short fat line, or the pipe decides and the nozzle never matters:
+        # the installed characteristic again.
+        wire = sim.connect(high, "outlet", low, "inlet")
+        wire.k_pa_per_lps2 = 50.0
+        sim.run(10.0)
+        return low.level_l
+
+    def test_a_bigger_nozzle_drains_faster_under_the_same_head(self) -> None:
+        stock = self._drain(20.0)
+        big = self._drain(100.0)
+        assert big > stock * 1.5
+
+    def test_the_default_is_the_old_fixed_nozzle(self) -> None:
+        tank = Tank("t", capacity_l=100.0)
+        assert tank.nozzle_cv_lps == Tank.OUTLET_CV_LPS
+
+
 class TestBlockValve:
     """An on/off valve strokes: for stroke_s after the command changes it
     is neither open nor shut, and only then does it pass what the head

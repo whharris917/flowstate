@@ -29,6 +29,7 @@ const METER_K := 1000.0
 
 var kind: String
 var liters_per_meter: float
+var meter_k: float = METER_K   # the flow kind: size the element to its line
 var species_index: int = SimSpecies.PRODUCT
 var reading: float = 0.0
 
@@ -41,12 +42,14 @@ var signal_out: SimOutputPort
 
 
 func _init(name_: String, kind_: String, liters_per_meter_: float = 45.45,
-		species_: String = "product") -> void:
+		species_: String = "product", meter_k_: float = METER_K) -> void:
 	super(name_)
 	assert(KINDS.has(kind_), "kind must be one of " + str(KINDS))
 	assert(liters_per_meter_ > 0.0, "liters_per_meter must be positive")
+	assert(meter_k_ > 0.0, "meter_k must be positive")
 	kind = kind_
 	liters_per_meter = liters_per_meter_
+	meter_k = meter_k_
 	var index := SimSpecies.index_of(species_)
 	species_index = index if index >= 0 else SimSpecies.PRODUCT
 	if kind == "dp_pa":
@@ -74,7 +77,7 @@ func tap_ports() -> Array[String]:
 
 func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	if kind == "flow":
-		net.add_branch(SimResistance.new(node["inlet"], node["outlet"], METER_K, comp_name))
+		net.add_branch(SimResistance.new(node["inlet"], node["outlet"], meter_k, comp_name))
 
 
 func units() -> String:
@@ -129,7 +132,7 @@ func species_key() -> String:
 
 
 func state_dict() -> Dictionary:
-	return {"species": species_key(), "liters_per_meter": liters_per_meter}
+	return {"species": species_key(), "liters_per_meter": liters_per_meter, "meter_k": meter_k}
 
 
 func apply_state(state: Dictionary) -> void:
@@ -138,3 +141,4 @@ func apply_state(state: Dictionary) -> void:
 		if index >= 0:
 			species_index = index
 	liters_per_meter = maxf(float(state.get("liters_per_meter", liters_per_meter)), 1e-6)
+	meter_k = maxf(float(state.get("meter_k", meter_k)), 1e-6)

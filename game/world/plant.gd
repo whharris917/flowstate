@@ -1626,7 +1626,8 @@ func save_game() -> bool:
 func _params_for(record: SimComponent) -> Dictionary:
 	if record is SimTank:
 		var tank_rec := record as SimTank
-		return {"height_m": tank_rec.height_m, "diameter_m": tank_rec.diameter_m}
+		return {"height_m": tank_rec.height_m, "diameter_m": tank_rec.diameter_m,
+			"nozzle_cv_lps": tank_rec.nozzle_cv_lps}
 	if record is SimPump:
 		var pump_rec := record as SimPump
 		return {"rated_lps": pump_rec.rated_lps, "head_m": pump_rec.head_m}
@@ -1635,7 +1636,7 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"low_l": fs.low_l, "high_l": fs.high_l}
 	if record is SimGauge:
 		var g := record as SimGauge
-		return {"liters_per_meter": g.liters_per_meter, "species": g.species_key()}
+		return {"liters_per_meter": g.liters_per_meter, "species": g.species_key(), "meter_k": g.meter_k}
 	if record is SimColumn:
 		var col := record as SimColumn
 		return {"charge_l": col.charge_l, "max_duty_kw": col.max_duty_kw}

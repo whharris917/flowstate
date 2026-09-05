@@ -136,10 +136,10 @@ func _draw() -> void:
 
 	# Vessels, with their switches marked at the level each trips at.
 	_vessel(Rect2(300, 110, 80, 120), t401, "T-401", [
-		[_rec("lsh_401"), 700.0, "LSH-401"], [_rec("lsl_401"), 200.0, "LSL-401"]])
-	_vessel(Rect2(300, 292, 80, 120), t402, "T-402", [[_rec("lsl_402"), 200.0, "LSL-402"]])
+		[_rec("lsh_401"), "LSH-401"], [_rec("lsl_401"), "LSL-401"]])
+	_vessel(Rect2(300, 292, 80, 120), t402, "T-402", [[_rec("lsl_402"), "LSL-402"]])
 	_vessel(Rect2(270, 476, 140, 100), t403, "T-403 SUMP", [
-		[_rec("lsh_403"), 1000.0, "LSH-403"], [_rec("lsl_403"), 500.0, "LSL-403"]])
+		[_rec("lsh_403"), "LSH-403"], [_rec("lsl_403"), "LSL-403"]])
 
 	# Valves, pumps, meter, header, sewer.
 	_valve(Vector2(340, 261), xv401, "XV-401", true)
@@ -275,7 +275,9 @@ func _vessel(rect: Rect2, tank: SimTank, tag: String, switches: Array) -> void:
 		var ls := entry[0] as SimFloatSwitch
 		if ls == null:
 			continue
-		var trip_l := float(entry[1])
+		# A single-point switch trips at its one level; a two-point one
+		# is drawn at its low point.
+		var trip_l := ls.low_l
 		var y := rect.end.y - rect.size.y * clampf(trip_l / tank.capacity_l, 0.0, 1.0)
 		draw_line(Vector2(rect.end.x - 6, y), Vector2(rect.end.x + 6, y), COL_INK, 1.5)
 		var mark := Vector2(rect.end.x + 14, y)
@@ -283,7 +285,7 @@ func _vessel(rect: Rect2, tank: SimTank, tag: String, switches: Array) -> void:
 			draw_circle(mark, 5, COL_STROKE)
 		else:
 			draw_arc(mark, 5, 0.0, TAU, 20, COL_MUTED, 1.5)
-		_text(Vector2(rect.end.x + 24, y + 4), str(entry[2]), 11, COL_INK if ls.closed else COL_MUTED)
+		_text(Vector2(rect.end.x + 24, y + 4), str(entry[1]), 11, COL_INK if ls.closed else COL_MUTED)
 
 
 ## A block valve as a bowtie: green when open, outline when shut, amber
@@ -336,8 +338,15 @@ func _trend(rect: Rect2, tanks: Array, colors: Array) -> void:
 	var times := historian.time
 	var t1 := times[times.size() - 1]
 	var t0 := maxf(times[0], t1 - TREND_S)
-	var y_max := 1100.0
-	for tick_l: int in [500, 1000]:
+	# The axis reaches a little past the highest trip level on the unit.
+	var top_trip := 0.0
+	for switch_name: String in ["lsh_403", "lsh_401", "lsl_402"]:
+		var ls := _rec(switch_name) as SimFloatSwitch
+		if ls != null:
+			top_trip = maxf(top_trip, ls.high_l)
+	var y_max := maxf(100.0, ceilf(top_trip * 1.15 / 100.0) * 100.0)
+	var tick_step := 100 if y_max <= 800.0 else 500
+	for tick_l: int in range(tick_step, int(y_max), tick_step):
 		var y := rect.end.y - rect.size.y * tick_l / y_max
 		draw_line(Vector2(rect.position.x, y), Vector2(rect.end.x, y), COL_LINE, 1.0)
 		_text(Vector2(rect.position.x + 2, y - 2), "%d L" % tick_l, 9, COL_MUTED)

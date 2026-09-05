@@ -182,7 +182,13 @@ func _run(world: Node) -> void:
 	var u400_timeline: Array[String] = []
 	if u400_step >= 0:
 		u400_timeline.append("%s %s" % [_clock(plant.sim.time), U400_STEPS[u400_step]])
-	for _i in roundi(1200.0 / Plant.SIM_DT):
+	var scans := roundi(1200.0 / Plant.SIM_DT)
+	for i in scans:
+		# Let a frame through each simulated minute so the window's HUD
+		# clock shows the soak advancing instead of freezing on the last
+		# vantage for the two real minutes it takes.
+		if i % roundi(60.0 / Plant.SIM_DT) == 0:
+			await get_tree().process_frame
 		plant.sim.tick()
 		var step_now := _u400_step(plant)
 		if step_now != u400_step:

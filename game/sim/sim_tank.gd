@@ -24,6 +24,9 @@ const LOSS_PER_S := 0.0002
 const NOZZLE_K := 800.0
 ## Flow the bottom nozzle passes at the reference drop.
 const OUTLET_CV_LPS := 20.0
+## Both nozzles, sized to their lines: the bottom nozzle's Cv, with the
+## top nozzle's stub scaled from the default pair to match.
+var nozzle_cv_lps: float = OUTLET_CV_LPS
 ## Depth over which the bottom nozzle uncovers as the level falls past
 ## it. Smooth, so an emptying vessel tails off instead of chattering
 ## shut.
@@ -52,14 +55,17 @@ var _outlet_branch: SimControlResistance = null
 
 func _init(name_: String, capacity_l_: float, level_l_: float = 0.0, drain_lps_: float = 0.0,
 		height_m_: float = 0.0, diameter_m_: float = 0.0,
-		headspace_kpa_: float = 0.0, elevation_m_: float = 0.0) -> void:
+		headspace_kpa_: float = 0.0, elevation_m_: float = 0.0,
+		nozzle_cv_lps_: float = OUTLET_CV_LPS) -> void:
 	super(name_)
 	assert(capacity_l_ > 0.0, "capacity_l must be positive")
 	assert(level_l_ >= 0.0, "level_l must be non-negative")
+	assert(nozzle_cv_lps_ > 0.0, "nozzle_cv_lps must be positive")
 	capacity_l = capacity_l_
 	level_l = level_l_
 	drain_lps = drain_lps_
 	headspace_kpa = headspace_kpa_
+	nozzle_cv_lps = nozzle_cv_lps_
 	elevation_m = elevation_m_
 	if height_m_ > 0.0 and diameter_m_ > 0.0:
 		# Geometry given: capacity follows it honestly.
@@ -135,9 +141,10 @@ func set_size(height_m_: float, diameter_m_: float) -> void:
 func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	_roof = net.add_node(0.0, true)
 	_floor = net.add_node(0.0, true)
-	net.add_branch(SimCheckResistance.new(node["inlet"], _roof, NOZZLE_K, comp_name + ".inlet"))
+	var inlet_k := NOZZLE_K * pow(OUTLET_CV_LPS / nozzle_cv_lps, 2.0)
+	net.add_branch(SimCheckResistance.new(node["inlet"], _roof, inlet_k, comp_name + ".inlet"))
 	_outlet_branch = net.add_branch(SimControlResistance.new(
-		_floor, node["outlet"], OUTLET_CV_LPS, comp_name + ".outlet")) as SimControlResistance
+		_floor, node["outlet"], nozzle_cv_lps, comp_name + ".outlet")) as SimControlResistance
 
 
 func update_hydraulics(net: SimNetwork, _node: Dictionary) -> void:

@@ -34,6 +34,7 @@ const PAGES := {
 			["height_m", "m", "0", "Shell height. Sets capacity with diameter, and sets how high the top nozzle sits."],
 			["diameter_m", "m", "0", "Shell diameter."],
 			["headspace_kpa", "kPa", "0", "Blanket pressure over the liquid. Adds to both nozzles equally."],
+			["nozzle_cv_lps", "L/s", "20", "Size of the nozzles: what the bottom nozzle passes wide open across a 1 bar drop, with the top nozzle's stub sized to match. The default suits a few litres a second; a line carrying tens needs a bigger vessel nozzle as much as a bigger pipe."],
 			["elevation_m", "m", "placement", "Height of the vessel floor above grade. Taken from where you set it down; this is what buys you gravity flow."],
 		],
 		"assumptions": [
@@ -640,6 +641,7 @@ const PAGES := {
 			["kind", "-", "required", "level_kpa, flow, temp_c, conc_pct, dp_pa, or press_kpa."],
 			["liters_per_meter", "L/m", "45.45", "Vessel cross-section, for turning level into head."],
 			["species", "-", "product", "Which species an analyser reads."],
+			["meter_k", "Pa/(L/s)^2", "1000", "What the inline element costs the line, for the flow kind. Size it to the line: about 10 to 30 kPa at design flow."],
 		],
 		"assumptions": [
 			"No sensor lag, no noise, no drift, no calibration error. The gauge reads the process exactly.",
@@ -669,6 +671,7 @@ const PAGES := {
 			["kind", "-", "required", "level_kpa, flow, temp_c, conc_pct, dp_pa, or press_kpa."],
 			["liters_per_meter", "L/m", "45.45", "Vessel cross-section, for turning level into head."],
 			["species", "-", "product", "Which species an analyser reads."],
+			["meter_k", "Pa/(L/s)^2", "1000", "What the inline element costs the line, for the flow kind. Size it to the line: about 10 to 30 kPa at design flow."],
 		],
 		"assumptions": [
 			"No sensor lag, no noise, no drift, no calibration error. The gauge reads the process exactly.",
@@ -698,6 +701,7 @@ const PAGES := {
 			["kind", "-", "required", "level_kpa, flow, temp_c, conc_pct, dp_pa, or press_kpa."],
 			["liters_per_meter", "L/m", "45.45", "Vessel cross-section, for turning level into head."],
 			["species", "-", "product", "Which species an analyser reads."],
+			["meter_k", "Pa/(L/s)^2", "1000", "What the inline element costs the line, for the flow kind. Size it to the line: about 10 to 30 kPa at design flow."],
 		],
 		"assumptions": [
 			"No sensor lag, no noise, no drift, no calibration error. The gauge reads the process exactly.",
@@ -727,6 +731,7 @@ const PAGES := {
 			["kind", "-", "required", "level_kpa, flow, temp_c, conc_pct, dp_pa, or press_kpa."],
 			["liters_per_meter", "L/m", "45.45", "Vessel cross-section, for turning level into head."],
 			["species", "-", "product", "Which species an analyser reads."],
+			["meter_k", "Pa/(L/s)^2", "1000", "What the inline element costs the line, for the flow kind. Size it to the line: about 10 to 30 kPa at design flow."],
 		],
 		"assumptions": [
 			"No sensor lag, no noise, no drift, no calibration error. The gauge reads the process exactly.",
@@ -756,6 +761,7 @@ const PAGES := {
 			["kind", "-", "required", "level_kpa, flow, temp_c, conc_pct, dp_pa, or press_kpa."],
 			["liters_per_meter", "L/m", "45.45", "Vessel cross-section, for turning level into head."],
 			["species", "-", "product", "Which species an analyser reads."],
+			["meter_k", "Pa/(L/s)^2", "1000", "What the inline element costs the line, for the flow kind. Size it to the line: about 10 to 30 kPa at design flow."],
 		],
 		"assumptions": [
 			"No sensor lag, no noise, no drift, no calibration error. The gauge reads the process exactly.",
@@ -785,6 +791,7 @@ const PAGES := {
 			["kind", "-", "required", "level_kpa, flow, temp_c, conc_pct, dp_pa, or press_kpa."],
 			["liters_per_meter", "L/m", "45.45", "Vessel cross-section, for turning level into head."],
 			["species", "-", "product", "Which species an analyser reads."],
+			["meter_k", "Pa/(L/s)^2", "1000", "What the inline element costs the line, for the flow kind. Size it to the line: about 10 to 30 kPa at design flow."],
 		],
 		"assumptions": [
 			"No sensor lag, no noise, no drift, no calibration error. The gauge reads the process exactly.",

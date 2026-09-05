@@ -47,17 +47,21 @@ class Tank(Component):
         comp: dict[str, float] | None = None,
         headspace_kpa: float = 0.0,
         elevation_m: float = 0.0,
+        nozzle_cv_lps: float = 20.0,
     ) -> None:
         super().__init__(name)
         if capacity_l <= 0.0:
             raise ValueError("capacity_l must be positive")
         if level_l < 0.0:
             raise ValueError("level_l must be non-negative")
+        if nozzle_cv_lps <= 0.0:
+            raise ValueError("nozzle_cv_lps must be positive")
         self.capacity_l = capacity_l
         self.level_l = level_l
         self.drain_lps = drain_lps
         self.headspace_kpa = headspace_kpa
         self.elevation_m = elevation_m
+        self.nozzle_cv_lps = nozzle_cv_lps  # both nozzles, sized to their lines
         if height_m > 0.0 and diameter_m > 0.0:
             self.height_m = height_m
             self.diameter_m = diameter_m
@@ -139,12 +143,15 @@ class Tank(Component):
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         self._roof = net.add_node(0.0, fixed=True)
         self._floor = net.add_node(0.0, fixed=True)
+        # The top nozzle's stub is sized with the bottom nozzle: the
+        # default pair (800 Pa/(L/s)^2 and Cv 20) scales together.
+        inlet_k = self.NOZZLE_K * (self.OUTLET_CV_LPS / self.nozzle_cv_lps) ** 2
         for feed in self._feed_ports():
             net.add_branch(CheckResistance(
-                node[feed], self._roof, self.NOZZLE_K,
+                node[feed], self._roof, inlet_k,
                 "%s.%s" % (self.name, feed)))
         self._outlet_branch = net.add_branch(ControlResistance(
-            self._floor, node["outlet"], self.OUTLET_CV_LPS,
+            self._floor, node["outlet"], self.nozzle_cv_lps,
             self.name + ".outlet"))
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
@@ -251,14 +258,18 @@ class Gauge(Component):
         kind: str,
         liters_per_meter: float = 45.45,
         species: str = "product",
+        meter_k: float = METER_K,
     ) -> None:
         super().__init__(name)
         if kind not in self.KINDS:
             raise ValueError(f"kind must be one of {sorted(self.KINDS)}")
         if liters_per_meter <= 0.0:
             raise ValueError("liters_per_meter must be positive")
+        if meter_k <= 0.0:
+            raise ValueError("meter_k must be positive")
         self.kind = kind
         self.liters_per_meter = liters_per_meter
+        self.meter_k = meter_k  # the flow kind: size the element to its line
         self.species = species  # which species a "conc_pct" analyser reads
         self.reading = 0.0
         if kind == "dp_pa":
@@ -278,7 +289,7 @@ class Gauge(Component):
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         if self.kind == "flow":
             net.add_branch(Resistance(node["inlet"], node["outlet"],
-                                      self.METER_K, self.name))
+                                      self.meter_k, self.name))
 
     def units(self) -> str:
         return self.UNITS[self.kind]
@@ -944,6 +955,13 @@ Tank.SPEC = EquipmentSpec(
         Param("comp", "-", "Starting composition, as species fractions."),
         Param("headspace_kpa", "kPa", "Blanket pressure over the liquid. "
                                       "Adds to both nozzles equally."),
+        Param("nozzle_cv_lps", "L/s", "Size of the nozzles: what the bottom "
+                                      "nozzle passes wide open across a 1 bar "
+                                      "drop, with the top nozzle's stub sized "
+                                      "to match. The default suits a few "
+                                      "litres a second; a line carrying tens "
+                                      "needs a bigger vessel nozzle as much as "
+                                      "a bigger pipe."),
         Param("elevation_m", "m", "Height of the vessel floor above grade. "
                                   "This is what buys you gravity flow."),
     ),
@@ -1314,6 +1332,10 @@ Gauge.SPEC = EquipmentSpec(
         Param("liters_per_meter", "L/m", "Vessel cross-section, for "
                                          "turning level into head."),
         Param("species", "-", "Which species an analyser reads."),
+        Param("meter_k", "Pa/(L/s)^2", "What the inline element costs the "
+                                       "line, for the flow kind. Size it to "
+                                       "the line: about 10 to 30 kPa at "
+                                       "design flow."),
     ),
     assumptions=(
         "No sensor lag, no noise, no drift, no calibration error. The "
