@@ -11,13 +11,29 @@ var _lamp_off: StandardMaterial3D
 
 func setup(psu_: SimPowerSupply) -> void:
 	psu = psu_
-	ViewUtil.box(self, Vector3(0.08, 1.0, 0.08), Vector3(0, 0.5, 0),
-		ViewUtil.flat(Color(0.16, 0.17, 0.19)))
+	# A control power supply on a post: a finned case, a terminal strip
+	# along the bottom edge, a gland boss where each cable lands, a DC
+	# lamp, a bracket to the post, a nameplate.
+	var dark := ViewUtil.flat(Color(0.16, 0.17, 0.19))
+	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
+	ViewUtil.box(self, Vector3(0.08, 1.0, 0.08), Vector3(0, 0.5, 0), dark)
+	ViewUtil.box(self, Vector3(0.16, 0.04, 0.16), Vector3(0, 0.02, 0), dark)
+	ViewUtil.box(self, Vector3(0.2, 0.1, 0.1), Vector3(0, 0.98, -0.06), steel)
 	ViewUtil.box(self, Vector3(0.5, 0.5, 0.28), Vector3(0, 1.2, 0),
 		ViewUtil.flat(Color(0.35, 0.55, 0.40)))
 	for i in range(5):
 		ViewUtil.box(self, Vector3(0.5, 0.06, 0.02), Vector3(0, 1.02 + i * 0.09, 0.15),
 			ViewUtil.flat(Color(0.28, 0.44, 0.32)))
+	for i in range(8):
+		ViewUtil.box(self, Vector3(0.012, 0.44, 0.06), Vector3(-0.21 + i * 0.06, 1.2, -0.16), dark)
+	ViewUtil.box(self, Vector3(0.44, 0.05, 0.03), Vector3(0, 0.98, 0.15), ViewUtil.flat(Color(0.72, 0.72, 0.68)))
+	for i in range(10):
+		var screw := ViewUtil.cylinder(self, 0.006, 0.008, Vector3(-0.2 + i * 0.044, 0.985, 0.167), steel)
+		screw.rotation_degrees = Vector3(90, 0, 0)
+	for gx: float in [-0.26, 0.26]:
+		var boss := ViewUtil.cylinder(self, 0.022, 0.04, Vector3(gx, 1.2, 0), dark)
+		boss.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.box(self, Vector3(0.16, 0.04, 0.004), Vector3(-0.1, 1.38, 0.162), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	_lamp_on = ViewUtil.glow(Color(0.30, 0.95, 0.45), 1.6)
 	_lamp_off = ViewUtil.flat(Color(0.20, 0.30, 0.22))
 	_lamp = ViewUtil.box(self, Vector3(0.07, 0.07, 0.03), Vector3(0.15, 1.38, 0.15), _lamp_off)

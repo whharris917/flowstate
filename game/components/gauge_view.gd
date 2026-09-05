@@ -23,16 +23,35 @@ func setup(gauge_: SimGauge, mounted_: bool = false) -> void:
 ## A dial on a post, for anything that stands in the plant: an inline
 ## flow meter, a pressure gauge on a tapping.
 func _build_pedestal() -> void:
-	ViewUtil.box(self, Vector3(0.08, 1.2, 0.08), Vector3(0, 0.6, 0),
-		ViewUtil.flat(Color(0.16, 0.17, 0.19)))
+	var dark := ViewUtil.flat(Color(0.16, 0.17, 0.19))
+	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
+	ViewUtil.box(self, Vector3(0.08, 1.2, 0.08), Vector3(0, 0.6, 0), dark)
+	ViewUtil.box(self, Vector3(0.18, 0.03, 0.18), Vector3(0, 0.015, 0), dark)
+	# The signal leaves a junction box behind the case.
+	ViewUtil.box(self, Vector3(0.12, 0.12, 0.06), Vector3(0, 1.32, -0.06), dark)
 	if gauge.kind == "flow":
 		# The line runs through it: a short spool at the base with the
-		# element in it, flanged both ends.
-		var steel := ViewUtil.flat(Color(0.45, 0.47, 0.50))
-		var spool := ViewUtil.cylinder(self, 0.07, 0.5, Vector3(0, 0.32, 0), steel)
+		# element in it, flanged both ends, the transmitter head above.
+		var spool := ViewUtil.cylinder(self, 0.07, 0.5, Vector3(0, 0.32, 0), ViewUtil.flat(Color(0.45, 0.47, 0.50)))
 		spool.rotation_degrees = Vector3(0, 0, 90)
+		for side: float in [-1.0, 1.0]:
+			var flange := ViewUtil.cylinder(self, 0.11, 0.03, Vector3(side * 0.22, 0.32, 0), steel)
+			flange.rotation_degrees = Vector3(0, 0, 90)
 		ViewUtil.box(self, Vector3(0.22, 0.2, 0.2), Vector3(0, 0.32, 0),
 			ViewUtil.flat(Color(0.30, 0.31, 0.33)))
+		ViewUtil.box(self, Vector3(0.14, 0.12, 0.14), Vector3(0, 0.5, 0), dark)
+	else:
+		# A tap: a manifold block at the base with its isolation valve.
+		ViewUtil.box(self, Vector3(0.12, 0.12, 0.12), Vector3(0, 0.25, 0), ViewUtil.flat(Color(0.30, 0.31, 0.33)))
+		var wheel := MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		torus.inner_radius = 0.03
+		torus.outer_radius = 0.045
+		wheel.mesh = torus
+		wheel.material_override = ViewUtil.flat(Color(0.75, 0.20, 0.15))
+		wheel.position = Vector3(0.09, 0.25, 0)
+		wheel.rotation_degrees = Vector3(0, 0, 90)
+		add_child(wheel)
 	_build_dial(Vector3(0, 1.32, 0), Vector3(0, 1.02, 0.06))
 	ViewUtil.label(self, gauge.comp_name, Vector3(0, 1.68, 0))
 	ViewUtil.interact_body(self, Vector3(0.55, 0.6, 0.3), Vector3(0, 1.3, 0))

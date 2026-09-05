@@ -18,9 +18,22 @@ func setup(drain_: SimDrain) -> void:
 	for i in range(5):
 		ViewUtil.box(self, Vector3(0.66, 0.03, 0.05),
 			Vector3(0, 0.19, -0.26 + i * 0.13), _grate_mat)
-	var stand := ViewUtil.cylinder(self, 0.07, 0.5, Vector3(0.38, 0.32, 0),
-		ViewUtil.flat(Color(0.55, 0.57, 0.60)))
+	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
+	var dark := ViewUtil.flat(Color(0.22, 0.23, 0.25))
+	var stand := ViewUtil.cylinder(self, 0.07, 0.5, Vector3(0.38, 0.32, 0), steel)
 	stand.rotation_degrees = Vector3(0, 0, 20)
+	# The drain valve on the standpipe: a ball valve body with a lever,
+	# a flange at the connection, and a curb tag.
+	ViewUtil.box(self, Vector3(0.15, 0.13, 0.13), Vector3(0.35, 0.28, 0), dark)
+	var lever := ViewUtil.box(self, Vector3(0.02, 0.03, 0.18), Vector3(0.35, 0.37, 0.07), ViewUtil.flat(Color(0.75, 0.20, 0.15)))
+	lever.rotation_degrees = Vector3(0, 20, 0)
+	var flange := ViewUtil.cylinder(self, 0.1, 0.03, Vector3(0.455, 0.52, 0), steel)
+	flange.rotation_degrees = Vector3(0, 0, 90)
+	for i in 6:
+		var a := TAU / 6.0 * i
+		var bolt := ViewUtil.cylinder(self, 0.009, 0.02, Vector3(0.475, 0.52 + cos(a) * 0.08, sin(a) * 0.08), dark)
+		bolt.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.box(self, Vector3(0.2, 0.06, 0.004), Vector3(0, 0.1, 0.452), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	_total = ViewUtil.label(self, "", Vector3(0, 0.62, 0))
 	_total.font_size = 26
 	ViewUtil.label(self, drain.comp_name, Vector3(0, 0.80, 0))

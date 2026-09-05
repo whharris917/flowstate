@@ -35,6 +35,20 @@ func setup(valve_: SimControlValve) -> void:
 	dome.material_override = ViewUtil.flat(Color(0.20, 0.45, 0.30))
 	dome.position = Vector3(0, 0.98, 0)
 	add_child(dome)
+	# Flange bolts, a positioner on the yoke with its gauge and the air
+	# tubing up to the diaphragm, and a nameplate.
+	for side: float in [-1.0, 1.0]:
+		for i in 8:
+			var a := TAU / 8.0 * i
+			var bolt := ViewUtil.cylinder(self, 0.011, 0.02, Vector3(side * 0.33, 0.32 + cos(a) * 0.12, sin(a) * 0.12), steel)
+			bolt.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.box(self, Vector3(0.10, 0.14, 0.08), Vector3(0.16, 0.74, 0.06), ViewUtil.flat(Color(0.22, 0.23, 0.26)))
+	var pgauge := ViewUtil.cylinder(self, 0.025, 0.012, Vector3(0.16, 0.77, 0.105), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
+	pgauge.rotation_degrees = Vector3(90, 0, 0)
+	ViewUtil.cylinder(self, 0.005, 0.2, Vector3(0.20, 0.88, 0.06), steel)
+	var tube := ViewUtil.cylinder(self, 0.005, 0.12, Vector3(0.14, 0.98, 0.06), steel)
+	tube.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.box(self, Vector3(0.004, 0.035, 0.08), Vector3(0.122, 0.62, 0), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	# Stem with a travel indicator that follows the real position.
 	ViewUtil.cylinder(self, 0.018, 0.30, Vector3(0, 0.72, 0), steel)
 	_indicator = ViewUtil.box(self, Vector3(0.10, 0.02, 0.05), Vector3(0, 0.60, 0.05),

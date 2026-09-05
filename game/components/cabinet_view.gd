@@ -61,6 +61,35 @@ func setup(name_: String) -> void:
 	add_child(_door)
 	ViewUtil.box(_door, Vector3(W - 0.04, H - 0.14, 0.04), Vector3(W / 2.0 - 0.02, 0, 0), shell_mat)
 	ViewUtil.box(_door, Vector3(0.05, 0.30, 0.06), Vector3(W - 0.14, 0, 0.03), dark)
+	# Door furniture: three hinges on the hinge edge, a nameplate, a
+	# warning label, a document pocket; on the body, a gland plate with
+	# its glands along the bottom, louvres on the side, lifting eyes.
+	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
+	for hy: float in [-0.7, 0.0, 0.7]:
+		ViewUtil.box(_door, Vector3(0.03, 0.10, 0.05), Vector3(0.02, hy, 0.03), steel)
+	ViewUtil.box(_door, Vector3(0.36, 0.08, 0.006), Vector3(W / 2.0 - 0.02, H / 2.0 - 0.3, 0.023),
+		ViewUtil.flat(Color(0.93, 0.93, 0.90)))
+	ViewUtil.box(_door, Vector3(0.14, 0.06, 0.006), Vector3(W / 2.0 + 0.3, H / 2.0 - 0.3, 0.023),
+		ViewUtil.flat(Color(0.95, 0.85, 0.10)))
+	ViewUtil.box(_door, Vector3(0.12, 0.04, 0.007), Vector3(W / 2.0 + 0.3, H / 2.0 - 0.3, 0.023),
+		ViewUtil.flat(Color(0.05, 0.05, 0.05)))
+	ViewUtil.box(_door, Vector3(0.5, 0.36, 0.01), Vector3(W / 2.0 - 0.02, -H / 2.0 + 0.5, 0.025),
+		ViewUtil.flat(Color(0.70, 0.71, 0.68)))
+	ViewUtil.box(self, Vector3(W - 0.2, 0.02, D - 0.1), Vector3(0, 0.11, 0), steel)
+	for i in 6:
+		ViewUtil.cylinder(self, 0.018, 0.06, Vector3(-0.5 + i * 0.2, 0.08, D / 2.0 - 0.12), dark)
+	for i in 6:
+		ViewUtil.box(self, Vector3(0.012, 0.012, D - 0.3), Vector3(W / 2.0, 0.5 + i * 0.05, 0), dark)
+	for ex: float in [-W / 2.0 + 0.15, W / 2.0 - 0.15]:
+		var eye := MeshInstance3D.new()
+		var ring := TorusMesh.new()
+		ring.inner_radius = 0.02
+		ring.outer_radius = 0.04
+		eye.mesh = ring
+		eye.material_override = steel
+		eye.position = Vector3(ex, H + 0.03, 0)
+		eye.rotation_degrees = Vector3(0, 90, 0)
+		add_child(eye)
 
 	_edit_button = CabinetEditButton.new()
 	_edit_button.position = Vector3(0, 1.35, D / 2.0 + 0.10)
