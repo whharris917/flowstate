@@ -45,6 +45,42 @@ func setup(lock_: SimVacuumLock) -> void:
 	head.material_override = steel
 	head.position = Vector3(0, 2.2, 0)
 	add_child(head)
+	# Chamber furniture: a round door on the front with hinge, wheel
+	# and a sight port, a pressure gauge by the pressure tap, the vacuum
+	# pump and its motor at the power fitting, the drain valve under the
+	# cone with its handle, and a nameplate.
+	var door := ViewUtil.cylinder(self, 0.32, 0.06, Vector3(0, 1.5, 0.55), steel)
+	door.rotation_degrees = Vector3(90, 0, 0)
+	var rim := ViewUtil.cylinder(self, 0.36, 0.03, Vector3(0, 1.5, 0.53), dark)
+	rim.rotation_degrees = Vector3(90, 0, 0)
+	var porthole := ViewUtil.cylinder(self, 0.09, 0.02, Vector3(0, 1.62, 0.585), ViewUtil.flat(Color(0.80, 0.88, 0.92, 0.5)))
+	porthole.rotation_degrees = Vector3(90, 0, 0)
+	var wheel := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.09
+	torus.outer_radius = 0.12
+	wheel.mesh = torus
+	wheel.material_override = ViewUtil.flat(Color(0.30, 0.31, 0.34))
+	wheel.position = Vector3(0, 1.36, 0.62)
+	wheel.rotation_degrees = Vector3(90, 0, 0)
+	add_child(wheel)
+	for hy: float in [1.3, 1.7]:
+		ViewUtil.box(self, Vector3(0.04, 0.08, 0.06), Vector3(-0.38, hy, 0.52), dark)
+	var pg := ViewUtil.cylinder(self, 0.06, 0.03, Vector3(0.3, 2.28, 0.42), dark)
+	pg.rotation_degrees = Vector3(90, 0, 0)
+	var pf := ViewUtil.cylinder(self, 0.05, 0.006, Vector3(0.3, 2.28, 0.437), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
+	pf.rotation_degrees = Vector3(90, 0, 0)
+	ViewUtil.box(self, Vector3(0.5, 0.06, 0.4), Vector3(-0.8, 0.3, 0.2), dark)
+	var vpump := ViewUtil.cylinder(self, 0.14, 0.3, Vector3(-0.72, 0.5, 0.2), ViewUtil.flat(Color(0.30, 0.31, 0.34)))
+	vpump.rotation_degrees = Vector3(0, 0, 90)
+	var vmotor := ViewUtil.cylinder(self, 0.12, 0.34, Vector3(-1.02, 0.5, 0.2), ViewUtil.flat(Color(0.16, 0.36, 0.62)))
+	vmotor.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.cylinder(self, 0.03, 0.4, Vector3(-0.72, 0.75, 0.2), steel)
+	ViewUtil.box(self, Vector3(0.1, 0.1, 0.06), Vector3(-0.75, 0.9, 0.24), steel)
+	var dvalve := ViewUtil.box(self, Vector3(0.12, 0.12, 0.12), Vector3(0.2, 0.55, 0), dark)
+	dvalve.name = "drain_valve"
+	ViewUtil.box(self, Vector3(0.02, 0.03, 0.16), Vector3(0.2, 0.62, 0.08), ViewUtil.flat(Color(0.75, 0.20, 0.15)))
+	ViewUtil.box(self, Vector3(0.22, 0.10, 0.005), Vector3(0.3, 1.1, 0.553), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	# Main air valve block and vent horn on the head.
 	ViewUtil.box(self, Vector3(0.28, 0.26, 0.28), Vector3(0, 2.5, 0),
 		ViewUtil.flat(Color(0.20, 0.45, 0.30)))

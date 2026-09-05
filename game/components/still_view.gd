@@ -37,6 +37,49 @@ func setup(still_: SimStill) -> void:
 	# The overhead draw-off, tinted by how much is actually going over.
 	_overhead = ViewUtil.cylinder(self, 0.07, 0.6, Vector3(0.78, 6.35, 0),
 		ViewUtil.glow(Color(0.30, 0.55, 0.80), 0.2))
+	# Column furniture: a flanged feed nozzle neck, a reflux return
+	# from the condenser drum into the column top, cooling water
+	# connections on the drum, a level gauge on it, a relief valve on
+	# the column top, a sight glass and a nameplate on the reboiler, and
+	# a caged ladder up the north side.
+	var dark := ViewUtil.flat(Color(0.20, 0.21, 0.23))
+	var bolt_mat := ViewUtil.flat(Color(0.35, 0.36, 0.38))
+	var feed := ViewUtil.cylinder(self, 0.06, 0.22, Vector3(-0.53, 2.6, 0), steel)
+	feed.rotation_degrees = Vector3(0, 0, 90)
+	var feed_flange := ViewUtil.cylinder(self, 0.10, 0.03, Vector3(-0.64, 2.6, 0), steel)
+	feed_flange.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.cylinder(self, 0.04, 0.3, Vector3(0.55, 6.42, 0), steel)
+	var reflux := ViewUtil.cylinder(self, 0.04, 0.32, Vector3(0.4, 6.28, 0), steel)
+	reflux.rotation_degrees = Vector3(0, 0, 90)
+	for cz: float in [-0.22, 0.22]:
+		ViewUtil.cylinder(self, 0.035, 0.16, Vector3(0.78, 7.1, cz), steel)
+		ViewUtil.cylinder(self, 0.06, 0.02, Vector3(0.78, 7.18, cz), steel)
+	ViewUtil.box(self, Vector3(0.04, 0.4, 0.03), Vector3(1.05, 6.8, 0.27), dark)
+	ViewUtil.box(self, Vector3(0.025, 0.34, 0.02), Vector3(1.05, 6.8, 0.275), ViewUtil.flat(Color(0.80, 0.88, 0.92, 0.5)))
+	ViewUtil.cylinder(self, 0.035, 0.16, Vector3(-0.25, 6.05, 0.25), steel)
+	ViewUtil.cylinder(self, 0.06, 0.12, Vector3(-0.25, 6.18, 0.25), ViewUtil.flat(Color(0.78, 0.62, 0.30)))
+	ViewUtil.box(self, Vector3(0.16, 0.015, 0.02), Vector3(-0.18, 6.25, 0.25), steel)
+	var sight := ViewUtil.cylinder(self, 0.1, 0.05, Vector3(0, 0.7, 0.55), steel)
+	sight.rotation_degrees = Vector3(90, 0, 0)
+	var glass := ViewUtil.cylinder(self, 0.075, 0.01, Vector3(0, 0.7, 0.58), ViewUtil.flat(Color(0.80, 0.88, 0.92, 0.5)))
+	glass.rotation_degrees = Vector3(90, 0, 0)
+	ViewUtil.box(self, Vector3(0.22, 0.10, 0.005), Vector3(-0.25, 0.95, 0.553), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
+	for i in 22:
+		ViewUtil.box(self, Vector3(0.36, 0.025, 0.025), Vector3(0, 1.5 + i * 0.25, -0.62), dark)
+	for lx: float in [-0.18, 0.18]:
+		ViewUtil.box(self, Vector3(0.03, 5.6, 0.03), Vector3(lx, 4.2, -0.62), dark)
+	for i in 6:
+		var hoop := MeshInstance3D.new()
+		var ring := TorusMesh.new()
+		ring.inner_radius = 0.33
+		ring.outer_radius = 0.36
+		hoop.mesh = ring
+		hoop.material_override = dark
+		hoop.position = Vector3(0, 3.0 + i * 0.7, -0.62)
+		add_child(hoop)
+	for i in 8:
+		var a := TAU / 8.0 * i
+		ViewUtil.cylinder(self, 0.012, 0.03, Vector3(-0.64 + 0.0, 2.6 + cos(a) * 0.08, sin(a) * 0.08), bolt_mat).rotation_degrees = Vector3(0, 0, 90)
 	ViewUtil.label(self, still.comp_name, Vector3(0, 7.3, 0))
 	_label = ViewUtil.label(self, "", Vector3(0, 7.05, 0))
 	_label.font_size = 26

@@ -24,6 +24,24 @@ func setup(hx_: SimHeatExchanger) -> void:
 	for flange_x: float in [-0.78, 0.78]:
 		var ring := ViewUtil.cylinder(self, 0.35, 0.05, Vector3(flange_x, 0.45, 0), steel)
 		ring.rotation_degrees = Vector3(0, 0, 90)
+	# Bolt circles on the channel flanges, a steam nozzle neck with its
+	# flange under the steam fitting, a vent, the condensate drain with
+	# its trap pot, and a nameplate on the shell.
+	var bolt_mat := ViewUtil.flat(Color(0.35, 0.36, 0.38))
+	for flange_x: float in [-0.78, 0.78]:
+		for i in 12:
+			var a := TAU / 12.0 * i
+			var bolt := ViewUtil.cylinder(self, 0.012, 0.03, Vector3(flange_x, 0.45 + cos(a) * 0.32, sin(a) * 0.32), bolt_mat)
+			bolt.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.cylinder(self, 0.07, 0.16, Vector3(-0.35, 0.68, 0), steel)
+	ViewUtil.cylinder(self, 0.11, 0.03, Vector3(-0.35, 0.75, 0), steel)
+	ViewUtil.cylinder(self, 0.025, 0.14, Vector3(0.45, 0.78, 0), steel)
+	ViewUtil.cylinder(self, 0.05, 0.02, Vector3(0.45, 0.86, 0), dark)
+	ViewUtil.cylinder(self, 0.03, 0.18, Vector3(-0.35, 0.10, 0), steel)
+	ViewUtil.cylinder(self, 0.07, 0.14, Vector3(-0.35, 0.07, 0.2), dark)
+	var drain := ViewUtil.cylinder(self, 0.03, 0.2, Vector3(-0.35, 0.07, 0.1), steel)
+	drain.rotation_degrees = Vector3(90, 0, 0)
+	ViewUtil.box(self, Vector3(0.24, 0.10, 0.005), Vector3(0.1, 0.5, 0.303), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	_label = ViewUtil.label(self, "", Vector3(0, 1.0, 0))
 	_label.font_size = 26
 	ViewUtil.label(self, hx.comp_name, Vector3(0, 1.2, 0))

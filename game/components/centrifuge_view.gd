@@ -38,6 +38,29 @@ func setup(fuge_: SimCentrifuge) -> void:
 		ViewUtil.flat(Color(0.92, 0.55, 0.10)))
 	ViewUtil.cylinder(self, 0.16, 0.28, Vector3(0, 1.62, 0),
 		ViewUtil.flat(Color(0.55, 0.30, 0.16)))
+	# Machine furniture: lid clamps and a hinge, a sight port on the
+	# lid, an interlock switch, vibration mounts under the legs, fin
+	# rings and a fan cowl on the motor, a discharge chute at the cake
+	# nozzle, and a nameplate.
+	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
+	for i in 6:
+		var a := TAU / 6.0 * i + 0.3
+		var clamp := ViewUtil.box(self, Vector3(0.06, 0.08, 0.05), Vector3.ZERO, dark)
+		clamp.position = Vector3(cos(a) * 0.5, 1.17, sin(a) * 0.5)
+		clamp.basis = Basis.looking_at(Vector3(cos(a), 0, sin(a)), Vector3.UP)
+	ViewUtil.box(self, Vector3(0.08, 0.1, 0.12), Vector3(-0.48, 1.2, 0.0), steel)
+	var port := ViewUtil.cylinder(self, 0.09, 0.03, Vector3(-0.22, 1.5, 0.22), steel)
+	port.rotation_degrees = Vector3(35, 0, 30)
+	ViewUtil.box(self, Vector3(0.08, 0.06, 0.06), Vector3(0.36, 1.25, 0.3), ViewUtil.flat(Color(0.95, 0.78, 0.05)))
+	for leg_angle in range(3):
+		var ang := TAU / 3.0 * leg_angle
+		ViewUtil.cylinder(self, 0.08, 0.05, Vector3(cos(ang) * 0.42, 0.025, sin(ang) * 0.42), ViewUtil.flat(Color(0.12, 0.12, 0.14)))
+	for i in 4:
+		ViewUtil.cylinder(self, 0.17, 0.01, Vector3(0, 1.52 + i * 0.06, 0), ViewUtil.flat(Color(0.50, 0.28, 0.15)))
+	ViewUtil.cylinder(self, 0.17, 0.05, Vector3(0, 1.78, 0), dark)
+	var chute := ViewUtil.box(self, Vector3(0.22, 0.14, 0.18), Vector3(0.6, 0.52, 0), steel)
+	chute.rotation_degrees = Vector3(0, 0, -25)
+	ViewUtil.box(self, Vector3(0.2, 0.09, 0.005), Vector3(0, 0.75, 0.503), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	_label = ViewUtil.label(self, "", Vector3(0, 1.95, 0))
 	_label.font_size = 26
 	ViewUtil.label(self, fuge.comp_name, Vector3(0, 2.15, 0))

@@ -48,6 +48,41 @@ func setup(reactor_: SimReactor) -> void:
 		ViewUtil.flat(Color(0.45, 0.47, 0.50)))
 	ViewUtil.box(_shaft, Vector3(0.34, 0.03, 0.08), Vector3(0, -0.1, 0),
 		ViewUtil.flat(Color(0.45, 0.47, 0.50)))
+	# Vessel furniture: bolted head nozzles under the two feed
+	# fittings, a manway with its davit on the head, a relief valve, a
+	# pair of flanged jacket connections, the drive's fan cowl and
+	# terminal box, and a nameplate.
+	var dark := ViewUtil.flat(Color(0.20, 0.21, 0.23))
+	var bolt_mat := ViewUtil.flat(Color(0.35, 0.36, 0.38))
+	for nx: float in [-0.42, 0.42]:
+		ViewUtil.cylinder(self, 0.07, 0.22, Vector3(nx, 2.31, 0), steel)
+		ViewUtil.cylinder(self, 0.11, 0.03, Vector3(nx, 2.40, 0), steel)
+		for i in 8:
+			var a := TAU / 8.0 * i
+			ViewUtil.cylinder(self, 0.01, 0.025, Vector3(nx + cos(a) * 0.09, 2.425, sin(a) * 0.09), bolt_mat)
+	var mw := Vector3(0.0, 2.52, -0.42)
+	ViewUtil.cylinder(self, 0.19, 0.06, mw, steel)
+	ViewUtil.cylinder(self, 0.23, 0.03, mw + Vector3(0, 0.045, 0), steel)
+	for i in 12:
+		var a := TAU / 12.0 * i
+		ViewUtil.cylinder(self, 0.012, 0.03, mw + Vector3(cos(a) * 0.21, 0.07, sin(a) * 0.21), bolt_mat)
+	ViewUtil.box(self, Vector3(0.05, 0.55, 0.05), mw + Vector3(0.3, 0.25, 0), dark)
+	ViewUtil.box(self, Vector3(0.36, 0.04, 0.04), mw + Vector3(0.12, 0.5, 0), dark)
+	ViewUtil.cylinder(self, 0.04, 0.16, Vector3(0.3, 2.62, 0.38), steel)
+	ViewUtil.cylinder(self, 0.07, 0.10, Vector3(0.3, 2.74, 0.38), ViewUtil.flat(Color(0.78, 0.62, 0.30)))
+	ViewUtil.box(self, Vector3(0.14, 0.015, 0.02), Vector3(0.36, 2.80, 0.38), steel)
+	for jn: Array in [[0.55, 0.3], [1.5, -0.3]]:
+		var jz := float(jn[1])
+		var jy := float(jn[0])
+		var neck := ViewUtil.cylinder(self, 0.05, 0.18, Vector3(0.9, jy, jz), jacket)
+		neck.rotation_degrees = Vector3(0, 0, 90)
+		var flange := ViewUtil.cylinder(self, 0.085, 0.03, Vector3(0.985, jy, jz), steel)
+		flange.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.cylinder(self, 0.21, 0.05, Vector3(0, 3.05, 0), dark)
+	for i in 4:
+		ViewUtil.cylinder(self, 0.215, 0.01, Vector3(0, 2.72 + i * 0.07, 0), ViewUtil.flat(Color(0.50, 0.28, 0.15)))
+	ViewUtil.box(self, Vector3(0.12, 0.10, 0.08), Vector3(0.2, 2.85, 0.2), steel)
+	ViewUtil.box(self, Vector3(0.24, 0.12, 0.005), Vector3(0.45, 1.9, 0.66), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	# Sight strip on the shell.
 	ViewUtil.box(self, Vector3(0.1, 1.9, 0.03), Vector3(0, 1.35, 0.795),
 		ViewUtil.flat(Color(0.30, 0.31, 0.33)))

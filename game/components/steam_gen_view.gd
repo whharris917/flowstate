@@ -36,6 +36,34 @@ func setup(boiler_: SimSteamGen) -> void:
 	ViewUtil.box(self, Vector3(0.7, 0.35, 0.5), Vector3(0.35, 0.3, 0.45), dark)
 	ViewUtil.box(self, Vector3(0.5, 0.2, 0.06), Vector3(0.35, 0.3, 0.71), _fire_mat)
 	ViewUtil.cylinder(self, 0.12, 1.4, Vector3(-0.6, 2.0, 0), dark)
+	# Drum furniture: a steam nozzle neck under the steam fitting, a
+	# safety valve with its lever, a pressure gauge on the drum face, a
+	# bolted manhole on the right head, the burner blower on the
+	# firebox with its fuel line, and a nameplate.
+	var brass := ViewUtil.flat(Color(0.78, 0.62, 0.30))
+	var bolt_mat := ViewUtil.flat(Color(0.35, 0.36, 0.38))
+	ViewUtil.cylinder(self, 0.08, 0.16, Vector3(0.35, 1.32, 0), steel)
+	ViewUtil.cylinder(self, 0.12, 0.03, Vector3(0.35, 1.39, 0), steel)
+	ViewUtil.cylinder(self, 0.035, 0.14, Vector3(0.7, 1.38, 0.2), steel)
+	ViewUtil.cylinder(self, 0.06, 0.12, Vector3(0.7, 1.5, 0.2), brass)
+	ViewUtil.box(self, Vector3(0.16, 0.015, 0.02), Vector3(0.77, 1.57, 0.2), steel)
+	var pg := ViewUtil.cylinder(self, 0.07, 0.03, Vector3(-0.35, 1.02, 0.56), dark)
+	pg.rotation_degrees = Vector3(90, 0, 0)
+	var pf := ViewUtil.cylinder(self, 0.058, 0.006, Vector3(-0.35, 1.02, 0.576), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
+	pf.rotation_degrees = Vector3(90, 0, 0)
+	ViewUtil.box(self, Vector3(0.006, 0.045, 0.004), Vector3(-0.35, 1.04, 0.58), ViewUtil.flat(Color(0.85, 0.20, 0.15)))
+	var manhole := ViewUtil.cylinder(self, 0.2, 0.05, Vector3(1.22, 0.9, 0), steel)
+	manhole.rotation_degrees = Vector3(0, 0, 90)
+	for i in 10:
+		var a := TAU / 10.0 * i
+		var bolt := ViewUtil.cylinder(self, 0.012, 0.03, Vector3(1.25, 0.9 + cos(a) * 0.17, sin(a) * 0.17), bolt_mat)
+		bolt.rotation_degrees = Vector3(0, 0, 90)
+	var blower := ViewUtil.cylinder(self, 0.13, 0.16, Vector3(0.55, 0.38, 0.79), dark)
+	blower.rotation_degrees = Vector3(90, 0, 0)
+	ViewUtil.cylinder(self, 0.05, 0.1, Vector3(0.55, 0.38, 0.92), ViewUtil.flat(Color(0.30, 0.31, 0.34)))
+	var fuel := ViewUtil.cylinder(self, 0.02, 0.5, Vector3(0.2, 0.2, 0.75), brass)
+	fuel.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.box(self, Vector3(0.24, 0.10, 0.005), Vector3(-0.1, 0.55, 0.553), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	# Gauge glass on the drum face.
 	ViewUtil.box(self, Vector3(0.05, 0.5, 0.04), Vector3(0.2, 0.8, 0.56),
 		ViewUtil.flat(Color(0.80, 0.88, 0.92, 0.5)))

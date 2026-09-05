@@ -45,6 +45,37 @@ func setup(crystallizer_: SimCrystallizer) -> void:
 	head.material_override = steel
 	head.position = Vector3(0, 2.0, 0)
 	add_child(head)
+	# Vessel furniture: cladding bands on the jacket, two flanged
+	# coolant connections, a manway on the head, a round sight port,
+	# sample valves at the two taps, the drive's fan cowl, a nameplate.
+	var dark := ViewUtil.flat(Color(0.20, 0.21, 0.23))
+	var bolt_mat := ViewUtil.flat(Color(0.35, 0.36, 0.38))
+	var band := ViewUtil.flat(Color(0.70, 0.73, 0.76))
+	for i in 3:
+		ViewUtil.cylinder(self, 0.79, 0.02, Vector3(0, 0.6 + i * 0.35, 0), band)
+	for jn: Array in [[0.6, 0.3], [1.3, -0.3]]:
+		var jy := float(jn[0])
+		var jz := float(jn[1])
+		var neck := ViewUtil.cylinder(self, 0.045, 0.16, Vector3(0.84, jy, jz), jacket)
+		neck.rotation_degrees = Vector3(0, 0, 90)
+		var flange := ViewUtil.cylinder(self, 0.08, 0.03, Vector3(0.925, jy, jz), steel)
+		flange.rotation_degrees = Vector3(0, 0, 90)
+	var mw := Vector3(0.0, 2.22, -0.38)
+	ViewUtil.cylinder(self, 0.17, 0.06, mw, steel)
+	ViewUtil.cylinder(self, 0.21, 0.03, mw + Vector3(0, 0.045, 0), steel)
+	for i in 12:
+		var a := TAU / 12.0 * i
+		ViewUtil.cylinder(self, 0.011, 0.03, mw + Vector3(cos(a) * 0.19, 0.07, sin(a) * 0.19), bolt_mat)
+	var sight := ViewUtil.cylinder(self, 0.12, 0.05, Vector3(0.3, 1.55, 0.68), steel)
+	sight.rotation_degrees = Vector3(90, 0, 0)
+	var glass := ViewUtil.cylinder(self, 0.09, 0.01, Vector3(0.3, 1.55, 0.71), ViewUtil.flat(Color(0.80, 0.88, 0.92, 0.5)))
+	glass.rotation_degrees = Vector3(90, 0, 0)
+	for ty: float in [1.1, 1.6]:
+		var sv := ViewUtil.cylinder(self, 0.03, 0.08, Vector3(-0.78, ty - 0.08, 0), steel)
+		sv.rotation_degrees = Vector3(0, 0, 90)
+		ViewUtil.box(self, Vector3(0.02, 0.06, 0.02), Vector3(-0.8, ty - 0.04, 0), ViewUtil.flat(Color(0.75, 0.20, 0.15)))
+	ViewUtil.cylinder(self, 0.19, 0.05, Vector3(0, 2.68, 0), dark)
+	ViewUtil.box(self, Vector3(0.22, 0.10, 0.005), Vector3(-0.35, 1.85, 0.62), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	# Slow sweep agitator: a crystallizer turns lazily, not like a
 	# reactor. The shaft only moves when the drive is really powered.
 	ViewUtil.cylinder(self, 0.18, 0.32, Vector3(0, 2.5, 0),

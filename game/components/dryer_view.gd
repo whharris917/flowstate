@@ -41,6 +41,39 @@ func setup(dryer_: SimDryer) -> void:
 	ViewUtil.cylinder(self, 0.47, 0.3, Vector3(0, 1.05, 0),
 		ViewUtil.flat(Color(0.55, 0.30, 0.16))).rotation_degrees = Vector3(0, 0, 90)
 	ViewUtil.cylinder(self, 0.09, 0.45, Vector3(0, 1.6, 0), steel)
+	# Machine furniture: trunnion rollers under the drum, a ring gear
+	# with the drive motor at the power fitting, the heater control box
+	# at the duty fitting, a cyclone on the vent, an inspection door on
+	# the drum end, and a nameplate on the frame.
+	var dark := ViewUtil.flat(Color(0.20, 0.21, 0.23))
+	for rx: float in [-0.45, 0.45]:
+		for rz: float in [-0.3, 0.3]:
+			var roller := ViewUtil.cylinder(self, 0.08, 0.14, Vector3(rx, 0.6, rz), dark)
+			roller.rotation_degrees = Vector3(0, 0, 90)
+			ViewUtil.box(self, Vector3(0.12, 0.35, 0.08), Vector3(rx, 0.35, rz), ViewUtil.flat(Color(0.28, 0.29, 0.31)))
+	var gear := ViewUtil.cylinder(self, 0.49, 0.06, Vector3(-0.35, 1.05, 0), dark)
+	gear.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.box(self, Vector3(0.26, 0.24, 0.26), Vector3(-0.3, 0.44, 0.52), ViewUtil.flat(Color(0.16, 0.36, 0.62)))
+	var motor := ViewUtil.cylinder(self, 0.12, 0.3, Vector3(-0.3, 0.44, 0.52), ViewUtil.flat(Color(0.16, 0.36, 0.62)))
+	motor.rotation_degrees = Vector3(90, 0, 0)
+	ViewUtil.cylinder(self, 0.05, 0.08, Vector3(-0.3, 0.62, 0.52), steel)
+	ViewUtil.box(self, Vector3(0.22, 0.22, 0.12), Vector3(0.3, 0.42, 0.55), ViewUtil.flat(Color(0.62, 0.63, 0.66)))
+	ViewUtil.box(self, Vector3(0.12, 0.05, 0.005), Vector3(0.3, 0.46, 0.612), ViewUtil.glow(Color(0.35, 0.75, 0.95), 0.6))
+	ViewUtil.cylinder(self, 0.16, 0.22, Vector3(0, 1.93, 0), steel)
+	var cone := MeshInstance3D.new()
+	var cone_mesh := CylinderMesh.new()
+	cone_mesh.top_radius = 0.16
+	cone_mesh.bottom_radius = 0.05
+	cone_mesh.height = 0.2
+	cone.mesh = cone_mesh
+	cone.material_override = steel
+	cone.position = Vector3(0, 1.72, 0)
+	add_child(cone)
+	ViewUtil.cylinder(self, 0.05, 0.3, Vector3(0, 2.18, 0), steel)
+	var door := ViewUtil.cylinder(self, 0.2, 0.04, Vector3(0.79, 1.05, 0), steel)
+	door.rotation_degrees = Vector3(0, 0, 90)
+	ViewUtil.box(self, Vector3(0.04, 0.06, 0.14), Vector3(0.81, 1.05, 0.12), dark)
+	ViewUtil.box(self, Vector3(0.005, 0.10, 0.22), Vector3(-0.775, 0.85, 0.3), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	_label = ViewUtil.label(self, "", Vector3(0, 2.0, 0))
 	_label.font_size = 26
 	ViewUtil.label(self, dryer.comp_name, Vector3(0, 2.25, 0))

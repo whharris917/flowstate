@@ -52,6 +52,32 @@ func setup(filler_: SimVialFiller) -> void:
 			ViewUtil.flat(Color(0.55, 0.55, 0.58)))
 		glove.rotation_degrees = Vector3(90, 0, 0)
 
+	# Isolator furniture: the HEPA housing on top with two fan cowls and
+	# an exhaust duct, a Magnehelic gauge, the control panel with its
+	# screen and keys on the base, a light tower at the corner, and a
+	# nameplate.
+	ViewUtil.box(self, Vector3(2.0, 0.3, 0.8), Vector3(0, 2.15, 0), ViewUtil.flat(Color(0.86, 0.87, 0.85)))
+	for i in 12:
+		ViewUtil.box(self, Vector3(0.015, 0.3, 0.7), Vector3(-0.9 + i * 0.16, 2.15, 0), ViewUtil.flat(Color(0.62, 0.64, 0.66)))
+	for cx: float in [-0.6, 0.6]:
+		ViewUtil.cylinder(self, 0.18, 0.12, Vector3(cx, 2.36, 0), ViewUtil.flat(Color(0.62, 0.64, 0.66)))
+		ViewUtil.cylinder(self, 0.12, 0.02, Vector3(cx, 2.43, 0), dark)
+	ViewUtil.cylinder(self, 0.09, 0.5, Vector3(0.6, 2.65, 0), ViewUtil.flat(Color(0.62, 0.64, 0.66)))
+	var duct := ViewUtil.cylinder(self, 0.09, 0.9, Vector3(0.6, 2.9, -0.45), ViewUtil.flat(Color(0.62, 0.64, 0.66)))
+	duct.rotation_degrees = Vector3(90, 0, 0)
+	var mg := ViewUtil.cylinder(self, 0.07, 0.04, Vector3(-1.0, 1.85, 0.53), dark)
+	mg.rotation_degrees = Vector3(90, 0, 0)
+	var mf := ViewUtil.cylinder(self, 0.058, 0.006, Vector3(-1.0, 1.85, 0.553), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
+	mf.rotation_degrees = Vector3(90, 0, 0)
+	ViewUtil.box(self, Vector3(0.44, 0.34, 0.05), Vector3(0.6, 0.62, 0.52), ViewUtil.flat(Color(0.62, 0.63, 0.66)))
+	ViewUtil.box(self, Vector3(0.32, 0.18, 0.01), Vector3(0.6, 0.67, 0.55), ViewUtil.glow(Color(0.35, 0.75, 0.95), 0.6))
+	for i in 5:
+		ViewUtil.box(self, Vector3(0.04, 0.03, 0.01), Vector3(0.45 + i * 0.07, 0.5, 0.55), dark)
+	ViewUtil.cylinder(self, 0.02, 0.35, Vector3(1.05, 2.15, 0.4), dark)
+	for i in 3:
+		ViewUtil.cylinder(self, 0.045, 0.07, Vector3(1.05, 2.36 + i * 0.075, 0.4),
+			[ViewUtil.flat(Color(0.20, 0.70, 0.35)), ViewUtil.flat(Color(0.95, 0.70, 0.15)), ViewUtil.flat(Color(0.85, 0.20, 0.15))][i])
+	ViewUtil.box(self, Vector3(0.28, 0.10, 0.005), Vector3(-0.6, 0.62, 0.503), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	# Conveyor bed and the vial train.
 	ViewUtil.box(self, Vector3(2.0, 0.06, 0.22), Vector3(0, BED_Y - 0.05, 0), dark)
 	_vials = Node3D.new()
