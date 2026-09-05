@@ -60,10 +60,12 @@ func _build_environment() -> void:
 	world_env.environment = env
 	add_child(world_env)
 
-	var sun := DirectionalLight3D.new()
+	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-58, 28, 0)
 	sun.light_energy = 1.6
 	sun.light_color = Color(1.0, 0.97, 0.92)
+	_sun_base_energy = sun.light_energy
+	_sun_base_color = sun.light_color
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 80.0
 	add_child(sun)

@@ -283,6 +283,11 @@ func _run(world: Node) -> void:
 		for _i in roundi(6.0 / Plant.SIM_DT):
 			plant.sim.tick()
 		print("[probe] u400 after START: %s" % _station_state(plant))
+	# The time-of-day slider: the same rig at dusk, then back to morning.
+	(world as WorldBase).set_time_of_day(18.2)
+	await _vantage(player, Vector3(4.5, 0.15, 20.5), Vector2(-4.5, -9.0), 0.95, 0.02)
+	await _shot("user://probe_showcase_u400_dusk.png")
+	(world as WorldBase).set_time_of_day(10.0)
 	# The plant-wide balance screen beside the home HMI.
 	await _vantage(player, Vector3(-6.9, 0.15, -2.6), Vector2(0.0, -1.0), 0.0, 0.05)
 	await _shot("user://probe_showcase_balance.png")

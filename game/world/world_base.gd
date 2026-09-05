@@ -21,6 +21,21 @@ var reverb_wet := 0.25
 
 var _loop_players: Array[AudioStreamPlayer] = []
 
+# On-screen options (director, 2026-09-05): the sun follows a
+# time-of-day slider and the music is a toggle, off by default. Both
+# persist in user://settings.json. Worlds hand their sun (and, outdoors,
+# their sky material) to these so one slider serves both worlds.
+const SETTINGS_PATH := "user://settings.json"
+var sun: DirectionalLight3D = null
+var sky_mat: ProceduralSkyMaterial = null
+var sky_env: Environment = null
+var settings: SettingsPanel
+var music_player: AudioStreamPlayer = null
+var time_of_day := 10.0
+var music_on := false
+var _sun_base_energy := 1.5
+var _sun_base_color := Color(1.0, 0.97, 0.90)
+
 
 func _ready() -> void:
 	_build_world()
@@ -48,11 +63,20 @@ func _ready() -> void:
 	plant.tank_panel = tank_panel
 	library = LibraryPanel.new()
 	layer.add_child(library)
+	settings = SettingsPanel.new()
+	layer.add_child(settings)
+	settings.on_time_changed = func(hours: float) -> void:
+		set_time_of_day(hours)
+		_save_settings()
+	settings.on_music_changed = func(on: bool) -> void:
+		set_music(on)
+		_save_settings()
 	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)
 	_after_plant()
-	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · F5/F9 save/load")
+	_load_settings()
+	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
 
 
 ## Environment, geometry, lighting. Override in each world.
@@ -85,10 +109,86 @@ func _unhandled_input(event: InputEvent) -> void:
 		player.input_locked = library.visible
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if library.visible \
 			else Input.MOUSE_MODE_CAPTURED
+	elif event.is_action_pressed("options"):
+		settings.toggle()
+		player.input_locked = settings.visible
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if settings.visible \
+			else Input.MOUSE_MODE_CAPTURED
 	elif event.is_action_pressed("quicksave"):
 		hud.toast("saved" if plant.save_game() else "save FAILED")
 	elif event.is_action_pressed("quickload"):
 		hud.toast("loaded" if plant.load_game() else "no save found")
+
+
+## ---- options: the sun and the music ---------------------------------------
+
+## Hours 0-24. The sun rises in the east at six, stands 60 degrees up at
+## noon, sets in the west at six, and below the horizon the world runs
+## on a dim blue moon. Colour warms toward the horizon; the outdoor sky
+## darkens with it.
+func set_time_of_day(hours: float) -> void:
+	time_of_day = fposmod(hours, 24.0)
+	if sun == null:
+		return
+	var day_frac := (time_of_day - 6.0) / 12.0          # 0 at sunrise, 1 at sunset
+	var elevation := 60.0 * sin(clampf(day_frac, 0.0, 1.0) * PI)
+	var up := day_frac >= 0.0 and day_frac <= 1.0
+	var azimuth := 90.0 + clampf(day_frac, 0.0, 1.0) * 180.0
+	sun.rotation_degrees = Vector3(-(elevation if up else 8.0), azimuth, 0)
+	var horizon := clampf(elevation / 20.0, 0.0, 1.0) if up else 0.0
+	var warm := Color(1.0, 0.62, 0.35).lerp(_sun_base_color, horizon)
+	var night := Color(0.45, 0.55, 0.80)
+	sun.light_color = warm if up else night
+	sun.light_energy = _sun_base_energy * (0.25 + 0.75 * horizon) if up else 0.12
+	if sky_mat != null:
+		var day_top := Color(0.30, 0.48, 0.72)
+		var day_horizon := Color(0.72, 0.78, 0.84)
+		var dusk_top := Color(0.16, 0.18, 0.34)
+		var dusk_horizon := Color(0.95, 0.55, 0.32)
+		var night_top := Color(0.03, 0.04, 0.08)
+		var night_horizon := Color(0.10, 0.12, 0.18)
+		if up:
+			sky_mat.sky_top_color = dusk_top.lerp(day_top, horizon)
+			sky_mat.sky_horizon_color = dusk_horizon.lerp(day_horizon, horizon)
+		else:
+			sky_mat.sky_top_color = night_top
+			sky_mat.sky_horizon_color = night_horizon
+		sky_mat.ground_horizon_color = sky_mat.sky_horizon_color.darkened(0.15)
+	if sky_env != null:
+		sky_env.ambient_light_energy = (0.35 + 0.45 * horizon) if up else 0.15
+		sky_env.fog_light_color = sky_mat.sky_horizon_color if sky_mat != null else sky_env.fog_light_color
+
+
+func set_music(on: bool) -> void:
+	music_on = on
+	if music_player == null:
+		return
+	if on and not music_player.playing:
+		music_player.play()
+	elif not on and music_player.playing:
+		music_player.stop()
+
+
+func _save_settings() -> void:
+	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+	if file == null:
+		return
+	file.store_string(JSON.stringify({"time_of_day": time_of_day, "music": music_on}))
+
+
+func _load_settings() -> void:
+	var hours := time_of_day
+	var on := music_on
+	if FileAccess.file_exists(SETTINGS_PATH):
+		var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
+		if file != null:
+			var parsed: Variant = JSON.parse_string(file.get_as_text())
+			if parsed is Dictionary:
+				hours = float((parsed as Dictionary).get("time_of_day", hours))
+				on = bool((parsed as Dictionary).get("music", on))
+	set_time_of_day(hours)
+	set_music(on)
+	settings.set_values(time_of_day, music_on)
 
 
 func _fmt_time(seconds: float) -> String:
@@ -108,12 +208,14 @@ func _build_audio() -> void:
 	reverb.damping = 0.55
 	AudioServer.add_bus_effect(bus, reverb)
 
-	_looping_player("res://audio/music_loop.wav", -16.0, "Master")
+	# The music is off until the options toggle turns it on.
+	music_player = _looping_player("res://audio/music_loop.wav", -16.0, "Master")
+	music_player.autoplay = false
 	if with_hum:
 		_looping_player("res://audio/hum_loop.wav", -18.0, "Room")
 
 
-func _looping_player(path: String, volume_db: float, bus: String) -> void:
+func _looping_player(path: String, volume_db: float, bus: String) -> AudioStreamPlayer:
 	var stream := load(path) as AudioStreamWAV
 	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	stream.loop_begin = 0
@@ -128,6 +230,7 @@ func _looping_player(path: String, volume_db: float, bus: String) -> void:
 	audio_player.autoplay = DisplayServer.get_name() != "headless"
 	add_child(audio_player)
 	_loop_players.append(audio_player)
+	return audio_player
 
 
 func _exit_tree() -> void:
