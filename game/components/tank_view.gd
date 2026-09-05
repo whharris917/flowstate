@@ -51,6 +51,43 @@ func rebuild() -> void:
 	ViewUtil.cylinder(_built, r + 0.04, 0.06, Vector3(0, h - 0.02, 0), shell_mat)
 	ViewUtil.cylinder(_built, r + 0.04, 0.08, Vector3(0, 0.04, 0),
 		ViewUtil.flat(Color(0.34, 0.35, 0.37)))
+	# Vessel furniture, all above the shell or on the base ring where no
+	# nozzle or mounted instrument lands: a shallow dished roof, a bolted
+	# manway with its davit, a vent stub, a nameplate, anchor lugs.
+	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
+	var dark := ViewUtil.flat(Color(0.22, 0.23, 0.25))
+	var roof := MeshInstance3D.new()
+	var roof_mesh := CylinderMesh.new()
+	roof_mesh.bottom_radius = r
+	roof_mesh.top_radius = maxf(r * 0.15, 0.03)
+	roof_mesh.height = clampf(r * 0.22, 0.04, 0.16)
+	roof.mesh = roof_mesh
+	roof.material_override = shell_mat
+	roof.position = Vector3(0, h + roof_mesh.height / 2.0, 0)
+	_built.add_child(roof)
+	var mr := clampf(r * 0.35, 0.08, 0.25)
+	var mw := Vector3(r * 0.45, h + roof_mesh.height * 0.8, 0)
+	ViewUtil.cylinder(_built, mr, 0.05, mw + Vector3(0, 0.025, 0), shell_mat)
+	ViewUtil.cylinder(_built, mr * 1.2, 0.03, mw + Vector3(0, 0.06, 0), steel)
+	for i in 12:
+		var a := TAU / 12.0 * i
+		ViewUtil.cylinder(_built, mr * 0.07, 0.03, mw + Vector3(cos(a) * mr * 1.1, 0.085, sin(a) * mr * 1.1), dark)
+	if r > 0.35:
+		ViewUtil.box(_built, Vector3(0.05, 0.6, 0.05), mw + Vector3(mr * 1.5, 0.25, 0), dark)
+		ViewUtil.box(_built, Vector3(mr * 1.6, 0.04, 0.04), mw + Vector3(mr * 0.7, 0.55, 0), dark)
+	var vent := ViewUtil.cylinder(_built, 0.035, 0.28, Vector3(-r * 0.45, h + roof_mesh.height * 0.6 + 0.14, 0), steel)
+	vent.name = "vent"
+	ViewUtil.cylinder(_built, 0.07, 0.02, Vector3(-r * 0.45, h + roof_mesh.height * 0.6 + 0.29, 0), dark)
+	var plate_dir := Vector3(0, 0, 1)
+	var plate := ViewUtil.box(_built, Vector3(0.20, 0.13, 0.006), Vector3.ZERO, ViewUtil.flat(Color(0.93, 0.93, 0.90)))
+	plate.position = plate_dir * (r + 0.004) + Vector3(0, h * 0.78, 0)
+	plate.basis = Basis.looking_at(plate_dir, Vector3.UP)
+	for i in 4:
+		var a := TAU / 4.0 * i + TAU / 8.0
+		var lug := ViewUtil.box(_built, Vector3(0.10, 0.07, 0.06), Vector3.ZERO, dark)
+		lug.position = Vector3(cos(a) * (r + 0.07), 0.035, sin(a) * (r + 0.07))
+		lug.basis = Basis.looking_at(Vector3(cos(a), 0, sin(a)), Vector3.UP)
+		ViewUtil.cylinder(_built, 0.012, 0.05, Vector3(cos(a) * (r + 0.07), 0.085, sin(a) * (r + 0.07)), steel)
 
 	# Three sight glasses at 120°: frame, glass, and a liquid column
 	# driven by the real level each frame.
