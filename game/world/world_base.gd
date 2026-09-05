@@ -217,14 +217,16 @@ func _build_audio() -> void:
 	reverb.damping = 0.55
 	AudioServer.add_bus_effect(bus, reverb)
 
-	# The music is off until the options toggle turns it on.
-	music_player = _looping_player("res://audio/music_loop.wav", -16.0, "Master")
-	music_player.autoplay = false
+	# The music is off until the options toggle turns it on (director,
+	# 2026-09-05: it must not play for the seconds before the settings
+	# load, so it is never told to autoplay at all).
+	music_player = _looping_player("res://audio/music_loop.wav", -16.0, "Master", false)
 	if with_hum:
 		_looping_player("res://audio/hum_loop.wav", -18.0, "Room")
 
 
-func _looping_player(path: String, volume_db: float, bus: String) -> AudioStreamPlayer:
+func _looping_player(path: String, volume_db: float, bus: String,
+		autoplay: bool = true) -> AudioStreamPlayer:
 	var stream := load(path) as AudioStreamWAV
 	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	stream.loop_begin = 0
@@ -236,7 +238,7 @@ func _looping_player(path: String, volume_db: float, bus: String) -> AudioStream
 	# Playing streams leak their playback objects in a teardown race at
 	# process exit; harmless in real play but noise in headless smoke
 	# runs, so only start them when a real audio driver exists.
-	audio_player.autoplay = DisplayServer.get_name() != "headless"
+	audio_player.autoplay = autoplay and DisplayServer.get_name() != "headless"
 	add_child(audio_player)
 	_loop_players.append(audio_player)
 	return audio_player

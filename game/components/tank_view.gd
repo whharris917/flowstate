@@ -121,7 +121,11 @@ func rebuild() -> void:
 				ViewUtil.flat(Color(0.54, 0.53, 0.51)))
 
 	ViewUtil.label(_built, tank.comp_name, Vector3(0, h + 0.45, 0))
-	ViewUtil.interact_body(_built, Vector3(r * 2.2, h, r * 2.2), Vector3(0, h / 2.0, 0))
+	# The body hangs from the rebuilt geometry but must answer for the
+	# tank itself: hover, E, X and G all ask the collider for its view
+	# (director, 2026-09-05: X could not remove a tank).
+	var body := ViewUtil.interact_body(_built, Vector3(r * 2.2, h, r * 2.2), Vector3(0, h / 2.0, 0))
+	body.set_meta("view", self)
 
 	var markers := {}
 	for port: String in nozzles:

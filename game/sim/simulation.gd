@@ -113,6 +113,12 @@ func set_wire_resistance(wire: SimWire, k_pa_per_lps2: float) -> void:
 ## plus whatever each component puts between its own nozzles. Only
 ## topology lives here. Pressures and settings are refreshed every
 ## scan, which is far cheaper than rebuilding.
+## Topology or a boundary elevation changed outside a wiring call: the
+## next tick rebuilds the network.
+func invalidate_network() -> void:
+	_network_stale = true
+
+
 func _rebuild_network() -> void:
 	var net := SimNetwork.new()
 	for component in components:

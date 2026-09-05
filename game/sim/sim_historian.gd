@@ -30,9 +30,15 @@ func sample_count() -> int:
 
 
 func register(tag: String, read: Callable) -> void:
-	if data.has(tag):
+	if _readers.has(tag):
 		push_error("duplicate tag '%s'" % tag)
 		return
+	if data.has(tag):
+		# A retired tag coming back: equipment removed and a new record
+		# placed under the same name (X then B, 2026-09-05). The old
+		# record's series goes with it; this is a new series from now.
+		data.erase(tag)
+		_starts.erase(tag)
 	_readers[tag] = read
 	_starts[tag] = time.size()
 	data[tag] = PackedFloat64Array()

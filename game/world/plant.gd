@@ -73,6 +73,14 @@ func _ready() -> void:
 
 ## Headless smoke runs can't press B/C/X, so exercise the build API
 ## directly: place, connect, mis-wire, remove, save/load round-trip.
+## The visible run on a record, for the exercises. Null if none.
+func _visible_run_of(name_: String) -> PipeView:
+	for visual in _wire_visuals:
+		if visual["node"] != null and (visual["a"] == name_ or visual["b"] == name_):
+			return visual["node"] as PipeView
+	return null
+
+
 func _exercise_build_api() -> void:
 	var problems: Array[String] = []
 	# A level transmitter mounts on the tank's shell and is ranged to it.
@@ -90,6 +98,37 @@ func _exercise_build_api() -> void:
 	var pump2 := place_new("pump", _world(Vector3(6.0, 0.0, -1.0)), 0.0)
 	if pump2 == null or not remove_equipment(pump2.comp_name):
 		problems.append("place/remove pump failed")
+	# G move: a tank set down elsewhere carries its elevation, its run
+	# follows, and commissioned equipment stays put.
+	var mv_tank := place_new("tank", _world(Vector3(6.0, 0.0, -3.0)), 0.0) as SimTank
+	var mv_drain := place_new("drain", _world(Vector3(8.0, 0.0, -3.0)), 0.0)
+	if mv_tank == null or mv_drain == null:
+		problems.append("place tank/drain for the move test failed")
+	else:
+		if connect_equipment(mv_tank.comp_name, "outlet", mv_drain.comp_name, "inlet") != "":
+			problems.append("move test connect refused")
+		var run_before := _visible_run_of(mv_tank.comp_name)
+		if not move_equipment(mv_tank.comp_name, _world(Vector3(6.0, 3.0, -5.0)), PI / 2.0):
+			problems.append("move_equipment refused a placed tank")
+		if absf(mv_tank.elevation_m - 3.0) > 0.02:
+			problems.append("moved tank elevation %.2f m, expected 3.0" % mv_tank.elevation_m)
+		var run_after := _visible_run_of(mv_tank.comp_name)
+		if run_before == null or run_after == null or run_after == run_before:
+			problems.append("the moved tank's run was not re-laid")
+		if movable("supply_tank") == "":
+			problems.append("commissioned tank was movable")
+		# The crosshair asks the interact body for its view: a tank's
+		# must answer with the TankView, or hover, E, X and G miss it.
+		var tank_view := views[mv_tank.comp_name] as Node3D
+		var answers_for_tank := false
+		for body in tank_view.find_children("*", "StaticBody3D", true, false):
+			if (body as StaticBody3D).collision_layer == 4 and body.has_meta("view") \
+					and body.get_meta("view") == tank_view:
+				answers_for_tank = true
+		if not answers_for_tank:
+			problems.append("the tank's interact body does not name its view")
+		if not remove_equipment(mv_drain.comp_name) or not remove_equipment(mv_tank.comp_name):
+			problems.append("move test cleanup failed")
 	var src_t := place_new("source", _world(Vector3(7.5, 0.0, 0.5)), 0.0)
 	var drn_t := place_new("drain", _world(Vector3(8.6, 0.0, 0.5)), 0.0)
 	if src_t == null or drn_t == null:
@@ -304,13 +343,19 @@ func _new_graph() -> void:
 
 ## ---- equipment lifecycle ------------------------------------------------
 
+## Types whose nozzles stand at the placement height: a vessel on a
+## deck really does stand above one at grade. The elevation is
+## re-derived from the saved position on load, and from the new spot
+## when the equipment is moved.
+const ELEVATED_TYPES: Array[String] = ["tank", "reactor", "crystallizer", "source", "drain"]
+
+
 func place(type_id: String, name_: String, params: Dictionary,
 		world_pos: Vector3, rot_y: float, is_protected: bool) -> SimComponent:
 	# Nozzle pressures are piezometric, so a vessel on a deck really
 	# does stand above one at grade: the placement height is its
 	# elevation, and it is re-derived from the saved position on load.
-	if type_id in ["tank", "reactor", "crystallizer", "source", "drain"] \
-			and not params.has("elevation_m"):
+	if type_id in ELEVATED_TYPES and not params.has("elevation_m"):
 		params = params.duplicate()
 		params["elevation_m"] = snappedf(to_local(world_pos).y, 0.01)
 	var record := PlantFactory.make_record(sim, type_id, name_, params)
@@ -778,6 +823,39 @@ func refresh_wires_of(name_: String) -> void:
 		if str(visual.get("fitting", "")) != "":
 			pipe.set_fitting(str(visual["fitting"]))
 	_revalidate_in = 3
+
+
+## Why a record cannot be picked up and set down elsewhere, or "".
+func movable(name_: String) -> String:
+	if not equip_types.has(name_) or not views.has(name_):
+		return "only placed equipment moves — remove and re-place structure"
+	if protected.has(name_):
+		return "%s is commissioned equipment — can't move" % name_
+	if mounted.has(name_) or PlantFactory.MOUNTABLE.has(str(equip_types[name_])):
+		return "%s is mounted on a vessel — remove it and mount it again" % name_
+	return ""
+
+
+## Set placed equipment down somewhere else (director, 2026-09-05).
+## Its runs are re-laid from their own waypoints, instruments on its
+## shell ride with it, and a vessel takes its elevation from the new
+## height exactly as it did at placement.
+func move_equipment(name_: String, world_pos: Vector3, rot_y: float) -> bool:
+	if movable(name_) != "":
+		return false
+	var view := views[name_] as Node3D
+	var type_id := str(equip_types[name_])
+	view.position = to_local(world_pos) + Vector3(0, PlantFactory.Y_OFFSETS.get(type_id, 0.0), 0)
+	view.rotation.y = rot_y
+	var record := sim.get_component(name_)
+	if record != null and type_id in ELEVATED_TYPES:
+		record.set("elevation_m", snappedf(to_local(world_pos).y, 0.01))
+		sim.invalidate_network()
+	refresh_wires_of(name_)
+	for inst_name: String in mounted.keys():
+		if str((mounted[inst_name] as Dictionary)["host"]) == name_:
+			refresh_wires_of(inst_name)
+	return true
 
 
 func remove_equipment(name_: String) -> bool:

@@ -5,8 +5,9 @@ extends Node
 ## pick, R rotates, click places), C toggles connect (click an output
 ## port, lay waypoints, finish on an input port — the kernel's wiring
 ## rules and the support rule both get a veto), X removes player-placed
-## equipment, structure, or a routed run. The placement ghost is the
-## asset's real geometry, tinted by validity; the route preview is
+## equipment, structure, or a routed run, G picks placed equipment up
+## to set it down elsewhere (its runs follow). The placement ghost is
+## the asset's real geometry, tinted by validity; the route preview is
 ## real translucent pipe.
 
 enum Mode { NORMAL, PLACE, CONNECT }
@@ -53,6 +54,9 @@ var _last_route: Array[Vector3] = []
 var _route_ok := true
 var _route_span := 0.0
 var _nozzle_grab: Dictionary = {}   # {view, port, was: {frac, angle}}
+# Equipment picked up with G: the ghost is its type until it is set down.
+var _move_name := ""
+var _move_type := ""
 
 
 func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
@@ -128,6 +132,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_update_hud()
 	elif event.is_action_pressed("move_port") and mode == Mode.CONNECT:
 		_toggle_nozzle_grab()
+	elif event.is_action_pressed("move_port"):
+		_try_pick_up()
 	elif mode == Mode.CONNECT and not _nozzle_grab.is_empty() \
 			and event.is_action_pressed("place"):
 		_commit_nozzle_grab()
@@ -163,6 +169,8 @@ func _set_mode(new_mode: Mode) -> void:
 	if not _nozzle_grab.is_empty():
 		_toggle_nozzle_grab()  # cancel and restore
 	mode = new_mode
+	_move_name = ""
+	_move_type = ""
 	_clear_ghost()
 	_beam_anchor = Vector3.INF
 	_beam_ghost.visible = false
@@ -183,8 +191,12 @@ func _update_hud() -> void:
 	match mode:
 		Mode.NORMAL:
 			menu.visible = false
-			hud.set_mode_text("B build · C connect · X remove")
+			hud.set_mode_text("B build · C connect · G move · X remove")
 		Mode.PLACE:
+			if _move_name != "":
+				menu.visible = false
+				hud.set_mode_text("MOVE %s — click to set it down · R rotate · Esc cancel" % _move_name)
+				return
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
 				"ROUTING & SIGNS", "CONTROL", "UTILITIES"]
 			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 7]],
@@ -464,7 +476,14 @@ func _update_ghost() -> void:
 	# World geometry (1) plus interact volumes (4), which stand in for
 	# the space equipment occupies.
 	overlap.collision_mask = 1 | 4
-	overlap.exclude = [player.get_rid()]
+	var excluded: Array[RID] = [player.get_rid()]
+	if _move_name != "":
+		# Equipment being moved must not block its own new spot.
+		var moved: Node3D = plant.views.get(_move_name)
+		if moved != null:
+			for body in moved.find_children("*", "CollisionObject3D", true, false):
+				excluded.append((body as CollisionObject3D).get_rid())
+	overlap.exclude = excluded
 	_ghost_valid = space.intersect_shape(overlap, 1).is_empty()
 	if _ghost_valid and not _is_equipment_page():
 		_ghost_valid = StructureFactory.placement_ok(type_id, _ghost_pos, rot_y, space) == ""
@@ -613,10 +632,12 @@ func _catalog() -> Array[Dictionary]:
 
 ## Pages 0, 1, 2, 5, and 6 place sim equipment; 3 and 4 place structure.
 func _is_equipment_page() -> bool:
-	return page in [0, 1, 2, 5, 6]
+	return _move_name != "" or page in [0, 1, 2, 5, 6]
 
 
 func _current_type() -> String:
+	if _move_name != "":
+		return _move_type
 	return _catalog()[catalog_index]["type"]
 
 
@@ -638,6 +659,17 @@ func _try_place() -> void:
 			return
 		_run_points.append(aim)
 		_update_hud()
+		return
+	if _move_name != "":
+		if _ghost == null or not _ghost.visible or not _ghost_valid:
+			hud.toast("can't set it down here")
+			return
+		var moved := _move_name
+		if plant.move_equipment(moved, _ghost_pos, rot_y):
+			hud.toast("moved %s" % moved)
+		else:
+			hud.toast("could not move %s" % moved)
+		_set_mode(Mode.NORMAL)
 		return
 	if _is_mountable():
 		if not _ghost_valid or _mount_host == "":
@@ -837,9 +869,30 @@ func _port_picked(record_name: String, port_name: String, is_input: bool) -> voi
 		% [record_name, port_name])
 
 
+## G on placed equipment: pick it up. The ghost becomes its type at
+## its current rotation; the next click sets it down and its runs
+## follow. Esc or B puts it back untouched.
+func _try_pick_up() -> void:
+	var view := player.look_view()
+	if view == null or not view.has_meta("record_name"):
+		hud.toast("aim at equipment to move it")
+		return
+	var name_ := str(view.get_meta("record_name"))
+	var why := plant.movable(name_)
+	if why != "":
+		hud.toast(why)
+		return
+	_set_mode(Mode.PLACE)
+	_move_name = name_
+	_move_type = str(plant.equip_types[name_])
+	rot_y = (plant.views[name_] as Node3D).rotation.y
+	_update_hud()
+
+
 func _try_delete() -> void:
 	var view := player.look_view()
 	if view == null:
+		hud.toast("aim at equipment, structure or a run to remove it")
 		return
 	if view is PipeView:
 		var pipe := view as PipeView
@@ -857,6 +910,7 @@ func _try_delete() -> void:
 			hud.toast("removed %s — runs it carried re-check" % struct_name)
 		return
 	if not view.has_meta("record_name"):
+		hud.toast("nothing removable there")
 		return
 	var name_ := str(view.get_meta("record_name"))
 	if plant.remove_equipment(name_):
