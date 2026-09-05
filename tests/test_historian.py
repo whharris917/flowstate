@@ -46,7 +46,7 @@ def test_registers_ports_and_observables_as_tags() -> None:
         "pump.dry_run_s",
         "pump.flow_lps",
         "pump.head_pa",
-    } | nozzle_tags("tank.outlet") | nozzle_tags("pump.outlet")
+    } | nozzle_tags("tank.outlet") | nozzle_tags("tank.contents") | nozzle_tags("pump.outlet")
 
 
 def test_samples_every_scan_including_t0_baseline() -> None:

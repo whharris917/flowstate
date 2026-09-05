@@ -225,6 +225,14 @@ class Component:
         solve — a vessel's head as it fills, a valve's opening, whether
         a pump is turning."""
 
+    def standing_ports(self) -> set[str]:
+        """Ports whose node carries this component's own supplied stream
+        even when nothing moves through them: a vessel's contents tap,
+        which a probe on the shell reads. Nothing flows there, so the
+        composition pass would otherwise leave it holding whatever it
+        held at start."""
+        return set()
+
     def tap_ports(self) -> set[str]:
         """Nozzles that observe without carrying anything: a thermowell,
         an analyser tapping. A run to a tap creates no branch, so the
@@ -382,6 +390,15 @@ class Simulation:
         for i, stream in enumerate(fresh):
             if not stream.is_flowing:
                 fresh[i] = previous[i].with_flow(0.0)
+        # A vessel's contents tap holds the contents whether or not
+        # anything moves: a probe on the shell reads what is in the
+        # vessel. After the memory step, because nothing flows there.
+        for component in self.components:
+            for name in component.standing_ports():
+                port = component.material_ports().get(name)
+                supplied = component.supplied_stream(name)
+                if port is not None and supplied is not None and port.flow_lps > -1e-12:
+                    fresh[port.node] = supplied.with_flow(0.0)
         for tap_node, watched in self._tap_source.items():
             fresh[tap_node] = fresh[watched]
             net.pressures[tap_node] = net.pressures[watched]

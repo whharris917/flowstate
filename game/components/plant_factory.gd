@@ -215,12 +215,17 @@ const PORT_ANCHORS := {
 # floor. Their process input is the vessel's internal level tap, wired
 # by the plant when they are mounted, so only the signal side gets a
 # fitting. Anchors are in the mount frame: +x is outward from the shell.
-const MOUNTABLE: Array[String] = ["float_switch", "gauge_level"]
+const MOUNTABLE: Array[String] = ["float_switch", "gauge_level", "gauge_temp"]
 const MOUNTED_ANCHORS := {
 	"float_switch": {"contact": {"pos": Vector3(0.12, 0.05, 0), "dir": Vector3.RIGHT}},
 	"gauge_level": {"signal": {"pos": Vector3(0.1, -0.2, 0), "dir": Vector3.DOWN}},
+	"gauge_temp": {"signal": {"pos": Vector3(0.1, -0.2, 0), "dir": Vector3.DOWN}},
 }
-const MOUNTED_INPUT := {"float_switch": "level", "gauge_level": "process"}
+# The instrument's input the plant lands the hidden wire on, and the
+# vessel's hidden tap it lands it from: level instruments read the
+# level tap, a temperature probe reads the contents tap.
+const MOUNTED_INPUT := {"float_switch": "level", "gauge_level": "process", "gauge_temp": "process"}
+const MOUNTED_HOST_PORT := {"float_switch": "level", "gauge_level": "level", "gauge_temp": "contents"}
 
 # One player pipe is one kernel wire: a material nozzle to a material
 # nozzle, and the network decides what moves through it and which way.

@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from conftest import Contact, Duty, wire_power
-from sim.components import BlockValve, ControlValve, Drain, Pump, Source, Tank
+from sim.components import BlockValve, ControlValve, Drain, Gauge, Pump, Source, Tank
 from sim.core import PortKind, Simulation
 from sim.hydraulics import Network
 
@@ -225,6 +225,34 @@ class TestVesselNozzleSize:
     def test_the_default_is_the_old_fixed_nozzle(self) -> None:
         tank = Tank("t", capacity_l=100.0)
         assert tank.nozzle_cv_lps == Tank.OUTLET_CV_LPS
+
+
+class TestInstruments:
+    """A flow element totalizes what passed it; a probe on a vessel's
+    shell reads the contents through the tap the vessel keeps for it."""
+
+    def test_a_flow_meter_totalizes_what_reached_the_tank(self) -> None:
+        sim = Simulation(dt=0.05)
+        header = sim.add(Source("hdr", pressure_kpa=200.0))
+        meter = sim.add(Gauge("fqi", "flow", meter_k=100.0))
+        tank = sim.add(Tank("t", capacity_l=9000.0, level_l=0.0, height_m=4.0))
+        sim.connect(header, "outlet", meter, "inlet")
+        sim.connect(meter, "outlet", tank, "inlet")
+        sim.run(20.0)
+        assert tank.level_l > 10.0
+        assert meter.total_l == pytest.approx(tank.level_l, rel=1e-3)
+
+    def test_a_probe_on_the_shell_reads_the_contents_temperature(self) -> None:
+        sim = Simulation(dt=0.05)
+        tank = sim.add(Tank("t", capacity_l=2000.0, level_l=800.0, height_m=2.0, temp_c=62.0))
+        probe = sim.add(Gauge("ti", "temp_c"))
+        sim.connect(tank, "contents", probe, "process")
+        sim.run(1.0)
+        # The vessel loses a little heat to the room as it stands, and
+        # the probe follows it: within a tenth of a degree after a second.
+        assert probe.reading == pytest.approx(62.0, abs=0.1)
+        # Nothing moved: the tap is not a hole in the vessel.
+        assert tank.level_l == pytest.approx(800.0, abs=0.5)
 
 
 class TestBlockValve:

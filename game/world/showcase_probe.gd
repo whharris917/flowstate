@@ -75,6 +75,14 @@ func _run(world: Node) -> void:
 	print("[probe] u300 tanks: solvent %.0f L (%.0f%% solvent) · product silo %.0f L (%.0f%% product)" % [
 		solvent_tank.level_l, solvent_tank.contents.frac(SimSpecies.SOLVENT) * 100.0,
 		product_tank.level_l, product_tank.purity_frac() * 100.0])
+	# Probes on the shells read the contents: the solvent tank takes
+	# hot distillate, the liquor tank takes cooled mother liquor.
+	var ti308 := plant.sim.get_component("ti_308") as SimGauge
+	var ti306 := plant.sim.get_component("ti_306") as SimGauge
+	if ti308 != null and ti306 != null:
+		print("[probe] u300 probes: TI-308 solvent tank %.1f C (contents %.1f C) · TI-306 liquor tank %.1f C (contents %.1f C)" % [
+			ti308.reading, solvent_tank.temp_c, ti306.reading,
+			(plant.sim.get_component("lt_306") as SimTank).temp_c])
 	player.global_position = Vector3(47.5, 0.15, -9.5)
 	player.rotation.y = PI  # facing +z, along the cake side
 	player.zoom_t = 0.55

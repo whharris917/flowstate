@@ -83,6 +83,14 @@ func tap_ports() -> Array[String]:
 	return []
 
 
+## Ports whose node carries this component's own supplied stream even
+## when nothing moves through it: a vessel's contents tap, which a
+## probe on the shell reads. Nothing flows there, so the composition
+## pass would otherwise leave it holding whatever it held at start.
+func standing_ports() -> Array[String]:
+	return []
+
+
 ## What this component pushes out of that nozzle, when it is a source
 ## of material rather than a pass-through. A vessel supplies its
 ## contents; a header supplies what it carries. Returning null means

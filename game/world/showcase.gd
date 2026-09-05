@@ -243,6 +243,12 @@ static func _unit_300(plant: Plant) -> void:
 		Vector3(46.8, 0.0, 6.6), 0.0, false)
 	plant.place("tank", "sv_308", {"height_m": 2.6, "diameter_m": 1.6},
 		Vector3(38.0, 0.0, 6.6), 0.0, false)
+	# Temperature probes on the shells where temperature means something:
+	# the solvent tank takes hot distillate off the still, the liquor
+	# tank takes mother liquor off the centrifuge. Mounted after both
+	# tanks exist: a mount on a vessel not yet placed is silently nothing.
+	plant.mount_instrument("gauge_temp", "ti_308", {}, "sv_308", 0.45, 0.9, false)
+	plant.mount_instrument("gauge_temp", "ti_306", {}, "lt_306", 0.45, 0.9, false)
 	plant.place("pump", "p_309", {"rated_lps": 0.8}, Vector3(35.2, 0.0, 6.6), 0.0, false)
 	plant.place("drain", "du_301", {"rate_lps": 2.0}, Vector3(35.2, 0.0, -7.8), 0.0, false)
 

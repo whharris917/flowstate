@@ -45,6 +45,13 @@ func _build_mounted() -> void:
 	var housing := ViewUtil.box(self, Vector3(0.14, 0.34, 0.30), Vector3(0.07, 0, 0),
 		ViewUtil.flat(Color(0.16, 0.17, 0.19)))
 	housing.rotation_degrees = Vector3.ZERO
+	if gauge.kind == "temp_c":
+		# A thermowell: the stem reaches into the vessel behind the head.
+		var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
+		var stem := ViewUtil.cylinder(self, 0.022, 0.34, Vector3(-0.17, -0.04, 0), steel)
+		stem.rotation_degrees = Vector3(0, 0, 90)
+		var boss := ViewUtil.cylinder(self, 0.05, 0.05, Vector3(-0.025, -0.04, 0), steel)
+		boss.rotation_degrees = Vector3(0, 0, 90)
 	var dial := Node3D.new()
 	dial.position = Vector3(0.14, 0.02, 0)
 	dial.rotation_degrees = Vector3(0, 90, 0)  # face along +x
@@ -78,16 +85,22 @@ func _process(_delta: float) -> void:
 	var frac := clampf(gauge.reading / gauge.full_scale(), 0.0, 1.0)
 	# Zero at 7 o'clock, full scale at 5 o'clock, like a real dial.
 	_needle_root.rotation_degrees = Vector3(0, 0, 135.0 - 270.0 * frac)
-	_value_label.text = "%.1f %s" % [gauge.reading, gauge.units()]
+	if gauge.kind == "flow":
+		_value_label.text = "%.1f %s · Σ %.0f L" % [gauge.reading, gauge.units(), gauge.total_l]
+	else:
+		_value_label.text = "%.1f %s" % [gauge.reading, gauge.units()]
 
 
 func describe() -> String:
 	var wired := "wired" if gauge.is_wired() else "NOT CONNECTED"
 	if mounted:
 		wired = "on the vessel"
-	return "%s — %.2f %s (%s)\nfull scale %.0f %s" % [
+	var text := "%s — %.2f %s (%s)\nfull scale %.0f %s" % [
 		gauge.comp_name, gauge.reading, gauge.units(), wired,
 		gauge.full_scale(), gauge.units()]
+	if gauge.kind == "flow":
+		text += " · totalized %.1f L" % gauge.total_l
+	return text
 
 
 ## One line for the vessel it is mounted on to repeat.

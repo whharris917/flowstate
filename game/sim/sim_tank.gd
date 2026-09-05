@@ -47,6 +47,7 @@ var ran_dry_ticks: int = 0
 var inlet: SimInputPort
 var outlet: SimOutputPort
 var level: SimOutputPort
+var contents_tap: SimOutputPort
 
 var _roof: int = -1
 var _floor: int = -1
@@ -85,6 +86,9 @@ func _init(name_: String, capacity_l_: float, level_l_: float = 0.0, drain_lps_:
 	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_MATERIAL)
 	outlet = add_output("outlet", SimTypes.PortKind.PROCESS_MATERIAL)
 	level = add_output("level", SimTypes.PortKind.PROCESS_LEVEL)
+	# The contents tap: a probe mounted on the shell reads what the
+	# vessel holds through it. No branch, no flow, just the contents.
+	contents_tap = add_output("contents", SimTypes.PortKind.PROCESS_MATERIAL)
 	level.value = level_l
 	add_observable("overflowed_l", &"overflowed_l")
 	add_observable("ran_dry_ticks", &"ran_dry_ticks")
@@ -107,7 +111,11 @@ var depth_m: float:
 ## the level tap exists for instruments mounted on the shell, and the
 ## plant wires it for them.
 func hidden_ports() -> Array[String]:
-	return ["level"]
+	return ["level", "contents"]
+
+
+func standing_ports() -> Array[String]:
+	return ["contents"]
 
 
 ## Put a charge in the vessel directly — a commissioning fill, or a

@@ -409,7 +409,7 @@ func mount_instrument(type_id: String, name_: String, params: Dictionary,
 	mounted[record.comp_name] = {"host": host_name, "frac": frac, "angle": angle}
 	if is_protected:
 		protected[record.comp_name] = true
-	connect_equipment(host_name, "level", record.comp_name,
+	connect_equipment(host_name, str(PlantFactory.MOUNTED_HOST_PORT[type_id]), record.comp_name,
 		str(PlantFactory.MOUNTED_INPUT[type_id]), [], false)
 	return record
 

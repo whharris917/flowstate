@@ -30,6 +30,7 @@ const METER_K := 1000.0
 var kind: String
 var liters_per_meter: float
 var meter_k: float = METER_K   # the flow kind: size the element to its line
+var total_l: float = 0.0       # the flow kind totalizes forward flow
 var species_index: int = SimSpecies.PRODUCT
 var reading: float = 0.0
 
@@ -108,7 +109,7 @@ func is_wired() -> bool:
 	return process.wire_count > 0
 
 
-func tick(_dt: float) -> void:
+func tick(dt: float) -> void:
 	if kind == "dp_pa":
 		reading = process_a.value - process_b.value
 	elif kind == "level_kpa":
@@ -118,6 +119,7 @@ func tick(_dt: float) -> void:
 	elif kind == "flow":
 		# Signed: positive is forward through the meter, inlet to outlet.
 		reading = inlet.flow_lps
+		total_l += maxf(reading, 0.0) * dt
 	elif kind == "temp_c":
 		reading = process.stream.temp_c
 	elif kind == "conc_pct":
@@ -132,7 +134,8 @@ func species_key() -> String:
 
 
 func state_dict() -> Dictionary:
-	return {"species": species_key(), "liters_per_meter": liters_per_meter, "meter_k": meter_k}
+	return {"species": species_key(), "liters_per_meter": liters_per_meter, "meter_k": meter_k,
+		"total_l": total_l}
 
 
 func apply_state(state: Dictionary) -> void:
@@ -142,3 +145,4 @@ func apply_state(state: Dictionary) -> void:
 			species_index = index
 	liters_per_meter = maxf(float(state.get("liters_per_meter", liters_per_meter)), 1e-6)
 	meter_k = maxf(float(state.get("meter_k", meter_k)), 1e-6)
+	total_l = float(state.get("total_l", total_l))

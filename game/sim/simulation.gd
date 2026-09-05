@@ -256,6 +256,16 @@ func _resolve_compositions() -> void:
 				if supplied != null:
 					fresh[port.node] = supplied.with_flow(-port.flow_lps)
 
+	# A vessel's contents tap holds the contents whether or not anything
+	# is moving: a probe on the shell reads what is in the vessel.
+	for component in components:
+		for port_name: String in component.standing_ports():
+			var port: SimPort = component.material_ports().get(port_name)
+			if port != null and port.flow_lps > -1e-12:
+				var supplied := component.supplied_stream(port_name)
+				if supplied != null:
+					fresh[port.node] = supplied.with_flow(0.0)
+
 	# A line with nothing moving in it still holds what it last held.
 	# Forgetting would make a restarted pump briefly deliver water it
 	# never contained.

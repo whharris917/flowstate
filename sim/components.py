@@ -84,6 +84,9 @@ class Tank(Component):
         self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         self.level = self.add_output("level", PortKind.PROCESS_LEVEL)
         self.level.value = level_l
+        # The contents tap: a probe mounted on the shell reads what the
+        # vessel holds through it. No branch, no flow, just the contents.
+        self.contents_tap = self.add_output("contents", PortKind.PROCESS_MATERIAL)
         self.add_observable("overflowed_l", "overflowed_l")
         self.add_observable("ran_dry_ticks", "ran_dry_ticks")
         self.add_observable("temp_c", "temp_c")
@@ -124,6 +127,9 @@ class Tank(Component):
         self.temp_c = temp_c
         self.contents = Stream(self.level_l, temp_c, comp)
         self.level.value = self.level_l
+
+    def standing_ports(self) -> set[str]:
+        return {"contents"}
 
     def _feed_ports(self):
         return ("inlet",)
@@ -272,6 +278,7 @@ class Gauge(Component):
         self.meter_k = meter_k  # the flow kind: size the element to its line
         self.species = species  # which species a "conc_pct" analyser reads
         self.reading = 0.0
+        self.total_l = 0.0  # the flow kind totalizes forward flow
         if kind == "dp_pa":
             self.process_a = self.add_input("process_a", self.KINDS[kind])
             self.process_b = self.add_input("process_b", self.KINDS[kind])
@@ -282,6 +289,8 @@ class Gauge(Component):
             self.process = self.add_input("process", self.KINDS[kind])
         self.signal = self.add_output("signal", PortKind.SIGNAL_ANALOG)
         self.add_observable("reading", "reading")
+        if kind == "flow":
+            self.add_observable("total_l", "total_l")
 
     def tap_ports(self) -> set[str]:
         return {"process"} if self.kind in self.TAP_KINDS else set()
@@ -306,6 +315,7 @@ class Gauge(Component):
         elif self.kind == "flow":
             # Signed: positive is forward through the meter.
             self.reading = self.inlet.flow_lps
+            self.total_l += max(self.reading, 0.0) * dt
         elif self.kind == "temp_c":
             self.reading = self.process.stream.temp_c
         else:  # conc_pct
@@ -907,6 +917,9 @@ Tank.SPEC = EquipmentSpec(
                  "tee and blend. It sits above the liquid, so it cannot "
                  "flow backwards.",
         "level": "Level tap, in litres, for a switch or a transmitter.",
+        "contents": "Internal tap of the contents that a temperature probe "
+                    "mounted on the shell reads. Nothing flows through it; "
+                    "it holds what the vessel holds.",
         "outlet": "Bottom nozzle, at headspace pressure plus the static "
                   "head of the liquid. Material goes whichever way the "
                   "network solves -- charging a vessel up through it is "
@@ -1311,6 +1324,11 @@ Gauge.SPEC = EquipmentSpec(
             "dP = K * F^2                     [flow]",
             "An inline element costs the line a little pressure, like "
             "any fitting.",
+        ),
+        Equation(
+            "total += max(F, 0) * dt          [flow]",
+            "The totalizer: forward flow integrated since the meter was "
+            "placed. What a batch was, not only what it is.",
         ),
         Equation(
             "reading = T                      [temp_c]",
