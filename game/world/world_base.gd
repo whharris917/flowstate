@@ -93,6 +93,8 @@ func _after_plant() -> void:
 
 func _process(_delta: float) -> void:
 	var view := player.look_view()
+	if builder.is_editing():
+		view = null  # the pointer, not the player's crosshair, is what matters
 	if view != null and view.has_method("describe"):
 		hud.set_look_text(str(view.call("describe")))
 	else:

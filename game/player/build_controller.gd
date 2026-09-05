@@ -60,7 +60,12 @@ var _edit_name := ""
 var _gizmo: EditGizmo = null
 var _drag := ""
 var _drag_offset_f := 0.0          # size the grab started at, less the raw hit
-var _drag_offset_v := Vector3.ZERO  # base less the grab point, so it stays under the crosshair
+var _drag_offset_v := Vector3.ZERO  # base less the grab point, so it stays under the pointer
+var _edit_cam: EditCamera = null
+var _orbiting := false
+var _panning := false
+var _right_down := false
+var _right_moved := false
 
 
 func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
@@ -138,12 +143,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_toggle_nozzle_grab()
 	elif event.is_action_pressed("move_item"):
 		_toggle_edit()
-	elif mode == Mode.EDIT and event.is_action_pressed("place"):
-		_begin_drag()
-	elif mode == Mode.EDIT and event.is_action_released("place"):
-		_drag = ""
-		if _gizmo != null:
-			_gizmo.set_blocked(false)
+	elif mode == Mode.EDIT and _edit_mouse(event):
+		get_viewport().set_input_as_handled()
 	elif mode == Mode.EDIT and event.is_action_pressed("rotate_item"):
 		_rotate_edited()
 	elif mode == Mode.CONNECT and not _nozzle_grab.is_empty() \
@@ -213,7 +214,7 @@ func _update_hud() -> void:
 			var handles := "arrows move it (red X, blue Z, gold cube free)"
 			if plant.sim.get_component(_edit_name) is SimTank:
 				handles = "ring = diameter · post = height · " + handles
-			hud.set_mode_text("MODIFY %s — aim at a handle, hold click and look: %s · R rotate · M/Esc done"
+			hud.set_mode_text("MODIFY %s — drag a handle: %s · middle-drag pan · shift+middle or right-drag orbit · wheel zoom · R rotate · M/Esc done"
 				% [_edit_name, handles])
 		Mode.PLACE:
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
@@ -907,6 +908,24 @@ func exercise_device_menu() -> void:
 	plant.remove_equipment(record.comp_name)
 	print("[flowstate] edit gizmo exercise %s — %d handles, ring 0.8 m out reads %.1f m, post at 2.44 reads %.1f m, X arrow lands at %s"
 		% ["OK" if gizmo_ok else "FAILED", handles, d, h, str(m)])
+	# The edit camera: takes over where the player's camera stands,
+	# keeps its distance through an orbit, and the wheel brings it in.
+	var cam := EditCamera.new()
+	add_child(cam)
+	var target := Vector3(12.0, 1.0, 4.0)
+	cam.start_from(player.camera, target)
+	var d0 := cam.global_position.distance_to(target)
+	var start_ok := absf(d0 - clampf(player.camera.global_position.distance_to(target),
+		EditCamera.MIN_DIST, EditCamera.MAX_DIST)) < 1e-3
+	cam.orbit(Vector2(200.0, -50.0))
+	var orbit_ok := absf(cam.global_position.distance_to(target) - d0) < 1e-3 \
+		and (-cam.global_basis.z).dot((target - cam.global_position).normalized()) > 0.999
+	cam.zoom(2.0)
+	var zoom_ok := cam.global_position.distance_to(target) < d0
+	cam.queue_free()
+	print("[flowstate] edit camera exercise %s — starts %.2f m out, orbit holds distance, zoom brings it to %.2f m"
+		% ["OK" if start_ok and orbit_ok and zoom_ok else "FAILED", d0,
+		cam.global_position.distance_to(target)])
 
 
 ## Is a footprint free of world geometry (1) and interact volumes (4),
@@ -953,15 +972,120 @@ func _toggle_edit() -> void:
 	add_child(_gizmo)
 	_gizmo.setup(plant.views[name_] as Node3D, plant.sim.get_component(name_) as SimTank,
 		float(PlantFactory.Y_OFFSETS.get(plant.equip_types[name_], 0.0)))
+	# The camera leaves the player: a CAD viewport orbiting the
+	# equipment, the pointer free to drag its handles.
+	_edit_cam = EditCamera.new()
+	add_child(_edit_cam)
+	_edit_cam.start_from(player.camera, _gizmo.base() + Vector3(0, _edit_footprint().y * 0.5, 0))
+	_edit_cam.make_current()
+	player.input_locked = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_update_hud()
+
+
+func is_editing() -> bool:
+	return mode == Mode.EDIT
 
 
 func _end_edit() -> void:
 	_edit_name = ""
 	_drag = ""
+	_orbiting = false
+	_panning = false
+	_right_down = false
 	if _gizmo != null:
 		_gizmo.queue_free()
 		_gizmo = null
+	if _edit_cam != null:
+		player.camera.make_current()
+		_edit_cam.queue_free()
+		_edit_cam = null
+		player.input_locked = false
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## The ray under the pointer, from the edit camera: [origin, direction].
+func _edit_ray() -> Array[Vector3]:
+	var mouse := get_viewport().get_mouse_position()
+	return [_edit_cam.project_ray_origin(mouse), _edit_cam.project_ray_normal(mouse)]
+
+
+## Mouse in edit mode: left drags a handle, middle pans (shift: orbits),
+## right orbits, a right click that did not move opens the device
+## menu, the wheel zooms. Returns true when the event was ours.
+func _edit_mouse(event: InputEvent) -> bool:
+	if _edit_cam == null:
+		return false
+	if event is InputEventMouseButton:
+		var button := event as InputEventMouseButton
+		match button.button_index:
+			MOUSE_BUTTON_LEFT:
+				if button.pressed:
+					_begin_drag()
+				else:
+					_drag = ""
+					if _gizmo != null:
+						_gizmo.set_blocked(false)
+				return true
+			MOUSE_BUTTON_MIDDLE:
+				_orbiting = button.pressed and button.shift_pressed
+				_panning = button.pressed and not button.shift_pressed
+				return true
+			MOUSE_BUTTON_RIGHT:
+				if button.pressed:
+					_right_down = true
+					_right_moved = false
+				else:
+					var was_click := _right_down and not _right_moved
+					_right_down = false
+					if was_click:
+						_open_port_menu_at_pointer()
+				return true
+			MOUSE_BUTTON_WHEEL_UP:
+				if button.pressed:
+					_edit_cam.zoom(1.0)
+				return true
+			MOUSE_BUTTON_WHEEL_DOWN:
+				if button.pressed:
+					_edit_cam.zoom(-1.0)
+				return true
+		return false
+	if event is InputEventMouseMotion:
+		var motion := event as InputEventMouseMotion
+		if _orbiting or _right_down:
+			if motion.relative.length() > 0.5:
+				_right_moved = true
+			_edit_cam.orbit(motion.relative)
+			return true
+		if _panning:
+			_edit_cam.pan(motion.relative)
+			return true
+	return false
+
+
+## Right-click in edit mode: the device under the pointer, or the one
+## being edited.
+func _open_port_menu_at_pointer() -> void:
+	var ray := _edit_ray()
+	var query := PhysicsRayQueryParameters3D.create(ray[0], ray[0] + ray[1] * 200.0, 1 | 4)
+	query.exclude = [player.get_rid()]
+	var hit := player.camera.get_world_3d().direct_space_state.intersect_ray(query)
+	var name_ := _edit_name
+	if not hit.is_empty():
+		var collider := hit["collider"] as Node
+		if collider != null and collider.has_meta("view"):
+			var view := collider.get_meta("view") as Node
+			if view != null and view.has_meta("record_name"):
+				name_ = str(view.get_meta("record_name"))
+	var type_id := str(plant.equip_types.get(name_, ""))
+	port_menu.open(plant, "%s — %s" % [name_, type_id], [name_], type_id, _port_picked,
+		func(record_name: String, values: Dictionary) -> String:
+			var why := plant.configure_equipment(record_name, values)
+			if why == "":
+				hud.toast("%s configured" % record_name)
+				if _gizmo != null:
+					_gizmo.refresh()
+			return why)
 
 
 func _edit_footprint() -> Vector3:
@@ -975,9 +1099,9 @@ func _edit_footprint() -> Vector3:
 ## the ring's horizontal plane, a vertical plane through the axis
 ## facing the camera for the post, the ground for the arrows.
 func _drag_hit(base: Vector3) -> Vector3:
-	var camera := player.camera
-	var origin := camera.global_position
-	var dir := -camera.global_basis.z
+	var ray := _edit_ray()
+	var origin := ray[0]
+	var dir := ray[1]
 	var plane: Plane
 	match _drag:
 		"ring":
@@ -997,9 +1121,15 @@ func _drag_hit(base: Vector3) -> Vector3:
 
 
 func _begin_drag() -> void:
-	if _gizmo == null or not player.ray.is_colliding():
+	if _gizmo == null:
 		return
-	var collider := player.ray.get_collider() as Node
+	var ray := _edit_ray()
+	var query := PhysicsRayQueryParameters3D.create(ray[0], ray[0] + ray[1] * 200.0,
+		EditGizmo.LAYER)
+	var pick := player.camera.get_world_3d().direct_space_state.intersect_ray(query)
+	if pick.is_empty():
+		return
+	var collider := pick["collider"] as Node
 	if collider == null or not collider.has_meta("handle"):
 		return
 	_drag = str(collider.get_meta("handle"))
