@@ -142,7 +142,7 @@ class TestPumpsCanBeDefeated:
 
     def test_an_unpowered_pump_moves_nothing(self) -> None:
         sim, header, pump, tank = _plant()
-        sim.disconnect(sim.get_component("mains_1"), "power", pump, "power")
+        sim.disconnect(sim.get_component("mains_1"), "way1", pump, "power")
         sim.run(20.0)
         assert not pump.running
         assert pump.flow_lps == pytest.approx(0.0)

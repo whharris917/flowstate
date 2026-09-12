@@ -123,8 +123,13 @@ func _rebuild_network() -> void:
 	var net := SimNetwork.new()
 	for component in components:
 		var ports := component.material_ports()
+		var shared := {}
+		for group: Array in component.shared_node_ports():
+			var node := net.add_node()
+			for port_name: String in group:
+				shared[port_name] = node
 		for port_name: String in ports:
-			(ports[port_name] as SimPort).node = net.add_node()
+			(ports[port_name] as SimPort).node = shared[port_name] if shared.has(port_name) else net.add_node()
 		var node_map := {}
 		for port_name: String in ports:
 			node_map[port_name] = (ports[port_name] as SimPort).node

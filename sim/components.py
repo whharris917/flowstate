@@ -433,14 +433,69 @@ class MainsFeed(Component):
     power circuit — nothing runs without a cable back to a feed.
     """
 
-    def __init__(self, name: str, spec: str = "480VAC") -> None:
+    def __init__(self, name: str, spec: str = "480VAC", ways: int = 8) -> None:
         super().__init__(name)
+        if ways < 1:
+            raise ValueError("ways must be at least 1")
         self.spec = spec
-        self.power = self.add_output("power", PortKind.POWER, spec)
-        self.power.value = 1.0
+        self.ways = ways
+        # One numbered way per load (director, 2026-09-12): a terminal
+        # takes one cable, so a feeder that serves N loads has N ways.
+        self.way_ports = [self.add_output(f"way{i + 1}", PortKind.POWER, spec)
+                          for i in range(ways)]
+        for port in self.way_ports:
+            port.value = 1.0
 
     def tick(self, dt: float) -> None:
-        self.power.value = 1.0
+        for port in self.way_ports:
+            port.value = 1.0
+
+
+class Tee(Component):
+    """A pipe fitting whose nozzles are one hydraulic node: pressures
+    equal, flows summing to zero, composition the flow-weighted blend
+    of what arrives. A splitter has one inlet and three outlets, a
+    mixer three inlets and one outlet, on four separated nozzles; an
+    unused nozzle is capped. It exists because a nozzle takes one
+    line (director, 2026-09-12): joining and splitting is a fitting's
+    job, with its own connection points.
+    """
+
+    MODES = ("split", "mix")
+
+    def __init__(self, name: str, mode: str = "split") -> None:
+        super().__init__(name)
+        if mode not in self.MODES:
+            raise ValueError("mode must be 'split' or 'mix'")
+        self.mode = mode
+        if mode == "split":
+            self.add_input("in", PortKind.PROCESS_MATERIAL)
+            for leg in ("a", "b", "c"):
+                self.add_output(leg, PortKind.PROCESS_MATERIAL)
+        else:
+            for leg in ("a", "b", "c"):
+                self.add_input(leg, PortKind.PROCESS_MATERIAL)
+            self.add_output("out", PortKind.PROCESS_MATERIAL)
+
+    def shared_node_ports(self) -> list[list[str]]:
+        return [list(self.material_ports().keys())]
+
+    def tick(self, dt: float) -> None:
+        pass
+
+
+class SplitTee(Tee):
+    """A tee with one inlet and three outlets: the library's splitter."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name, mode="split")
+
+
+class MixTee(Tee):
+    """A tee with three inlets and one outlet: the library's mixer."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name, mode="mix")
 
 
 class PowerSupply(Component):
@@ -1523,18 +1578,89 @@ MainsFeed.SPEC = EquipmentSpec(
     title="Mains Feeder",
     tier="utility",
     summary=(
-        "The plant's electrical supply: one always-energized output at "
-        "its voltage class. The honest root of every power circuit -- "
-        "nothing in the plant runs without a cable back to one of these."
+        "The plant's electrical supply: numbered always-energized ways at "
+        "its voltage class, one per load. The honest root of every power "
+        "circuit -- nothing in the plant runs without a cable back to one "
+        "of these, and a way takes one cable."
     ),
-    ports={"power": "Energized supply at the feeder's voltage class."},
+    ports={f"way{i}": f"Way {i}: energized supply at the feeder's voltage "
+                      "class, for one load."
+           for i in range(1, 9)},
     equations=(
-        Equation("power = 1 always", "No load accounting or breakers yet."),
+        Equation("way_n = 1 always", "No load accounting or breakers yet."),
     ),
-    params=(Param("spec", "-", "Voltage class, e.g. 480VAC."),),
+    params=(
+        Param("spec", "-", "Voltage class, e.g. 480VAC."),
+        Param("ways", "-", "How many loads it can feed; set when placed."),
+    ),
     assumptions=(
         "Infinite capacity: no breaker, no load accounting, no volt drop. "
-        "Every feeder carries whatever you hang on it.",
+        "Every way carries whatever you hang on it.",
+    ),
+)
+
+SplitTee.SPEC = EquipmentSpec(
+    key="tee_split",
+    title="Tee -- Splitter",
+    tier="utility",
+    summary=(
+        "A pipe fitting whose nozzles are one point in the network: the "
+        "same pressure at every leg, flows that add to zero. One inlet "
+        "and three outlets on separated nozzles; an unused leg is "
+        "capped. It exists because a nozzle takes one line -- joining "
+        "and splitting is a fitting's job, and the split is whatever the "
+        "resistances downstream make of it."
+    ),
+    ports={
+        "in": "Inlet: the line being split.",
+        "a": "Outlet, straight through.",
+        "b": "Outlet, the near side leg.",
+        "c": "Outlet, the far side leg.",
+    },
+    equations=(
+        Equation("P_in = P_a = P_b = P_c",
+                 "One node: every leg sees the same pressure."),
+        Equation("Q_in = Q_a + Q_b + Q_c",
+                 "What comes in leaves; each leg takes what its own run's "
+                 "resistance and destination allow."),
+    ),
+    params=(),
+    assumptions=(
+        "No pressure drop through the fitting itself: the legs' runs carry "
+        "the resistance.",
+        "A capped leg is a dead nozzle, not a leak.",
+    ),
+)
+
+MixTee.SPEC = EquipmentSpec(
+    key="tee_mix",
+    title="Tee -- Mixer",
+    tier="utility",
+    summary=(
+        "A pipe fitting whose nozzles are one point in the network: the "
+        "same pressure at every leg, and the flow-weighted blend of "
+        "whatever arrives. Three inlets on separated nozzles, one "
+        "outlet; an unused leg is capped. It exists because a nozzle "
+        "takes one line -- joining is a fitting's job."
+    ),
+    ports={
+        "a": "Inlet, straight through.",
+        "b": "Inlet, the near side leg.",
+        "c": "Inlet, the far side leg.",
+        "out": "Outlet: the blend.",
+    },
+    equations=(
+        Equation("P_a = P_b = P_c = P_out",
+                 "One node: every leg sees the same pressure."),
+        Equation("x_out = sum(Q_i x_i) / sum(Q_i)",
+                 "The blend, flow-weighted, one scan later like every "
+                 "other hop. Temperature and solids blend the same way."),
+    ),
+    params=(),
+    assumptions=(
+        "No pressure drop through the fitting itself: the legs' runs carry "
+        "the resistance.",
+        "Perfect mixing at the node: no stratification, no dead leg.",
     ),
 )
 

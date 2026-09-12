@@ -157,10 +157,10 @@ static func _mcc_and_batch(plant: Plant) -> void:
 
 	# Power: 480 V from the plant feeder, through the doorway, to the
 	# cabinet PSU and the pump starter.
-	plant.connect_equipment("plant_mains", "power", psu_name, "ac_in",
+	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), psu_name, "ac_in",
 		[plant.to_local(Vector3(-3.6, 0.3, 0.2)), plant.to_local(Vector3(12.6, 0.3, 4.4)),
 		plant.to_local(Vector3(12.6, 0.3, 6.2)), plant.to_local(Vector3(13.8, 0.3, 6.6))])
-	plant.connect_equipment("plant_mains", "power", "feed_pump", "power",
+	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), "feed_pump", "power",
 		[plant.to_local(Vector3(-3.6, 0.3, 0.4)), plant.to_local(Vector3(12.5, 0.3, 4.5)),
 		plant.to_local(Vector3(12.5, 0.3, 7.0)), plant.to_local(Vector3(15.0, 0.3, 8.0))])
 
@@ -224,8 +224,12 @@ static func _unit_300(plant: Plant) -> void:
 	# line climbs, and the solvent inventory climbs with it.
 	plant.place("block_valve", "hv_311", {"cv_lps": 2.0, "stroke_s": 3.0},
 		Vector3(39.6, 0.0, -6.4), 0.0, false)
-	plant.connect_equipment("supply_solv", "outlet", "hv_311", "inlet",
-		[plant.to_local(Vector3(25.4, 0.35, 8.4)), plant.to_local(Vector3(38.6, 0.35, 8.4)),
+	# A nozzle takes one line (director, 2026-09-12): the header feeds a
+	# splitter tee, P-SOLV off its near side leg, the wash off the far.
+	plant.place("tee_split", "tee_solv", {}, Vector3(25.6, 0.0, 7.6), 0.0, false)
+	plant.connect_equipment("supply_solv", "outlet", "tee_solv", "in")
+	plant.connect_equipment("tee_solv", "c", "hv_311", "inlet",
+		[plant.to_local(Vector3(25.6, 0.35, 8.4)), plant.to_local(Vector3(38.6, 0.35, 8.4)),
 			plant.to_local(Vector3(38.6, 0.35, -6.4))])
 	plant.connect_equipment("hv_311", "outlet", "cf_301", "wash",
 		[plant.to_local(Vector3(41.24, 0.35, -6.4))])
@@ -285,13 +289,17 @@ static func _unit_300(plant: Plant) -> void:
 	plant.connect_equipment("supply_301a", "outlet", "p_301a", "inlet")
 	plant.connect_equipment("supply_301b", "outlet", "p_301b", "inlet")
 	plant.connect_equipment("supply_bfw", "outlet", "sg_301", "inlet")
-	plant.connect_equipment("supply_solv", "outlet", "p_solv", "inlet")
+	plant.connect_equipment("tee_solv", "b", "p_solv", "inlet")
 	plant.connect_equipment("p_301a", "outlet", "e_301", "cold_in",
 		[plant.to_local(Vector3(28.4, 0.35, -5.9)), plant.to_local(Vector3(28.4, 0.35, -0.5))])
 	plant.connect_equipment("sg_301", "steam", "e_301", "steam_in",
 		[plant.to_local(Vector3(28.5, 0.35, 1.6)), plant.to_local(Vector3(30.1, 0.35, 0.3))])
-	plant.connect_equipment("e_301", "cold_out", "r_301", "inlet_a",
-		[plant.to_local(Vector3(33.0, 0.9, -1.6))])
+	plant.place("tee_mix", "tee_301a", {}, Vector3(33.0, 0.0, -2.2), 0.0, false)
+	plant.connect_equipment("e_301", "cold_out", "tee_301a", "a",
+		[plant.to_local(Vector3(32.0, 0.9, -1.6)), plant.to_local(Vector3(32.0, 0.35, -2.2))])
+	plant.connect_equipment("tee_301a", "out", "r_301", "inlet_a",
+		[plant.to_local(Vector3(33.78, 0.35, -2.2)), plant.to_local(Vector3(33.78, 0.35, -3.15)),
+			plant.to_local(Vector3(33.78, 2.9, -3.15))])
 	plant.connect_equipment("p_301b", "outlet", "r_301", "inlet_b",
 		[plant.to_local(Vector3(31.6, 0.35, -3.5))])
 	plant.connect_equipment("e_301", "duty", "r_301", "heat_duty",
@@ -330,27 +338,35 @@ static func _unit_300(plant: Plant) -> void:
 		[plant.to_local(Vector3(43.0, 0.35, 4.2))])
 	plant.connect_equipment("hic_307", "out", "st_307", "heat_duty",
 		[plant.to_local(Vector3(46.0, 0.3, 5.6))])
-	plant.connect_equipment("st_307", "distillate", "sv_308", "inlet",
-		[plant.to_local(Vector3(45.6, 0.35, 6.9)), plant.to_local(Vector3(39.2, 0.35, 6.9))])
+	plant.place("tee_mix", "tee_308", {}, Vector3(38.0, 0.0, 4.6), -PI / 2.0, false)
+	plant.connect_equipment("st_307", "distillate", "tee_308", "b",
+		[plant.to_local(Vector3(45.6, 0.35, 6.9)), plant.to_local(Vector3(41.0, 0.35, 6.9)),
+			plant.to_local(Vector3(41.0, 0.35, 4.6))])
+	plant.connect_equipment("tee_308", "out", "sv_308", "inlet")
 	plant.connect_equipment("st_307", "bottoms", "du_301", "inlet",
 		[plant.to_local(Vector3(44.6, 0.35, 2.2)), plant.to_local(Vector3(35.2, 0.35, 2.2)),
 			plant.to_local(Vector3(35.2, 0.35, -6.9))])
-	plant.connect_equipment("p_solv", "outlet", "sv_308", "inlet",
-		[plant.to_local(Vector3(29.0, 0.35, 6.5)), plant.to_local(Vector3(36.6, 0.35, 6.5))])
+	plant.connect_equipment("p_solv", "outlet", "tee_308", "c",
+		[plant.to_local(Vector3(29.0, 0.35, 6.5)), plant.to_local(Vector3(34.6, 0.35, 6.5)),
+			plant.to_local(Vector3(34.6, 0.35, 4.6))])
 	# The loop closes here: recovered solvent goes back to the reactor.
 	plant.connect_equipment("sv_308", "outlet", "p_309", "inlet",
 		[plant.to_local(Vector3(36.7, 0.35, 6.6))])
-	plant.connect_equipment("p_309", "outlet", "r_301", "inlet_a",
-		[plant.to_local(Vector3(34.2, 0.35, 6.0)), plant.to_local(Vector3(34.2, 0.35, -2.6))])
+	plant.connect_equipment("p_309", "outlet", "tee_301a", "c",
+		[plant.to_local(Vector3(34.2, 0.35, 6.0)), plant.to_local(Vector3(34.2, 0.35, -1.4)),
+			plant.to_local(Vector3(33.0, 0.35, -1.4))])
 	# The lock keeps to itself.
 	plant.connect_equipment("vl_302", "press", "pi_302", "process",
 		[plant.to_local(Vector3(29.9, 0.35, -8.5))])
 	# Two lines land on one drain nozzle: a tee, which the network
 	# solves without a component.
-	plant.connect_equipment("vl_302", "drain_flow", "du_302", "inlet",
-		[plant.to_local(Vector3(31.7, 0.35, -8.15))])
-	plant.connect_equipment("e_301", "condensate", "du_302", "inlet",
-		[plant.to_local(Vector3(30.8, 0.35, -3.0)), plant.to_local(Vector3(32.4, 0.35, -7.4))])
+	plant.place("tee_mix", "tee_302d", {}, Vector3(34.6, 0.0, -8.3), PI, false)
+	plant.connect_equipment("vl_302", "drain_flow", "tee_302d", "b",
+		[plant.to_local(Vector3(31.7, 0.35, -7.2)), plant.to_local(Vector3(34.6, 0.35, -7.2))])
+	plant.connect_equipment("e_301", "condensate", "tee_302d", "a",
+		[plant.to_local(Vector3(30.8, 0.35, -3.0)), plant.to_local(Vector3(35.6, 0.35, -3.0)),
+			plant.to_local(Vector3(35.6, 0.35, -8.3))])
+	plant.connect_equipment("tee_302d", "out", "du_302", "inlet")
 
 	# ---- power: 480 V drops from the plant feeder along the rack ----
 	var trunk := [Vector3(-3.6, 0.3, -0.8), Vector3(22.6, 0.3, -0.8)]
@@ -372,7 +388,7 @@ static func _unit_300(plant: Plant) -> void:
 		for point: Vector3 in trunk:
 			path.append(plant.to_local(point))
 		path.append(plant.to_local(load[1] as Vector3))
-		plant.connect_equipment("plant_mains", "power", str(load[0]), "power", path)
+		plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), str(load[0]), "power", path)
 
 	# ---- commissioned state ----------------------------------------
 	# Seeded deliberately so the loop is doing something within a
@@ -425,11 +441,13 @@ static func _unit_300(plant: Plant) -> void:
 	# has to come apart to be cleaned (director, 2026-09-04).
 	_service_wire(plant, "cf_301", "ht_304", Color(0.13, 0.55, 0.28), "CK-301", "clamp")
 	_service_wire(plant, "cf_301", "lt_306", Color(0.45, 0.36, 0.25), "ML-301", "clamp")
-	_service_wire(plant, "st_307", "sv_308", Color(0.20, 0.45, 0.75), "SR-307", "clamp")
-	_service_wire(plant, "p_309", "r_301", Color(0.20, 0.45, 0.75), "SR-309", "clamp")
+	_service_wire(plant, "st_307", "tee_308", Color(0.20, 0.45, 0.75), "SR-307", "clamp")
+	_service_wire(plant, "tee_308", "sv_308", Color(0.20, 0.45, 0.75), "SR-307", "clamp")
+	_service_wire(plant, "p_309", "tee_301a", Color(0.20, 0.45, 0.75), "SR-309", "clamp")
+	_service_wire(plant, "tee_301a", "r_301", Color(0.20, 0.45, 0.75), "SR-309", "clamp")
 	_service_wire(plant, "st_307", "du_301", Color(0.45, 0.36, 0.25), "WS-307")
 	_service_wire(plant, "cx_303", "cf_301", Color(0.60, 0.25, 0.60), "PR-303", "clamp")
-	_service_wire(plant, "supply_solv", "hv_311", Color(0.20, 0.45, 0.75), "WL-311", "clamp")
+	_service_wire(plant, "tee_solv", "hv_311", Color(0.20, 0.45, 0.75), "WL-311", "clamp")
 	_service_wire(plant, "hv_311", "cf_301", Color(0.20, 0.45, 0.75), "WL-311", "clamp")
 	_service_wire(plant, "ht_304", "dr_305", Color(0.60, 0.25, 0.60), "PR-304", "clamp")
 	_service_wire(plant, "dr_305", "pt_300", Color(0.60, 0.25, 0.60), "PR-305", "clamp")
@@ -569,20 +587,25 @@ static func _unit_400(plant: Plant) -> void:
 	# ---- process path ------------------------------------------------
 	# Both pumps and the sewer line draw off the sump: a tee at its
 	# outlet nozzle.
-	plant.connect_equipment("t_403", "outlet", "p_401", "inlet",
-		_local(plant, [Vector3(-4.0, 0.35, 10.7), Vector3(-6.6, 0.35, 10.7)]))
-	plant.connect_equipment("t_403", "outlet", "p_402", "inlet",
-		_local(plant, [Vector3(-4.0, 0.3, 11.3), Vector3(-6.7, 0.3, 11.3), Vector3(-6.7, 0.3, 12.4)]))
-	plant.connect_equipment("t_403", "outlet", "xv_403", "inlet",
-		_local(plant, [Vector3(-3.6, 0.3, 11.7), Vector3(-3.6, 0.3, 12.6)]))
+	plant.place("tee_split", "tee_403a", {}, Vector3(-3.5, 0.0, 11.0), PI, false)
+	plant.connect_equipment("t_403", "outlet", "tee_403a", "in")
+	plant.connect_equipment("tee_403a", "a", "p_401", "inlet",
+		_local(plant, [Vector3(-4.2, 0.2, 11.0), Vector3(-6.6, 0.2, 11.0)]))
+	plant.connect_equipment("tee_403a", "c", "p_402", "inlet",
+		_local(plant, [Vector3(-3.5, 0.15, 10.1), Vector3(-7.4, 0.15, 10.1), Vector3(-7.4, 0.15, 12.4)]))
+	plant.connect_equipment("tee_403a", "b", "xv_403", "inlet",
+		_local(plant, [Vector3(-3.6, 0.35, 12.6)]))
 	plant.connect_equipment("xv_403", "outlet", "du_401", "inlet")
 	# P-401 through the meter, then up the west column past the top-deck
 	# railing to the top tank's inlet; P-402's riser meets it there.
 	plant.connect_equipment("p_401", "outlet", "fi_401", "inlet")
-	plant.connect_equipment("fi_401", "outlet", "t_401", "inlet",
-		_local(plant, [Vector3(-4.4, 0.42, 9.0), Vector3(-4.4, 7.35, 9.0), Vector3(-4.4, 7.35, 11.4)]))
-	plant.connect_equipment("p_402", "outlet", "t_401", "inlet",
-		_local(plant, [Vector3(-4.4, 0.42, 13.0), Vector3(-4.4, 7.55, 13.0), Vector3(-4.4, 7.55, 11.6)]))
+	plant.place("tee_mix", "tee_401m", {}, Vector3(-4.4, 0.0, 12.0), 0.0, false)
+	plant.connect_equipment("fi_401", "outlet", "tee_401m", "b",
+		_local(plant, [Vector3(-4.4, 0.42, 9.0)]))
+	plant.connect_equipment("p_402", "outlet", "tee_401m", "c",
+		_local(plant, [Vector3(-4.4, 0.42, 13.0)]))
+	plant.connect_equipment("tee_401m", "out", "t_401", "inlet",
+		_local(plant, [Vector3(-3.0, 0.35, 12.0), Vector3(-3.0, 7.35, 12.0), Vector3(-3.0, 7.35, 11.4)]))
 	# Gravity, one transfer at a time. The top tank drains north through
 	# XV-401, over the deck edge and down the north-east column to the
 	# mid tank's inlet.
@@ -594,13 +617,15 @@ static func _unit_400(plant: Plant) -> void:
 	# to XV-402 at grade, then in under the platform to the sump's inlet.
 	plant.connect_equipment("t_402", "outlet", "xv_402", "inlet",
 		_local(plant, [Vector3(-0.9, 3.28, 8.55), Vector3(0.4, 3.28, 8.55), Vector3(0.4, 0.35, 8.55)]))
-	plant.connect_equipment("xv_402", "outlet", "t_403", "inlet",
-		_local(plant, [Vector3(2.3, 0.35, 8.55), Vector3(2.3, 0.35, 14.2), Vector3(-1.7, 0.35, 14.2)]))
+	plant.place("tee_mix", "tee_403m", {}, Vector3(-2.0, 0.0, 13.0), PI / 2.0, false)
+	plant.connect_equipment("xv_402", "outlet", "tee_403m", "a",
+		_local(plant, [Vector3(2.3, 0.35, 8.55), Vector3(2.3, 0.35, 14.2), Vector3(-2.0, 0.35, 14.2)]))
+	plant.connect_equipment("tee_403m", "out", "t_403", "inlet")
 	# Makeup: header, valve, and a line in under the platform to the
 	# sump's inlet, which is a tee with the mid tank's drain.
 	plant.connect_equipment("supply_401", "outlet", "xv_404", "inlet")
-	plant.connect_equipment("xv_404", "outlet", "t_403", "inlet",
-		_local(plant, [Vector3(-2.3, 0.35, 15.0)]))
+	plant.connect_equipment("xv_404", "outlet", "tee_403m", "c",
+		_local(plant, [Vector3(-0.2, 0.35, 15.0), Vector3(-0.2, 0.35, 13.0)]))
 	# Line sizing, for about 20 L/s everywhere so each stage moves its
 	# 300 L in fifteen seconds or so. The pump lines are sized so the
 	# lift lands near P-401's rating; the gravity lines have two metres
@@ -608,18 +633,22 @@ static func _unit_400(plant: Plant) -> void:
 	# behind it, half a metre at most, so it is the fattest of all; the
 	# makeup line is throttled so the fill takes about as long as the
 	# lift.
-	plant.set_pipe_resistance("t_403", "outlet", "p_401", "inlet", 40.0)
-	plant.set_pipe_resistance("t_403", "outlet", "p_402", "inlet", 40.0)
+	plant.set_pipe_resistance("t_403", "outlet", "tee_403a", "in", 2.0)
+	plant.set_pipe_resistance("tee_403a", "a", "p_401", "inlet", 40.0)
+	plant.set_pipe_resistance("tee_403a", "c", "p_402", "inlet", 40.0)
 	plant.set_pipe_resistance("p_401", "outlet", "fi_401", "inlet", 40.0)
-	plant.set_pipe_resistance("fi_401", "outlet", "t_401", "inlet", 40.0)
+	plant.set_pipe_resistance("fi_401", "outlet", "tee_401m", "b", 20.0)
+	plant.set_pipe_resistance("tee_401m", "out", "t_401", "inlet", 20.0)
+	plant.set_pipe_resistance("p_402", "outlet", "tee_401m", "c", 40.0)
 	plant.set_pipe_resistance("t_401", "outlet", "xv_401", "inlet", 8.0)
 	plant.set_pipe_resistance("xv_401", "outlet", "t_402", "inlet", 8.0)
 	plant.set_pipe_resistance("t_402", "outlet", "xv_402", "inlet", 8.0)
-	plant.set_pipe_resistance("xv_402", "outlet", "t_403", "inlet", 8.0)
-	plant.set_pipe_resistance("t_403", "outlet", "xv_403", "inlet", 3.5)
+	plant.set_pipe_resistance("xv_402", "outlet", "tee_403m", "a", 6.0)
+	plant.set_pipe_resistance("tee_403m", "out", "t_403", "inlet", 2.0)
+	plant.set_pipe_resistance("tee_403a", "b", "xv_403", "inlet", 3.5)
 	plant.set_pipe_resistance("xv_403", "outlet", "du_401", "inlet", 3.5)
 	plant.set_pipe_resistance("supply_401", "outlet", "xv_404", "inlet", 375.0)
-	plant.set_pipe_resistance("xv_404", "outlet", "t_403", "inlet", 375.0)
+	plant.set_pipe_resistance("xv_404", "outlet", "tee_403m", "c", 375.0)
 
 	# ---- the sequence: a PLC in its own cabinet ----------------------
 	# The cabinet stands north of the platform with its door to the
@@ -772,13 +801,13 @@ static func _unit_400(plant: Plant) -> void:
 		_local(plant, [Vector3(3.5, 0.3, 8.75), Vector3(-4.9, 0.3, 8.75), Vector3(-4.9, 0.3, 8.35)]))
 
 	# ---- power: 480 V from the plant feeder, low along the ground ----
-	plant.connect_equipment("plant_mains", "power", "p_401", "power",
+	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), "p_401", "power",
 		_local(plant, [Vector3(-3.4, 0.3, 0.6), Vector3(-3.4, 0.3, 5.6),
 			Vector3(-3.4, 0.14, 6.0), Vector3(-5.95, 0.14, 6.0)]))
-	plant.connect_equipment("plant_mains", "power", "p_402", "power",
+	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), "p_402", "power",
 		_local(plant, [Vector3(-3.2, 0.3, 0.6), Vector3(-3.2, 0.3, 5.4),
 			Vector3(-3.2, 0.1, 5.8), Vector3(-7.4, 0.1, 5.8), Vector3(-7.4, 0.1, 11.8)]))
-	plant.connect_equipment("plant_mains", "power", psu_name, "ac_in",
+	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), psu_name, "ac_in",
 		_local(plant, [Vector3(-3.0, 0.3, 0.6), Vector3(-3.0, 0.3, 5.3), Vector3(5.6, 0.3, 5.3),
 			Vector3(5.6, 0.3, 7.6)]))
 
@@ -788,15 +817,18 @@ static func _unit_400(plant: Plant) -> void:
 	# the sump fills from the header when the plant starts.
 	(plant.sim.get_component("p_402") as SimPump).mode = "hand"
 
-	_service_wire(plant, "fi_401", "t_401", Color(0.13, 0.55, 0.28), "PW-401")
-	_service_wire(plant, "p_402", "t_401", Color(0.13, 0.55, 0.28), "PW-402")
+	_service_wire(plant, "fi_401", "tee_401m", Color(0.13, 0.55, 0.28), "PW-401")
+	_service_wire(plant, "tee_401m", "t_401", Color(0.13, 0.55, 0.28), "PW-401")
+	_service_wire(plant, "p_402", "tee_401m", Color(0.13, 0.55, 0.28), "PW-402")
 	_service_wire(plant, "t_401", "xv_401", Color(0.20, 0.45, 0.75), "GR-401")
 	_service_wire(plant, "xv_401", "t_402", Color(0.20, 0.45, 0.75), "GR-401")
 	_service_wire(plant, "t_402", "xv_402", Color(0.20, 0.45, 0.75), "GR-402")
-	_service_wire(plant, "xv_402", "t_403", Color(0.20, 0.45, 0.75), "GR-402")
-	_service_wire(plant, "t_403", "xv_403", Color(0.45, 0.30, 0.15), "SW-403")
+	_service_wire(plant, "xv_402", "tee_403m", Color(0.20, 0.45, 0.75), "GR-402")
+	_service_wire(plant, "tee_403m", "t_403", Color(0.20, 0.45, 0.75), "GR-402")
+	_service_wire(plant, "t_403", "tee_403a", Color(0.45, 0.30, 0.15), "SW-403")
+	_service_wire(plant, "tee_403a", "xv_403", Color(0.45, 0.30, 0.15), "SW-403")
 	_service_wire(plant, "xv_403", "du_401", Color(0.45, 0.30, 0.15), "SW-403")
-	_service_wire(plant, "xv_404", "t_403", Color(0.13, 0.55, 0.28), "MU-404")
+	_service_wire(plant, "xv_404", "tee_403m", Color(0.13, 0.55, 0.28), "MU-404")
 
 	# The operator screen: a simplified P&ID of the unit with every
 	# reading live from the records, facing the rig beside the cabinet.

@@ -54,6 +54,8 @@ static func build(type_id: String) -> Node3D:
 				(node as RelayView).setup(record as SimRelay)
 			"hmi_trend":
 				(node as TrendScreenView).setup_trend(record as SimTrendScreen, null)
+			"tee_split", "tee_mix":
+				(node as TeeView).setup(record as SimTee)
 			"float_switch":
 				(node as FloatSwitchView).setup(record as SimFloatSwitch)
 			"gauge_level", "gauge_flow", "gauge_dp", "gauge_press":

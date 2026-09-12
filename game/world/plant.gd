@@ -176,7 +176,7 @@ func _exercise_build_api() -> void:
 	else:
 		if connect_equipment(col.comp_name, "p_top", pi_top.comp_name, "process") != "":
 			problems.append("pressure gauge connect refused")
-		if connect_equipment("plant_mains", "power", col.comp_name, "power") != "":
+		if connect_equipment("plant_mains", free_way("plant_mains"), col.comp_name, "power") != "":
 			problems.append("column power feed refused")
 		col.set_duty(1.0)
 		for _i in 2400:
@@ -289,7 +289,10 @@ func _exercise_build_api() -> void:
 				psu_name = record_name
 			elif equip_types.get(record_name) == "relay":
 				relay_name = record_name
-		if connect_equipment("level_switch", "contact", t + "1", "in") != "":
+		# A switch of its own on the shell: the home loop's already feeds
+		# the pump relay, and a contact takes one line.
+		var cab_switch := mount_new("float_switch", "supply_tank", 0.5, 1.2) as SimFloatSwitch
+		if cab_switch == null or connect_equipment(cab_switch.comp_name, "contact", t + "1", "in") != "":
 			problems.append("field wire to cabinet terminal refused")
 		if connect_equipment(t + "1", "out", plc_name, "di_0", [], false) != "":
 			problems.append("internal terminal->PLC wire refused")
@@ -299,13 +302,13 @@ func _exercise_build_api() -> void:
 			problems.append("PLC refused a mirror rung")
 		if connect_equipment(plc_name, "do_0", t + "2", "in", [], false) != "":
 			problems.append("internal PLC->terminal wire refused")
-		switch.set_band(150.0, 150.0)  # level < 150: contact closed for sure
+		cab_switch.set_band(150.0, 150.0)  # level < 150: contact closed for sure
 		for _i in 10:
 			sim.tick()
 		# The PSU has no 480 V feed yet: the whole rack must be dead.
 		if (sim.get_component(t + "2") as SimTerminal).t_out.value > 0.5:
 			problems.append("unpowered PLC drove an output")
-		if connect_equipment("plant_mains", "power", psu_name, "ac_in") != "":
+		if connect_equipment("plant_mains", free_way("plant_mains"), psu_name, "ac_in") != "":
 			problems.append("mains to cabinet PSU refused")
 		for _i in 10:
 			sim.tick()
@@ -320,7 +323,7 @@ func _exercise_build_api() -> void:
 			sim.tick()
 		if (sim.get_component(t + "3") as SimTerminal).t_out.value < 0.5:
 			problems.append("signal failed to traverse the interposing relay")
-		switch.set_band(40.0, 80.0)
+		# The switch stays: the save/load check below expects the loop alive.
 	var real_path := save_path
 	save_path = "user://selfcheck_save.json"
 	var roundtrip := save_game() and load_game()
@@ -453,6 +456,8 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as PIDView).setup(record as SimPID)
 		"mains":
 			(view as MainsView).setup(record as SimMainsFeed)
+		"tee_split", "tee_mix":
+			(view as TeeView).setup(record as SimTee)
 		"psu":
 			(view as PsuView).setup(record as SimPowerSupply)
 		"source":
@@ -479,7 +484,10 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as StillView).setup(record as SimStill)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
-	if type_id != "tank":  # a tank's nozzles are its own
+	if type_id == "mains":
+		PlantFactory.attach_port_markers(view, record, type_id,
+			PlantFactory.mains_anchors((record as SimMainsFeed).ways))
+	elif type_id != "tank":  # a tank's nozzles are its own
 		PlantFactory.attach_port_markers(view, record, type_id)
 	views[record.comp_name] = view
 	equip_types[record.comp_name] = type_id
@@ -1096,6 +1104,17 @@ func connect_equipment(src_name: String, src_port: String,
 			in_port.path(), SimTypes.kind_name(in_port.kind)]
 	if in_port.wire_count > 0 and not SimTypes.allows_multiple_sources(in_port.kind):
 		return "%s already has a wire" % in_port.path()
+	if visible:
+		# One line per nozzle, one cable per terminal (director,
+		# 2026-09-12): joining and splitting is a fitting's job, with its
+		# own separated connection points. A tap does not count as a
+		# line on what it reads. Hidden wires — mounts, cabinet internals,
+		# multicore circuits — are the plant's own bookkeeping.
+		var to_tap := dst.tap_ports().has(dst_port)
+		if not to_tap and visible_wire_count(src_name, src_port) > 0:
+			return "%s already has a line — split it with a tee, or use another way" % out_port.path()
+		if visible_wire_count(dst_name, dst_port) > 0:
+			return "%s already has a line — join lines with a tee" % in_port.path()
 	if not sim.connect_ports(src, src_port, dst, dst_port):
 		return "connection refused"
 	if visible:
@@ -1106,6 +1125,35 @@ func connect_equipment(src_name: String, src_port: String,
 			"b": dst_name, "b_port": dst_port, "waypoints": [],
 			"color": "", "label": "", "hidden": true,
 		})
+	return ""
+
+
+## Visible lines on a port — the ones that occupy its fitting. A tap
+## reading a line is not a line on it.
+func visible_wire_count(record_name: String, port_name: String) -> int:
+	var count := 0
+	for visual in _wire_visuals:
+		if visual["node"] == null:
+			continue
+		if str(visual["a"]) == record_name and str(visual["a_port"]) == port_name:
+			var dst := sim.get_component(str(visual["b"]))
+			if dst != null and dst.tap_ports().has(str(visual["b_port"])):
+				continue
+			count += 1
+		elif str(visual["b"]) == record_name and str(visual["b_port"]) == port_name:
+			count += 1
+	return count
+
+
+## The first way on a mains feeder with nothing on it, or "".
+func free_way(mains_name: String) -> String:
+	var mains := sim.get_component(mains_name) as SimMainsFeed
+	if mains == null:
+		return ""
+	for i in mains.ways:
+		var way := "way%d" % (i + 1)
+		if visible_wire_count(mains_name, way) == 0:
+			return way
 	return ""
 
 
@@ -1474,6 +1522,23 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 	return lines
 
 
+## Every port carrying more than one wire (director, 2026-09-12: a
+## nozzle or a terminal takes one line; joining and splitting is a
+## fitting's job, with its own separated connection points).
+func fanout_report() -> PackedStringArray:
+	var counts: Dictionary = {}
+	for wire in sim.wires:
+		for port in [wire.src, wire.dst]:
+			var key: String = port.path()
+			counts[key] = int(counts.get(key, 0)) + 1
+	var lines := PackedStringArray()
+	for key: String in counts:
+		if int(counts[key]) > 1:
+			lines.append("%s carries %d wires" % [key, int(counts[key])])
+	lines.sort()
+	return lines
+
+
 ## How far two segments run side by side within `gap` of each other,
 ## and where: [length, midpoint]. Zero unless they are parallel.
 static func _segment_overlap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3,
@@ -1717,11 +1782,12 @@ func _build_initial_plant() -> void:
 		0.0, true) as SimRelay
 	pump = place("pump", "fill_pump", {"rated_lps": 4.0},
 		_world(Vector3(-0.5, 0, -2.6)), 0.0, true) as SimPump
-	place("mains", "plant_mains", {}, _world(Vector3(-4.4, 0, -1.2)), 0.0, true)
+	# Twenty-four ways: the showcase hangs every unit's loads on it.
+	place("mains", "plant_mains", {"ways": 24}, _world(Vector3(-4.4, 0, -1.2)), 0.0, true)
 	place("source", "raw_water", {}, _world(Vector3(-6.4, 0, -2.9)), 0.0, true)
 	place("drain", "du_100", {"rate_lps": 1.5}, _world(Vector3(4.7, 0, -1.4)), 0.0, true)
 	# Power first — nothing runs without a cable back to the feeder.
-	connect_equipment("plant_mains", "power", "fill_pump", "power",
+	connect_equipment("plant_mains", free_way("plant_mains"), "fill_pump", "power",
 		[Vector3(-3.6, 0.3, -1.6), Vector3(-1.0, 0.3, -2.9)])
 	# The flow path is honest end to end: the pump pulls from the
 	# supply header, and the tank's consumption is a real drain. One
@@ -1788,7 +1854,7 @@ func _self_check() -> void:
 	var c_mains := check.add(SimMainsFeed.new("m")) as SimMainsFeed
 	var c_src := check.add(SimSource.new("bl")) as SimSource
 	var c_drn := check.add(SimDrain.new("d", 1.5)) as SimDrain
-	check.connect_ports(c_mains, "power", c_pump, "power")
+	check.connect_ports(c_mains, "way1", c_pump, "power")
 	check.connect_ports(c_src, "outlet", c_pump, "inlet")
 	check.connect_ports(c_pump, "outlet", c_tank, "inlet")
 	check.connect_ports(c_tank, "outlet", c_drn, "inlet")
@@ -1882,7 +1948,7 @@ func _hydraulics_self_check() -> void:
 	var tank_ := sim.add(SimTank.new("t", 4000.0, 0.0, 0.0, 3.0)) as SimTank
 	var drain := sim.add(SimDrain.new("d", 2.0)) as SimDrain
 	var mains := sim.add(SimMainsFeed.new("m")) as SimMainsFeed
-	sim.connect_ports(mains, "power", pump, "power")
+	sim.connect_ports(mains, "way1", pump, "power")
 	sim.connect_ports(header, "outlet", pump, "inlet")
 	sim.connect_ports(pump, "outlet", tank_, "inlet")
 	sim.connect_ports(tank_, "outlet", drain, "inlet")
@@ -1905,7 +1971,7 @@ func _hydraulics_self_check() -> void:
 	var weak := sim.add(SimPump.new("p", 3.0, "hand", 4.0)) as SimPump
 	var tower := sim.add(SimTank.new("tower", 8000.0, 0.0, 0.0, 20.0)) as SimTank
 	var mains2 := sim.add(SimMainsFeed.new("m")) as SimMainsFeed
-	sim.connect_ports(mains2, "power", weak, "power")
+	sim.connect_ports(mains2, "way1", weak, "power")
 	sim.connect_ports(low_hdr, "outlet", weak, "inlet")
 	sim.connect_ports(weak, "outlet", tower, "inlet")
 	sim.run_for(60.0)
@@ -2313,6 +2379,10 @@ func _params_for(record: SimComponent) -> Dictionary:
 			"out_min": pid.out_min, "out_max": pid.out_max}
 	if record is SimTerminal:
 		return {"kind": (record as SimTerminal).kind}
+	if record is SimMainsFeed:
+		return {"spec": (record as SimMainsFeed).spec, "ways": (record as SimMainsFeed).ways}
+	if record is SimTee:
+		return {"mode": (record as SimTee).mode}
 	if record is SimTrendScreen:
 		var screen := record as SimTrendScreen
 		return {"tags": screen.tags.duplicate(), "window_s": screen.window_s}

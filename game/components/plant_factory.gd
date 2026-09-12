@@ -25,6 +25,8 @@ const CATALOG_UTILITIES: Array[Dictionary] = [
 	{"type": "source", "label": "Supply header"},
 	{"type": "drain", "label": "Drain / sewer"},
 	{"type": "vaclock", "label": "Vacuum lock"},
+	{"type": "tee_split", "label": "Tee — splitter"},
+	{"type": "tee_mix", "label": "Tee — mixer"},
 ]
 
 const CATALOG_INSTRUMENTS: Array[Dictionary] = [
@@ -70,6 +72,8 @@ const FOOTPRINTS := {
 	"junction_box": Vector3(0.5, 1.7, 0.3),
 	"control_station": Vector3(0.6, 1.6, 0.3),
 	"mains": Vector3(0.85, 1.85, 0.65),
+	"tee_split": Vector3(0.7, 0.6, 0.7),
+	"tee_mix": Vector3(0.7, 0.6, 0.7),
 	"psu": Vector3(0.65, 1.6, 0.45),
 	"source": Vector3(0.75, 1.9, 0.75),
 	"drain": Vector3(0.95, 0.5, 0.95),
@@ -92,7 +96,7 @@ const Y_OFFSETS := {
 	"float_switch": 0.0, "air_cascade": 0.0,
 	"valve": 0.0, "block_valve": 0.0, "controller": 0.0, "cabinet": 0.0, "junction_box": 0.0,
 	"control_station": 0.0,
-	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0,
+	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0, "tee_split": 0.0, "tee_mix": 0.0,
 	"reactor": 0.0, "centrifuge": 0.0, "hx": 0.0, "steamgen": 0.0,
 	"vaclock": 0.0, "vialfill": 0.0,
 	"gauge_temp": 0.0, "gauge_conc": 0.0,
@@ -153,7 +157,17 @@ const PORT_ANCHORS := {
 	"controller": {
 		"pv": {"pos": Vector3(-0.14, 1.12, 0.07), "dir": Vector3.BACK},
 		"out": {"pos": Vector3(0.14, 1.12, 0.07), "dir": Vector3.BACK}},
-	"mains": {"power": {"pos": Vector3(0.35, 1.05, 0), "dir": Vector3.RIGHT}},
+	# The mains feeder's ways are laid out per record by mains_anchors().
+	"tee_split": {
+		"in": {"pos": Vector3(-0.27, 0.35, 0), "dir": Vector3.LEFT},
+		"a": {"pos": Vector3(0.27, 0.35, 0), "dir": Vector3.RIGHT},
+		"b": {"pos": Vector3(0, 0.35, -0.27), "dir": Vector3.FORWARD},
+		"c": {"pos": Vector3(0, 0.35, 0.27), "dir": Vector3.BACK}},
+	"tee_mix": {
+		"a": {"pos": Vector3(-0.27, 0.35, 0), "dir": Vector3.LEFT},
+		"out": {"pos": Vector3(0.27, 0.35, 0), "dir": Vector3.RIGHT},
+		"b": {"pos": Vector3(0, 0.35, -0.27), "dir": Vector3.FORWARD},
+		"c": {"pos": Vector3(0, 0.35, 0.27), "dir": Vector3.BACK}},
 	"reactor": {
 		"inlet_a": {"pos": Vector3(-0.42, 2.42, 0), "dir": Vector3.UP},
 		"inlet_b": {"pos": Vector3(0.42, 2.42, 0), "dir": Vector3.UP},
@@ -322,7 +336,12 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 		"pilot_light":
 			return sim.add(SimPilotLight.new(name_, params.get("color", "green")))
 		"mains":
-			return sim.add(SimMainsFeed.new(name_, params.get("spec", "480VAC")))
+			return sim.add(SimMainsFeed.new(name_, params.get("spec", "480VAC"),
+				int(params.get("ways", 8))))
+		"tee_split":
+			return sim.add(SimTee.new(name_, "split"))
+		"tee_mix":
+			return sim.add(SimTee.new(name_, "mix"))
 		"psu":
 			return sim.add(SimPowerSupply.new(name_))
 		"source":
@@ -370,6 +389,8 @@ static func make_view(type_id: String, record: SimComponent,
 			view = RelayView.new()
 		"hmi_trend":
 			view = TrendScreenView.new()
+		"tee_split", "tee_mix":
+			view = TeeView.new()
 		"float_switch":
 			view = FloatSwitchView.new()
 		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", \
@@ -417,6 +438,21 @@ static func make_view(type_id: String, record: SimComponent,
 	view.set_meta("type_id", type_id)
 	view.set_meta("record_name", record.comp_name)
 	return view
+
+
+## A mains feeder's ways, down its right flank in columns of twelve,
+## one fitting per way so each cable has its own place to land.
+static func mains_anchors(ways: int) -> Dictionary:
+	var out := {}
+	@warning_ignore("integer_division")
+	var columns := (ways + 11) / 12
+	for i in ways:
+		@warning_ignore("integer_division")
+		var col := i / 12
+		var row := i % 12
+		out["way%d" % (i + 1)] = {"pos": Vector3(0.36, 1.55 - row * 0.1, (col - (columns - 1) / 2.0) * 0.16),
+			"dir": Vector3.RIGHT}
+	return out
 
 
 ## The build-menu label of a type, for the journal and toasts.

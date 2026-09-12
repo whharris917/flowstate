@@ -54,9 +54,9 @@ class Contact(Component):
 def wire_power(sim: Simulation, *components: Component) -> MainsFeed:
     """Feed each component's power input from a fresh mains feeder —
     the boilerplate of an energized plant."""
-    mains = sim.add(MainsFeed(sim.unique_name("mains")))
-    for component in components:
-        sim.connect(mains, "power", component, "power")
+    mains = sim.add(MainsFeed(sim.unique_name("mains"), ways=max(len(components), 1)))
+    for i, component in enumerate(components, start=1):
+        sim.connect(mains, f"way{i}", component, "power")
     return mains
 
 

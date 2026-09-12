@@ -239,6 +239,13 @@ class Component:
         instrument reads the line without being a hole in it."""
         return set()
 
+    def shared_node_ports(self) -> list[list[str]]:
+        """Groups of nozzles that are one hydraulic node: a tee's three
+        (director, 2026-09-12: a nozzle takes one line, so joining and
+        splitting is a fitting with its own separated nozzles). The
+        layout gives every port in a group the same node."""
+        return []
+
     def supplied_stream(self, port_name: str) -> Optional[Stream]:
         """What this component pushes out of that nozzle, when it is a
         source of material rather than a pass-through. A vessel supplies
@@ -291,8 +298,13 @@ class Simulation:
         """
         net = Network()
         for component in self.components:
-            for port in component.material_ports().values():
-                port.node = net.add_node()
+            shared: dict[str, int] = {}
+            for group in component.shared_node_ports():
+                node = net.add_node()
+                for name in group:
+                    shared[name] = node
+            for name, port in component.material_ports().items():
+                port.node = shared[name] if name in shared else net.add_node()
         taps = set()
         for component in self.components:
             for name in component.tap_ports():

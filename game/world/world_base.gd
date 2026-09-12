@@ -123,6 +123,10 @@ func _ready() -> void:
 		print("[flowstate] run overlaps: %d" % overlaps.size())
 		for line in overlaps:
 			print("    " + line)
+		var fanouts := plant.fanout_report()
+		print("[flowstate] ports with more than one wire: %d" % fanouts.size())
+		for line in fanouts:
+			print("    " + line)
 	_load_settings()
 	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
 

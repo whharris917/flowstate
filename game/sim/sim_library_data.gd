@@ -472,6 +472,46 @@ const PAGES := {
 			"Each pen has its own scale, so two pens crossing on the screen means nothing about their values -- read the legend.",
 		],
 	},
+	"tee_split": {
+		"title": "Tee — Splitter",
+		"tier": "utility",
+		"summary": "A pipe fitting whose nozzles are one point in the network: the same pressure at every leg, flows that add to zero. One inlet, three outlets on separated nozzles; an unused leg is capped. It exists because a nozzle takes one line -- joining and splitting is a fitting's job, and the split is whatever the resistances downstream make of it.",
+		"ports": {
+			"in": "Inlet: the line being split.",
+			"a": "Outlet, straight through.",
+			"b": "Outlet, the near side leg.",
+			"c": "Outlet, the far side leg.",
+		},
+		"equations": [
+			["P_in = P_a = P_b = P_c", "One node: every leg sees the same pressure."],
+			["Q_in = Q_a + Q_b + Q_c", "What comes in leaves; each leg takes what its own run's resistance and destination allow."],
+		],
+		"params": [],
+		"assumptions": [
+			"No pressure drop through the fitting itself: the legs' runs carry the resistance.",
+			"A capped leg is a dead nozzle, not a leak.",
+		],
+	},
+	"tee_mix": {
+		"title": "Tee — Mixer",
+		"tier": "utility",
+		"summary": "A pipe fitting whose nozzles are one point in the network: the same pressure at every leg, and the flow-weighted blend of whatever arrives. Three inlets on separated nozzles, one outlet; an unused leg is capped. It exists because a nozzle takes one line -- joining is a fitting's job.",
+		"ports": {
+			"a": "Inlet, straight through.",
+			"b": "Inlet, the near side leg.",
+			"c": "Inlet, the far side leg.",
+			"out": "Outlet: the blend.",
+		},
+		"equations": [
+			["P_a = P_b = P_c = P_out", "One node: every leg sees the same pressure."],
+			["x_out = sum(Q_i x_i) / sum(Q_i)", "The blend, flow-weighted, one scan later like every other hop. Temperature and solids blend the same way."],
+		],
+		"params": [],
+		"assumptions": [
+			"No pressure drop through the fitting itself: the legs' runs carry the resistance.",
+			"Perfect mixing at the node: no stratification, no dead leg.",
+		],
+	},
 	"float_switch": {
 		"title": "Level Switch",
 		"tier": "control",
@@ -513,15 +553,23 @@ const PAGES := {
 	"mains": {
 		"title": "Mains Feeder",
 		"tier": "utility",
-		"summary": "The plant's electrical supply: one always-energized output at its voltage class. The honest root of every power circuit -- nothing in the plant runs without a cable back to one of these.",
+		"summary": "The plant's electrical supply: numbered always-energized ways at its voltage class, one per load. The honest root of every power circuit -- nothing in the plant runs without a cable back to one of these, and a way takes one cable. Feed several loads from several ways; a busy plant needs a feeder with more ways, set when it is placed.",
 		"ports": {
-			"power": "Energized supply at the feeder's voltage class.",
+			"way1": "Way 1: energized supply at the feeder's voltage class, for one load.",
+			"way2": "Way 2, the same.",
+			"way3": "Way 3, the same.",
+			"way4": "Way 4, the same.",
+			"way5": "Way 5, the same.",
+			"way6": "Way 6, the same.",
+			"way7": "Way 7, the same.",
+			"way8": "Way 8, the same.",
 		},
 		"equations": [
-			["power = 1 always", "No load accounting or breakers yet."],
+			["way_n = 1 always", "No load accounting or breakers yet."],
 		],
 		"params": [
 			["spec", "-", "480VAC", "Voltage class, e.g. 480VAC."],
+			["ways", "-", "8", "How many loads it can feed; set when placed."],
 		],
 		"assumptions": [
 			"Infinite capacity: no breaker, no load accounting, no volt drop. Every feeder carries whatever you hang on it.",

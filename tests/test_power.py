@@ -20,7 +20,7 @@ class TestPower:
         sim = Simulation(dt=0.05)
         pump = sim.add(Pump("p", rated_lps=4.0, mode="hand"))
         mains = sim.add(MainsFeed("mains"))
-        sim.connect(mains, "power", pump, "power")
+        sim.connect(mains, "way1", pump, "power")
         sim.run(1.0)
         assert pump.running
 
@@ -36,7 +36,7 @@ class TestPower:
         mains = sim.add(MainsFeed("mains"))
         psu = sim.add(PowerSupply("psu"))
         plc = sim.add(PLC("plc"))
-        sim.connect(mains, "power", psu, "ac_in")
+        sim.connect(mains, "way1", psu, "ac_in")
         sim.connect(psu, "dc_out", plc, "power")
         plc.set_program([{"coil": "do_0", "logic": [[{"ref": "di_0", "nc": True}]]}])
         sim.run(1.0)
@@ -44,7 +44,7 @@ class TestPower:
         assert plc.scans > 0
         # Pull the feeder: the PSU output collapses and the PLC halts
         # with its outputs dropped.
-        sim.disconnect(mains, "power", psu, "ac_in")
+        sim.disconnect(mains, "way1", psu, "ac_in")
         scans_at_loss = plc.scans
         sim.run(1.0)
         assert not plc.do_ports[0].value
@@ -56,6 +56,6 @@ class TestPower:
         pump = sim.add(Pump("p", rated_lps=4.0))
         mains_a = sim.add(MainsFeed("ma"))
         mains_b = sim.add(MainsFeed("mb"))
-        sim.connect(mains_a, "power", pump, "power")
+        sim.connect(mains_a, "way1", pump, "power")
         with pytest.raises(ValueError, match="one wire"):
-            sim.connect(mains_b, "power", pump, "power")
+            sim.connect(mains_b, "way1", pump, "power")

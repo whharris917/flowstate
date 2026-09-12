@@ -213,6 +213,8 @@ def sample_components() -> list[Component]:
         comp.FloatSwitch("switch", low_l=40.0, high_l=80.0),
         comp.Relay("relay"),
         comp.MainsFeed("mains"),
+        comp.SplitTee("tee_split"),
+        comp.MixTee("tee_mix"),
         comp.PowerSupply("psu"),
         comp.Terminal("terminal"),
         comp.Pushbutton("pushbutton"),

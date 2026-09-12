@@ -13,7 +13,7 @@ extends RefCounted
 ## editorial review, like the library pages.
 
 ## Tier 0 by hand: vessels, headers, sewers, and a valve you turn yourself.
-const BASE_TYPES: Array[String] = ["tank", "source", "drain", "block_valve"]
+const BASE_TYPES: Array[String] = ["tank", "source", "drain", "block_valve", "tee_split", "tee_mix"]
 
 const LADDER: Array[Dictionary] = [
 	{

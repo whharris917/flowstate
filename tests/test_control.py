@@ -43,7 +43,7 @@ class TestControlStation:
         # Powered for real: a poked port value is gone by the next scan.
         mains = sim.add(MainsFeed("mains"))
         psu = sim.add(PowerSupply("psu"))
-        sim.connect(mains, "power", psu, "ac_in")
+        sim.connect(mains, "way1", psu, "ac_in")
         sim.connect(psu, "dc_out", plc, "power")
         start = sim.add(Pushbutton("start"))
         stop = sim.add(Pushbutton("stop", normally_closed=True))

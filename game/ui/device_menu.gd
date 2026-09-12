@@ -114,13 +114,16 @@ func _fill_io(records: Array) -> void:
 			if hidden.has(port_name):
 				continue
 			var port: SimOutputPort = record.outputs[port_name]
+			# An outlet takes one line (director, 2026-09-12): a wired one
+			# shows its reading and is not offered again.
+			var taken := _plant.visible_wire_count(record_name, port_name) > 0
 			_io_list.add_child(_row(record_name, port_name, port.kind, port.spec, false,
-				port.reading(), true))
+				("wired · " if taken else "") + port.reading(), not taken))
 		for port_name: String in record.inputs:
 			if hidden.has(port_name):
 				continue
 			var port: SimInputPort = record.inputs[port_name]
-			var free := port.wire_count == 0 or SimTypes.allows_multiple_sources(port.kind)
+			var free := _plant.visible_wire_count(record_name, port_name) == 0
 			var state := "wired" if port.wire_count > 0 else "open"
 			if SimTypes.is_material(port.kind) and port.wire_count > 0:
 				state = port.reading()

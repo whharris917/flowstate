@@ -90,7 +90,7 @@ class TestSteamGen:
         sim.run(5.0)
         assert boiler.steam_lps == pytest.approx(0.0)   # not fired
         boiler.is_on = True
-        sim.disconnect(sim.get_component("mains_1"), "power", boiler, "power")
+        sim.disconnect(sim.get_component("mains_1"), "way1", boiler, "power")
         sim.run(5.0)
         assert boiler.steam_lps == pytest.approx(0.0)   # no power
         assert boiler.feedwater_lps == pytest.approx(0.0)
@@ -590,7 +590,7 @@ class TestVacuumLock:
         lock.is_on = True
         sim.run(15.0)          # well into evacuation
         assert lock.press_pa < 50000.0
-        sim.disconnect(sim.get_component("mains_1"), "power", lock, "power")
+        sim.disconnect(sim.get_component("mains_1"), "way1", lock, "power")
         sim.run(90.0)
         assert lock.state == "idle"
         assert lock.press_pa == pytest.approx(lock.PRESS_ATM_PA, rel=0.05)
@@ -661,7 +661,7 @@ class TestVialFiller:
         sim.run(10.0)
         assert filler.vials_done > 0
         done = filler.vials_done
-        sim.disconnect(sim.get_component("mains_1"), "power", filler, "power")
+        sim.disconnect(sim.get_component("mains_1"), "way1", filler, "power")
         sim.run(10.0)
         assert filler.vials_done == done
         assert filler.state == "idle"
