@@ -226,9 +226,10 @@ func _build_enclosure() -> void:
 	var cz := (HALL_MIN.z + HALL_MAX.z) / 2.0
 	var lx := HALL_MAX.x - HALL_MIN.x
 	var lz := HALL_MAX.z - HALL_MIN.z
-	# Up each wall: sill, window band, wall, clerestory, wall.
-	var bands: Array = [[0.0, 2.6, false], [2.6, 5.6, true], [5.6, 12.4, false],
-		[12.4, 14.8, true], [14.8, top, false]]
+	# Up each wall: sill, window band, then wall to the roof (the
+	# clerestory came out, director 2026-09-12; daylight from above is
+	# the skylights' job).
+	var bands: Array = [[0.0, 2.6, false], [2.6, 5.6, true], [5.6, top, false]]
 	# Roller-door openings in the sill band: west by the pad, east by
 	# Unit 300. Their lintel is the window band.
 	_wall(Vector3(HALL_MIN.x, y0, cz), lz, true, bands, [-6.0, 2.0])
