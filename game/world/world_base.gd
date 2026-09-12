@@ -48,8 +48,12 @@ var _sun_base_color := Color(1.0, 0.97, 0.90)
 
 
 func _ready() -> void:
+	var t_start := Time.get_ticks_msec()
+	var t0 := t_start
 	_build_world()
 	_build_audio()
+	var ms_world := Time.get_ticks_msec() - t0
+	t0 = Time.get_ticks_msec()
 	plant = Plant.new()
 	plant.position.y = plant_height
 	plant.save_path = plant_save_path
@@ -59,6 +63,8 @@ func _ready() -> void:
 		campaign = Milestones.new()
 		plant.campaign = campaign
 	add_child(plant)
+	var ms_plant := Time.get_ticks_msec() - t0
+	t0 = Time.get_ticks_msec()
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	hud = Hud.new()
@@ -90,9 +96,16 @@ func _ready() -> void:
 	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)
+	var ms_ui := Time.get_ticks_msec() - t0
+	t0 = Time.get_ticks_msec()
 	if DisplayServer.get_name() == "headless" and campaign != null:
 		_campaign_self_check()  # before _after_plant loads a save onto the bare ground
 	_after_plant()
+	var ms_after := Time.get_ticks_msec() - t0
+	print("[flowstate] startup %d ms — world %d · plant %d (self-check %d, home loop %d) · ui %d · after_plant %d"
+		% [Time.get_ticks_msec() - t_start, ms_world, ms_plant,
+		int(plant.startup_ms.get("self-check", 0)), int(plant.startup_ms.get("home loop", 0)),
+		ms_ui, ms_after])
 	if DisplayServer.get_name() == "headless" and with_home:
 		builder.exercise_device_menu()
 	if DisplayServer.get_name() == "headless" and with_home:

@@ -67,12 +67,25 @@ func is_unlocked(type_id: String) -> bool:
 	return campaign == null or campaign.unlocked(type_id)
 
 
+## Milliseconds each startup phase took, for the world's startup line.
+var startup_ms: Dictionary = {}
+
+
 func _ready() -> void:
+	var t0 := Time.get_ticks_msec()
 	_new_graph()
-	_self_check()
+	# The kernel self-checks simulate ten minutes of plant and cost
+	# about eight seconds; they are for the headless smoke runs, not for
+	# someone pressing Play (director, 2026-09-12: the wait after the
+	# title screen).
+	if DisplayServer.get_name() == "headless":
+		_self_check()
+	startup_ms["self-check"] = Time.get_ticks_msec() - t0
+	t0 = Time.get_ticks_msec()
 	if build_home:
 		_build_initial_plant()
 	_build_hmi()
+	startup_ms["home loop"] = Time.get_ticks_msec() - t0
 	if DisplayServer.get_name() == "headless" and build_home:
 		_exercise_build_api()
 		_support_exercise_phase = 1
