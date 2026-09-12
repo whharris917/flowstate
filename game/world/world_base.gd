@@ -21,6 +21,8 @@ var with_hum := true              # machine-room ambience loop
 var campaign: Milestones = null
 var journal: MilestonePanel = null
 var _journal_refresh := 0.0
+var autosave_s := 0.0             # > 0: save this often, and on quit
+var _autosave_left := 0.0
 var reverb_room_size := 0.85
 var reverb_wet := 0.25
 
@@ -134,7 +136,18 @@ func _after_plant() -> void:
 	pass
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and autosave_s > 0.0 and plant != null:
+		plant.save_game()
+
+
 func _process(delta: float) -> void:
+	if autosave_s > 0.0 and DisplayServer.get_name() != "headless":
+		_autosave_left -= delta
+		if _autosave_left <= 0.0:
+			_autosave_left = autosave_s
+			if plant.save_game():
+				hud.toast("autosaved")
 	if campaign != null:
 		var finished := campaign.tick(plant)
 		if not finished.is_empty():

@@ -15,4 +15,10 @@ func _init() -> void:
 
 
 func _after_plant() -> void:
-	hud.toast("Campaign. J journal — the plant proves each milestone itself · B build · C connect · L library · O options · F5/F9 save/load")
+	# A game continues where it left off: the campaign loads its own
+	# save on entry and writes it every two minutes and on quit.
+	if FileAccess.file_exists(plant_save_path) and plant.load_game():
+		hud.toast("Campaign continued from your last save. J journal · F5 save now")
+	else:
+		hud.toast("Campaign. J journal — the plant proves each milestone itself · B build · C connect · L library · O options")
+	autosave_s = 120.0
