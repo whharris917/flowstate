@@ -19,6 +19,15 @@ static func build(plant: Plant) -> void:
 
 ## ---- pipe rack PR-1: steel bents carrying services east ------------------
 
+## Where a trunk feed leaves the PR-1 tray: beside its load, but never
+## down the face of a rack column.
+static func _drop_x(x: float) -> float:
+	for col: float in [-3.0, 3.0, 9.0, 15.0, 21.0, 27.0, 33.0, 39.0]:
+		if absf(x - col) < 0.7:
+			return col + (0.7 if x >= col else -0.7)
+	return x
+
+
 static func _pipe_rack(plant: Plant) -> void:
 	# Bents from the plant feeder east: the power trunk to Unit 300
 	# rides the tray, so the rack starts where the feeder stands.
@@ -40,8 +49,6 @@ static func _pipe_rack(plant: Plant) -> void:
 	plant.place_structure("s_beam", "pr1_beam_3_feed", Vector3(-3.0, 3.0, 0.65), PI / 2.0, 2.9)
 	plant.place_run("run_tray", "pr1_tray_feed",
 		[plant.to_local(Vector3(-2.6, 3.35, -0.6)), plant.to_local(Vector3(-2.6, 3.35, 2.4))])
-	plant.place_run("run_conduit", "pr1_conduit",
-		[plant.to_local(Vector3(9.2, 3.55, 2.1)), plant.to_local(Vector3(20.8, 3.55, 2.1))])
 	plant.place_run("run_pipe", "pr1_pw",
 		[plant.to_local(Vector3(9.2, 4.35, 1.15)), plant.to_local(Vector3(20.8, 4.35, 1.15))])
 	plant.place_run("run_pipe", "pr1_st",
@@ -404,7 +411,7 @@ static func _unit_300(plant: Plant) -> void:
 		var at: Vector3 = load[1]
 		# Off the tray sideways before dropping: straight down from the
 		# tray centreline is straight through the beam under it.
-		var drop_x := minf(at.x, TRAY_END)
+		var drop_x := _drop_x(minf(at.x, TRAY_END))
 		var path: Array[Vector3] = [plant.to_local(riser_top), plant.to_local(tray_in),
 			plant.to_local(Vector3(drop_x, 3.6, 2.1)), plant.to_local(Vector3(drop_x, 3.6, 2.7)),
 			plant.to_local(at)]

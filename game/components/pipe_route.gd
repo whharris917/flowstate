@@ -112,6 +112,7 @@ static func _snap_end(cells: Array[Vector3], target: Vector3) -> void:
 	var along := _axis(cells[last] - cells[last - 1])
 	for axis in 3:
 		if axis == along:
+			cells[last][axis] = target[axis]   # the last straight simply ends at the target
 			continue
 		var delta: float = target[axis] - cells[last][axis]
 		if absf(delta) < 0.001 or absf(delta) > CELL * 0.51:
@@ -247,6 +248,8 @@ static func _search(a: Vector3, b: Vector3, blocked: Callable, busy: Callable) -
 				cost += 6   # overhead, with nothing to carry it
 			elif next.y < floor_:
 				cost += 2
+			elif next.y > floor_ + 1:
+				cost += 1   # the low road: drop first, or run low before rising
 			var tentative: int = g[node] + cost
 			if g.has(next) and tentative >= int(g[next]):
 				continue

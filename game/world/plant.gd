@@ -1724,9 +1724,9 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 			if overlap <= 0.0:
 				break
 		chosen = best_lane
-		if OS.has_environment("FLOWSTATE_ROUTE_DEBUG") and best_overlap > 0.0:
-			print("[lane] %s.%s -> %s.%s: lane %d still overlaps %.2f m" % [src_name, src_port,
-				dst_name, dst_port, chosen, best_overlap])
+		if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
+			print("[lane] %s.%s -> %s.%s: lane %d%s" % [src_name, src_port, dst_name, dst_port, chosen,
+				(" still overlaps %.2f m" % best_overlap) if best_overlap > 0.0 else ""])
 	else:
 		path = _route_points(src_name, src_port, dst_name, dst_port, corners, chosen, radius)
 	var pipe := PipeView.new()
@@ -1775,9 +1775,9 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	var k := slot / (2 * LANE_TIERS) + 1
 	var step := 2.0 * radius + 0.03
 	var lift := tier * (step + 0.02)
-	var room_key := "%s.%s>%s.%s|%d|%d" % [src_name, src_port, dst_name, dst_port, side, tier]
+	var room_key := "%s.%s>%s.%s|%d" % [src_name, src_port, dst_name, dst_port, side]
 	if not _lane_room.has(room_key):
-		_lane_room[room_key] = _leg_room(base, side, step, lift, [src_name, dst_name])
+		_lane_room[room_key] = _leg_room(base, side, step, 0.0, [src_name, dst_name])
 	var shifted := _offset_polyline(base, side, k * step, lift, _lane_room[room_key], [src_name, dst_name])
 	return PipeRoute.routed(from, from_dir, to, to_dir, shifted)
 
@@ -1883,13 +1883,19 @@ func _vertical_offset(v: int, base: Array[Vector3], dirs: Array[Vector3], normal
 			shift = offs[h1] + offs[h2]
 		else:
 			shift = offs[h1]
-			if shift.length() < 0.001:
-				# Nothing beside either leg: slide the riser along them.
-				var slide := dirs[h1] * (side * want)
+			# A tier lifts a horizontal leg clear of its neighbour but does
+			# nothing for a vertical, so a riser slides along the legs it
+			# joins by its tier instead — and by the whole lane offset when
+			# there was no room beside those legs at all. Sliding along
+			# parallel legs needs no room beside anything.
+			var along := lift + (want if shift.length() < 0.001 else 0.0)
+			if along > 0.001:
+				var slide := dirs[h1] * (side * along)
 				for attempt in 3:
-					if _leg_clear(base[v] + slide + Vector3.UP * lift, base[v + 1] + slide + Vector3.UP * lift,
+					if _leg_clear(base[v] + shift + slide + Vector3.UP * lift,
+							base[v + 1] + shift + slide + Vector3.UP * lift,
 							from, to, [] if cache.get("ignore") == null else cache["ignore"]):
-						shift = slide
+						shift += slide
 						break
 					slide *= 0.5
 	elif h1 >= 0:
