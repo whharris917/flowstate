@@ -211,10 +211,12 @@ func _process(delta: float) -> void:
 func _on_time_of_day(_horizon: float, twilight: float) -> void:
 	if _stars_mat != null:
 		_stars_mat.set_shader_parameter("visibility", 1.0 - twilight)
+	# Night level set with the director (2026-09-12): 3 was too dim, 9
+	# too bright; 5.5 is a lit night shift.
 	for light in _hall_lights:
-		light.light_energy = lerpf(9.0, 1.2, twilight)
+		light.light_energy = lerpf(5.5, 1.2, twilight)
 	if _hall_lamp_mat != null:
-		_hall_lamp_mat.emission_energy_multiplier = lerpf(6.0, 1.5, twilight)
+		_hall_lamp_mat.emission_energy_multiplier = lerpf(4.5, 1.5, twilight)
 
 
 ## ---- the hall -------------------------------------------------------------
