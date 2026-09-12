@@ -4,6 +4,7 @@ extends Node
 
 
 func _ready() -> void:
+	MouseMode.probe = true
 	add_child((load("res://world/menu.tscn") as PackedScene).instantiate())
 	_run()
 

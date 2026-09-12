@@ -50,7 +50,7 @@ func _ready() -> void:
 	# World (1) + interact volumes (4) + routed runs (8); connect mode
 	# adds port markers (2).
 	ray.collision_mask = 1 | 4 | 8
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	MouseMode.capture()
 	_build_body()
 	for i in range(1, 5):
 		_step_streams.append(load("res://audio/step_%d.wav" % i))
@@ -102,7 +102,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
 			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		MouseMode.capture()
 	elif event.is_action_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif event.is_action_pressed("interact"):

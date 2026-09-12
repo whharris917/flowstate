@@ -222,20 +222,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		# The panel owns the screen while it is up: free the mouse so the
 		# page can be read, and stop the player walking off behind it.
 		player.input_locked = library.visible
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if library.visible \
-			else Input.MOUSE_MODE_CAPTURED
+		MouseMode.set_captured(not library.visible)
 	elif event.is_action_pressed("journal") and campaign != null:
 		journal.toggle()
 		if journal.visible:
 			journal.refresh(campaign, plant)
 		player.input_locked = journal.visible
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if journal.visible \
-			else Input.MOUSE_MODE_CAPTURED
+		MouseMode.set_captured(not journal.visible)
 	elif event.is_action_pressed("options"):
 		settings.toggle()
 		player.input_locked = settings.visible
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if settings.visible \
-			else Input.MOUSE_MODE_CAPTURED
+		MouseMode.set_captured(not settings.visible)
 	elif event.is_action_pressed("quicksave"):
 		hud.toast("saved" if plant.save_game() else "save FAILED")
 	elif event.is_action_pressed("quickload"):

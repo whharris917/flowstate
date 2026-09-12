@@ -89,7 +89,7 @@ func close() -> void:
 	var world := get_tree().current_scene as WorldBase
 	if world != null and world.player != null:
 		world.player.input_locked = false
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		MouseMode.capture()
 
 
 func _unhandled_input(event: InputEvent) -> void:

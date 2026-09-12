@@ -136,7 +136,7 @@ func open(plant: Plant, cab_name: String) -> void:
 func close_panel() -> void:
 	visible = false
 	_plant = null
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	MouseMode.capture()
 
 
 func _unhandled_input(event: InputEvent) -> void:

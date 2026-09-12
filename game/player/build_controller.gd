@@ -1030,7 +1030,7 @@ func _end_edit() -> void:
 		_edit_cam.queue_free()
 		_edit_cam = null
 		player.input_locked = false
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		MouseMode.capture()
 
 
 ## The ray under the pointer, from the edit camera: [origin, direction].

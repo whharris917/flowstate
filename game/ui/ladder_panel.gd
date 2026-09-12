@@ -108,7 +108,7 @@ func close_panel() -> void:
 	if plant != null and plant.cabinet_editor != null:
 		plant.cabinet_editor.open(plant, cab)
 	else:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		MouseMode.capture()
 
 
 func _unhandled_input(event: InputEvent) -> void:

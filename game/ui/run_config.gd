@@ -148,7 +148,7 @@ func _ok() -> void:
 
 func close() -> void:
 	visible = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	MouseMode.capture()
 
 
 func _unhandled_input(event: InputEvent) -> void:

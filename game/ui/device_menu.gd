@@ -240,7 +240,7 @@ func close() -> void:
 	visible = false
 	_plant = null
 	_note.add_theme_color_override("font_color", Color(0.75, 0.75, 0.72))
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	MouseMode.capture()
 
 
 func _unhandled_input(event: InputEvent) -> void:

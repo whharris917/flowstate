@@ -6,6 +6,7 @@ extends Node
 
 
 func _ready() -> void:
+	MouseMode.probe = true
 	var world: Node = (load("res://world/sandbox.tscn") as PackedScene).instantiate()
 	add_child(world)
 	_run(world)
