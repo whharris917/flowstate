@@ -7,3 +7,6 @@ __pycache__/
 # Godot
 game/.godot/
 *.translation
+
+# Office lock files
+~$*
