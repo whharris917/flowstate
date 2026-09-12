@@ -106,9 +106,21 @@ static func port_rows(type_id: String) -> Array[Dictionary]:
 				"direction": direction,
 				"kind_label": SimTypes.kind_label(port.kind),
 				"spec": port.spec,
-				"meaning": str(meanings.get(port_name, "")),
+				"meaning": _meaning(meanings, port_name),
 			})
 	return rows
+
+
+## A numbered port beyond what the page spelled out — a feeder's
+## way 17 — takes the first way's meaning with its own number.
+static func _meaning(meanings: Dictionary, port_name: String) -> String:
+	if meanings.has(port_name):
+		return str(meanings[port_name])
+	var numbered := RegEx.create_from_string("^([a-z_]+?)(\\d+)$")
+	var hit := numbered.search(port_name)
+	if hit != null and meanings.has(hit.get_string(1) + "1"):
+		return str(meanings[hit.get_string(1) + "1"]).replace(" 1:", " %s:" % hit.get_string(2))
+	return ""
 
 
 ## Historian tags this equipment contributes beyond its ports — the
