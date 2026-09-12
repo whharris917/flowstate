@@ -212,9 +212,9 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 	if _stars_mat != null:
 		_stars_mat.set_shader_parameter("visibility", 1.0 - twilight)
 	for light in _hall_lights:
-		light.light_energy = lerpf(3.2, 1.0, twilight)
+		light.light_energy = lerpf(9.0, 1.2, twilight)
 	if _hall_lamp_mat != null:
-		_hall_lamp_mat.emission_energy_multiplier = lerpf(4.0, 1.5, twilight)
+		_hall_lamp_mat.emission_energy_multiplier = lerpf(6.0, 1.5, twilight)
 
 
 ## ---- the hall -------------------------------------------------------------
@@ -320,8 +320,8 @@ func _high_bay(pos: Vector3) -> void:
 	light.position = pos + Vector3(0, -0.3, 0)
 	light.light_color = Color(1.0, 0.96, 0.88)
 	light.light_energy = 1.0
-	light.omni_range = 30.0
-	light.omni_attenuation = 1.4
+	light.omni_range = 40.0
+	light.omni_attenuation = 1.1
 	light.shadow_enabled = false
 	add_child(light)
 	_hall_lights.append(light)
