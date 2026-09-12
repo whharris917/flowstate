@@ -13,6 +13,7 @@ extends SimComponent
 ## dryer downstream. The bowl is a 480 V drive toggled with is_on.
 
 const FEED_HEAD_M := 18.0
+const WASH_CV_LPS := 1.5   # the wash spray nozzles, wide open, across 1 bar
 
 var rate_lps: float
 var capture_eff: float
@@ -22,8 +23,12 @@ var spinning: bool = false
 var starts: int = 0
 var cake_lps: float = 0.0
 var liquor_lps: float = 0.0
+var wash_lps: float = 0.0
 
 var inlet: SimInputPort
+# Wash liquor: sprayed onto the cake while the bowl spins, it displaces
+# the mother liquor the cake would otherwise keep.
+var wash: SimInputPort
 var power: SimInputPort
 var product: SimOutputPort
 var waste: SimOutputPort
@@ -31,6 +36,7 @@ var waste: SimOutputPort
 var _cake: SimStream = SimStream.empty()
 var _liquor: SimStream = SimStream.empty()
 var _feed: SimPumpCurve = null
+var _wash: SimControlResistance = null
 var _to_cake: SimFixedFlow = null
 var _to_liquor: SimFixedFlow = null
 
@@ -43,6 +49,7 @@ func _init(name_: String, rate_lps_: float = 4.0, capture_eff_: float = 0.95,
 	capture_eff = clampf(capture_eff_, 0.0, 1.0)
 	cake_wetness = maxf(cake_wetness_, 0.0)
 	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_MATERIAL)
+	wash = add_input("wash", SimTypes.PortKind.PROCESS_MATERIAL)
 	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
 	product = add_output("product", SimTypes.PortKind.PROCESS_MATERIAL)
 	waste = add_output("waste", SimTypes.PortKind.PROCESS_MATERIAL)
@@ -50,6 +57,7 @@ func _init(name_: String, rate_lps_: float = 4.0, capture_eff_: float = 0.95,
 	add_observable("cake_lps", &"cake_lps")
 	add_observable("liquor_lps", &"liquor_lps")
 	add_observable("draw_lps", &"draw_lps")
+	add_observable("wash_lps", &"wash_lps")
 
 
 var draw_lps: float:
@@ -66,6 +74,11 @@ func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	var bowl := net.add_node(0.0, true)
 	_feed = net.add_branch(SimPumpCurve.new(node["inlet"], bowl,
 		SimHydraulics.static_head_pa(FEED_HEAD_M), rate_lps, comp_name + ".feed")) as SimPumpCurve
+	# The wash spray is a valve into the bowl, interlocked to the bowl:
+	# shut unless it spins. What comes through is set by the pressure
+	# behind it, like everything else.
+	_wash = net.add_branch(SimControlResistance.new(node["wash"], bowl,
+		WASH_CV_LPS, comp_name + ".wash")) as SimControlResistance
 	_to_cake = net.add_branch(SimFixedFlow.new(bowl, node["product"], 0.0,
 		comp_name + ".cake")) as SimFixedFlow
 	_to_liquor = net.add_branch(SimFixedFlow.new(bowl, node["waste"], 0.0,
@@ -76,6 +89,8 @@ func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
 	var now_spinning := is_on and power.value > 0.5
 	if _feed != null:
 		_feed.running = now_spinning
+	if _wash != null:
+		_wash.opening = 1.0 if now_spinning else 0.0
 	# The split is worked out from what actually came in, so the
 	# discharges follow the draw by one scan.
 	if _to_cake != null:
@@ -98,36 +113,50 @@ func tick(_dt: float) -> void:
 	spinning = now_spinning
 	var feed := inlet.stream.clamped_solids()
 	var rate := draw_lps
-	if rate <= 1e-9:
+	var wash_in := wash.stream.clamped_solids()
+	wash_lps = maxf(wash.flow_lps, 0.0)
+	if rate <= 1e-9 and wash_lps <= 1e-9:
 		cake_lps = 0.0
 		liquor_lps = 0.0
 		return
 
 	var liquid_comp := feed.liquid_comp()
+	var wash_comp := wash_in.liquid_comp()
 	var solids_lps := rate * feed.solids_frac
 	var captured := solids_lps * capture_eff
 	var cake_liquid := minf(captured * cake_wetness, rate - solids_lps)
 	var cake_total := captured + cake_liquid
-	var liquor_total := rate - cake_total
+	# Displacement washing: each cake-liquid volume of wash pushes out
+	# 63 % of the mother liquor still in the cake and takes its place.
+	# What it displaces, and the rest of the wash, leave with the liquor.
+	var kept := exp(-wash_lps / cake_liquid) if cake_liquid > 1e-12 else 1.0
+	var liquor_total := rate - cake_total + wash_lps
 
-	# The cake is captured crystals plus the mother liquor clinging to
-	# them; the liquor carries everything else, crystals the bowl failed
-	# to catch included.
+	# The cake is captured crystals plus the liquid clinging to them;
+	# the liquor carries everything else, crystals the bowl failed to
+	# catch and spent wash included.
 	var cake_amounts := SimStream.zero_amounts()
 	var liquor_amounts := SimStream.zero_amounts()
 	cake_amounts[SimSpecies.SOLID] = captured
 	liquor_amounts[SimSpecies.SOLID] = solids_lps - captured
-	var remaining_liquid := rate - solids_lps - cake_liquid
+	var remaining_liquid := rate - solids_lps - cake_liquid * kept
+	var wash_through := wash_lps - cake_liquid * (1.0 - kept)
 	for i in SimSpecies.COUNT:
-		cake_amounts[i] += cake_liquid * liquid_comp[i]
-		liquor_amounts[i] += remaining_liquid * liquid_comp[i]
+		cake_amounts[i] += cake_liquid * (kept * liquid_comp[i] + (1.0 - kept) * wash_comp[i])
+		liquor_amounts[i] += remaining_liquid * liquid_comp[i] + wash_through * wash_comp[i]
+	var cake_temp := feed.temp_c * kept + wash_in.temp_c * (1.0 - kept) \
+		if cake_liquid > 1e-12 else feed.temp_c
+	var liquor_temp := feed.temp_c
+	if remaining_liquid + wash_through > 1e-12:
+		liquor_temp = (remaining_liquid * feed.temp_c + wash_through * wash_in.temp_c) \
+			/ (remaining_liquid + wash_through)
 
 	cake_lps = cake_total
 	liquor_lps = liquor_total
-	_cake = SimStream.make(maxf(cake_total, 1e-9), feed.temp_c,
+	_cake = SimStream.make(maxf(cake_total, 1e-9), cake_temp,
 		SimStream.normalized(cake_amounts),
 		captured / cake_total if cake_total > 0.0 else 0.0)
-	_liquor = SimStream.make(maxf(liquor_total, 1e-9), feed.temp_c,
+	_liquor = SimStream.make(maxf(liquor_total, 1e-9), liquor_temp,
 		SimStream.normalized(liquor_amounts),
 		(solids_lps - captured) / liquor_total if liquor_total > 0.0 else 0.0)
 

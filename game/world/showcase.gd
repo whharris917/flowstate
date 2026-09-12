@@ -217,6 +217,18 @@ static func _unit_300(plant: Plant) -> void:
 		{"kp": -8.0, "ki": -0.25, "sp": 16.0, "out_max": 400.0},
 		Vector3(38.8, 0.0, -7.2), 0.0, false)
 	plant.place("centrifuge", "cf_301", {"rate_lps": 1.2}, Vector3(41.4, 0.0, -4.5), 0.0, false)
+	# A hand valve on a wash line from the solvent header to the
+	# centrifuge (2026-09-11): shut as commissioned, so nothing changes
+	# until someone opens it at the handwheel — then clean solvent
+	# displaces the mother liquor in the cake, the purity on the fill
+	# line climbs, and the solvent inventory climbs with it.
+	plant.place("block_valve", "hv_311", {"cv_lps": 2.0, "stroke_s": 3.0},
+		Vector3(39.6, 0.0, -6.4), 0.0, false)
+	plant.connect_equipment("supply_solv", "outlet", "hv_311", "inlet",
+		[plant.to_local(Vector3(25.4, 0.35, 8.4)), plant.to_local(Vector3(38.6, 0.35, 8.4)),
+			plant.to_local(Vector3(38.6, 0.35, -6.4))])
+	plant.connect_equipment("hv_311", "outlet", "cf_301", "wash",
+		[plant.to_local(Vector3(41.24, 0.35, -6.4))])
 
 	# ---- cake side: hopper, dryer, product silo --------------------
 	plant.place("tank", "ht_304", {"height_m": 1.8, "diameter_m": 1.0},
@@ -411,6 +423,8 @@ static func _unit_300(plant: Plant) -> void:
 	_service_wire(plant, "p_309", "r_301", Color(0.20, 0.45, 0.75), "SR-309", "clamp")
 	_service_wire(plant, "st_307", "du_301", Color(0.45, 0.36, 0.25), "WS-307")
 	_service_wire(plant, "cx_303", "cf_301", Color(0.60, 0.25, 0.60), "PR-303", "clamp")
+	_service_wire(plant, "supply_solv", "hv_311", Color(0.20, 0.45, 0.75), "WL-311", "clamp")
+	_service_wire(plant, "hv_311", "cf_301", Color(0.20, 0.45, 0.75), "WL-311", "clamp")
 	_service_wire(plant, "ht_304", "dr_305", Color(0.60, 0.25, 0.60), "PR-304", "clamp")
 	_service_wire(plant, "dr_305", "pt_300", Color(0.60, 0.25, 0.60), "PR-305", "clamp")
 	_service_wire(plant, "pt_300", "vf_310", Color(0.60, 0.25, 0.60), "PR-310", "clamp")

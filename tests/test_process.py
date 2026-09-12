@@ -399,6 +399,54 @@ class TestCentrifuge:
         assert fuge.cake_lps == pytest.approx(0.0)
         assert fuge.liquor_lps == pytest.approx(4.0)
 
+    def test_a_wash_displaces_mother_liquor_from_the_cake(self) -> None:
+        """Clean solvent sprayed on the cake takes the place of the
+        liquor it would have kept, so impurity leaves with the wash and
+        the cake gets cleaner. In and out still add up."""
+        fuge = Centrifuge("cf", rate_lps=4.0, capture_eff=0.95, cake_wetness=0.25)
+        dirty_feed = Stream(4.0, 30.0, {"product": 0.2, "impurity": 0.2, "solvent": 0.6},
+                            solids_frac=0.3)
+        feed(fuge.inlet, dirty_feed)
+        fuge.is_on = True
+        fuge.power.value = 1.0
+        fuge.tick(0.05)
+        unwashed = fuge.supplied_stream("product").frac("impurity")
+        assert unwashed > 0.0
+        # Two cake-liquid volumes of wash: cake liquid is 0.95*1.2*0.25 L/s.
+        feed(fuge.wash, Stream(0.57, 30.0, {"solvent": 1.0}))
+        fuge.tick(0.05)
+        washed = fuge.supplied_stream("product").frac("impurity")
+        assert washed < 0.2 * unwashed
+        assert fuge.wash_lps == pytest.approx(0.57)
+        assert fuge.cake_lps + fuge.liquor_lps == pytest.approx(4.0 + 0.57)
+        # The impurity did not vanish: it went out with the liquor.
+        liquor = fuge.supplied_stream("waste")
+        total_impurity = (fuge.supplied_stream("product").frac("impurity") * fuge.cake_lps
+                          + liquor.frac("impurity") * fuge.liquor_lps)
+        assert total_impurity == pytest.approx(4.0 * 0.2, rel=1e-6)
+
+    def test_the_wash_is_interlocked_to_the_bowl(self) -> None:
+        """The wash nozzle is a valve into the bowl that only opens
+        while it spins: pressure behind it moves nothing otherwise."""
+        sim = Simulation(dt=0.05)
+        vessel = sim.add(Tank("t", capacity_l=4000.0, level_l=3000.0,
+                              height_m=3.0, comp={"product": 1.0}))
+        fuge = sim.add(Centrifuge("cf", rate_lps=4.0))
+        solvent = sim.add(Source("wash", pressure_kpa=200.0, species="solvent"))
+        cake = sim.add(Drain("dc", rate_lps=5.0))
+        liquor = sim.add(Drain("dl", rate_lps=5.0))
+        wire_power(sim, fuge)
+        sim.connect(vessel, "outlet", fuge, "inlet")
+        sim.connect(solvent, "outlet", fuge, "wash")
+        sim.connect(fuge, "product", cake, "inlet")
+        sim.connect(fuge, "waste", liquor, "inlet")
+        sim.run(5.0)
+        assert fuge.wash_lps == pytest.approx(0.0)
+        fuge.is_on = True
+        sim.run(5.0)
+        assert fuge.wash_lps > 0.5
+        assert solvent.total_l > 0.0
+
     def test_starved_bowl_moves_nothing(self) -> None:
         fuge = Centrifuge("cf", rate_lps=4.0)
         fuge.is_on = True

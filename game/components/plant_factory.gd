@@ -162,6 +162,7 @@ const PORT_ANCHORS := {
 		"outlet": {"pos": Vector3(0.77, 0.5, 0), "dir": Vector3.RIGHT}},
 	"centrifuge": {
 		"inlet": {"pos": Vector3(0.16, 1.4, 0), "dir": Vector3.UP},
+		"wash": {"pos": Vector3(-0.16, 1.4, 0), "dir": Vector3.UP},
 		"power": {"pos": Vector3(0.16, 1.62, 0.14), "dir": Vector3.BACK},
 		"product": {"pos": Vector3(0.49, 0.65, 0), "dir": Vector3.RIGHT},
 		"waste": {"pos": Vector3(-0.49, 0.55, 0), "dir": Vector3.LEFT}},

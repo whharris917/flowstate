@@ -231,16 +231,18 @@ const PAGES := {
 		"summary": "Spins crystals out of the liquor they formed in. It reads the solid phase actually present in its feed -- nothing tells it what it is separating. Feed it clear liquid and it honestly sends everything out the liquor nozzle. The cake comes off wet, which is why there is a dryer after it.\n\nIt has its own feed pump, so what it draws is its curve against the suction you gave it. Starve it and the rate falls away rather than the machine inventing material.",
 		"ports": {
 			"inlet": "Feed nozzle. Its own pump pulls slurry through this while the bowl is spinning.",
+			"wash": "Wash liquor nozzle: pipe clean solvent here under pressure and it sprays onto the cake while the bowl spins, displacing the mother liquor the cake would keep. Shut unless the bowl spins.",
 			"power": "480 V to the bowl drive.",
-			"product": "Wet cake: captured crystals plus clinging liquor.",
-			"waste": "Mother liquor, plus any crystals the bowl missed.",
+			"product": "Wet cake: captured crystals plus what liquid is left clinging to them -- mother liquor, or wash if you washed.",
+			"waste": "Mother liquor, spent wash, plus any crystals the bowl missed.",
 		},
 		"equations": [
 			["dP_feed = rho*g*18 m * (1 - (Q/rated)^2)   while spinning", "The feed pump curve. Stop the bowl and it stops pulling."],
 			["Q_cake + Q_liquor = F   (imposed at the discharges)", "Whatever it drew last scan leaves as two streams that add back to it, so the bowl holds no inventory and the balance closes across the machine."],
 			["captured = F * s * eta", "Of the solid in the feed, the bowl catches a fixed fraction."],
 			["cake_liquid = captured * w", "Cake wetness: liquor retained per unit of crystal, carrying everything dissolved in it along for the ride."],
-			["liquor = F - (captured + cake_liquid)", "Everything else leaves the other nozzle. The two add to F."],
+			["kept = exp(-W / cake_liquid)", "Displacement washing: each cake-liquid volume of wash pushes out 63 % of the mother liquor still in the cake and takes its place. Two volumes leave 14 % of it, three leave 5 %."],
+			["liquor = F - (captured + cake_liquid) + W", "Everything else leaves the other nozzle, spent wash included. In and out still add up."],
 		],
 		"params": [
 			["rate_lps", "L/s", "4", "Throughput of the bowl: the rated flow of its feed pump."],
@@ -249,7 +251,7 @@ const PAGES := {
 		],
 		"assumptions": [
 			"A fixed capture efficiency: no g-force, no residence time, no particle size.",
-			"The cake retains liquor at the feed composition -- there is no wash step yet, so this caps the purity the train can reach.",
+			"Washing is ideal displacement: the wash never channels past the cake, and it never dissolves crystal. A real solvent wash loses some product to the liquor.",
 			"The two discharges are imposed rates, not pressure-driven: the bowl will push its split out against any back pressure you put on it, and it cannot be blocked in.",
 			"The split follows the draw by one scan, so a step change in feed shows up at the discharges the scan after.",
 		],

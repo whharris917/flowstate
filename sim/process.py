@@ -15,6 +15,8 @@ view or gauge shows comes from these records.
 """
 from __future__ import annotations
 
+import math
+
 from sim.core import Component, PortKind
 from sim.hydraulics import (
     CheckResistance, ControlResistance, FixedFlow, PumpCurve, Resistance,
@@ -415,6 +417,7 @@ class Centrifuge(Component):
     """
 
     FEED_HEAD_M = 18.0
+    WASH_CV_LPS = 1.5   # the wash spray nozzles, wide open, across 1 bar
 
     def __init__(self, name: str, rate_lps: float = 4.0,
                  capture_eff: float = 0.95, cake_wetness: float = 0.25) -> None:
@@ -428,6 +431,7 @@ class Centrifuge(Component):
         self.rate_lps = rate_lps
         self.capture_eff = capture_eff
         self.cake_wetness = cake_wetness
+        self.wash_lps = 0.0
         self.is_on = False
         self.spinning = False
         self.starts = 0
@@ -436,16 +440,21 @@ class Centrifuge(Component):
         self._cake = Stream.empty()
         self._liquor = Stream.empty()
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
+        # Wash liquor: sprayed onto the cake while the bowl spins, it
+        # displaces the mother liquor the cake would otherwise keep.
+        self.wash = self.add_input("wash", PortKind.PROCESS_MATERIAL)
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
         self.product = self.add_output("product", PortKind.PROCESS_MATERIAL)
         self.waste = self.add_output("waste", PortKind.PROCESS_MATERIAL)
         self._feed = None
+        self._wash = None
         self._to_cake = None
         self._to_liquor = None
         self.add_observable("starts", "starts")
         self.add_observable("cake_lps", "cake_lps")
         self.add_observable("liquor_lps", "liquor_lps")
         self.add_observable("draw_lps", "draw_lps")
+        self.add_observable("wash_lps", "wash_lps")
 
     @property
     def draw_lps(self) -> float:
@@ -461,6 +470,11 @@ class Centrifuge(Component):
         self._feed = net.add_branch(PumpCurve(
             node["inlet"], bowl, static_head_pa(self.FEED_HEAD_M),
             self.rate_lps, self.name + ".feed"))
+        # The wash spray is a valve into the bowl, interlocked to the
+        # bowl: shut unless it spins. What comes through is set by the
+        # pressure behind it, like everything else.
+        self._wash = net.add_branch(ControlResistance(
+            node["wash"], bowl, self.WASH_CV_LPS, self.name + ".wash"))
         self._to_cake = net.add_branch(
             FixedFlow(bowl, node["product"], 0.0, self.name + ".cake"))
         self._to_liquor = net.add_branch(
@@ -470,6 +484,8 @@ class Centrifuge(Component):
         spinning = self.is_on and float(self.power.value) > 0.5
         if self._feed is not None:
             self._feed.running = spinning
+        if self._wash is not None:
+            self._wash.opening = 1.0 if spinning else 0.0
         # The split is worked out from what actually came in, so the
         # discharges follow the draw by one scan.
         if self._to_cake is not None:
@@ -490,35 +506,55 @@ class Centrifuge(Component):
         self.spinning = spinning
         feed = self.inlet.stream.clamped_solids()
         rate = self.draw_lps
-        if rate <= 1e-9:
+        wash = self.wash.stream.clamped_solids()
+        wash_lps = max(self.wash.flow_lps, 0.0)
+        self.wash_lps = wash_lps
+        if rate <= 1e-9 and wash_lps <= 1e-9:
             self.cake_lps = 0.0
             self.liquor_lps = 0.0
             return
 
         liquid_comp = feed.liquid_comp()
+        wash_comp = wash.liquid_comp()
         solids_lps = rate * feed.solids_frac
         captured = solids_lps * self.capture_eff
         cake_liquid = min(captured * self.cake_wetness, rate - solids_lps)
         cake_total = captured + cake_liquid
-        liquor_total = rate - cake_total
+        # Displacement washing: each cake-liquid volume of wash pushes
+        # out 63 % of the mother liquor still in the cake and takes its
+        # place. What it displaces, and the rest of the wash, leave
+        # with the liquor.
+        kept = math.exp(-wash_lps / cake_liquid) if cake_liquid > 1e-12 else 1.0
+        liquor_total = rate - cake_total + wash_lps
 
         cake_amounts = {SOLID_KEY: captured}
         for key, frac in liquid_comp.items():
-            cake_amounts[key] = cake_amounts.get(key, 0.0) + cake_liquid * frac
+            cake_amounts[key] = cake_amounts.get(key, 0.0) + cake_liquid * kept * frac
+        for key, frac in wash_comp.items():
+            cake_amounts[key] = cake_amounts.get(key, 0.0) + cake_liquid * (1.0 - kept) * frac
         liquor_amounts = {SOLID_KEY: solids_lps - captured}
-        remaining_liquid = rate - solids_lps - cake_liquid
+        remaining_liquid = rate - solids_lps - cake_liquid * kept
         for key, frac in liquid_comp.items():
             liquor_amounts[key] = (
                 liquor_amounts.get(key, 0.0) + remaining_liquid * frac
             )
+        wash_through = wash_lps - cake_liquid * (1.0 - kept)
+        for key, frac in wash_comp.items():
+            liquor_amounts[key] = liquor_amounts.get(key, 0.0) + wash_through * frac
+
+        cake_temp = (feed.temp_c * kept + wash.temp_c * (1.0 - kept)
+                     if cake_liquid > 1e-12 else feed.temp_c)
+        liquor_temp = ((remaining_liquid * feed.temp_c + wash_through * wash.temp_c)
+                       / (remaining_liquid + wash_through)
+                       if remaining_liquid + wash_through > 1e-12 else feed.temp_c)
 
         self.cake_lps = cake_total
         self.liquor_lps = liquor_total
         self._cake = Stream(
-            max(cake_total, 1e-9), feed.temp_c, comp_from_amounts(cake_amounts),
+            max(cake_total, 1e-9), cake_temp, comp_from_amounts(cake_amounts),
             captured / cake_total if cake_total > 0.0 else 0.0)
         self._liquor = Stream(
-            max(liquor_total, 1e-9), feed.temp_c,
+            max(liquor_total, 1e-9), liquor_temp,
             comp_from_amounts(liquor_amounts),
             (solids_lps - captured) / liquor_total if liquor_total > 0.0 else 0.0)
 
@@ -943,9 +979,16 @@ Centrifuge.SPEC = EquipmentSpec(
     ports={
         "inlet": "Feed nozzle. Its own pump pulls slurry through this "
                  "while the bowl is spinning.",
+        "wash": "Wash liquor nozzle: pipe clean solvent here under "
+                "pressure and it sprays onto the cake while the bowl "
+                "spins, displacing the mother liquor the cake would keep. "
+                "Shut unless the bowl spins.",
         "power": "480 V to the bowl drive.",
-        "product": "Wet cake: captured crystals plus clinging liquor.",
-        "waste": "Mother liquor, plus any crystals the bowl missed.",
+        "product": "Wet cake: captured crystals plus what liquid is left "
+                   "clinging to them -- mother liquor, or wash if you "
+                   "washed.",
+        "waste": "Mother liquor, spent wash, plus any crystals the bowl "
+                 "missed.",
     },
     equations=(
         Equation(
@@ -968,8 +1011,15 @@ Centrifuge.SPEC = EquipmentSpec(
             "everything dissolved in it along for the ride.",
         ),
         Equation(
-            "liquor = F - (captured + cake_liquid)",
-            "Everything else leaves the other nozzle. The two add to F.",
+            "kept = exp(-W / cake_liquid)",
+            "Displacement washing: each cake-liquid volume of wash pushes "
+            "out 63 % of the mother liquor still in the cake and takes "
+            "its place. Two volumes leave 14 % of it, three leave 5 %.",
+        ),
+        Equation(
+            "liquor = F - (captured + cake_liquid) + W",
+            "Everything else leaves the other nozzle, spent wash "
+            "included. In and out still add up.",
         ),
     ),
     params=(
@@ -981,8 +1031,9 @@ Centrifuge.SPEC = EquipmentSpec(
     assumptions=(
         "A fixed capture efficiency: no g-force, no residence time, no "
         "particle size.",
-        "The cake retains liquor at the feed composition -- there is no "
-        "wash step yet, so this caps the purity the train can reach.",
+        "Washing is ideal displacement: the wash never channels past the "
+        "cake, and it never dissolves crystal. A real solvent wash loses "
+        "some product to the liquor.",
         "The two discharges are imposed rates, not pressure-driven: the "
         "bowl will push its split out against any back pressure you put "
         "on it, and it cannot be blocked in.",
