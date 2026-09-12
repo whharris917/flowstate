@@ -173,6 +173,37 @@ func _exercise_build_api() -> void:
 			problems.append("column overhead %.1f kPa outside expected range" % kpa)
 		if not remove_equipment(pi_top.comp_name) or not remove_equipment(col.comp_name):
 			problems.append("column cleanup failed")
+	# Enclosures: a station's circuit reaches a junction box through a
+	# multicore, the cable survives a save and reload with a live getter,
+	# and X on the box takes its circuits and the cable with it.
+	var jb := unique_jb_name()
+	var lcs := unique_station_name()
+	if not place_junction_box(jb, _world(Vector3(13.0, 0.0, -4.0)), 0.0, 4) \
+			or not place_control_station(lcs, _world(Vector3(15.0, 0.0, -4.0)), 0.0, default_station_devices()):
+		problems.append("place junction box / station failed")
+	else:
+		var cable := "MC-X1"
+		var err := connect_multicore(cable, [[lcs + "_start", "contact", jb + "_t1", "in"]], [])
+		if err != "":
+			problems.append("multicore refused: " + err)
+		var keep_path := save_path
+		save_path = "user://exercise_save.json"
+		var saved := save_game()
+		var loaded := saved and load_game()
+		save_path = keep_path
+		if not loaded:
+			problems.append("save/load round trip failed")
+		elif not runs.has(cable) or not (runs[cable] as Dictionary).has("circuits"):
+			problems.append("the multicore did not reload with its circuits")
+		elif sim.find_wire(sim.get_component(lcs + "_start"), "contact",
+				sim.get_component(jb + "_t1"), "in") == null:
+			problems.append("the multicore's wire did not reload")
+		if not remove_junction_box(jb):
+			problems.append("junction box removal refused")
+		if runs.has(cable) or views.has(jb + "_t1") or sim.get_component(jb + "_t1") != null:
+			problems.append("junction box removal left its cable or terminals behind")
+		if not remove_control_station(lcs) or views.has(lcs + "_start"):
+			problems.append("control station removal failed")
 	# Air-cascade checks only where the aseptic suite exists (the hall).
 	var cascade := sim.get_component("suite_hvac") as SimAirCascade
 	if cascade != null:
@@ -673,6 +704,66 @@ func remove_cabinet(name_: String) -> bool:
 	return true
 
 
+## X on a junction box or a control station (2026-09-11, a stress-test
+## gap): its records go, every wire on them, and any multicore that
+## carried its circuits — the cable has nothing left to carry.
+func remove_junction_box(name_: String) -> bool:
+	if not junction_boxes.has(name_):
+		return false
+	_remove_enclosure_records((junction_boxes[name_] as Dictionary)["records"] as Array, name_)
+	((junction_boxes[name_] as Dictionary)["node"] as Node).queue_free()
+	junction_boxes.erase(name_)
+	_revalidate_in = 3
+	return true
+
+
+func remove_control_station(name_: String) -> bool:
+	if not control_stations.has(name_):
+		return false
+	_remove_enclosure_records((control_stations[name_] as Dictionary)["records"] as Array, name_)
+	((control_stations[name_] as Dictionary)["node"] as Node).queue_free()
+	control_stations.erase(name_)
+	_revalidate_in = 3
+	return true
+
+
+func _remove_enclosure_records(records: Array, enclosure: String) -> void:
+	for record_v: Variant in records.duplicate():
+		var record_name := str(record_v)
+		sim.remove_component(record_name)
+		_prune_wires_of(record_name)
+		views.erase(record_name)
+		equip_types.erase(record_name)
+		protected.erase(record_name)
+		member_of.erase(record_name)
+	for label: String in runs.keys():
+		var entry: Dictionary = runs[label]
+		if not entry.has("circuits"):
+			continue
+		for pair_v: Variant in entry["circuits"]:
+			var pair := pair_v as Array
+			if str(pair[0]).begins_with(enclosure + "_") or str(pair[2]).begins_with(enclosure + "_"):
+				remove_placed_run(entry["node"] as PipeView)
+				break
+
+
+## A multicore lights while any circuit in it is live. Ports are
+## looked up by name at read time, so the same getter serves a cable
+## laid now and one rebuilt from a save before its wires reload.
+func _multicore_getter(pairs: Array) -> Callable:
+	return func() -> float:
+		var count := 0.0
+		for pair_v: Variant in pairs:
+			var pair := pair_v as Array
+			var src := sim.get_component(str(pair[0]))
+			if src == null:
+				continue
+			var port: SimOutputPort = src.outputs.get(str(pair[1]))
+			if port != null and port.value > 0.5:
+				count += 1.0
+		return count
+
+
 ## ---- cabinet queries (editor, ladder, port menu) --------------------------
 
 func cabinet_plc(cab: String) -> String:
@@ -1099,25 +1190,16 @@ func connect_multicore(label: String, pairs: Array, waypoints: Array) -> String:
 		return "nothing to carry"
 	if runs.has(label):
 		return "a run named %s exists" % label
-	var live: Array[SimOutputPort] = []
 	for pair_v: Variant in pairs:
 		var pair := pair_v as Array
 		var err := connect_equipment(str(pair[0]), str(pair[1]), str(pair[2]), str(pair[3]), [], false)
 		if err != "":
 			return err
-		var src := sim.get_component(str(pair[0]))
-		live.append(src.outputs[str(pair[1])] as SimOutputPort)
 	var first := pairs[0] as Array
 	var points: Array = [_marker_pos(str(first[0]), str(first[1]))]
 	points.append_array(waypoints)
 	points.append(_marker_pos(str(first[2]), str(first[3])))
-	var getter := func() -> float:
-		var count := 0.0
-		for port in live:
-			if port.value > 0.5:
-				count += 1.0
-		return count
-	if not place_run("run_cable", label, points, getter):
+	if not place_run("run_cable", label, points, _multicore_getter(pairs.duplicate(true))):
 		return "could not lay the cable"
 	var entry: Dictionary = runs[label]
 	var text := "%s · %d circuits" % [label, pairs.size()]
@@ -1920,7 +2002,7 @@ func save_game() -> bool:
 			pts.append([point.x, point.y, point.z])
 		run_list.append({"kind": entry["kind"], "name": name_, "points": pts,
 			"color": entry.get("color", ""), "label": entry.get("label", ""),
-			"fitting": entry.get("fitting", "")})
+			"fitting": entry.get("fitting", ""), "circuits": entry.get("circuits", [])})
 	var cab_list: Array = []
 	for name_: String in cabinets:
 		var entry: Dictionary = cabinets[name_]
@@ -2070,12 +2152,21 @@ func load_game() -> bool:
 		((runs[name_] as Dictionary)["node"] as Node).queue_free()
 	for name_: String in cabinets:
 		((cabinets[name_] as Dictionary)["node"] as Node).queue_free()
+	# Enclosures too, or the saved ones are refused as duplicates and
+	# their terminals never come back (found by the round-trip exercise,
+	# 2026-09-11).
+	for name_: String in junction_boxes:
+		((junction_boxes[name_] as Dictionary)["node"] as Node).queue_free()
+	for name_: String in control_stations:
+		((control_stations[name_] as Dictionary)["node"] as Node).queue_free()
 	views.clear()
 	equip_types.clear()
 	protected.clear()
 	structures.clear()
 	runs.clear()
 	cabinets.clear()
+	junction_boxes.clear()
+	control_stations.clear()
 	member_of.clear()
 	mounted.clear()
 	_wire_visuals.clear()
@@ -2121,7 +2212,13 @@ func load_game() -> bool:
 		var pts: Array = []
 		for point: Array in entry["points"]:
 			pts.append(Vector3(point[0], point[1], point[2]))
-		place_run(entry["kind"], entry["name"], pts)
+		# A multicore's circuits come back with it, and its getter reads
+		# the reloaded wires by name (the cable used to load dead).
+		var circuits: Array = entry.get("circuits", [])
+		place_run(entry["kind"], entry["name"], pts,
+			_multicore_getter(circuits.duplicate(true)) if not circuits.is_empty() else Callable())
+		if not circuits.is_empty():
+			(runs[entry["name"]] as Dictionary)["circuits"] = circuits.duplicate(true)
 		if str(entry.get("color", "")) != "":
 			set_run_service((runs[entry["name"]] as Dictionary)["node"] as PipeView,
 				Color.html(str(entry["color"])), str(entry.get("label", "")), str(entry.get("fitting", "")))

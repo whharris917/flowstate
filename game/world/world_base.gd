@@ -158,8 +158,19 @@ func _process(delta: float) -> void:
 	else:
 		hud.set_look_text("")
 	if plant.tank == null:
-		# A blank map has no starting loop to report on: just the clock.
-		hud.set_readout_text("t %s" % _fmt_time(plant.sim.time))
+		# A blank map has no starting loop to report on: just the clock,
+		# and in the campaign the next thing the plant has to prove.
+		var line := "t %s" % _fmt_time(plant.sim.time)
+		if campaign != null:
+			var milestone := campaign.current()
+			if not milestone.is_empty():
+				for req: Dictionary in milestone["requires"]:
+					var p := campaign.progress(plant, req)
+					if not bool(p["done"]):
+						line += "   %s — %s %.0f / %.0f %s" % [milestone["title"], p["label"],
+							float(p["value"]), float(p["target"]), p["unit"]]
+						break
+		hud.set_readout_text(line)
 		return
 	hud.set_readout_text("t %s   level %.1f L   relay %d cyc   pump %s" % [
 		_fmt_time(plant.sim.time), plant.tank.level_l, plant.relay.cycles,

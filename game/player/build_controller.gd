@@ -1237,6 +1237,16 @@ func _try_delete() -> void:
 		if plant.remove_cabinet(cab_name):
 			hud.toast("removed %s and its internal wiring" % cab_name)
 		return
+	if view is JunctionBoxView:
+		var jb_name := (view as JunctionBoxView).jb_name
+		if plant.remove_junction_box(jb_name):
+			hud.toast("removed %s, its circuits and any multicore it fed" % jb_name)
+		return
+	if view is ControlStationView:
+		var lcs_name := (view as ControlStationView).station_name
+		if plant.remove_control_station(lcs_name):
+			hud.toast("removed %s and its circuits" % lcs_name)
+		return
 	if view.has_meta("structure_name"):
 		var struct_name := str(view.get_meta("structure_name"))
 		if plant.remove_structure(struct_name):

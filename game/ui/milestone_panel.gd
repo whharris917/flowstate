@@ -122,6 +122,14 @@ func _row(p: Dictionary) -> Control:
 	bar.custom_minimum_size = Vector2(140, 14)
 	bar.max_value = 100.0
 	bar.show_percentage = false
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0.20, 0.22, 0.24)
+	track.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("background", track)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color(0.45, 0.80, 0.52) if done else Color(0.35, 0.60, 0.85)
+	fill.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("fill", fill)
 	var target := float(p["target"])
 	bar.value = 100.0 if target <= 0.0 else clampf(100.0 * float(p["value"]) / target, 0.0, 100.0)
 	row.add_child(bar)
