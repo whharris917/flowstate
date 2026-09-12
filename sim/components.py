@@ -525,6 +525,7 @@ class BlockValve(Component):
         self.cv_lps = cv_lps
         self.stroke_s = stroke_s
         self.position = 0.0  # percent of travel: 0 shut, 100 open
+        self.hand_open = False  # the handwheel, when nothing is wired to "open"
         self.open_cmd = self.add_input("open", PortKind.SIGNAL_DISCRETE)
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
@@ -554,7 +555,15 @@ class BlockValve(Component):
 
     @property
     def commanded_open(self) -> bool:
+        # Nothing wired to the command makes it a hand valve: the
+        # operator's own setting is the command (Tier 0).
+        if self.open_cmd.wire_count == 0:
+            return self.hand_open
         return float(self.open_cmd.value) > 0.5
+
+    @property
+    def is_hand_operated(self) -> bool:
+        return self.open_cmd.wire_count == 0
 
     @property
     def state(self) -> str:
@@ -1221,7 +1230,9 @@ BlockValve.SPEC = EquipmentSpec(
     ),
     ports={
         "open": "Discrete command: energized opens, de-energized closes. "
-                "Land a PLC output, a relay contact or a switch here.",
+                "Land a PLC output, a relay contact or a switch here. "
+                "Leave it unwired and this is a hand valve: the operator "
+                "opens and shuts it at the handwheel.",
         "inlet": "Upstream nozzle.",
         "outlet": "Downstream nozzle, at the same temperature and "
                   "composition -- a valve changes rate, not material.",

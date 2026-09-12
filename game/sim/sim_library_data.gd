@@ -431,7 +431,7 @@ const PAGES := {
 		"tier": "control",
 		"summary": "An on/off valve with a stroking actuator: one discrete command, a fixed travel time from seat to full open, and a trim that follows the valve equation the whole way. It is the valve a sequence uses -- open it, wait for it to travel, move to the next step -- rather than one a controller throttles. Its position and flow are historized, so a valve that was told to open and did not is a fact on a trend rather than a mystery.",
 		"ports": {
-			"open": "Discrete command: energized opens, de-energized closes. Land a PLC output, a relay contact or a switch here.",
+			"open": "Discrete command: energized opens, de-energized closes. Land a PLC output, a relay contact or a switch here. Leave it unwired and this is a hand valve: E at the valve opens and shuts it.",
 			"inlet": "Upstream nozzle.",
 			"outlet": "Downstream nozzle, at the same temperature and composition -- a valve changes rate, not material.",
 			"zso": "Open limit switch: a dry contact that makes in the last 2 % of travel. Wire it to a PLC input and a step can wait for the valve to report open instead of trusting the stroke time.",

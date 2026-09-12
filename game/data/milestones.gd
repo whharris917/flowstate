@@ -12,12 +12,13 @@ extends RefCounted
 ## The briefs are player-facing prose: drafts for the director's
 ## editorial review, like the library pages.
 
-const BASE_TYPES: Array[String] = ["tank", "source", "drain"]
+## Tier 0 by hand: vessels, headers, sewers, and a valve you turn yourself.
+const BASE_TYPES: Array[String] = ["tank", "source", "drain", "block_valve"]
 
 const LADDER: Array[Dictionary] = [
 	{
 		"id": "first_water", "tier": "TIER 0 — MANUAL", "title": "First water",
-		"brief": "A header, a vessel, a sewer. Put a line between them and let pressure do the work: nothing in this plant is ever told how fast to flow.",
+		"brief": "A header, a vessel, a sewer, and a valve you turn by hand. Put a line between them and let pressure do the work: nothing in this plant is ever told how fast to flow.",
 		"requires": [
 			{"kind": "placed", "type": "source", "n": 1, "label": "a supply header placed"},
 			{"kind": "placed", "type": "tank", "n": 1, "label": "a tank placed"},
@@ -42,7 +43,7 @@ const LADDER: Array[Dictionary] = [
 		"requires": [
 			{"kind": "relay_cycles", "target": 5.0, "label": "relay cycles", "unit": ""},
 		],
-		"unlocks": ["cabinet", "block_valve", "junction_box", "control_station", "gauge_flow", "gauge_level"],
+		"unlocks": ["cabinet", "junction_box", "control_station", "gauge_flow", "gauge_level"],
 	},
 	{
 		"id": "sequence", "tier": "TIER 3 — PLC", "title": "Sequence",

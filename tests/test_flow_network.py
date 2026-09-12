@@ -290,6 +290,23 @@ class TestBlockValve:
         assert valve.flow_lps > 1.0
         assert tank.level_l > 0.0
 
+    def test_unwired_it_is_a_hand_valve(self) -> None:
+        sim = Simulation(dt=0.05)
+        header = sim.add(Source("hdr", pressure_kpa=300.0))
+        valve = sim.add(BlockValve("hv", cv_lps=10.0, stroke_s=4.0))
+        tank = sim.add(Tank("t", capacity_l=9000.0, level_l=0.0, height_m=4.0))
+        sim.connect(header, "outlet", valve, "inlet")
+        sim.connect(valve, "outlet", tank, "inlet")
+        assert valve.is_hand_operated
+        sim.run(5.0)
+        assert valve.state == "CLOSED" and tank.level_l == pytest.approx(0.0)
+        valve.hand_open = True
+        sim.run(6.0)
+        assert valve.state == "OPEN" and valve.flow_lps > 1.0
+        valve.hand_open = False
+        sim.run(6.0)
+        assert valve.state == "CLOSED"
+
     def test_limit_switches_make_only_at_the_ends_of_travel(self) -> None:
         sim, valve, tank, switch = self._line()
         assert valve.zsc.value == 1.0 and valve.zso.value == 0.0

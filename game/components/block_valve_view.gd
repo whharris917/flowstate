@@ -98,10 +98,15 @@ func describe() -> String:
 	var pos := valve.position
 	var travel := "" if (pos <= 0.5 or pos >= 99.5) else " %.0f %%" % pos
 	var limits := "ZSO" if valve.limit_open else ("ZSC" if valve.limit_closed else "no limit made")
-	return "%s — block valve, Cv %.0f L/s at 1 bar\ncmd %s · %s%s · %s · flow %.2f L/s" % [
-		valve.comp_name, valve.cv_lps, "OPEN" if valve.commanded_open else "CLOSE",
-		valve.state(), travel, limits, valve.flow_lps]
+	var cmd := ("HAND %s · E to %s" % ["OPEN" if valve.hand_open else "SHUT",
+		"shut" if valve.hand_open else "open"]) if valve.is_hand_operated \
+		else ("cmd " + ("OPEN" if valve.commanded_open else "CLOSE"))
+	return "%s — block valve, Cv %.0f L/s at 1 bar\n%s · %s%s · %s · flow %.2f L/s" % [
+		valve.comp_name, valve.cv_lps, cmd, valve.state(), travel, limits, valve.flow_lps]
 
 
+## E: a hand valve turns at the handwheel. Once something is wired to
+## its command, the wire decides and the handwheel is ignored.
 func use() -> void:
-	pass
+	if valve.is_hand_operated:
+		valve.hand_open = not valve.hand_open

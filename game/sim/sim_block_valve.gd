@@ -14,6 +14,7 @@ extends SimComponent
 var cv_lps: float
 var stroke_s: float
 var position: float = 0.0   # percent of travel: 0 shut, 100 open
+var hand_open: bool = false  # the handwheel, when nothing is wired to "open"
 
 var open_cmd: SimInputPort
 var inlet: SimInputPort
@@ -60,9 +61,18 @@ var flow_lps: float:
 		return maxf(inlet.flow_lps, 0.0)
 
 
+## Nothing wired to the command makes it a hand valve: the operator's
+## own setting is the command (Tier 0).
 var commanded_open: bool:
 	get:
+		if open_cmd.wire_count == 0:
+			return hand_open
 		return open_cmd.value > 0.5
+
+
+var is_hand_operated: bool:
+	get:
+		return open_cmd.wire_count == 0
 
 
 func state() -> String:
@@ -92,10 +102,11 @@ func tick(dt: float) -> void:
 
 
 func state_dict() -> Dictionary:
-	return {"position": position}
+	return {"position": position, "hand_open": hand_open}
 
 
 func apply_state(state_: Dictionary) -> void:
 	position = state_.get("position", position)
+	hand_open = bool(state_.get("hand_open", hand_open))
 	zso.value = 1.0 if limit_open else 0.0
 	zsc.value = 1.0 if limit_closed else 0.0
