@@ -106,6 +106,8 @@ func _ready() -> void:
 		% [Time.get_ticks_msec() - t_start, ms_world, ms_plant,
 		int(plant.startup_ms.get("self-check", 0)), int(plant.startup_ms.get("home loop", 0)),
 		ms_ui, ms_after])
+	print("[flowstate] router: %d searches (%d failed), %d cells expanded, %d ms"
+		% [PipeRoute.searches, PipeRoute.failures, PipeRoute.expansions, PipeRoute.search_usec / 1000])
 	if DisplayServer.get_name() == "headless" and with_home:
 		builder.exercise_device_menu()
 	if DisplayServer.get_name() == "headless" and with_home:
@@ -119,6 +121,11 @@ func _ready() -> void:
 		print("[flowstate] alarm scan — %d active: %s" % [names.size(), "; ".join(names)])
 		# Runs sharing the same space: a walkdown finding the smoke run
 		# now makes before the director does.
+		var unsupported := plant.unsupported_report()
+		print("[flowstate] unsupported runs: %s" % ("none" if unsupported.is_empty() else str(unsupported.size())))
+		for line in unsupported:
+			print("    " + line)
+
 		var overlaps := plant.overlap_report()
 		print("[flowstate] run overlaps: %d" % overlaps.size())
 		for line in overlaps:

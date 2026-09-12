@@ -20,16 +20,28 @@ static func build(plant: Plant) -> void:
 ## ---- pipe rack PR-1: steel bents carrying services east ------------------
 
 static func _pipe_rack(plant: Plant) -> void:
-	for x: float in [9.0, 15.0, 21.0]:
-		plant.place_structure("s_column", "pr1_col_%d" % int(x), Vector3(x, 0.0, 1.5), 0.0)
+	# Bents from the plant feeder east: the power trunk to Unit 300
+	# rides the tray, so the rack starts where the feeder stands.
+	for x: float in [-3.0, 3.0, 9.0, 15.0, 21.0]:
+		plant.place_structure("s_column", "pr1_col_%d" % int(absf(x) + (100 if x < 0 else 0)),
+			Vector3(x, 0.0, 1.5), 0.0)
 	for tier: float in [3.0, 4.0]:
-		for mid_x: float in [12.0, 18.0]:
+		for mid_x: float in [0.0, 6.0, 12.0, 18.0]:
 			plant.place_structure("s_beam", "pr1_beam_%d_%d" % [int(tier), int(mid_x)],
 				Vector3(mid_x, tier, 1.5), 0.0, 6.0)
+	# Trays hang off the south face of the beams: on the beam line they
+	# would run straight through the columns, and on the north face
+	# they would take the head off anyone climbing the Unit 100 stairs.
 	plant.place_run("run_tray", "pr1_tray",
-		[plant.to_local(Vector3(9.2, 3.35, 1.5)), plant.to_local(Vector3(20.8, 3.35, 1.5))])
+		[plant.to_local(Vector3(-2.8, 3.35, 2.1)), plant.to_local(Vector3(20.8, 3.35, 2.1))])
+	# A stub bent back to the feeder: the trunk risers climb beside its
+	# column and the branch tray carries them onto the rack.
+	plant.place_structure("s_column", "pr1_col_feed", Vector3(-3.0, 0.0, -0.8), 0.0)
+	plant.place_structure("s_beam", "pr1_beam_3_feed", Vector3(-3.0, 3.0, 0.65), PI / 2.0, 2.9)
+	plant.place_run("run_tray", "pr1_tray_feed",
+		[plant.to_local(Vector3(-2.6, 3.35, -0.6)), plant.to_local(Vector3(-2.6, 3.35, 2.4))])
 	plant.place_run("run_conduit", "pr1_conduit",
-		[plant.to_local(Vector3(9.2, 3.55, 1.5)), plant.to_local(Vector3(20.8, 3.55, 1.5))])
+		[plant.to_local(Vector3(9.2, 3.55, 2.1)), plant.to_local(Vector3(20.8, 3.55, 2.1))])
 	plant.place_run("run_pipe", "pr1_pw",
 		[plant.to_local(Vector3(9.2, 4.35, 1.15)), plant.to_local(Vector3(20.8, 4.35, 1.15))])
 	plant.place_run("run_pipe", "pr1_st",
@@ -185,7 +197,7 @@ static func _unit_300(plant: Plant) -> void:
 			plant.place_structure("s_beam", "pr1x_beam_%d_%d" % [int(tier), int(mid_x)],
 				Vector3(mid_x, tier, 1.5), 0.0, 6.0)
 	plant.place_run("run_tray", "pr1x_tray",
-		[plant.to_local(Vector3(21.2, 3.35, 1.5)), plant.to_local(Vector3(38.8, 3.35, 1.5))])
+		[plant.to_local(Vector3(21.2, 3.35, 2.1)), plant.to_local(Vector3(38.8, 3.35, 2.1))])
 
 	# ---- feed end -------------------------------------------------
 	# A header is what it carries: this is where each species enters
@@ -368,8 +380,13 @@ static func _unit_300(plant: Plant) -> void:
 			plant.to_local(Vector3(35.6, 0.35, -8.3))])
 	plant.connect_equipment("tee_302d", "out", "du_302", "inlet")
 
-	# ---- power: 480 V drops from the plant feeder along the rack ----
-	var trunk := [Vector3(-3.6, 0.3, -0.8), Vector3(22.6, 0.3, -0.8)]
+	# ---- power: 480 V from the plant feeder, up onto the PR-1 tray,
+	# east along it, and down beside each load. Sixteen conduits in
+	# one tray, the way a plant carries them; at grade they could not
+	# pass between the drain and the tank (2026-09-12).
+	var riser_top := Vector3(-2.6, 3.6, -0.8)
+	var tray_in := Vector3(-2.6, 3.6, 2.1)
+	const TRAY_END := 38.6
 	for load: Array in [
 			["p_301a", Vector3(25.6, 0.3, -6.6)],
 			["p_301b", Vector3(25.6, 0.3, -3.0)],
@@ -384,10 +401,13 @@ static func _unit_300(plant: Plant) -> void:
 			["p_309", Vector3(34.4, 0.3, 5.8)],
 			["vl_302", Vector3(29.6, 0.3, -7.2)],
 			["vf_310", Vector3(53.9, 0.3, -3.6)]]:
-		var path: Array[Vector3] = []
-		for point: Vector3 in trunk:
-			path.append(plant.to_local(point))
-		path.append(plant.to_local(load[1] as Vector3))
+		var at: Vector3 = load[1]
+		# Off the tray sideways before dropping: straight down from the
+		# tray centreline is straight through the beam under it.
+		var drop_x := minf(at.x, TRAY_END)
+		var path: Array[Vector3] = [plant.to_local(riser_top), plant.to_local(tray_in),
+			plant.to_local(Vector3(drop_x, 3.6, 2.1)), plant.to_local(Vector3(drop_x, 3.6, 2.7)),
+			plant.to_local(at)]
 		plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), str(load[0]), "power", path)
 
 	# ---- commissioned state ----------------------------------------
@@ -801,14 +821,16 @@ static func _unit_400(plant: Plant) -> void:
 		_local(plant, [Vector3(3.5, 0.3, 8.75), Vector3(-4.9, 0.3, 8.75), Vector3(-4.9, 0.3, 8.35)]))
 
 	# ---- power: 480 V from the plant feeder, low along the ground ----
+	# Straight down off the way first, under the Unit 300 stub legs.
+	var way_drop := Vector3(-3.3, 0.3, -1.12)
 	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), "p_401", "power",
-		_local(plant, [Vector3(-3.4, 0.3, 0.6), Vector3(-3.4, 0.3, 5.6),
+		_local(plant, [way_drop, Vector3(-3.4, 0.3, 0.6), Vector3(-3.4, 0.3, 5.6),
 			Vector3(-3.4, 0.14, 6.0), Vector3(-5.95, 0.14, 6.0)]))
 	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), "p_402", "power",
-		_local(plant, [Vector3(-3.2, 0.3, 0.6), Vector3(-3.2, 0.3, 5.4),
+		_local(plant, [way_drop, Vector3(-3.2, 0.3, 0.6), Vector3(-3.2, 0.3, 5.4),
 			Vector3(-3.2, 0.1, 5.8), Vector3(-7.4, 0.1, 5.8), Vector3(-7.4, 0.1, 11.8)]))
 	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), psu_name, "ac_in",
-		_local(plant, [Vector3(-3.0, 0.3, 0.6), Vector3(-3.0, 0.3, 5.3), Vector3(5.6, 0.3, 5.3),
+		_local(plant, [way_drop, Vector3(-3.0, 0.3, 0.6), Vector3(-3.0, 0.3, 5.3), Vector3(5.6, 0.3, 5.3),
 			Vector3(5.6, 0.3, 7.6)]))
 
 	# ---- commissioned state ------------------------------------------

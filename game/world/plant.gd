@@ -47,6 +47,7 @@ var _cost_iterations: int = 0
 # Support re-validation runs a few physics frames after geometry
 # changes, once new/freed colliders have actually reached the space.
 var _revalidate_in: int = 0
+var _relay_round: int = 0   # deferred re-lays since the last change; capped, see _revalidate_supports
 var _support_exercise_phase: int = 0
 var _support_exercise_wait: int = 0
 
@@ -723,7 +724,7 @@ func remove_cabinet(name_: String) -> bool:
 			member_of.erase(record_name)
 	(entry["node"] as Node).queue_free()
 	cabinets.erase(name_)
-	_revalidate_in = 3
+	_schedule_revalidate()
 	return true
 
 
@@ -736,7 +737,7 @@ func remove_junction_box(name_: String) -> bool:
 	_remove_enclosure_records((junction_boxes[name_] as Dictionary)["records"] as Array, name_)
 	((junction_boxes[name_] as Dictionary)["node"] as Node).queue_free()
 	junction_boxes.erase(name_)
-	_revalidate_in = 3
+	_schedule_revalidate()
 	return true
 
 
@@ -746,7 +747,7 @@ func remove_control_station(name_: String) -> bool:
 	_remove_enclosure_records((control_stations[name_] as Dictionary)["records"] as Array, name_)
 	((control_stations[name_] as Dictionary)["node"] as Node).queue_free()
 	control_stations.erase(name_)
-	_revalidate_in = 3
+	_schedule_revalidate()
 	return true
 
 
@@ -867,7 +868,7 @@ func _sync_cabinet(cab: String) -> void:
 			if record is SimRelay:
 				relays.append(record as SimRelay)
 	view.set_relays(relays)
-	_revalidate_in = 3
+	_schedule_revalidate()
 
 
 func _cabinet_wire_specs(cab: String) -> Array:
@@ -929,7 +930,7 @@ func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
 	for inst_name: String in mounted:
 		if str((mounted[inst_name] as Dictionary)["host"]) == name_:
 			refresh_wires_of(inst_name)
-	_revalidate_in = 3
+	_schedule_revalidate()
 
 
 ## Rebuild the pipe visuals touching one record — after its nozzles
@@ -940,18 +941,42 @@ func refresh_wires_of(name_: String) -> void:
 			continue
 		if str(visual["a"]) != name_ and str(visual["b"]) != name_:
 			continue
-		(visual["node"] as Node).queue_free()
-		visual["path"] = []  # not a collision with its own old route
-		var pipe := _build_pipe(str(visual["a"]), str(visual["a_port"]),
-			str(visual["b"]), str(visual["b_port"]), visual["waypoints"])
-		visual["node"] = pipe
-		visual["lane"] = int(pipe.get_meta("lane", 0))
-		visual["path"] = pipe.get_meta("path", [])
-		if str(visual.get("color", "")) != "":
-			pipe.apply_service(Color.html(str(visual["color"])), str(visual.get("label", "")))
-		if str(visual.get("fitting", "")) != "":
-			pipe.set_fitting(str(visual["fitting"]))
-	_revalidate_in = 3
+		_refresh_visual(visual)
+	_schedule_revalidate()
+
+
+## Lay one run again from its record: its lane is chosen afresh
+## against everything else as it stands now.
+func _refresh_visual(visual: Dictionary) -> void:
+	(visual["node"] as Node).queue_free()
+	visual["path"] = []  # not a collision with its own old route
+	var pipe := _build_pipe(str(visual["a"]), str(visual["a_port"]),
+		str(visual["b"]), str(visual["b_port"]), visual["waypoints"])
+	visual["node"] = pipe
+	visual["lane"] = int(pipe.get_meta("lane", 0))
+	visual["path"] = pipe.get_meta("path", [])
+	visual["corners"] = pipe.get_meta("corners", [])
+	if str(visual.get("color", "")) != "":
+		pipe.apply_service(Color.html(str(visual["color"])), str(visual.get("label", "")))
+	if str(visual.get("fitting", "")) != "":
+		pipe.set_fitting(str(visual["fitting"]))
+
+
+## Every run failing the support rule, with where its longest
+## unsupported span begins and how long it is.
+func unsupported_report() -> PackedStringArray:
+	var out := PackedStringArray()
+	for visual in _wire_visuals:
+		var node: Node = visual["node"]
+		if node is PipeView and (node as PipeView)._unsupported:
+			out.append("%s -> %s: %.1f m from %s" % [visual["a"], visual["b"],
+				float(node.get_meta("unsupported_span", 0.0)), str(node.get_meta("unsupported_at", "?"))])
+	for name_: String in runs:
+		var node := runs[name_]["node"] as PipeView
+		if node != null and node._unsupported:
+			out.append("%s: %.1f m from %s" % [name_, float(node.get_meta("unsupported_span", 0.0)),
+				str(node.get_meta("unsupported_at", "?"))])
+	return out
 
 
 ## Why a record cannot be picked up and set down elsewhere, or "".
@@ -1194,7 +1219,7 @@ func place_structure(type_id: String, name_: String, base_pos: Vector3, rot_y: f
 	if type_id == "s_sign":
 		node.config_cb = _configure_sign
 	structures[name_] = {"type": type_id, "node": node, "length": length, "text": ""}
-	_revalidate_in = 3
+	_schedule_revalidate()
 	return true
 
 
@@ -1205,7 +1230,7 @@ func remove_structure(name_: String) -> bool:
 		return false
 	((structures[name_] as Dictionary)["node"] as Node).queue_free()
 	structures.erase(name_)
-	_revalidate_in = 3
+	_schedule_revalidate()
 	return true
 
 
@@ -1252,7 +1277,7 @@ func place_junction_box(name_: String, world_pos: Vector3, rot_y: float, channel
 		PlantFactory.attach_port_markers(view, sim.get_component(record_name), "terminal",
 			{"in": Vector3(-0.25, y, 0.06), "out": Vector3(0.25, y, 0.06)})
 		y -= step
-	_revalidate_in = 3
+	_schedule_revalidate()
 	return true
 
 
@@ -1346,7 +1371,7 @@ func place_control_station(name_: String, world_pos: Vector3, rot_y: float, devi
 		PlantFactory.attach_port_markers(view, record, str(equip_types[record_name]),
 			{port_name: Vector3(0.26, y, 0.03)})
 		y -= step
-	_revalidate_in = 3
+	_schedule_revalidate()
 	return true
 
 
@@ -1375,7 +1400,7 @@ func place_run(kind: String, name_: String, sparse_local: Array, getter: Callabl
 	view.config_cb = _configure_run
 	runs[name_] = {"kind": kind, "node": view, "points": sparse_local,
 		"color": "", "label": ""}
-	_revalidate_in = 3
+	_schedule_revalidate()
 	return true
 
 
@@ -1433,7 +1458,7 @@ func remove_placed_run(view: PipeView) -> bool:
 		if (runs[name_] as Dictionary)["node"] == view:
 			view.queue_free()
 			runs.erase(name_)
-			_revalidate_in = 3  # whatever it carried re-checks
+			_schedule_revalidate()  # whatever it carried re-checks
 			return true
 	return false
 
@@ -1463,7 +1488,60 @@ func _disconnect_visual(visual: Dictionary) -> void:
 ## infrastructure — updating brackets and alarm state. Called a few
 ## frames after geometry changes. A run excludes its own colliders so
 ## it can't count as its own support.
+static func _same_path(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in a.size():
+		if (a[i] as Vector3).distance_to(b[i] as Vector3) > 0.005:
+			return false
+	return true
+
+
+## Anything that changes what a run could be routed round asks for the
+## deferred pass, and starts a fresh re-lay budget.
+func _schedule_revalidate() -> void:
+	_revalidate_in = 3
+	_relay_round = 0
+
+
 func _revalidate_supports() -> void:
+	var t0 := Time.get_ticks_msec()
+	_route_cells.clear()
+	_body_owners.clear()
+	PipeRoute.clear_cache()
+	# Runs laid before physics knew the bodies round them: re-lay any
+	# whose avoiding route now differs.
+	var relay: Array[Dictionary] = []
+	for visual in _wire_visuals:
+		if visual["node"] == null:
+			continue
+		var fresh := _avoided_corners(str(visual["a"]), str(visual["a_port"]),
+			str(visual["b"]), str(visual["b_port"]), visual["waypoints"])
+		if fresh != (visual.get("corners", []) as Array):
+			relay.append(visual)
+			continue
+		# Same corners, but a lane laid blind may sit differently now
+		# that physics knows what is beside it.
+		var view := visual["node"] as PipeView
+		_lane_room.clear()
+		var fresh_path := _route_points(str(visual["a"]), str(visual["a_port"]), str(visual["b"]),
+			str(visual["b_port"]), fresh, int(visual.get("lane", 0)), view.radius())
+		if not _same_path(fresh_path, visual.get("path", [])):
+			relay.append(visual)
+	var t1 := Time.get_ticks_msec()
+	# Re-laid runs change what the others route round, so this can
+	# chase its own tail; three rounds is plenty for the pass to settle
+	# and a bound is what makes it a pass rather than a loop.
+	if _relay_round >= 3 and not relay.is_empty():
+		if DisplayServer.get_name() == "headless":
+			print("[flowstate] revalidate: %d runs still moving after 3 rounds, left as laid" % relay.size())
+		relay.clear()
+	for visual in relay:
+		_refresh_visual(visual)
+	if not relay.is_empty():
+		_relay_round += 1
+		_revalidate_in = 3  # once more, against the re-laid runs
+	var t2 := Time.get_ticks_msec()
 	var space := get_world_3d().direct_space_state
 	for visual in _wire_visuals:
 		if visual["node"] == null:
@@ -1472,6 +1550,9 @@ func _revalidate_supports() -> void:
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
 		_apply_support(entry["node"] as PipeView, entry["points"], space)
+	if DisplayServer.get_name() == "headless":
+		print("[flowstate] revalidate: corners %d ms, re-lay %d ms (%d runs), supports %d ms"
+			% [t1 - t0, t2 - t1, relay.size(), Time.get_ticks_msec() - t2])
 
 
 ## Runs sharing the same space (director's walkdown, 2026-09-12): every
@@ -1486,7 +1567,8 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 		var view := visual["node"] as PipeView
 		if view.style() == "tray":
 			continue
-		paths.append({"name": "%s.%s -> %s.%s" % [visual["a"], visual["a_port"], visual["b"], visual["b_port"]],
+		paths.append({"name": "%s.%s -> %s.%s [lane %d]" % [visual["a"], visual["a_port"], visual["b"],
+				visual["b_port"], int(visual.get("lane", 0))],
 			"path": _visual_path(visual), "r": view.radius(),
 			"from": "%s.%s" % [visual["a"], visual["a_port"]], "to": "%s.%s" % [visual["b"], visual["b_port"]]})
 	for name_: String in runs:
@@ -1510,9 +1592,10 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 					if got[0] > worst:
 						worst = got[0]
 						where = got[1]
-			var shared: bool = str(paths[i]["from"]) != "" and (str(paths[i]["from"]) == str(paths[j]["from"])
-				or str(paths[i]["to"]) == str(paths[j]["to"]))
-			if worst >= (maxf(min_length, 1.0) if shared else min_length):
+			var allowed := _allowed_overlap(str(paths[i]["from"]).get_slice(".", 0),
+				str(paths[i]["to"]).get_slice(".", 0), str(paths[j]["from"]).get_slice(".", 0),
+				str(paths[j]["to"]).get_slice(".", 0), where)
+			if worst >= maxf(min_length, allowed):
 				found.append([worst, "%s ∥ %s for %.1f m near (%.1f, %.1f, %.1f)" % [
 					paths[i]["name"], paths[j]["name"], worst, where.x, where.y, where.z]])
 	found.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) > float(b[0]))
@@ -1579,6 +1662,9 @@ func _apply_support_path(view: PipeView, path: Array[Vector3],
 	for bracket: Dictionary in result["brackets"]:
 		local_brackets.append({"from": to_local(bracket["from"]), "to": to_local(bracket["to"])})
 	view.set_supports(local_brackets, not bool(result["ok"]))
+	if not bool(result["ok"]):
+		view.set_meta("unsupported_at", to_local(result["worst_at"]))
+		view.set_meta("unsupported_span", float(result["max_span"]))
 
 
 func _wire_visual(src_name: String, src_port: String,
@@ -1589,8 +1675,9 @@ func _wire_visual(src_name: String, src_port: String,
 		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
 		"color": "", "label": "",
 		"lane": int(pipe.get_meta("lane", 0)), "path": pipe.get_meta("path", []),
+		"corners": pipe.get_meta("corners", []),
 	})
-	_revalidate_in = 3
+	_schedule_revalidate()
 
 
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
@@ -1621,11 +1708,14 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	# waypoints has nothing to shift and takes the route as it comes.
 	var chosen := lane
 	var path: Array[Vector3] = []
+	var corners := _avoided_corners(src_name, src_port, dst_name, dst_port, waypoints)
+	var searched := PipeRoute.last_searched
+	_lane_room.clear()  # the room beside each leg is this run's, for its lanes
 	if chosen < 0:
 		var best_lane := 0
 		var best_overlap := INF
-		for try_lane in 25:
-			var candidate := _route_points(src_name, src_port, dst_name, dst_port, waypoints, try_lane, radius)
+		for try_lane in 49:
+			var candidate := _route_points(src_name, src_port, dst_name, dst_port, corners, try_lane, radius)
 			var overlap := _path_collision(candidate, radius, src_name, src_port, dst_name, dst_port)
 			if overlap < best_overlap:
 				best_overlap = overlap
@@ -1634,14 +1724,20 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 			if overlap <= 0.0:
 				break
 		chosen = best_lane
+		if OS.has_environment("FLOWSTATE_ROUTE_DEBUG") and best_overlap > 0.0:
+			print("[lane] %s.%s -> %s.%s: lane %d still overlaps %.2f m" % [src_name, src_port,
+				dst_name, dst_port, chosen, best_overlap])
 	else:
-		path = _route_points(src_name, src_port, dst_name, dst_port, waypoints, chosen, radius)
+		path = _route_points(src_name, src_port, dst_name, dst_port, corners, chosen, radius)
 	var pipe := PipeView.new()
 	add_child(pipe)
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	pipe.set_meta("lane", chosen)
 	pipe.set_meta("path", path)
+	pipe.set_meta("corners", corners)
+	pipe.set_meta("src", src_name)
+	pipe.set_meta("searched", searched)
 	pipe.config_cb = _configure_run
 	if wire != null:
 		# A line can be pressurised without moving: a dead-headed
@@ -1659,57 +1755,335 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 ## lanes 1, 2, 3… step out alternately either side, and the step is
 ## diagonal so legs along x and legs along z both move over.
 func _route_points(src_name: String, src_port: String, dst_name: String, dst_port: String,
-		waypoints: Array, lane: int, radius: float) -> Array[Vector3]:
+		corners: Array, lane: int, radius: float) -> Array[Vector3]:
 	var from := _marker_pos(src_name, src_port)
 	var from_dir := _marker_dir(src_name, src_port)
 	var to := _marker_pos(dst_name, dst_port)
 	var to_dir := _marker_dir(dst_name, dst_port)
-	var corners: Array = waypoints
-	if corners.is_empty() and lane > 0:
-		# A direct run has no waypoints to shift: its own elbows, as the
-		# router laid them, become the waypoints its lane moves.
-		var auto := PipeRoute.routed(from, from_dir, to, to_dir, [])
-		corners = auto.slice(2, auto.size() - 2)
-	var shifted: Array = []
-	var offset := _lane_offset(lane, radius, from_dir)
-	for point in corners:
-		shifted.append((point as Vector3) + offset)
-	if lane > 0:
-		# Jog into the lane straight off each stub, or every run from
-		# the same fitting still shares its first leg to the first corner.
-		shifted.insert(0, from + from_dir * PipeRoute.STUB + offset)
-		shifted.append(to + to_dir * PipeRoute.STUB + offset)
+	var base := PipeRoute.routed(from, from_dir, to, to_dir, corners)
+	if lane <= 0:
+		return base
+	# Lane slots: either side, then the same two one tier up, then a
+	# step further out. A tier is a run's width, the way cables stack
+	# in a tray; a whole tier would carry a ground run past the
+	# support rule's reach.
+	var slot := lane - 1
+	var side := 1 if slot % 2 == 0 else -1
+	@warning_ignore("integer_division")
+	var tier := (slot / 2) % LANE_TIERS
+	@warning_ignore("integer_division")
+	var k := slot / (2 * LANE_TIERS) + 1
+	var step := 2.0 * radius + 0.03
+	var lift := tier * (step + 0.02)
+	var room_key := "%s.%s>%s.%s|%d|%d" % [src_name, src_port, dst_name, dst_port, side, tier]
+	if not _lane_room.has(room_key):
+		_lane_room[room_key] = _leg_room(base, side, step, lift, [src_name, dst_name])
+	var shifted := _offset_polyline(base, side, k * step, lift, _lane_room[room_key], [src_name, dst_name])
 	return PipeRoute.routed(from, from_dir, to, to_dir, shifted)
 
 
-## Lanes step out sideways from the stub a run leaves by, alternately
-## either side, a step further each time — never up or down, which
-## would carry a ground-run past the support rule's reach. A stub
-## pointing up or down has no sideways, so those use the world axes.
-static func _lane_offset(lane: int, radius: float, from_dir: Vector3) -> Vector3:
-	if lane <= 0:
-		return Vector3.ZERO
-	var across := Vector3(-from_dir.z, 0.0, from_dir.x)
-	var dirs: Array[Vector3]
-	if across.length() < 0.5:
-		dirs = [Vector3(1, 0, 1).normalized(), Vector3(-1, 0, -1).normalized(),
-			Vector3(1, 0, -1).normalized(), Vector3(-1, 0, 1).normalized()]
-	else:
-		# Mostly across, a little along: a shift purely across the stub
-		# cannot part two legs that run in that same direction (the two
-		# feeds to P-301A and P-301B did, for 1.2 m).
-		across = across.normalized()
-		var along := Vector3(from_dir.x, 0.0, from_dir.z).normalized()
-		dirs = [(across + along * 0.5).normalized(), (-across + along * 0.5).normalized()]
-	@warning_ignore("integer_division")
-	var k := (lane - 1) / dirs.size() + 1
-	return dirs[(lane - 1) % dirs.size()] * (k * (2.0 * radius + 0.03))
+const LANE_TIERS := 4
+const LANE_STEPS := 7   # 49 lanes over two sides and four tiers
+var _lane_room: Dictionary = {}
 
 
+## How far each horizontal leg of `base` can move to `side` before it
+## meets something solid, in steps, up to LANE_STEPS of them; INF for
+## a vertical leg, which moves with its neighbour.
+func _leg_room(base: Array[Vector3], side: int, step: float, lift: float, ignore: Array) -> Array[float]:
+	var n := base.size()
+	var from := base[0]
+	var to := base[n - 1]
+	var room: Array[float] = []
+	for i in n - 1:
+		var d := base[i + 1] - base[i]
+		if absf(d.y) > maxf(absf(d.x), absf(d.z)):
+			room.append(INF)
+			continue
+		var dir := Vector3(d.x, 0.0, d.z).normalized()
+		var normal := Vector3(-dir.z, 0.0, dir.x) * side
+		var clear := 0.0
+		for k in range(1, LANE_STEPS + 1):
+			var o := k * step
+			if not _leg_clear(base[i] + normal * o + Vector3.UP * lift,
+					base[i + 1] + normal * o + Vector3.UP * lift, from, to, ignore):
+				break
+			clear = o
+		room.append(clear)
+	return room
+
+
+## The interior corners of `base` moved sideways by up to `want`, leg
+## by leg: each horizontal leg takes the offset on its side that the
+## room beside it allows, so a bundle bends round a rack column or a
+## drain together instead of shifting into it (director, 2026-09-12).
+## A corner between two horizontal legs at right angles takes both
+## offsets, which is where the two shifted lines meet. A vertical leg
+## takes one shift at both its ends so it stays vertical: both
+## flanking offsets when the legs it joins are at right angles, and
+## when they are parallel their common offset — or, if that is nil,
+## a slide along them, which needs no room beside anything. Where
+## legs still disagree, the re-routing that follows turns the misfit
+## into a short jog. `lift` raises every corner: the tier.
+func _offset_polyline(base: Array[Vector3], side: int, want: float, lift: float,
+		room: Array[float], ignore: Array) -> Array:
+	var n := base.size()
+	var from := base[0]
+	var to := base[n - 1]
+	var dirs: Array[Vector3] = []
+	var normals: Array[Vector3] = []
+	var offs: Array[Vector3] = []
+	for i in n - 1:
+		var d := base[i + 1] - base[i]
+		if room[i] == INF:
+			dirs.append(Vector3.ZERO)
+			normals.append(Vector3.ZERO)
+			offs.append(Vector3.ZERO)
+			continue
+		var dir := Vector3(d.x, 0.0, d.z).normalized()
+		var normal := Vector3(-dir.z, 0.0, dir.x) * side
+		dirs.append(dir)
+		normals.append(normal)
+		offs.append(normal * minf(want, room[i]))
+	var vertical_shift := {"ignore": ignore}
+	var out: Array = []
+	for j in range(1, n - 1):
+		var shift := Vector3.ZERO
+		if normals[j - 1] != Vector3.ZERO and normals[j] != Vector3.ZERO:
+			if absf(normals[j - 1].dot(normals[j])) < 0.5:
+				shift = offs[j - 1] + offs[j]
+			else:
+				shift = offs[j - 1]
+		elif normals[j] == Vector3.ZERO:
+			shift = _vertical_offset(j, base, dirs, normals, offs, side, want, lift, from, to, vertical_shift)
+		else:
+			shift = _vertical_offset(j - 1, base, dirs, normals, offs, side, want, lift, from, to, vertical_shift)
+		out.append(base[j] + shift + Vector3.UP * lift)
+	return out
+
+
+func _vertical_offset(v: int, base: Array[Vector3], dirs: Array[Vector3], normals: Array[Vector3],
+		offs: Array[Vector3], side: int, want: float, lift: float, from: Vector3, to: Vector3,
+		cache: Dictionary) -> Vector3:
+	if cache.has(v):
+		return cache[v]
+	var h1 := -1
+	for i in range(v - 1, -1, -1):
+		if normals[i] != Vector3.ZERO:
+			h1 = i
+			break
+	var h2 := -1
+	for i in range(v + 1, normals.size()):
+		if normals[i] != Vector3.ZERO:
+			h2 = i
+			break
+	var shift := Vector3.ZERO
+	if h1 >= 0 and h2 >= 0:
+		if absf(dirs[h1].dot(dirs[h2])) < 0.5:
+			shift = offs[h1] + offs[h2]
+		else:
+			shift = offs[h1]
+			if shift.length() < 0.001:
+				# Nothing beside either leg: slide the riser along them.
+				var slide := dirs[h1] * (side * want)
+				for attempt in 3:
+					if _leg_clear(base[v] + slide + Vector3.UP * lift, base[v + 1] + slide + Vector3.UP * lift,
+							from, to, [] if cache.get("ignore") == null else cache["ignore"]):
+						shift = slide
+						break
+					slide *= 0.5
+	elif h1 >= 0:
+		shift = offs[h1]
+	elif h2 >= 0:
+		shift = offs[h2]
+	cache[v] = shift
+	return shift
+
+
+## Is the straight from a to b clear of solids, the run's own two
+## pieces of equipment aside and its stubs exempt?
+func _leg_clear(a: Vector3, b: Vector3, from: Vector3, to: Vector3, ignore: Array) -> bool:
+	var steps := maxi(1, ceili(a.distance_to(b) / 0.5))
+	for i in range(steps + 1):
+		var p := a.lerp(b, float(i) / steps)
+		if p.distance_to(from) < PipeRoute.STUB_CLEAR or p.distance_to(to) < PipeRoute.STUB_CLEAR:
+			continue
+		if _route_blocked(p, ignore):
+			return false
+	return true
+
+
+## The path a run was laid on. Reports and the support check read
+## what is rendered; a lane recomputed against what physics knows now
+## can differ from what was laid, and that difference is the deferred
+## pass's business, not the report's.
 func _visual_path(visual: Dictionary) -> Array[Vector3]:
+	var stored: Array = visual.get("path", [])
+	if not stored.is_empty():
+		var out: Array[Vector3] = []
+		for p: Vector3 in stored:
+			out.append(p)
+		return out
 	var view := visual["node"] as PipeView
 	return _route_points(str(visual["a"]), str(visual["a_port"]), str(visual["b"]), str(visual["b_port"]),
-		visual["waypoints"], int(visual.get("lane", 0)), view.radius() if view != null else 0.025)
+		visual.get("corners", visual["waypoints"]), int(visual.get("lane", 0)),
+		view.radius() if view != null else 0.025)
+
+
+## The corners of a run's own route, laid round whatever is solid
+## (director, 2026-09-12): the search runs between the waypoints the
+## player gave, and the result is what the lanes then shift. Physics
+## only knows a body the frame after it is added, so a run laid in the
+## same frame as its equipment is re-laid by the deferred pass.
+func _avoided_corners(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		waypoints: Array) -> Array:
+	var full := PipeRoute.routed_avoiding(_marker_pos(src_name, src_port), _marker_dir(src_name, src_port),
+		_marker_pos(dst_name, dst_port), _marker_dir(dst_name, dst_port), waypoints,
+		_route_blocked.bind([src_name, dst_name]), _route_busy.bind([src_name]))
+	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG") and PipeRoute.last_searched:
+		var b := PipeRoute.last_block
+		print("[route] %s.%s -> %s.%s detours at %s (%s): %s" % [src_name, src_port, dst_name, dst_port,
+			b, _route_block_by.get(_route_key(b), "?"), full.slice(2, full.size() - 2)])
+	return full.slice(2, full.size() - 2)
+
+
+var _route_cells: Dictionary = {}
+var _route_probe: BoxShape3D = null
+
+
+## Is this half-metre cell solid? World geometry (1) and equipment
+## volumes (4); other runs are not solid, lanes see to those. Cells
+## within a metre of the endpoints are open: a stub leaves through
+## its own equipment's volume. Cached until the plant changes.
+func _route_blocked(center: Vector3, ignore: Array) -> bool:
+	for owner in _route_owners(center)["solid"]:
+		if not ignore.has(owner):
+			if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
+				_route_block_by[_route_key(center)] = str(owner)
+			return true
+	return false
+
+
+## Does a run from some other source already pass through this cell?
+## Runs from the same record — sixteen feeds down one trunk — are
+## bundle-mates: they detour together and the lanes part them.
+func _route_busy(center: Vector3, own_sources: Array) -> bool:
+	for src in _route_owners(center)["runs"]:
+		if not own_sources.has(src):
+			return true
+	return false
+
+
+func _route_key(center: Vector3) -> Vector3i:
+	return Vector3i(roundi(center.x * 10.0), roundi(maxf(center.y, PipeRoute.CELL_Y0) * 10.0),
+		roundi(center.z * 10.0))
+
+
+## What occupies this cell: {"solid": owners, "runs": bool}. Solid is
+## the record names of equipment, or the node for structure; runs
+## (trays, racks, other lines) are only noted, never solid, and the
+## probe never dips below a ground run, so the floor is not either.
+## A run ignores its own two pieces of equipment: a drop down the
+## flank of a column is inside the column volume the whole way.
+func _route_owners(center: Vector3) -> Dictionary:
+	var key := _route_key(center)
+	if _route_cells.has(key):
+		return _route_cells[key]
+	if _route_probe == null:
+		# Shallower than it is wide: a run lying on a tray or a deck is
+		# a hand above the beam under it, and that is not a collision.
+		_route_probe = BoxShape3D.new()
+		_route_probe.size = Vector3(0.42, 0.26, 0.42)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _route_probe
+	query.transform = Transform3D(Basis(),
+		to_global(Vector3(center.x, maxf(center.y, PipeRoute.CELL_Y0), center.z)))
+	query.collision_mask = 1 | 4 | 8
+	var owners: Array = []
+	var runs_here: Array = []
+	for found: Dictionary in get_world_3d().direct_space_state.intersect_shape(query, 12):
+		var collider: Object = found["collider"]
+		if not (collider is Node):
+			continue
+		var body := collider as Node
+		if body.has_meta("run"):
+			# Only a run laid where its waypoints put it is something to
+			# steer round. A searched run is itself steering, and two of
+			# those steering round each other never settle; they share a
+			# corridor and the lanes part them.
+			var run_view: Variant = body.get_meta("run")
+			if run_view is Node and bool(run_view.get_meta("searched", false)):
+				continue
+			var src := str(run_view.get_meta("src", "")) if run_view is Node else ""
+			if not runs_here.has(src):
+				runs_here.append(src)
+			continue
+		var owner: Variant = _owner_of_body(body)
+		if not owners.has(owner):
+			owners.append(owner)
+	var cell := {"solid": owners, "runs": runs_here}
+	_route_cells[key] = cell
+	return cell
+
+
+## The record a collider belongs to — its view may be tagged on the
+## body, or be an ancestor — or the body itself for structure and
+## world geometry. Cached with the cells.
+var _body_owners: Dictionary = {}
+
+func _owner_of_body(body: Node) -> Variant:
+	if _body_owners.has(body):
+		return _body_owners[body]
+	var owner: Variant = body
+	var node: Node = body.get_meta("view") if body.has_meta("view") else body
+	while node != null and node != self:
+		var found_key: Variant = views.find_key(node)
+		if found_key != null:
+			owner = found_key
+			break
+		for structure_name: String in structures:
+			if structures[structure_name]["node"] == node:
+				owner = "structure:" + structure_name
+				break
+		if owner is String:
+			break
+		node = node.get_parent()
+	_body_owners[body] = owner
+	return owner
+
+
+var _route_block_by: Dictionary = {}
+
+
+## Two runs with an end on the same equipment — a pump's suction and
+## its power, or two circuits into one cabinet — may approach it side
+## by side for a metre and a half, beside it: their fittings are a
+## hand apart on one machine. Anywhere else, half a metre is the most
+## two runs may share. Cabinet modules (`<cab>_m3`, `<cab>_m5_t6`)
+## count as their cabinet.
+func _allowed_overlap(a1: String, b1: String, a2: String, b2: String, at: Vector3) -> float:
+	var g2 := [_approach_group(a2), _approach_group(b2)]
+	for end_name: String in [a1, b1]:
+		if _approach_group(end_name) in g2 and _near_record(at, end_name, 2.5):
+			return 1.5
+	return 0.5
+
+
+func _near_record(at: Vector3, name_: String, within: float) -> bool:
+	var group := _approach_group(name_)
+	for record_name: String in views:
+		if _approach_group(record_name) == group \
+				and (views[record_name] as Node3D).position.distance_to(at) <= within:
+			return true
+	return false
+
+
+static func _approach_group(name_: String) -> String:
+	if name_ == "":
+		return "<none>"
+	var module := RegEx.create_from_string("^(.*)_m\\d+(_t\\d+)?$")
+	var hit := module.search(name_)
+	return hit.get_string(1) if hit != null else name_
 
 
 ## The longest stretch this route would share with a run already laid,
@@ -1724,10 +2098,8 @@ func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: Str
 		var other := visual["node"] as PipeView
 		if other == null or other.style() == "tray":
 			continue
-		var shared := (str(visual["a"]) == a and str(visual["a_port"]) == a_port) \
-			or (str(visual["b"]) == b and str(visual["b_port"]) == b_port)
 		var got := _paths_overlap(path, visual.get("path", []), radius + other.radius())
-		if got >= (1.0 if shared else 0.5):
+		if got >= _allowed_overlap(a, b, str(visual["a"]), str(visual["b"]), _last_overlap_at):
 			worst = maxf(worst, got)
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
@@ -1741,12 +2113,41 @@ func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: Str
 
 
 ## The longest stretch two paths share within gap of each other.
+## Paths whose boxes do not meet are rejected before any segment pair
+## is looked at: with a hundred runs and fifty lanes, that is the cost.
 static func _paths_overlap(pa: Array, pb: Array, gap: float) -> float:
+	if pa.size() < 2 or pb.size() < 2:
+		return 0.0
+	var box_a := _path_box(pa).grow(gap)
+	if not box_a.intersects(_path_box(pb)):
+		return 0.0
 	var worst := 0.0
+	var where := Vector3.ZERO
 	for s in range(pa.size() - 1):
+		var a0: Vector3 = pa[s]
+		var a1: Vector3 = pa[s + 1]
+		var seg_box := AABB(a0, Vector3.ZERO).expand(a1).grow(gap)
 		for t in range(pb.size() - 1):
-			worst = maxf(worst, float(_segment_overlap(pa[s], pa[s + 1], pb[t], pb[t + 1], gap)[0]))
+			var b0: Vector3 = pb[t]
+			var b1: Vector3 = pb[t + 1]
+			if not seg_box.intersects(AABB(b0, Vector3.ZERO).expand(b1)):
+				continue
+			var got := _segment_overlap(a0, a1, b0, b1, gap)
+			if float(got[0]) > worst:
+				worst = float(got[0])
+				where = got[1]
+	_last_overlap_at = where
 	return worst
+
+
+static var _last_overlap_at := Vector3.ZERO
+
+
+static func _path_box(path: Array) -> AABB:
+	var box := AABB(path[0], Vector3.ZERO)
+	for i in range(1, path.size()):
+		box = box.expand(path[i])
+	return box
 
 
 func _marker_pos(record_name: String, port_name: String) -> Vector3:

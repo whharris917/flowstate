@@ -65,15 +65,21 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 
 	var max_span := 0.0
 	var span_start := -1.0
+	var worst_at := Vector3.INF
+	var span_at := Vector3.INF
 	for i in range(samples.size()):
 		if supported[i]:
 			if span_start >= 0.0:
-				max_span = maxf(max_span, arcs[i] - span_start)
+				if arcs[i] - span_start > max_span:
+					max_span = arcs[i] - span_start
+					worst_at = span_at
 				span_start = -1.0
 		elif span_start < 0.0:
 			span_start = arcs[maxi(0, i - 1)]
-	if span_start >= 0.0:
-		max_span = maxf(max_span, total - span_start)
+			span_at = samples[i]
+	if span_start >= 0.0 and total - span_start > max_span:
+		max_span = total - span_start
+		worst_at = span_at
 
 	var brackets: Array[Dictionary] = []
 	var last_bracket := -BRACKET_SPACING
@@ -87,7 +93,8 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 			brackets.append({"from": samples[i], "to": anchor})
 			last_bracket = arcs[i]
 
-	return {"ok": max_span <= MAX_SPAN + 0.01, "max_span": max_span, "brackets": brackets}
+	return {"ok": max_span <= MAX_SPAN + 0.01, "max_span": max_span, "brackets": brackets,
+		"worst_at": worst_at}
 
 
 static func _nearest_surface(point: Vector3, space: PhysicsDirectSpaceState3D,

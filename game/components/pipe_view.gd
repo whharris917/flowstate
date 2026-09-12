@@ -52,18 +52,37 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 	_path = path
 	_set_service_color(color)
 	_bad = ViewUtil.glow(ALARM, 1.3)
+	_bad.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Corners are swept bends (director, 2026-09-12: the sphere joints
+	# read as bulbs): each straight is shortened by the bend radius at
+	# a corner that bends, and a quarter-torus elbow fills the gap. A
+	# corner too tight for a bend keeps the old ball joint.
+	var bend := radius * 1.5
 	for i in range(path.size() - 1):
 		var from := path[i]
 		var to := path[i + 1]
 		if from.distance_to(to) < 0.005:
 			continue
-		var seg := segment_node(from, to, radius, style, _cold)
-		add_child(seg)
-		_collect_meshes(seg)
+		var direction := (to - from).normalized()
+		var seg_from := from
+		var seg_to := to
+		if style != "tray":
+			if _bends_at(path, i, bend):
+				seg_from = from + direction * bend
+			if _bends_at(path, i + 1, bend):
+				seg_to = to - direction * bend
+		if seg_from.distance_to(seg_to) > 0.005:
+			var seg := segment_node(seg_from, seg_to, radius, style, _cold)
+			add_child(seg)
+			_collect_meshes(seg)
 		if collider_layer > 0:
 			_segment_collider(from, to, maxf(radius * 2.5, 0.12), collider_layer)
 		if i > 0:
-			var joint := joint_node(from, radius, style, _cold)
+			var joint: Node3D = null
+			if style != "tray" and _bends_at(path, i, bend):
+				joint = elbow_node(from, (from - path[i - 1]).normalized(), direction, radius, bend, _cold)
+			if joint == null:
+				joint = joint_node(from, radius, style, _cold)
 			if joint != null:
 				add_child(joint)
 				_collect_meshes(joint)
@@ -143,6 +162,10 @@ func _set_service_color(color: Color) -> void:
 	_charged = ViewUtil.glow(color, 0.35)
 	_cold = ViewUtil.flat(color.lerp(Color(0.35, 0.35, 0.37), 0.55)) if _style == "pipe" \
 		else ViewUtil.flat(color)
+	# Two-sided: the swept elbows are built by hand and a closed tube
+	# shows no back faces anyway.
+	for mat: StandardMaterial3D in [_hot, _charged, _cold]:
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 
 
 ## Repaint the run in a service color and hang line labels along it.
@@ -223,6 +246,66 @@ static func segment_node(from: Vector3, to: Vector3, radius: float,
 	return root
 
 
+## Does the path turn at point k with room on both sides for a bend?
+static func _bends_at(path: Array[Vector3], k: int, bend: float) -> bool:
+	if k <= 0 or k >= path.size() - 1:
+		return false
+	var before := path[k] - path[k - 1]
+	var after := path[k + 1] - path[k]
+	if before.length() < 2.0 * bend or after.length() < 2.0 * bend:
+		return false
+	return absf(before.normalized().dot(after.normalized())) < 0.99
+
+
+## A swept 90-degree bend: a quarter torus of the pipe's radius round
+## the corner, tangent to both straights. Built once per corner with
+## SurfaceTool; the tube's normals are set explicitly and the pipe
+## materials are two-sided, so the winding need not be argued about.
+static func elbow_node(at: Vector3, dir_in: Vector3, dir_out: Vector3, radius: float,
+		bend: float, mat: Material) -> MeshInstance3D:
+	var normal := dir_in.cross(dir_out)
+	if normal.length() < 1e-4:
+		return null
+	normal = normal.normalized()
+	var center := at - dir_in * bend + dir_out * bend
+	var arc_steps := 8
+	var ring := 12
+	var rings: Array = []
+	for s in arc_steps + 1:
+		var theta := PI / 2.0 * s / arc_steps
+		var p := center - dir_out * bend * cos(theta) + dir_in * bend * sin(theta)
+		var tangent := (dir_out * sin(theta) + dir_in * cos(theta)).normalized()
+		var n2 := tangent.cross(normal).normalized()
+		var verts: Array[Vector3] = []
+		var norms: Array[Vector3] = []
+		for j in ring:
+			var phi := TAU * j / ring
+			var nrm := (normal * cos(phi) + n2 * sin(phi)).normalized()
+			verts.append(p + nrm * radius)
+			norms.append(nrm)
+		rings.append([verts, norms, theta / (PI / 2.0)])
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for s in arc_steps:
+		var r0: Array = rings[s]
+		var r1: Array = rings[s + 1]
+		for j in ring:
+			var j2 := (j + 1) % ring
+			var quad := [[r0, j], [r1, j], [r1, j2], [r0, j2]]
+			for tri: Array in [[0, 1, 2], [0, 2, 3]]:
+				for idx: int in tri:
+					var ringref: Array = quad[idx][0]
+					var jj: int = quad[idx][1]
+					st.set_normal((ringref[1] as Array[Vector3])[jj])
+					st.set_uv(Vector2(float(jj) / ring, float(ringref[2])))
+					st.add_vertex((ringref[0] as Array[Vector3])[jj])
+	st.generate_tangents()
+	var inst := MeshInstance3D.new()
+	inst.mesh = st.commit()
+	inst.material_override = mat
+	return inst
+
+
 static func joint_node(at: Vector3, radius: float, style: String,
 		mat: StandardMaterial3D) -> Node3D:
 	if style == "tray":
@@ -261,6 +344,7 @@ func _segment_collider(from: Vector3, to: Vector3, thickness: float, layer: int)
 	var body := StaticBody3D.new()
 	body.collision_layer = layer
 	body.collision_mask = 0
+	body.set_meta("run", self)  # the router routes round equipment, never round runs
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	var delta := to - from

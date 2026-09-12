@@ -297,12 +297,10 @@ func _run(world: Node) -> void:
 	await _vantage(player, Vector3(-6.9, 0.15, -2.6), Vector2(0.0, -1.0), 0.0, 0.05)
 	await _shot("user://probe_showcase_balance.png")
 
-	var bad: Array[String] = []
-	for visual: Dictionary in plant._wire_visuals:
-		var node: Node = visual["node"]
-		if node is PipeView and (node as PipeView)._unsupported:
-			bad.append("%s->%s" % [visual["a"], visual["b"]])
-	print("[probe] unsupported runs: %s" % ("none" if bad.is_empty() else ", ".join(bad)))
+	var bad := plant.unsupported_report()
+	print("[probe] unsupported runs: %s" % ("none" if bad.is_empty() else str(bad.size())))
+	for line in bad:
+		print("    " + line)
 	var overlaps := plant.overlap_report()
 	print("[probe] run overlaps: %s" % ("none" if overlaps.is_empty() else str(overlaps.size())))
 	for line in overlaps:
