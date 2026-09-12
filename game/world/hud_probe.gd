@@ -22,6 +22,13 @@ func _run() -> void:
 	_press(KEY_TAB)
 	await get_tree().create_timer(0.4).timeout
 	await _shot("user://probe_structure.png")
+	# The same view at noon and at dusk: the lighting pass reads here.
+	_press(KEY_B)
+	world.player.camera.rotation.x = 0.0
+	for shot: Array in [[12.0, "noon"], [17.7, "dusk"], [21.0, "night"]]:
+		world.set_time_of_day(float(shot[0]))
+		await get_tree().create_timer(0.5).timeout
+		await _shot("user://probe_%s.png" % str(shot[1]))
 	print("[probe] screenshots written to user://")
 	get_tree().quit()
 

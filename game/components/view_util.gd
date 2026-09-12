@@ -64,14 +64,56 @@ static func matte(color: Color) -> StandardMaterial3D:
 	return mat
 
 
+static var _brushed_normal: ImageTexture = null
+
+
 static func _stainless(mat: StandardMaterial3D) -> void:
 	mat.metallic = 0.92
 	mat.roughness = 0.34
 	mat.metallic_specular = 0.6
 	# The brushing: anisotropic highlights along the surface, which the
-	# primitive meshes' tangents carry for free.
+	# primitive meshes' tangents carry for free, and a fine grain of
+	# brush lines in a normal map projected triplanar so no primitive
+	# needs UVs that line up.
 	mat.anisotropy_enabled = true
 	mat.anisotropy = 0.55
+	mat.normal_enabled = true
+	mat.normal_texture = brushed_normal()
+	mat.normal_scale = 0.3
+	mat.uv1_triplanar = true
+	mat.uv1_scale = Vector3(4.0, 4.0, 4.0)
+
+
+## Brush lines as a normal map: streaks of smooth noise along one axis,
+## generated once (2026-09-11). Sixty-four thousand pixels, a few
+## milliseconds, no asset.
+static func brushed_normal() -> ImageTexture:
+	if _brushed_normal != null:
+		return _brushed_normal
+	var n := 256
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.seed = 20260911
+	noise.frequency = 1.0
+	var height := PackedFloat32Array()
+	height.resize(n * n)
+	for y in n:
+		for x in n:
+			# Slow along x, fast across y: long streaks.
+			height[y * n + x] = noise.get_noise_2d(x * 0.03, y * 0.9) * 0.7 \
+				+ noise.get_noise_2d(x * 0.15 + 50.0, y * 2.5) * 0.3
+	var img := Image.create(n, n, false, Image.FORMAT_RGB8)
+	for y in n:
+		for x in n:
+			var hl := height[y * n + (x + n - 1) % n]
+			var hr := height[y * n + (x + 1) % n]
+			var hu := height[((y + n - 1) % n) * n + x]
+			var hd := height[((y + 1) % n) * n + x]
+			var normal := Vector3(-(hr - hl) * 3.0, -(hd - hu) * 3.0, 1.0).normalized()
+			img.set_pixel(x, y, Color(normal.x * 0.5 + 0.5, normal.y * 0.5 + 0.5, normal.z * 0.5 + 0.5))
+	img.generate_mipmaps()
+	_brushed_normal = ImageTexture.create_from_image(img)
+	return _brushed_normal
 
 
 static func glow(color: Color, energy: float = 1.6) -> StandardMaterial3D:

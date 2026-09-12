@@ -36,12 +36,13 @@ var _loop_players: Array[AudioStreamPlayer] = []
 # their sky material) to these so one slider serves both worlds.
 const SETTINGS_PATH := "user://settings.json"
 var sun: DirectionalLight3D = null
-var sky_mat: ProceduralSkyMaterial = null
+var sky_mat: Material = null          # PhysicalSkyMaterial outdoors; a ProceduralSkyMaterial is still honoured
 var sky_env: Environment = null
 var settings: SettingsPanel
 var music_player: AudioStreamPlayer = null
 var time_of_day := 10.0
 var music_on := false
+var high_lighting := false           # SDFGI and volumetric fog, for machines that can afford them
 var _sun_base_energy := 1.5
 var _sun_base_color := Color(1.0, 0.97, 0.90)
 
@@ -83,14 +84,17 @@ func _ready() -> void:
 	settings.on_music_changed = func(on: bool) -> void:
 		set_music(on)
 		_save_settings()
+	settings.on_lighting_changed = func(on: bool) -> void:
+		set_high_lighting(on)
+		_save_settings()
 	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)
+	if DisplayServer.get_name() == "headless" and campaign != null:
+		_campaign_self_check()  # before _after_plant loads a save onto the bare ground
 	_after_plant()
 	if DisplayServer.get_name() == "headless" and with_home:
 		builder.exercise_device_menu()
-	if DisplayServer.get_name() == "headless" and campaign != null:
-		_campaign_self_check()
 	if DisplayServer.get_name() == "headless" and with_home:
 		# Ten seconds of the commissioned plant, then the annunciator:
 		# the showcase's P-402 runs against a shut head on purpose.
@@ -252,7 +256,10 @@ func set_time_of_day(hours: float) -> void:
 	var elevation := 60.0 * sin(clampf(day_frac, 0.0, 1.0) * PI)
 	var up := day_frac >= 0.0 and day_frac <= 1.0
 	var azimuth := 90.0 + clampf(day_frac, 0.0, 1.0) * 180.0
-	sun.rotation_degrees = Vector3(-(elevation if up else 8.0), azimuth, 0)
+	# Below the horizon the same light is the moon: thirty degrees up in
+	# the south, dim and blue, so night has shadows and a physical sky
+	# renders a faint moonlit dome instead of black.
+	sun.rotation_degrees = Vector3(-elevation, azimuth, 0) if up else Vector3(-30.0, 180.0, 0)
 	# Twilight: an hour either side of the horizon, night fades in and
 	# out instead of switching.
 	var twilight := 1.0
@@ -264,20 +271,55 @@ func set_time_of_day(hours: float) -> void:
 	var warm := Color(1.0, 0.62, 0.35).lerp(_sun_base_color, horizon)
 	var night := Color(0.45, 0.55, 0.80)
 	sun.light_color = night.lerp(warm, twilight)
-	sun.light_energy = lerpf(0.12, _sun_base_energy * (0.25 + 0.75 * horizon), twilight)
-	if sky_mat != null:
+	sun.light_energy = lerpf(0.35, _sun_base_energy * (0.25 + 0.75 * horizon), twilight)
+	var day_horizon := Color(0.72, 0.78, 0.84)
+	var dusk_horizon := Color(0.95, 0.55, 0.32)
+	var night_horizon := Color(0.10, 0.12, 0.18)
+	var horizon_color := night_horizon.lerp(dusk_horizon.lerp(day_horizon, horizon), twilight)
+	if sky_mat is PhysicalSkyMaterial:
+		# A low sun leaves a physical sky dim while the real one glows:
+		# lift its energy toward the horizon, and let night fade it.
+		(sky_mat as PhysicalSkyMaterial).energy_multiplier = \
+			lerpf(0.5, 2.0 + 2.0 * (1.0 - horizon), maxf(twilight, 0.25))
+	if sky_mat is ProceduralSkyMaterial:
+		# The painted sky: its colours follow the clock by hand. A
+		# physical sky needs nothing here; it follows the sun itself.
+		var painted := sky_mat as ProceduralSkyMaterial
 		var day_top := Color(0.30, 0.48, 0.72)
-		var day_horizon := Color(0.72, 0.78, 0.84)
 		var dusk_top := Color(0.16, 0.18, 0.34)
-		var dusk_horizon := Color(0.95, 0.55, 0.32)
 		var night_top := Color(0.03, 0.04, 0.08)
-		var night_horizon := Color(0.10, 0.12, 0.18)
-		sky_mat.sky_top_color = night_top.lerp(dusk_top.lerp(day_top, horizon), twilight)
-		sky_mat.sky_horizon_color = night_horizon.lerp(dusk_horizon.lerp(day_horizon, horizon), twilight)
-		sky_mat.ground_horizon_color = sky_mat.sky_horizon_color.darkened(0.15)
+		painted.sky_top_color = night_top.lerp(dusk_top.lerp(day_top, horizon), twilight)
+		painted.sky_horizon_color = horizon_color
+		painted.ground_horizon_color = horizon_color.darkened(0.15)
 	if sky_env != null:
-		sky_env.ambient_light_energy = lerpf(0.15, 0.28 + 0.30 * horizon, twilight)
-		sky_env.fog_light_color = sky_mat.sky_horizon_color if sky_mat != null else sky_env.fog_light_color
+		if sky_mat is PhysicalSkyMaterial:
+			# A physical sky's dome goes dim long before the real one
+			# stops lighting the ground, so the ambient follows the clock
+			# by hand: blue-grey by day, warm at dusk, blue at night. The
+			# sky still supplies the reflections.
+			var day_amb := Color(0.62, 0.68, 0.78)
+			var dusk_amb := Color(0.62, 0.44, 0.34)
+			var night_amb := Color(0.14, 0.18, 0.28)
+			sky_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			sky_env.ambient_light_color = night_amb.lerp(dusk_amb.lerp(day_amb, horizon), twilight)
+			sky_env.ambient_light_energy = lerpf(0.55, 0.66 + 0.04 * horizon, twilight)
+		else:
+			sky_env.ambient_light_energy = lerpf(0.25, 0.55 + 0.05 * horizon, twilight)
+		sky_env.fog_light_color = horizon_color
+
+
+## High lighting: signed-distance-field global illumination (bounce
+## light in the corners, stainless reflecting the plant around it) and
+## volumetric fog outdoors. Off by default: it costs real GPU time.
+func set_high_lighting(on: bool) -> void:
+	high_lighting = on
+	if sky_env == null:
+		return
+	sky_env.sdfgi_enabled = on
+	sky_env.sdfgi_use_occlusion = true
+	sky_env.sdfgi_bounce_feedback = 0.5
+	if sky_mat != null:  # outdoors; the hall keeps its own fog either way
+		sky_env.volumetric_fog_enabled = on
 
 
 func set_music(on: bool) -> void:
@@ -297,12 +339,14 @@ func _save_settings() -> void:
 	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
 	if file == null:
 		return
-	file.store_string(JSON.stringify({"time_of_day": time_of_day, "music": music_on}))
+	file.store_string(JSON.stringify({"time_of_day": time_of_day, "music": music_on,
+		"high_lighting": high_lighting}))
 
 
 func _load_settings() -> void:
 	var hours := time_of_day
 	var on := music_on
+	var high := high_lighting
 	if FileAccess.file_exists(SETTINGS_PATH):
 		var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
 		if file != null:
@@ -310,9 +354,11 @@ func _load_settings() -> void:
 			if parsed is Dictionary:
 				hours = float((parsed as Dictionary).get("time_of_day", hours))
 				on = bool((parsed as Dictionary).get("music", on))
+				high = bool((parsed as Dictionary).get("high_lighting", high))
 	set_time_of_day(hours)
 	set_music(on)
-	settings.set_values(time_of_day, music_on)
+	set_high_lighting(high)
+	settings.set_values(time_of_day, music_on, high_lighting)
 
 
 func _fmt_time(seconds: float) -> String:

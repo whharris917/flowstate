@@ -22,3 +22,4 @@ func _after_plant() -> void:
 	else:
 		hud.toast("Campaign. J journal — the plant proves each milestone itself · B build · C connect · L library · O options")
 	autosave_s = 120.0
+	_autosave_left = autosave_s  # the first save waits its full interval

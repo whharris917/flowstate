@@ -9,7 +9,7 @@ const GROUND_SIZE := 4000.0   # wide enough that the edge stays past the horizon
 							  # even from the top of the camera's zoom handle
 const PAD_SIZE := Vector3(16.0, 0.16, 12.0)
 
-const COL_PAD := Color(0.55, 0.55, 0.53)
+const COL_PAD := Color(0.47, 0.47, 0.45)
 const COL_SAFETY := Color(0.95, 0.78, 0.05)
 
 var _ground: MeshInstance3D
@@ -53,11 +53,20 @@ func _build_world() -> void:
 
 
 func _build_environment() -> void:
-	sky_mat = ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.30, 0.48, 0.72)
-	sky_mat.sky_horizon_color = Color(0.72, 0.78, 0.84)
-	sky_mat.ground_bottom_color = Color(0.24, 0.27, 0.25)
-	sky_mat.ground_horizon_color = Color(0.62, 0.67, 0.68)
+	# A physical sky (2026-09-11): scattering, a real sun disc and the
+	# haze at the horizon all follow the sun, so dawn and dusk come from
+	# the sun's angle rather than from hand-picked colours.
+	var physical := PhysicalSkyMaterial.new()
+	physical.rayleigh_coefficient = 2.0
+	physical.mie_coefficient = 0.006
+	physical.mie_eccentricity = 0.8
+	physical.turbidity = 6.0
+	physical.sun_disk_scale = 1.0
+	physical.ground_color = Color(0.36, 0.38, 0.36)
+	# set_time_of_day sets the energy: a physical sky is dim at a low
+	# sun and needs lifting toward dawn and dusk.
+	physical.energy_multiplier = 2.0
+	sky_mat = physical
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 
@@ -79,23 +88,38 @@ func _build_environment() -> void:
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 2.0
 	env.ssao_power = 1.8
-	# A whisper of distance fog gives the infinite plane a horizon.
+	# A whisper of distance fog gives the infinite plane a horizon, and
+	# aerial perspective lets the far plant take the sky's colour.
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.72, 0.78, 0.84)
 	env.fog_density = 0.0012
+	env.fog_aerial_perspective = 0.5
+	env.fog_sky_affect = 0.0
+	# Screen-space reflections: the stainless picks up the ground and
+	# the pipes beside it, not only the sky.
+	env.ssr_enabled = true
+	env.ssr_max_steps = 64
+	env.ssr_fade_in = 0.15
+	env.ssr_fade_out = 2.0
+	env.ssr_depth_tolerance = 0.2
+	# Volumetric fog waits on the high-lighting option (with SDFGI).
+	env.volumetric_fog_density = 0.004
+	env.volumetric_fog_albedo = Color(0.90, 0.93, 0.97)
+	env.volumetric_fog_sky_affect = 0.0
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	add_child(world_env)
 
 	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48, 32, 0)
-	sun.light_energy = 1.5
+	sun.light_energy = 1.8
 	sun.light_color = Color(1.0, 0.97, 0.90)
 	_sun_base_energy = sun.light_energy
 	_sun_base_color = sun.light_color
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 120.0
 	sun.shadow_blur = 1.5
+	sun.light_angular_distance = 0.5   # the sun's half-degree: soft penumbrae, a real disc in the sky
 	sun.directional_shadow_split_1 = 0.08
 	sun.directional_shadow_split_2 = 0.2
 	sun.directional_shadow_split_3 = 0.5

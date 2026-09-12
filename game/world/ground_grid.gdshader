@@ -8,9 +8,9 @@ shader_type spatial;
 // so no texture asset is needed (director, 2026-09-11: as realistic
 // as possible).
 
-uniform vec3 base_color : source_color = vec3(0.50, 0.50, 0.48);
-uniform vec3 minor_color : source_color = vec3(0.45, 0.45, 0.43);
-uniform vec3 major_color : source_color = vec3(0.38, 0.39, 0.38);
+uniform vec3 base_color : source_color = vec3(0.58, 0.58, 0.56);
+uniform vec3 minor_color : source_color = vec3(0.52, 0.52, 0.50);
+uniform vec3 major_color : source_color = vec3(0.44, 0.45, 0.44);
 
 varying vec3 world_pos;
 
@@ -42,7 +42,10 @@ void fragment() {
 	float mottle = value_noise(p * 0.35) * 0.6 + value_noise(p * 1.3) * 0.4;
 	float grain = value_noise(p * 14.0);
 	float speckle = step(0.965, hash2(floor(p * 40.0)));
-	float shade = 0.70 + 0.40 * mottle + 0.12 * (grain - 0.5) - 0.14 * speckle;
+	// The fine grain and the speckle fade with distance, or they alias
+	// into salt on the far plane.
+	float near = clamp(1.0 - dist / 60.0, 0.0, 1.0);
+	float shade = 0.78 + 0.30 * mottle + (0.08 * (grain - 0.5) - 0.08 * speckle) * near;
 	vec3 color = base_color * shade;
 	float fade_minor = clamp(1.0 - dist / 40.0, 0.0, 1.0);
 	float fade_major = clamp(1.0 - dist / 160.0, 0.0, 1.0);
@@ -51,4 +54,14 @@ void fragment() {
 	ALBEDO = color;
 	ROUGHNESS = 0.90 - 0.08 * grain;
 	SPECULAR = 0.15;
+	// Relief: the aggregate and the speckle pits as a normal, from the
+	// height's finite differences, so grazing light picks the surface
+	// out instead of leaving it a flat tint.
+	float e = 0.03;
+	float h0 = value_noise(p * 14.0) - 0.6 * speckle;
+	float hx = value_noise((p + vec2(e, 0.0)) * 14.0) - 0.6 * step(0.965, hash2(floor((p + vec2(e, 0.0)) * 40.0)));
+	float hz = value_noise((p + vec2(0.0, e)) * 14.0) - 0.6 * step(0.965, hash2(floor((p + vec2(0.0, e)) * 40.0)));
+	float relief = clamp(1.0 - dist / 30.0, 0.0, 1.0);
+	NORMAL_MAP = normalize(vec3(-(hx - h0) * 2.0 * relief, -(hz - h0) * 2.0 * relief, 1.0)) * 0.5 + 0.5;
+	NORMAL_MAP_DEPTH = 0.6;
 }

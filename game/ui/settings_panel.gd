@@ -7,9 +7,11 @@ extends Control
 
 var on_time_changed: Callable = Callable()
 var on_music_changed: Callable = Callable()
+var on_lighting_changed: Callable = Callable()
 var _slider: HSlider
 var _clock: Label
 var _music: CheckButton
+var _lighting: CheckButton
 
 
 func _ready() -> void:
@@ -59,6 +61,14 @@ func _ready() -> void:
 			on_music_changed.call(on))
 	column.add_child(_music)
 
+	_lighting = CheckButton.new()
+	_lighting.text = "High lighting (global illumination and fog; needs a good GPU)"
+	_lighting.button_pressed = false
+	_lighting.toggled.connect(func(on: bool) -> void:
+		if on_lighting_changed.is_valid():
+			on_lighting_changed.call(on))
+	column.add_child(_lighting)
+
 	var hint := Label.new()
 	hint.text = "O closes"
 	hint.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
@@ -66,9 +76,10 @@ func _ready() -> void:
 	_refresh_clock()
 
 
-func set_values(hours: float, music_on: bool) -> void:
+func set_values(hours: float, music_on: bool, high_lighting: bool = false) -> void:
 	_slider.set_value_no_signal(hours)
 	_music.set_pressed_no_signal(music_on)
+	_lighting.set_pressed_no_signal(high_lighting)
 	_refresh_clock()
 
 

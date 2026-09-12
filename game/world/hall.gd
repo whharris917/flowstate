@@ -61,6 +61,8 @@ func _build_environment() -> void:
 	env.volumetric_fog_enabled = true
 	env.volumetric_fog_density = 0.008
 	env.volumetric_fog_albedo = Color(0.9, 0.92, 0.95)
+	env.ssr_enabled = true
+	env.ssr_max_steps = 64
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
 	add_child(world_env)
@@ -68,6 +70,7 @@ func _build_environment() -> void:
 	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-58, 28, 0)
 	sun.light_energy = 1.6
+	sun.light_angular_distance = 0.5
 	sun.light_color = Color(1.0, 0.97, 0.92)
 	_sun_base_energy = sun.light_energy
 	_sun_base_color = sun.light_color
