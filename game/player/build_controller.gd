@@ -219,8 +219,12 @@ func _update_hud() -> void:
 		Mode.PLACE:
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
 				"ROUTING & SIGNS", "CONTROL", "UTILITIES"]
-			menu.show_page("%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 7]],
-				_catalog(), icons, catalog_index)
+			var entries := _catalog()
+			catalog_index = mini(catalog_index, maxi(entries.size() - 1, 0))
+			var heading := "%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 7]]
+			if entries.is_empty():
+				heading += "  ·  nothing unlocked here yet — J for the journal"
+			menu.show_page(heading, entries, icons, catalog_index)
 			if _is_stretch():
 				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
 				var step := "click a supported START point" if _beam_anchor == Vector3.INF \
@@ -468,6 +472,10 @@ func _update_ghost() -> void:
 		return
 	_beam_ghost.visible = false
 	_clear_route()
+	if _current_type() == "":
+		_clear_ghost()
+		_ghost_valid = false
+		return
 	_refresh_ghost_asset()
 	if _ghost == null:
 		return
@@ -625,7 +633,25 @@ func _beam_aim(_space: PhysicsDirectSpaceState3D) -> Vector3:
 	return Vector3(snappedf(point.x, 0.25), point.y, snappedf(point.z, 0.25))
 
 
+## The page's entries, less whatever the campaign has not unlocked.
 func _catalog() -> Array[Dictionary]:
+	var entries := _page_catalog()
+	if plant.campaign == null:
+		return entries
+	var open: Array[Dictionary] = []
+	for entry in entries:
+		if plant.is_unlocked(str(entry["type"])):
+			open.append(entry)
+	return open
+
+
+## A milestone just unlocked something: redraw the page if it is up.
+func refresh_menu() -> void:
+	if mode == Mode.PLACE:
+		_update_hud()
+
+
+func _page_catalog() -> Array[Dictionary]:
 	match page:
 		0: return PlantFactory.CATALOG
 		1: return PlantFactory.CATALOG_SEPARATION
@@ -642,7 +668,10 @@ func _is_equipment_page() -> bool:
 
 
 func _current_type() -> String:
-	return _catalog()[catalog_index]["type"]
+	var entries := _catalog()
+	if catalog_index >= entries.size():
+		return ""  # a page with nothing unlocked on it
+	return entries[catalog_index]["type"]
 
 
 func _current_footprint() -> Vector3:

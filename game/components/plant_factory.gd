@@ -28,6 +28,7 @@ const CATALOG_UTILITIES: Array[Dictionary] = [
 ]
 
 const CATALOG_INSTRUMENTS: Array[Dictionary] = [
+	{"type": "float_switch", "label": "Level switch"},
 	{"type": "gauge_level", "label": "Level gauge"},
 	{"type": "gauge_flow", "label": "Flow gauge"},
 	{"type": "gauge_dp", "label": "DP gauge"},
@@ -406,6 +407,16 @@ static func make_view(type_id: String, record: SimComponent,
 	view.set_meta("type_id", type_id)
 	view.set_meta("record_name", record.comp_name)
 	return view
+
+
+## The build-menu label of a type, for the journal and toasts.
+static func label_for(type_id: String) -> String:
+	for catalog: Array in [CATALOG, CATALOG_SEPARATION, CATALOG_INSTRUMENTS,
+			CATALOG_CONTROL, CATALOG_UTILITIES]:
+		for entry: Dictionary in catalog:
+			if str(entry["type"]) == type_id:
+				return str(entry["label"])
+	return type_id
 
 
 ## Call after the view is in the tree and set up: builds the typed port

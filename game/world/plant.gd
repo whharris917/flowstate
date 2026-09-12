@@ -57,6 +57,15 @@ var _support_exercise_wait: int = 0
 ## run only with it.
 var build_home := true
 
+## The campaign ladder, when this world is gated (null: everything is
+## available). The build controller asks is_unlocked before offering
+## a type; place() itself never refuses, so loaders and showcases work.
+var campaign: Milestones = null
+
+
+func is_unlocked(type_id: String) -> bool:
+	return campaign == null or campaign.unlocked(type_id)
+
 
 func _ready() -> void:
 	_new_graph()
@@ -1968,6 +1977,7 @@ func save_game() -> bool:
 		})
 	var payload := {
 		"version": SAVE_VERSION, "time": sim.time, "junction_boxes": jb_list,
+		"campaign": campaign.state_dict() if campaign != null else {},
 		"control_stations": station_list,
 		"components": comps, "wires": wire_list, "structures": struct_list,
 		"runs": run_list, "cabinets": cab_list,
@@ -2045,6 +2055,8 @@ func load_game() -> bool:
 	if not parsed is Dictionary or int((parsed as Dictionary).get("version", 0)) < 3:
 		return false
 	var payload := parsed as Dictionary
+	if campaign != null and payload.has("campaign"):
+		campaign.apply_state(payload["campaign"])
 
 	for name_: String in views:
 		if not member_of.has(name_):  # members share the cabinet node

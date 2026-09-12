@@ -16,7 +16,11 @@ var plant_height := 0.0
 var plant_save_path := "user://save.json"
 var with_suite := true            # build the aseptic annex + air cascade
 var with_home := true             # the commissioned starting loop and its HMI
+var with_campaign := false        # the milestone ladder gates the build menu
 var with_hum := true              # machine-room ambience loop
+var campaign: Milestones = null
+var journal: MilestonePanel = null
+var _journal_refresh := 0.0
 var reverb_room_size := 0.85
 var reverb_wet := 0.25
 
@@ -46,6 +50,9 @@ func _ready() -> void:
 	plant.save_path = plant_save_path
 	plant.build_suite = with_suite
 	plant.build_home = with_home
+	if with_campaign:
+		campaign = Milestones.new()
+		plant.campaign = campaign
 	add_child(plant)
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -62,6 +69,8 @@ func _ready() -> void:
 	plant.ladder_panel = ladder_panel
 	library = LibraryPanel.new()
 	layer.add_child(library)
+	journal = MilestonePanel.new()
+	layer.add_child(journal)
 	settings = SettingsPanel.new()
 	layer.add_child(settings)
 	settings.on_time_changed = func(hours: float) -> void:
@@ -76,6 +85,8 @@ func _ready() -> void:
 	_after_plant()
 	if DisplayServer.get_name() == "headless" and with_home:
 		builder.exercise_device_menu()
+	if DisplayServer.get_name() == "headless" and campaign != null:
+		_campaign_self_check()
 	_load_settings()
 	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
 
@@ -85,13 +96,60 @@ func _build_world() -> void:
 	pass
 
 
+## Headless: the ladder starts at the bottom, nothing is met on bare
+## ground, and the first rung unlocks the pump.
+func _campaign_self_check() -> void:
+	var problems: Array[String] = []
+	if not campaign.unlocked("tank") or campaign.unlocked("pump") or not campaign.unlocked("s_column"):
+		problems.append("base gating wrong")
+	var first := campaign.current()
+	if str(first.get("id", "")) != "first_water":
+		problems.append("ladder does not start at first_water")
+	else:
+		for req: Dictionary in first["requires"]:
+			var p := campaign.progress(plant, req)
+			if bool(p["done"]):
+				problems.append("'%s' met on bare ground" % p["label"])
+	if not campaign.tick(plant).is_empty():
+		problems.append("a milestone completed on bare ground")
+	campaign.done.append("first_water")
+	if not campaign.unlocked("pump") or campaign.unlocked("relay"):
+		problems.append("first_water unlocks the wrong things")
+	var saved := campaign.state_dict()
+	campaign.done.clear()
+	campaign.apply_state(saved)
+	if not campaign.unlocked("pump"):
+		problems.append("campaign state did not round-trip")
+	campaign.done.clear()
+	if problems.is_empty():
+		print("[flowstate] campaign self-check OK — %d milestones, none met on bare ground, the first unlocks the pump"
+			% Milestones.LADDER.size())
+	else:
+		print("[flowstate] campaign self-check FAILED: " + ", ".join(problems))
+
+
 ## Commissioned equipment specific to one world, placed through the
 ## plant's build API once it exists. Override where needed.
 func _after_plant() -> void:
 	pass
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if campaign != null:
+		var finished := campaign.tick(plant)
+		if not finished.is_empty():
+			var names: PackedStringArray = PackedStringArray()
+			for type_id: String in finished["unlocks"]:
+				names.append(PlantFactory.label_for(type_id))
+			hud.toast("MILESTONE — %s.%s" % [finished["title"],
+				("  Unlocked: " + ", ".join(names)) if not names.is_empty() else "  The ladder is complete."])
+			EquipmentAudio.play_once(player, "res://audio/beep.wav", Vector3.ZERO, -6.0, 1.6)
+			builder.refresh_menu()
+		if journal.visible:
+			_journal_refresh -= delta
+			if _journal_refresh <= 0.0:
+				_journal_refresh = 0.5
+				journal.refresh(campaign, plant)
 	var view := player.look_view()
 	if builder.is_editing():
 		view = null  # the pointer, not the player's crosshair, is what matters
@@ -115,6 +173,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		# page can be read, and stop the player walking off behind it.
 		player.input_locked = library.visible
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if library.visible \
+			else Input.MOUSE_MODE_CAPTURED
+	elif event.is_action_pressed("journal") and campaign != null:
+		journal.toggle()
+		if journal.visible:
+			journal.refresh(campaign, plant)
+		player.input_locked = journal.visible
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if journal.visible \
 			else Input.MOUSE_MODE_CAPTURED
 	elif event.is_action_pressed("options"):
 		settings.toggle()
