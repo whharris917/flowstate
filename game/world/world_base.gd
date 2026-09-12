@@ -276,8 +276,10 @@ func set_time_of_day(hours: float) -> void:
 	if sky_mat is PhysicalSkyMaterial:
 		# A low sun leaves a physical sky dim while the real one glows:
 		# lift its energy toward the horizon, and let night fade it.
+		# Lower at high sun than at a low one: a bright dome tone-maps
+		# toward grey, and a crisp day wants its blue kept.
 		(sky_mat as PhysicalSkyMaterial).energy_multiplier = \
-			lerpf(0.5, 2.0 + 2.0 * (1.0 - horizon), maxf(twilight, 0.25))
+			lerpf(0.5, 1.4 + 1.6 * (1.0 - horizon), maxf(twilight, 0.25))
 	if sky_mat is ProceduralSkyMaterial:
 		# The painted sky: its colours follow the clock by hand. A
 		# physical sky needs nothing here; it follows the sun itself.

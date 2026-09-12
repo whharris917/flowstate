@@ -58,10 +58,13 @@ func _build_environment() -> void:
 	# haze at the horizon all follow the sun, so dawn and dusk come from
 	# the sun's angle rather than from hand-picked colours.
 	var physical := PhysicalSkyMaterial.new()
-	physical.rayleigh_coefficient = 2.0
-	physical.mie_coefficient = 0.006
-	physical.mie_eccentricity = 0.8
-	physical.turbidity = 6.0
+	# A crisp autumn day (director, 2026-09-12): clean air, deep blue,
+	# little haze around the sun.
+	physical.rayleigh_coefficient = 3.0
+	physical.rayleigh_color = Color(0.20, 0.38, 0.90)   # a saturated scatter: the blue survives tone mapping
+	physical.mie_coefficient = 0.0025
+	physical.mie_eccentricity = 0.75
+	physical.turbidity = 2.5
 	physical.sun_disk_scale = 1.0
 	physical.ground_color = Color(0.36, 0.38, 0.36)
 	# set_time_of_day sets the energy: a physical sky is dim at a low
@@ -93,8 +96,8 @@ func _build_environment() -> void:
 	# aerial perspective lets the far plant take the sky's colour.
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.72, 0.78, 0.84)
-	env.fog_density = 0.0012
-	env.fog_aerial_perspective = 0.5
+	env.fog_density = 0.0005
+	env.fog_aerial_perspective = 0.25
 	env.fog_sky_affect = 0.0
 	# Screen-space reflections: the stainless picks up the ground and
 	# the pipes beside it, not only the sky.

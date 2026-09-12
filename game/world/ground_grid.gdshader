@@ -6,9 +6,12 @@ shader_type spatial;
 // that grain — drawn in world space so the mesh can follow the player
 // without the pattern swimming. No grid: the build ghost snaps anyway.
 
-uniform vec3 base_color : source_color = vec3(0.24, 0.36, 0.13);
-uniform vec3 dry_color : source_color = vec3(0.46, 0.44, 0.21);
-uniform vec3 dark_color : source_color = vec3(0.12, 0.21, 0.08);
+// Uniformly green (director, 2026-09-12: the straw drifts read as a
+// drought): the "dry" tone is only a lighter, warmer green, and it
+// mixes in lightly.
+uniform vec3 base_color : source_color = vec3(0.22, 0.36, 0.12);
+uniform vec3 dry_color : source_color = vec3(0.34, 0.44, 0.15);
+uniform vec3 dark_color : source_color = vec3(0.13, 0.24, 0.08);
 
 varying vec3 world_pos;
 
@@ -38,8 +41,8 @@ void fragment() {
 	float clumps = value_noise(p * 2.2 + 3.0);
 	// Blades: fine grain that only matters close up.
 	float blades = value_noise(p * 38.0) * near;
-	vec3 color = mix(base_color, dry_color, smoothstep(0.52, 0.86, patches));
-	color = mix(color, dark_color, (1.0 - clumps) * 0.35);
+	vec3 color = mix(base_color, dry_color, smoothstep(0.45, 0.90, patches) * 0.55);
+	color = mix(color, dark_color, (1.0 - clumps) * 0.30);
 	color *= 0.92 + 0.22 * (blades - 0.5 * near);
 	ALBEDO = color;
 	ROUGHNESS = 0.96;
