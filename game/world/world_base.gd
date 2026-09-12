@@ -23,6 +23,8 @@ var journal: MilestonePanel = null
 var _journal_refresh := 0.0
 var autosave_s := 0.0             # > 0: save this often, and on quit
 var _autosave_left := 0.0
+var alarms := SimAlarms.new()
+var _alarm_scan_left := 0.0
 var reverb_room_size := 0.85
 var reverb_wet := 0.25
 
@@ -89,6 +91,15 @@ func _ready() -> void:
 		builder.exercise_device_menu()
 	if DisplayServer.get_name() == "headless" and campaign != null:
 		_campaign_self_check()
+	if DisplayServer.get_name() == "headless" and with_home:
+		# Ten seconds of the commissioned plant, then the annunciator:
+		# the showcase's P-402 runs against a shut head on purpose.
+		for _i in roundi(10.0 / Plant.SIM_DT):
+			plant.sim.tick()
+		var names := PackedStringArray()
+		for alarm: Dictionary in alarms.scan(plant.sim):
+			names.append("%s %s" % [alarm["tag"], alarm["text"]])
+		print("[flowstate] alarm scan — %d active: %s" % [names.size(), "; ".join(names)])
 	_load_settings()
 	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
 
@@ -148,6 +159,17 @@ func _process(delta: float) -> void:
 			_autosave_left = autosave_s
 			if plant.save_game():
 				hud.toast("autosaved")
+	# The annunciator: scan twice a second, ring once per new alarm.
+	_alarm_scan_left -= delta
+	if _alarm_scan_left <= 0.0:
+		_alarm_scan_left = 0.5
+		var active := alarms.scan(plant.sim)
+		var lines := PackedStringArray()
+		for alarm: Dictionary in active:
+			lines.append(SimAlarms.line(alarm, plant.sim.time))
+		hud.set_alarms(lines)
+		if not alarms.new_keys.is_empty():
+			EquipmentAudio.play_once(player, "res://audio/beep.wav", Vector3.ZERO, -10.0, 0.8)
 	if campaign != null:
 		var finished := campaign.tick(plant)
 		if not finished.is_empty():

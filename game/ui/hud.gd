@@ -7,6 +7,7 @@ var _look_label: Label
 var _readout_label: Label
 var _toast_label: Label
 var _mode_label: Label
+var _alarm_label: Label
 var _toast_tween: Tween
 
 
@@ -44,6 +45,17 @@ func _ready() -> void:
 	_mode_label.offset_bottom = -12.0
 	_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 
+	# Active alarms, top right: the annunciator. Hidden when the plant
+	# has nothing to say.
+	_alarm_label = _make_label(HORIZONTAL_ALIGNMENT_RIGHT)
+	_alarm_label.set_anchors_and_offsets_preset(PRESET_TOP_RIGHT)
+	_alarm_label.offset_left = -520.0
+	_alarm_label.offset_right = -12.0
+	_alarm_label.offset_top = 10.0
+	_alarm_label.offset_bottom = 160.0
+	_alarm_label.add_theme_color_override("font_color", Color(0.98, 0.45, 0.35))
+	_alarm_label.visible = false
+
 
 func _make_label(align: HorizontalAlignment) -> Label:
 	var label := Label.new()
@@ -69,6 +81,19 @@ func set_look_text(text: String) -> void:
 
 func set_readout_text(text: String) -> void:
 	_readout_label.text = text
+
+
+## The annunciator: one line per active alarm, oldest first, at most
+## six with a count of the rest.
+func set_alarms(lines: PackedStringArray) -> void:
+	if lines.is_empty():
+		_alarm_label.visible = false
+		return
+	var shown := lines.slice(0, mini(lines.size(), 6))
+	if lines.size() > 6:
+		shown.append("… and %d more" % (lines.size() - 6))
+	_alarm_label.text = "\n".join(shown)
+	_alarm_label.visible = true
 
 
 func set_mode_text(text: String) -> void:
