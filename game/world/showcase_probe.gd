@@ -301,6 +301,10 @@ func _run(world: Node) -> void:
 	print("[probe] unsupported runs: %s" % ("none" if bad.is_empty() else str(bad.size())))
 	for line in bad:
 		print("    " + line)
+	var crossings := plant.crossing_report()
+	print("[probe] run crossings: %s" % ("none" if crossings.is_empty() else str(crossings.size())))
+	for line in crossings:
+		print("    " + line)
 	var overlaps := plant.overlap_report()
 	print("[probe] run overlaps: %s" % ("none" if overlaps.is_empty() else str(overlaps.size())))
 	for line in overlaps:

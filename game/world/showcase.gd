@@ -413,7 +413,7 @@ static func _unit_300(plant: Plant) -> void:
 		# tray centreline is straight through the beam under it.
 		var drop_x := _drop_x(minf(at.x, TRAY_END))
 		var path: Array[Vector3] = [plant.to_local(riser_top), plant.to_local(tray_in),
-			plant.to_local(Vector3(drop_x, 3.6, 2.1)), plant.to_local(Vector3(drop_x, 3.6, 2.7)),
+			plant.to_local(Vector3(drop_x, 3.6, 2.1)), plant.to_local(Vector3(drop_x, 3.6, 2.5)),
 			plant.to_local(at)]
 		plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), str(load[0]), "power", path)
 

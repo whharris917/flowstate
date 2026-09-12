@@ -108,6 +108,8 @@ func _ready() -> void:
 		ms_ui, ms_after])
 	print("[flowstate] router: %d searches (%d failed), %d cells expanded, %d ms"
 		% [PipeRoute.searches, PipeRoute.failures, PipeRoute.expansions, PipeRoute.search_usec / 1000])
+	_load_settings()
+	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
 	if DisplayServer.get_name() == "headless" and with_home:
 		builder.exercise_device_menu()
 	if DisplayServer.get_name() == "headless" and with_home:
@@ -119,23 +121,33 @@ func _ready() -> void:
 		for alarm: Dictionary in alarms.scan(plant.sim):
 			names.append("%s %s" % [alarm["tag"], alarm["text"]])
 		print("[flowstate] alarm scan — %d active: %s" % [names.size(), "; ".join(names)])
-		# Runs sharing the same space: a walkdown finding the smoke run
-		# now makes before the director does.
-		var unsupported := plant.unsupported_report()
-		print("[flowstate] unsupported runs: %s" % ("none" if unsupported.is_empty() else str(unsupported.size())))
-		for line in unsupported:
-			print("    " + line)
+		_report_in = 20  # after the deferred routing pass has settled, see _process
 
-		var overlaps := plant.overlap_report()
-		print("[flowstate] run overlaps: %d" % overlaps.size())
-		for line in overlaps:
-			print("    " + line)
-		var fanouts := plant.fanout_report()
-		print("[flowstate] ports with more than one wire: %d" % fanouts.size())
-		for line in fanouts:
-			print("    " + line)
-	_load_settings()
-	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
+
+var _report_in: int = 0
+
+
+## Runs sharing the same space, or through each other, or in the air:
+## the walkdown findings the smoke run makes before the director does.
+## Frames after startup, so the deferred routing pass has run.
+func _headless_reports() -> void:
+	var unsupported := plant.unsupported_report()
+	print("[flowstate] unsupported runs: %s" % ("none" if unsupported.is_empty() else str(unsupported.size())))
+	for line in unsupported:
+		print("    " + line)
+
+	var crossings := plant.crossing_report()
+	print("[flowstate] run crossings: %s" % ("none" if crossings.is_empty() else str(crossings.size())))
+	for line in crossings:
+		print("    " + line)
+	var overlaps := plant.overlap_report()
+	print("[flowstate] run overlaps: %d" % overlaps.size())
+	for line in overlaps:
+		print("    " + line)
+	var fanouts := plant.fanout_report()
+	print("[flowstate] ports with more than one wire: %d" % fanouts.size())
+	for line in fanouts:
+		print("    " + line)
 
 
 ## Environment, geometry, lighting. Override in each world.
@@ -187,6 +199,10 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if _report_in > 0:
+		_report_in -= 1
+		if _report_in == 0:
+			_headless_reports()
 	if autosave_s > 0.0 and DisplayServer.get_name() != "headless":
 		_autosave_left -= delta
 		if _autosave_left <= 0.0:
