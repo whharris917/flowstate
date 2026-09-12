@@ -30,6 +30,12 @@ func _run() -> void:
 		world.set_time_of_day(float(shot[0]))
 		await get_tree().create_timer(0.5).timeout
 		await _shot("user://probe_%s.png" % str(shot[1]))
+	# The night sky from outside the hall, looking up past the roof line.
+	world.player.global_position = Vector3(-30.0, 0.35, 0.0)
+	world.player.rotation.y = PI / 2.0
+	world.player.camera.rotation.x = 0.55
+	await get_tree().create_timer(0.5).timeout
+	await _shot("user://probe_night_sky.png")
 	print("[probe] screenshots written to user://")
 	get_tree().quit()
 

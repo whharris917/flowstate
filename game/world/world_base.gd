@@ -318,6 +318,14 @@ func set_time_of_day(hours: float) -> void:
 		else:
 			sky_env.ambient_light_energy = lerpf(0.25, 0.55 + 0.05 * horizon, twilight)
 		sky_env.fog_light_color = horizon_color
+	_on_time_of_day(horizon, twilight)
+
+
+## A world's own response to the clock: hall lights, stars. horizon is
+## 0 at the horizon and 1 with the sun 20 degrees up; twilight is 1 by
+## day and 0 by night.
+func _on_time_of_day(_horizon: float, _twilight: float) -> void:
+	pass
 
 
 ## High lighting: signed-distance-field global illumination (bounce

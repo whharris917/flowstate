@@ -13,6 +13,21 @@ const COL_PAD := Color(0.47, 0.47, 0.45)
 const COL_SAFETY := Color(0.95, 0.78, 0.05)
 
 var _ground: MeshInstance3D
+var _stars: MeshInstance3D
+var _stars_mat: ShaderMaterial
+var _hall_lights: Array[OmniLight3D] = []
+var _hall_lamp_mat: StandardMaterial3D = null
+
+# The hall over the showcase (director, 2026-09-12): walls and a roof
+# round the developed slab, glass bands for daylight, skylight strips,
+# high-bay lights that come up with dusk. Sandbox only.
+const HALL_MIN := Vector3(-14.0, 0.0, -12.0)
+const HALL_MAX := Vector3(58.0, 18.0, 46.0)
+const WALL_T := 0.3
+const COL_HALL_WALL := Color(0.82, 0.82, 0.79)
+const COL_HALL_ROOF := Color(0.30, 0.31, 0.33)
+const COL_HALL_STEEL := Color(0.16, 0.17, 0.19)
+const COL_HALL_GLASS := Color(0.72, 0.84, 0.95, 0.22)
 
 
 func _init() -> void:
@@ -137,9 +152,23 @@ func _build_environment() -> void:
 	_sun_base_energy = sun.light_energy
 	_sun_base_color = sun.light_color
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 120.0
+	sun.directional_shadow_max_distance = 200.0  # the hall roof must shade its whole floor
 	sun.shadow_blur = 1.5
 	sun.light_angular_distance = 0.5   # the sun's half-degree: soft penumbrae, a real disc in the sky
+
+	# Stars on a dome that follows the player; visibility follows the clock.
+	_stars_mat = ShaderMaterial.new()
+	_stars_mat.shader = load("res://world/stars.gdshader")
+	var dome := SphereMesh.new()
+	dome.radius = 1500.0
+	dome.height = 3000.0
+	dome.radial_segments = 32
+	dome.rings = 16
+	_stars = MeshInstance3D.new()
+	_stars.mesh = dome
+	_stars.material_override = _stars_mat
+	_stars.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_stars)
 	sun.directional_shadow_split_1 = 0.08
 	sun.directional_shadow_split_2 = 0.2
 	sun.directional_shadow_split_3 = 0.5
@@ -155,6 +184,7 @@ func _after_plant() -> void:
 	# on the grass; the blank map keeps just the pad.
 	_static_box(Vector3(72.0, 0.5, 58.0), Vector3(22.0, plant_height - 0.25, 17.0), COL_PAD,
 		WorldBase.tile_floor())
+	_build_enclosure()
 	plant.place("column", "still_column", {}, Vector3(7.0, 0.08, -4.0), 0.0, true)
 	plant.place("gauge_press", "pi_still_top", {}, Vector3(7.5, 9.72, -3.4), PI, true)
 	plant.connect_equipment("still_column", "p_top", "pi_still_top", "process",
@@ -173,3 +203,125 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	_ground.position = Vector3(snappedf(player.global_position.x, 2.0), 0.0,
 		snappedf(player.global_position.z, 2.0))
+	if _stars != null:
+		_stars.position = player.global_position
+
+
+## Stars come out as twilight goes; the hall lights come up with it.
+func _on_time_of_day(_horizon: float, twilight: float) -> void:
+	if _stars_mat != null:
+		_stars_mat.set_shader_parameter("visibility", 1.0 - twilight)
+	for light in _hall_lights:
+		light.light_energy = lerpf(3.2, 1.0, twilight)
+	if _hall_lamp_mat != null:
+		_hall_lamp_mat.emission_energy_multiplier = lerpf(4.0, 1.5, twilight)
+
+
+## ---- the hall -------------------------------------------------------------
+
+func _build_enclosure() -> void:
+	var y0 := plant_height
+	var top := HALL_MAX.y
+	var cx := (HALL_MIN.x + HALL_MAX.x) / 2.0
+	var cz := (HALL_MIN.z + HALL_MAX.z) / 2.0
+	var lx := HALL_MAX.x - HALL_MIN.x
+	var lz := HALL_MAX.z - HALL_MIN.z
+	# Up each wall: sill, window band, wall, clerestory, wall.
+	var bands: Array = [[0.0, 2.6, false], [2.6, 5.6, true], [5.6, 12.4, false],
+		[12.4, 14.8, true], [14.8, top, false]]
+	# Roller-door openings in the sill band: west by the pad, east by
+	# Unit 300. Their lintel is the window band.
+	_wall(Vector3(HALL_MIN.x, y0, cz), lz, true, bands, [-6.0, 2.0])
+	_wall(Vector3(HALL_MAX.x, y0, cz), lz, true, bands, [8.0, 16.0])
+	_wall(Vector3(cx, y0, HALL_MIN.z), lx, false, bands, [])
+	_wall(Vector3(cx, y0, HALL_MAX.z), lx, false, bands, [])
+	# Roof: 4 m panels with 2 m skylight strips between, running the
+	# hall's depth, so the sun comes in in stripes.
+	var x := HALL_MIN.x
+	while x < HALL_MAX.x - 0.01:
+		var w := minf(4.0, HALL_MAX.x - x)
+		_static_box(Vector3(w, 0.3, lz), Vector3(x + w / 2.0, y0 + top + 0.15, cz), COL_HALL_ROOF)
+		x += w
+		if x < HALL_MAX.x - 0.01:
+			var g := minf(2.0, HALL_MAX.x - x)
+			_glass_box(Vector3(g, 0.12, lz), Vector3(x + g / 2.0, y0 + top + 0.06, cz))
+			x += g
+	# Steel: a column at each wall every 12 m and a roof beam across.
+	var bx := HALL_MIN.x + 6.0
+	while bx < HALL_MAX.x:
+		for wall_z: float in [HALL_MIN.z + 0.45, HALL_MAX.z - 0.45]:
+			_static_box(Vector3(0.45, top, 0.45), Vector3(bx, y0 + top / 2.0, wall_z), COL_HALL_STEEL)
+		_static_box(Vector3(0.5, 0.8, lz - 0.6), Vector3(bx, y0 + top - 0.4, cz), COL_HALL_STEEL)
+		bx += 12.0
+	# High-bay lights on a 12 m grid under the beams.
+	_hall_lamp_mat = ViewUtil.glow(Color(1.0, 0.97, 0.90), 2.0)
+	var fx := HALL_MIN.x + 6.0
+	while fx < HALL_MAX.x:
+		var fz := HALL_MIN.z + 6.0
+		while fz < HALL_MAX.z:
+			_high_bay(Vector3(fx, y0 + top - 1.3, fz))
+			fz += 12.0
+		fx += 12.0
+
+
+## One wall as its bands; a door interval (in the wall's long axis,
+## world coordinates) is cut from the sill band only.
+func _wall(center: Vector3, length: float, along_z: bool, bands: Array, door: Array) -> void:
+	for band: Array in bands:
+		var b0 := float(band[0])
+		var b1 := float(band[1])
+		var glass := bool(band[2])
+		var h := b1 - b0
+		var y := center.y + b0 + h / 2.0
+		var segments: Array = [[-length / 2.0, length / 2.0]]
+		if not door.is_empty() and b0 == 0.0:
+			var along := center.z if along_z else center.x
+			segments = [[-length / 2.0, float(door[0]) - along], [float(door[1]) - along, length / 2.0]]
+		for seg: Array in segments:
+			var s0 := float(seg[0])
+			var s1 := float(seg[1])
+			if s1 - s0 <= 0.01:
+				continue
+			var mid := (s0 + s1) / 2.0
+			var size := Vector3(WALL_T, h, s1 - s0) if along_z else Vector3(s1 - s0, h, WALL_T)
+			var pos := Vector3(center.x, y, center.z + mid) if along_z else Vector3(center.x + mid, y, center.z)
+			if glass:
+				_glass_box(size, pos)
+			else:
+				_static_box(size, pos, COL_HALL_WALL)
+
+
+## Glass: walkable-into, see-through, and no shadow, so the sun comes
+## through it.
+func _glass_box(size: Vector3, pos: Vector3) -> void:
+	var body := StaticBody3D.new()
+	body.position = pos
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	body.add_child(shape)
+	var mesh := MeshInstance3D.new()
+	var box_mesh := BoxMesh.new()
+	box_mesh.size = size
+	mesh.mesh = box_mesh
+	mesh.material_override = ViewUtil.flat(COL_HALL_GLASS)
+	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.add_child(mesh)
+	add_child(body)
+
+
+## A high-bay fixture: a lit housing and the light it throws.
+func _high_bay(pos: Vector3) -> void:
+	ViewUtil.box(self, Vector3(1.2, 0.18, 0.5), pos + Vector3(0, 0.12, 0), ViewUtil.flat(COL_HALL_STEEL))
+	var lens := ViewUtil.box(self, Vector3(1.1, 0.04, 0.42), pos, _hall_lamp_mat)
+	lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var light := OmniLight3D.new()
+	light.position = pos + Vector3(0, -0.3, 0)
+	light.light_color = Color(1.0, 0.96, 0.88)
+	light.light_energy = 1.0
+	light.omni_range = 30.0
+	light.omni_attenuation = 1.4
+	light.shadow_enabled = false
+	add_child(light)
+	_hall_lights.append(light)
