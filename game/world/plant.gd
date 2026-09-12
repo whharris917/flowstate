@@ -933,9 +933,12 @@ func refresh_wires_of(name_: String) -> void:
 		if str(visual["a"]) != name_ and str(visual["b"]) != name_:
 			continue
 		(visual["node"] as Node).queue_free()
+		visual["path"] = []  # not a collision with its own old route
 		var pipe := _build_pipe(str(visual["a"]), str(visual["a_port"]),
 			str(visual["b"]), str(visual["b_port"]), visual["waypoints"])
 		visual["node"] = pipe
+		visual["lane"] = int(pipe.get_meta("lane", 0))
+		visual["path"] = pipe.get_meta("path", [])
 		if str(visual.get("color", "")) != "":
 			pipe.apply_service(Color.html(str(visual["color"])), str(visual.get("label", "")))
 		if str(visual.get("fitting", "")) != "":
@@ -1417,16 +1420,84 @@ func _revalidate_supports() -> void:
 	for visual in _wire_visuals:
 		if visual["node"] == null:
 			continue  # internal cabinet wire, nothing physical to carry
-		var path := PipeRoute.routed(
-			_marker_pos(str(visual["a"]), str(visual["a_port"])),
-			_marker_dir(str(visual["a"]), str(visual["a_port"])),
-			_marker_pos(str(visual["b"]), str(visual["b_port"])),
-			_marker_dir(str(visual["b"]), str(visual["b_port"])),
-			visual["waypoints"])
-		_apply_support_path(visual["node"] as PipeView, path, space)
+		_apply_support_path(visual["node"] as PipeView, _visual_path(visual), space)
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
 		_apply_support(entry["node"] as PipeView, entry["points"], space)
+
+
+## Runs sharing the same space (director's walkdown, 2026-09-12): every
+## pair of parallel segments closer than their two radii for longer
+## than min_length, worst first. Trays are left out: a conduit in a
+## tray is where it belongs.
+func overlap_report(min_length: float = 0.5) -> PackedStringArray:
+	var paths: Array[Dictionary] = []
+	for visual in _wire_visuals:
+		if visual["node"] == null:
+			continue
+		var view := visual["node"] as PipeView
+		if view.style() == "tray":
+			continue
+		paths.append({"name": "%s.%s -> %s.%s" % [visual["a"], visual["a_port"], visual["b"], visual["b_port"]],
+			"path": _visual_path(visual), "r": view.radius(),
+			"from": "%s.%s" % [visual["a"], visual["a_port"]], "to": "%s.%s" % [visual["b"], visual["b_port"]]})
+	for name_: String in runs:
+		var entry: Dictionary = runs[name_]
+		var view := entry["node"] as PipeView
+		if view.style() == "tray":
+			continue
+		paths.append({"name": name_, "path": PipeRoute.orthogonalize(entry["points"]), "r": view.radius(),
+			"from": "", "to": ""})
+	var found: Array = []
+	for i in paths.size():
+		var pa: Array = paths[i]["path"]
+		for j in range(i + 1, paths.size()):
+			var pb: Array = paths[j]["path"]
+			var gap := float(paths[i]["r"]) + float(paths[j]["r"])
+			var worst := 0.0
+			var where := Vector3.ZERO
+			for s in range(pa.size() - 1):
+				for t in range(pb.size() - 1):
+					var got := _segment_overlap(pa[s], pa[s + 1], pb[t], pb[t + 1], gap)
+					if got[0] > worst:
+						worst = got[0]
+						where = got[1]
+			var shared: bool = str(paths[i]["from"]) != "" and (str(paths[i]["from"]) == str(paths[j]["from"])
+				or str(paths[i]["to"]) == str(paths[j]["to"]))
+			if worst >= (maxf(min_length, 2.0) if shared else min_length):
+				found.append([worst, "%s ∥ %s for %.1f m near (%.1f, %.1f, %.1f)" % [
+					paths[i]["name"], paths[j]["name"], worst, where.x, where.y, where.z]])
+	found.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) > float(b[0]))
+	var lines := PackedStringArray()
+	for hit: Array in found:
+		lines.append(str(hit[1]))
+	return lines
+
+
+## How far two segments run side by side within `gap` of each other,
+## and where: [length, midpoint]. Zero unless they are parallel.
+static func _segment_overlap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3,
+		gap: float) -> Array:
+	var da := a1 - a0
+	var db := b1 - b0
+	var la := da.length()
+	var lb := db.length()
+	if la < 1e-6 or lb < 1e-6:
+		return [0.0, Vector3.ZERO]
+	var na := da / la
+	if na.cross(db / lb).length() > 0.02:
+		return [0.0, Vector3.ZERO]
+	var off := b0 - a0
+	var perp := off - na * off.dot(na)
+	if perp.length() > gap:
+		return [0.0, Vector3.ZERO]
+	var t0 := off.dot(na)
+	var t1 := (b1 - a0).dot(na)
+	var lo := maxf(0.0, minf(t0, t1))
+	var hi := minf(la, maxf(t0, t1))
+	if hi <= lo:
+		return [0.0, Vector3.ZERO]
+	return [hi - lo, a0 + na * ((lo + hi) / 2.0)]
 
 
 func _apply_support(view: PipeView, sparse_local: Array, space: PhysicsDirectSpaceState3D) -> void:
@@ -1452,14 +1523,13 @@ func _wire_visual(src_name: String, src_port: String,
 		"node": pipe, "a": src_name, "a_port": src_port,
 		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
 		"color": "", "label": "",
+		"lane": int(pipe.get_meta("lane", 0)), "path": pipe.get_meta("path", []),
 	})
 	_revalidate_in = 3
 
 
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
-		waypoints: Array) -> PipeView:
-	var from := _marker_pos(src_name, src_port)
-	var to := _marker_pos(dst_name, dst_port)
+		waypoints: Array, lane: int = -1) -> PipeView:
 	var src := sim.get_component(src_name)
 	var port: SimOutputPort = src.outputs[src_port]
 	var kind := port.kind
@@ -1480,12 +1550,33 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 		getter = func() -> float: return port.value
 	var is_process := SimTypes.is_material(kind) \
 		or kind == SimTypes.PortKind.PROCESS_LEVEL
+	var radius := 0.07 if is_process else 0.025
+	# The lane: the first one whose route does not lie inside a run
+	# already laid (director's walkdown, 2026-09-12). A run without
+	# waypoints has nothing to shift and takes the route as it comes.
+	var chosen := lane
+	var path: Array[Vector3] = []
+	if chosen < 0:
+		var best_lane := 0
+		var best_overlap := INF
+		for try_lane in 25:
+			var candidate := _route_points(src_name, src_port, dst_name, dst_port, waypoints, try_lane, radius)
+			var overlap := _path_collision(candidate, radius, src_name, src_port, dst_name, dst_port)
+			if overlap < best_overlap:
+				best_overlap = overlap
+				best_lane = try_lane
+				path = candidate
+			if overlap <= 0.0:
+				break
+		chosen = best_lane
+	else:
+		path = _route_points(src_name, src_port, dst_name, dst_port, waypoints, chosen, radius)
 	var pipe := PipeView.new()
 	add_child(pipe)
-	pipe.setup(PipeRoute.routed(from, _marker_dir(src_name, src_port),
-			to, _marker_dir(dst_name, dst_port), waypoints), getter,
-		PlantFactory.KIND_COLORS[kind], 0.07 if is_process else 0.025,
+	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
+	pipe.set_meta("lane", chosen)
+	pipe.set_meta("path", path)
 	pipe.config_cb = _configure_run
 	if wire != null:
 		# A line can be pressurised without moving: a dead-headed
@@ -1495,6 +1586,92 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 		pipe.set_pressure_getter(func() -> float:
 			return maxf(kernel.pressure_at(live.src), kernel.pressure_at(live.dst)))
 	return pipe
+
+
+## A run's route in its lane: the waypoints shifted sideways so runs
+## that share a corridor lie side by side instead of inside each other
+## (director's walkdown, 2026-09-12). Lane 0 is the route as laid;
+## lanes 1, 2, 3… step out alternately either side, and the step is
+## diagonal so legs along x and legs along z both move over.
+func _route_points(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		waypoints: Array, lane: int, radius: float) -> Array[Vector3]:
+	var from := _marker_pos(src_name, src_port)
+	var from_dir := _marker_dir(src_name, src_port)
+	var to := _marker_pos(dst_name, dst_port)
+	var to_dir := _marker_dir(dst_name, dst_port)
+	var corners: Array = waypoints
+	if corners.is_empty() and lane > 0:
+		# A direct run has no waypoints to shift: its own elbows, as the
+		# router laid them, become the waypoints its lane moves.
+		var auto := PipeRoute.routed(from, from_dir, to, to_dir, [])
+		corners = auto.slice(2, auto.size() - 2)
+	var shifted: Array = []
+	var offset := _lane_offset(lane, radius, from_dir)
+	for point in corners:
+		shifted.append((point as Vector3) + offset)
+	if lane > 0:
+		# Jog into the lane straight off each stub, or every run from
+		# the same fitting still shares its first leg to the first corner.
+		shifted.insert(0, from + from_dir * PipeRoute.STUB + offset)
+		shifted.append(to + to_dir * PipeRoute.STUB + offset)
+	return PipeRoute.routed(from, from_dir, to, to_dir, shifted)
+
+
+## Lanes step out either side of the run, across the stub it leaves
+## by; a stub pointing up or down has no across, so those step
+## diagonally.
+static func _lane_offset(lane: int, radius: float, from_dir: Vector3) -> Vector3:
+	if lane <= 0:
+		return Vector3.ZERO
+	@warning_ignore("integer_division")
+	var k := (lane + 1) / 2
+	var side := 1.0 if lane % 2 == 1 else -1.0
+	var across := Vector3(-from_dir.z, 0.0, from_dir.x)
+	if across.length() < 0.5:
+		across = Vector3(1, 0, 1)
+	return across.normalized() * (side * k * (2.0 * radius + 0.03))
+
+
+func _visual_path(visual: Dictionary) -> Array[Vector3]:
+	var view := visual["node"] as PipeView
+	return _route_points(str(visual["a"]), str(visual["a_port"]), str(visual["b"]), str(visual["b_port"]),
+		visual["waypoints"], int(visual.get("lane", 0)), view.radius() if view != null else 0.025)
+
+
+## The longest stretch this route would share with a run already laid,
+## or 0. Trays do not count: a conduit belongs in one. Runs leaving
+## the same fitting are allowed two metres of company — the fan-out at
+## a gland plate is physics, not a mistake.
+func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: String,
+		b: String, b_port: String) -> float:
+	var worst := 0.0
+	for visual in _wire_visuals:
+		var other := visual["node"] as PipeView
+		if other == null or other.style() == "tray":
+			continue
+		var shared := (str(visual["a"]) == a and str(visual["a_port"]) == a_port) \
+			or (str(visual["b"]) == b and str(visual["b_port"]) == b_port)
+		var got := _paths_overlap(path, visual.get("path", []), radius + other.radius())
+		if got >= (2.0 if shared else 0.5):
+			worst = maxf(worst, got)
+	for name_: String in runs:
+		var entry: Dictionary = runs[name_]
+		var other := entry["node"] as PipeView
+		if other.style() == "tray":
+			continue
+		var got := _paths_overlap(path, PipeRoute.orthogonalize(entry["points"]), radius + other.radius())
+		if got >= 0.5:
+			worst = maxf(worst, got)
+	return worst
+
+
+## The longest stretch two paths share within gap of each other.
+static func _paths_overlap(pa: Array, pb: Array, gap: float) -> float:
+	var worst := 0.0
+	for s in range(pa.size() - 1):
+		for t in range(pb.size() - 1):
+			worst = maxf(worst, float(_segment_overlap(pa[s], pa[s + 1], pb[t], pb[t + 1], gap)[0]))
+	return worst
 
 
 func _marker_pos(record_name: String, port_name: String) -> Vector3:

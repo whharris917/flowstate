@@ -303,6 +303,10 @@ func _run(world: Node) -> void:
 		if node is PipeView and (node as PipeView)._unsupported:
 			bad.append("%s->%s" % [visual["a"], visual["b"]])
 	print("[probe] unsupported runs: %s" % ("none" if bad.is_empty() else ", ".join(bad)))
+	var overlaps := plant.overlap_report()
+	print("[probe] run overlaps: %s" % ("none" if overlaps.is_empty() else str(overlaps.size())))
+	for line in overlaps:
+		print("    " + line)
 	print("[probe] showcase screenshots written to user://")
 	get_tree().quit()
 

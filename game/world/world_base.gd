@@ -117,6 +117,12 @@ func _ready() -> void:
 		for alarm: Dictionary in alarms.scan(plant.sim):
 			names.append("%s %s" % [alarm["tag"], alarm["text"]])
 		print("[flowstate] alarm scan — %d active: %s" % [names.size(), "; ".join(names)])
+		# Runs sharing the same space: a walkdown finding the smoke run
+		# now makes before the director does.
+		var overlaps := plant.overlap_report()
+		print("[flowstate] run overlaps: %d" % overlaps.size())
+		for line in overlaps:
+			print("    " + line)
 	_load_settings()
 	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
 

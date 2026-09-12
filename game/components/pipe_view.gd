@@ -35,6 +35,14 @@ var _pressure_getter: Callable = Callable()
 var _charged: StandardMaterial3D
 
 
+func radius() -> float:
+	return _radius
+
+
+func style() -> String:
+	return _style
+
+
 func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 		desc: String = "", style: String = "pipe", collider_layer: int = 8) -> void:
 	_getter = getter
