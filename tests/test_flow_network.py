@@ -290,6 +290,18 @@ class TestBlockValve:
         assert valve.flow_lps > 1.0
         assert tank.level_l > 0.0
 
+    def test_limit_switches_make_only_at_the_ends_of_travel(self) -> None:
+        sim, valve, tank, switch = self._line()
+        assert valve.zsc.value == 1.0 and valve.zso.value == 0.0
+        switch.closed = True
+        sim.run(2.0)
+        assert valve.zsc.value == 0.0 and valve.zso.value == 0.0  # in between
+        sim.run(3.0)
+        assert valve.zso.value == 1.0 and valve.zsc.value == 0.0
+        switch.closed = False
+        sim.run(6.0)
+        assert valve.zsc.value == 1.0 and valve.zso.value == 0.0
+
     def test_dropping_the_command_closes_it_at_stroke_speed(self) -> None:
         sim, valve, tank, switch = self._line()
         switch.closed = True

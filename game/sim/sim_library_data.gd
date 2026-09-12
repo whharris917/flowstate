@@ -434,6 +434,8 @@ const PAGES := {
 			"open": "Discrete command: energized opens, de-energized closes. Land a PLC output, a relay contact or a switch here.",
 			"inlet": "Upstream nozzle.",
 			"outlet": "Downstream nozzle, at the same temperature and composition -- a valve changes rate, not material.",
+			"zso": "Open limit switch: a dry contact that makes in the last 2 % of travel. Wire it to a PLC input and a step can wait for the valve to report open instead of trusting the stroke time.",
+			"zsc": "Closed limit switch: makes in the first 2 % of travel. Both off means the valve is somewhere in between.",
 		},
 		"equations": [
 			["dx/dt = +100 / stroke_s opening, -100 / stroke_s closing", "The actuator travels at a fixed rate, so for stroke_s after the command changes the valve is neither open nor shut. A sequence that does not wait for that has a leak in it."],
@@ -446,7 +448,7 @@ const PAGES := {
 		],
 		"assumptions": [
 			"Linear travel and a linear trim: a real ball or gate valve passes most of its flow in the first part of its travel.",
-			"No limit switches, so a sequence trusts the stroke time rather than an open or closed contact.",
+			"The limit switches are ideal: they make at exactly 2 % from either end, never stick, and never drift.",
 			"No seat leakage, no stiction, and no fail position: lose the signal and it closes at stroke speed.",
 			"It resists in both directions equally and will not check reverse flow.",
 		],

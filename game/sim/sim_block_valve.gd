@@ -18,6 +18,13 @@ var position: float = 0.0   # percent of travel: 0 shut, 100 open
 var open_cmd: SimInputPort
 var inlet: SimInputPort
 var outlet: SimOutputPort
+# Limit switches on the actuator: dry contacts that make at the ends
+# of travel, so a sequence can wait for the valve to report open
+# rather than trusting the stroke time.
+var zso: SimOutputPort
+var zsc: SimOutputPort
+
+const LIMIT_BAND := 2.0   # percent of travel within which a limit contact makes
 
 var _branch: SimControlResistance = null
 
@@ -31,8 +38,21 @@ func _init(name_: String, cv_lps_: float = 20.0, stroke_s_: float = 4.0) -> void
 	open_cmd = add_input("open", SimTypes.PortKind.SIGNAL_DISCRETE)
 	inlet = add_input("inlet", SimTypes.PortKind.PROCESS_MATERIAL)
 	outlet = add_output("outlet", SimTypes.PortKind.PROCESS_MATERIAL)
+	zso = add_output("zso", SimTypes.PortKind.SIGNAL_DISCRETE)
+	zsc = add_output("zsc", SimTypes.PortKind.SIGNAL_DISCRETE)
+	zsc.value = 1.0
 	add_observable("position", &"position")
 	add_observable("flow_lps", &"flow_lps")
+
+
+var limit_open: bool:
+	get:
+		return position >= 100.0 - LIMIT_BAND
+
+
+var limit_closed: bool:
+	get:
+		return position <= LIMIT_BAND
 
 
 var flow_lps: float:
@@ -67,6 +87,8 @@ func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
 func tick(dt: float) -> void:
 	var target := 100.0 if commanded_open else 0.0
 	position = move_toward(position, target, 100.0 * dt / stroke_s)
+	zso.value = 1.0 if limit_open else 0.0
+	zsc.value = 1.0 if limit_closed else 0.0
 
 
 func state_dict() -> Dictionary:
@@ -75,3 +97,5 @@ func state_dict() -> Dictionary:
 
 func apply_state(state_: Dictionary) -> void:
 	position = state_.get("position", position)
+	zso.value = 1.0 if limit_open else 0.0
+	zsc.value = 1.0 if limit_closed else 0.0

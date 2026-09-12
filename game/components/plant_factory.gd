@@ -142,7 +142,9 @@ const PORT_ANCHORS := {
 	"block_valve": {
 		"inlet": {"pos": Vector3(-0.31, 0.32, 0), "dir": Vector3.LEFT},
 		"outlet": {"pos": Vector3(0.31, 0.32, 0), "dir": Vector3.RIGHT},
-		"open": {"pos": Vector3(0, 0.72, 0.2), "dir": Vector3.BACK}},
+		"open": {"pos": Vector3(0, 0.72, 0.2), "dir": Vector3.BACK},
+		"zso": {"pos": Vector3(-0.06, 0.72, -0.2), "dir": Vector3.FORWARD},
+		"zsc": {"pos": Vector3(0.06, 0.72, -0.2), "dir": Vector3.FORWARD}},
 	"source": {"outlet": {"pos": Vector3(0.5, 1.55, 0), "dir": Vector3.RIGHT}},
 	"drain": {
 		"inlet": {"pos": Vector3(0.46, 0.52, 0), "dir": Vector3.RIGHT}},

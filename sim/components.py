@@ -528,9 +528,25 @@ class BlockValve(Component):
         self.open_cmd = self.add_input("open", PortKind.SIGNAL_DISCRETE)
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
+        # Limit switches on the actuator: dry contacts that make at the
+        # ends of travel, so a sequence can wait for the valve to report
+        # open rather than trusting the stroke time.
+        self.zso = self.add_output("zso", PortKind.SIGNAL_DISCRETE)
+        self.zsc = self.add_output("zsc", PortKind.SIGNAL_DISCRETE)
+        self.zsc.value = 1.0
         self._branch = None
         self.add_observable("position", "position")
         self.add_observable("flow_lps", "flow_lps")
+
+    LIMIT_BAND = 2.0  # percent of travel within which a limit contact makes
+
+    @property
+    def limit_open(self) -> bool:
+        return self.position >= 100.0 - self.LIMIT_BAND
+
+    @property
+    def limit_closed(self) -> bool:
+        return self.position <= self.LIMIT_BAND
 
     @property
     def flow_lps(self) -> float:
@@ -564,6 +580,8 @@ class BlockValve(Component):
             self.position = min(target, self.position + step)
         elif self.position > target:
             self.position = max(target, self.position - step)
+        self.zso.value = 1.0 if self.limit_open else 0.0
+        self.zsc.value = 1.0 if self.limit_closed else 0.0
 
 
 class Pushbutton(Component):
@@ -1207,6 +1225,11 @@ BlockValve.SPEC = EquipmentSpec(
         "inlet": "Upstream nozzle.",
         "outlet": "Downstream nozzle, at the same temperature and "
                   "composition -- a valve changes rate, not material.",
+        "zso": "Open limit switch: a dry contact that makes in the last "
+               "2 % of travel. Wire it to a PLC input and a step can wait "
+               "for the valve to report open.",
+        "zsc": "Closed limit switch: makes in the first 2 % of travel. "
+               "Both off means the valve is somewhere in between.",
     },
     equations=(
         Equation(
