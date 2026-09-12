@@ -38,16 +38,35 @@ func plant_ring(center: Vector3, r_in: float, r_out: float, spacing: float,
 	return count
 
 
+## Low bushes between r_in and r_out: they close the gap between the
+## trunks at the foot of the tree line, so the wood reads as solid.
+func plant_bushes(center: Vector3, r_in: float, r_out: float, spacing: float,
+		rng: RandomNumberGenerator) -> int:
+	var count := int(PI * (r_out * r_out - r_in * r_in) / (spacing * spacing))
+	for _i in count:
+		var r := sqrt(rng.randf_range(r_in * r_in, r_out * r_out))
+		var a := rng.randf_range(0.0, TAU)
+		var at := center + Vector3(r * cos(a), 0.0, r * sin(a))
+		var size := rng.randf_range(1.2, 2.6)
+		var tint := BROADLEAF_COLOR.lightened(rng.randf_range(-0.02, 0.06))
+		_ball_xforms.append(_xform(at + Vector3(0, size * 0.45, 0), rng.randf_range(0.0, TAU),
+			Vector3(size, size * 0.7, size * rng.randf_range(0.8, 1.2))))
+		_ball_colors.append(tint)
+	return count
+
+
 func _conifer(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> void:
-	var trunk_h := h * 0.22
-	var trunk_r := h * 0.02
+	# Proportions of a real spruce: a trunk a thirtieth of the height,
+	# a crown about a third as wide as it is tall.
+	var trunk_h := h * 0.25
+	var trunk_r := h * 0.035
 	_trunk_xforms.append(_xform(at + Vector3(0, trunk_h / 2.0, 0), yaw, Vector3(trunk_r, trunk_h, trunk_r)))
 	var tint := CONIFER_COLOR.lightened(rng.randf_range(-0.03, 0.05))
-	var base_r := h * rng.randf_range(0.16, 0.22)
+	var base_r := h * rng.randf_range(0.12, 0.16)
 	# Three cones, each narrower and higher, overlapping into one crown.
 	for k in 3:
-		var frac := 0.18 + 0.27 * k
-		var cone_h := h * 0.42
+		var frac := 0.20 + 0.26 * k
+		var cone_h := h * 0.40
 		var cone_r := base_r * (1.0 - 0.28 * k)
 		_cone_xforms.append(_xform(at + Vector3(0, h * frac + cone_h / 2.0, 0), yaw,
 			Vector3(cone_r, cone_h, cone_r)))
@@ -55,18 +74,18 @@ func _conifer(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> 
 
 
 func _broadleaf(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> void:
-	var trunk_h := h * 0.45
-	var trunk_r := h * 0.025
+	var trunk_h := h * 0.48
+	var trunk_r := h * 0.04
 	_trunk_xforms.append(_xform(at + Vector3(0, trunk_h / 2.0, 0), yaw, Vector3(trunk_r, trunk_h, trunk_r)))
 	var tint := BROADLEAF_COLOR.lightened(rng.randf_range(-0.03, 0.06))
-	var crown_r := h * rng.randf_range(0.22, 0.30)
+	var crown_r := h * rng.randf_range(0.17, 0.22)
 	# A crown of four lobes: one on top, three around it.
-	_ball_xforms.append(_xform(at + Vector3(0, h * 0.68, 0), yaw, Vector3(crown_r, crown_r * 0.9, crown_r)))
+	_ball_xforms.append(_xform(at + Vector3(0, h * 0.72, 0), yaw, Vector3(crown_r, crown_r * 0.9, crown_r)))
 	_ball_colors.append(tint)
 	for k in 3:
 		var a := yaw + TAU / 3.0 * k
 		var lobe := crown_r * rng.randf_range(0.6, 0.8)
-		_ball_xforms.append(_xform(at + Vector3(cos(a) * crown_r * 0.55, h * 0.56, sin(a) * crown_r * 0.55),
+		_ball_xforms.append(_xform(at + Vector3(cos(a) * crown_r * 0.55, h * 0.60, sin(a) * crown_r * 0.55),
 			yaw, Vector3(lobe, lobe * 0.85, lobe)))
 		_ball_colors.append(tint.lightened(rng.randf_range(-0.05, 0.05)))
 
@@ -103,6 +122,10 @@ func _leaf_material() -> StandardMaterial3D:
 	# The tints are picked as screen colours: without this they are
 	# read as linear and every canopy comes out mint.
 	mat.vertex_color_is_srgb = true
+	# Foliage has no gloss: a smooth sphere at a grazing sun otherwise
+	# throws a broad white highlight and the tree reads as white.
+	mat.roughness = 1.0
+	mat.metallic_specular = 0.05
 	return mat
 
 

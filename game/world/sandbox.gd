@@ -50,12 +50,14 @@ func _build_world() -> void:
 	# no gap shows the horizon from ground level.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 20260912
+	var clearing := Vector3(16.0, 0.0, 10.0)
 	var near := Forest.new()
-	near.plant_ring(Vector3(16.0, 0.0, 10.0), 88.0, 130.0, 5.2, 15.0, rng)
+	near.plant_bushes(clearing, 84.0, 96.0, 3.2, rng)
+	near.plant_ring(clearing, 88.0, 130.0, 4.4, 11.0, rng)
 	near.finish(true)
 	add_child(near)
 	var far := Forest.new()
-	far.plant_ring(Vector3(16.0, 0.0, 10.0), 130.0, 210.0, 7.5, 22.0, rng)
+	far.plant_ring(clearing, 130.0, 210.0, 6.5, 16.0, rng)
 	far.finish(false)
 	add_child(far)
 
