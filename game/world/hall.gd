@@ -83,7 +83,7 @@ func _build_shell() -> void:
 	var half_w := ROOM_W / 2.0
 	var half_d := ROOM_D / 2.0
 
-	_static_box(Vector3(ROOM_W, 0.5, ROOM_D), Vector3(0, -0.25, 0), COL_FLOOR)
+	_static_box(Vector3(ROOM_W, 0.5, ROOM_D), Vector3(0, -0.25, 0), COL_FLOOR, WorldBase.tile_floor())
 	_static_box(Vector3(9.2, 0.08, 3.4), Vector3(-1.0, 0.04, -3.2), COL_PLINTH)
 
 	# End walls (x = +-22): solid below, one glazed band up high. The

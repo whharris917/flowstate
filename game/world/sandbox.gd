@@ -45,8 +45,9 @@ func _build_world() -> void:
 	_ground.material_override = mat
 	add_child(_ground)
 
-	# Home pad under the starter loop, with a safety stripe at its edge.
-	_static_box(PAD_SIZE, Vector3(0, 0, -1.0), COL_PAD)
+	# Home pad under the starter loop: a tiled plant floor with a safety
+	# stripe at its edge.
+	_static_box(PAD_SIZE, Vector3(0, 0, -1.0), COL_PAD, WorldBase.tile_floor())
 	var stripe := ViewUtil.box(self, Vector3(PAD_SIZE.x, 0.012, 0.12),
 		Vector3(0, 0.09, -1.0 + PAD_SIZE.z / 2.0 - 0.2), ViewUtil.flat(COL_SAFETY))
 	stripe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

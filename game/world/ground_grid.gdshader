@@ -1,16 +1,14 @@
 shader_type spatial;
-// World-space ground: poured concrete with faint 1 m minor and 8 m
-// major lines (the pad's own grid, not a construction overlay), each
-// fading with distance so the infinite plane reads as ground rather
-// than moiré. Drawn in world space so the mesh can follow the player
-// without the pattern swimming. The concrete is procedural value
-// noise at three scales — mottling, aggregate and a hairline sheen —
-// so no texture asset is needed (director, 2026-09-11: as realistic
-// as possible).
+// World-space grass (director, 2026-09-12: the concrete read as snow at
+// noon and a dappled mess at other hours). Procedural value noise at
+// four scales — metre-wide patches that dry to straw, forty-centimetre
+// clumps, blade-scale grain near the camera, and a faint relief from
+// that grain — drawn in world space so the mesh can follow the player
+// without the pattern swimming. No grid: the build ghost snaps anyway.
 
-uniform vec3 base_color : source_color = vec3(0.58, 0.58, 0.56);
-uniform vec3 minor_color : source_color = vec3(0.52, 0.52, 0.50);
-uniform vec3 major_color : source_color = vec3(0.44, 0.45, 0.44);
+uniform vec3 base_color : source_color = vec3(0.24, 0.36, 0.13);
+uniform vec3 dry_color : source_color = vec3(0.46, 0.44, 0.21);
+uniform vec3 dark_color : source_color = vec3(0.12, 0.21, 0.08);
 
 varying vec3 world_pos;
 
@@ -30,38 +28,28 @@ float value_noise(vec2 p) {
 		mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
-float grid_line(vec2 pos, float spacing) {
-	vec2 g = abs(fract(pos / spacing - 0.5) - 0.5) * spacing / fwidth(pos);
-	return 1.0 - min(min(g.x, g.y), 1.0);
-}
-
 void fragment() {
 	float dist = length(world_pos - CAMERA_POSITION_WORLD);
 	vec2 p = world_pos.xz;
-	// Concrete: broad mottling, fine aggregate, and a sparse speckle.
-	float mottle = value_noise(p * 0.35) * 0.6 + value_noise(p * 1.3) * 0.4;
-	float grain = value_noise(p * 14.0);
-	float speckle = step(0.965, hash2(floor(p * 40.0)));
-	// The fine grain and the speckle fade with distance, or they alias
-	// into salt on the far plane.
-	float near = clamp(1.0 - dist / 60.0, 0.0, 1.0);
-	float shade = 0.78 + 0.30 * mottle + (0.08 * (grain - 0.5) - 0.08 * speckle) * near;
-	vec3 color = base_color * shade;
-	float fade_minor = clamp(1.0 - dist / 40.0, 0.0, 1.0);
-	float fade_major = clamp(1.0 - dist / 160.0, 0.0, 1.0);
-	color = mix(color, minor_color * shade, grid_line(p, 1.0) * fade_minor * 0.7);
-	color = mix(color, major_color * shade, grid_line(p, 8.0) * fade_major);
+	float near = clamp(1.0 - dist / 25.0, 0.0, 1.0);
+	// Patches: broad drifts of drier grass over the green.
+	float patches = value_noise(p * 0.07) * 0.6 + value_noise(p * 0.23 + 7.0) * 0.4;
+	// Clumps: the lumpiness of a mown field.
+	float clumps = value_noise(p * 2.2 + 3.0);
+	// Blades: fine grain that only matters close up.
+	float blades = value_noise(p * 38.0) * near;
+	vec3 color = mix(base_color, dry_color, smoothstep(0.52, 0.86, patches));
+	color = mix(color, dark_color, (1.0 - clumps) * 0.35);
+	color *= 0.92 + 0.22 * (blades - 0.5 * near);
 	ALBEDO = color;
-	ROUGHNESS = 0.90 - 0.08 * grain;
-	SPECULAR = 0.15;
-	// Relief: the aggregate and the speckle pits as a normal, from the
-	// height's finite differences, so grazing light picks the surface
-	// out instead of leaving it a flat tint.
-	float e = 0.03;
-	float h0 = value_noise(p * 14.0) - 0.6 * speckle;
-	float hx = value_noise((p + vec2(e, 0.0)) * 14.0) - 0.6 * step(0.965, hash2(floor((p + vec2(e, 0.0)) * 40.0)));
-	float hz = value_noise((p + vec2(0.0, e)) * 14.0) - 0.6 * step(0.965, hash2(floor((p + vec2(0.0, e)) * 40.0)));
-	float relief = clamp(1.0 - dist / 30.0, 0.0, 1.0);
-	NORMAL_MAP = normalize(vec3(-(hx - h0) * 2.0 * relief, -(hz - h0) * 2.0 * relief, 1.0)) * 0.5 + 0.5;
-	NORMAL_MAP_DEPTH = 0.6;
+	ROUGHNESS = 0.96;
+	SPECULAR = 0.08;
+	// Relief from the clumps and the blades, fading with distance so the
+	// far field stays calm.
+	float e = 0.04;
+	float h0 = value_noise(p * 2.2 + 3.0) * 0.6 + value_noise(p * 38.0) * 0.4;
+	float hx = value_noise((p + vec2(e, 0.0)) * 2.2 + 3.0) * 0.6 + value_noise((p + vec2(e, 0.0)) * 38.0) * 0.4;
+	float hz = value_noise((p + vec2(0.0, e)) * 2.2 + 3.0) * 0.6 + value_noise((p + vec2(0.0, e)) * 38.0) * 0.4;
+	NORMAL_MAP = normalize(vec3(-(hx - h0) * 3.0 * near, -(hz - h0) * 3.0 * near, 1.0)) * 0.5 + 0.5;
+	NORMAL_MAP_DEPTH = 0.5;
 }

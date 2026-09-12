@@ -410,7 +410,7 @@ func _exit_tree() -> void:
 		audio_player.stop()
 
 
-func _static_box(size: Vector3, pos: Vector3, color: Color) -> void:
+func _static_box(size: Vector3, pos: Vector3, color: Color, material: Material = null) -> void:
 	var body := StaticBody3D.new()
 	body.position = pos
 	var shape := CollisionShape3D.new()
@@ -422,6 +422,15 @@ func _static_box(size: Vector3, pos: Vector3, color: Color) -> void:
 	var box_mesh := BoxMesh.new()
 	box_mesh.size = size
 	mesh.mesh = box_mesh
-	mesh.material_override = ViewUtil.matte(color)  # pads, floors, walls: concrete and paint
+	# Pads, floors, walls: concrete and paint, or a floor shader.
+	mesh.material_override = material if material != null else ViewUtil.matte(color)
 	body.add_child(mesh)
 	add_child(body)
+
+
+## The plant floor: matte off-white tiles with grout, world-space, so
+## every slab tiles alike (director, 2026-09-12).
+static func tile_floor() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://world/tile_floor.gdshader")
+	return mat
