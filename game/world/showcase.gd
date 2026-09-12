@@ -241,6 +241,12 @@ static func _unit_300(plant: Plant) -> void:
 		Vector3(49.2, 0.0, -1.0), 0.0, false)
 	plant.mount_instrument("gauge_level", "lt_300", {}, "pt_300", 0.22, 0.53, false)
 	plant.place("vialfill", "vf_310", {}, Vector3(52.6, 0.0, -2.6), 0.0, false)
+	# A trend screen by the filler (2026-09-11): the purity on the fill
+	# line beside the reactor's own purity and temperature, and the
+	# wash that HV-311 lets through — the composition story of the
+	# train on one page, replayed from the historian.
+	plant.place("hmi_trend", "hmi_301", {"tags": ["aq_310.reading", "r_301.purity", "r_301.temp",
+		"cf_301.wash_lps"], "window_s": 600.0}, Vector3(49.8, 0.0, 0.8), 0.0, false)
 	# An analyser on the fill line: until this is wired, nobody can say
 	# anything true about quality.
 	plant.place("gauge_conc", "aq_310", {"species": "product"},

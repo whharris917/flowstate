@@ -152,7 +152,18 @@ func _fill_config(type_id: String) -> void:
 		tag.text = str(field["label"])
 		tag.custom_minimum_size = Vector2(150, 0)
 		grid.add_child(tag)
-		if field.has("options"):
+		if str(field.get("kind", "")) == "tag":
+			# A historian tag: type part of it, pick from the matches.
+			var index := int(key.substr(3)) - 1
+			var current := ""
+			if record is SimTrendScreen and index >= 0 and index < SimTrendScreen.MAX_PENS:
+				current = (record as SimTrendScreen).tags[index]
+			var all_tags := PackedStringArray(_plant.historian.active_tags())
+			all_tags.sort()
+			var picker := TagPicker.new(all_tags, current)
+			grid.add_child(picker)
+			_fields[key] = picker
+		elif field.has("options"):
 			var choice := OptionButton.new()
 			var current := str(record.call("species_key"))
 			for i in SimSpecies.COUNT:
@@ -192,6 +203,8 @@ func _apply() -> void:
 		var control: Control = _fields[key]
 		if control is OptionButton:
 			values[key] = SimSpecies.key_of((control as OptionButton).get_selected_id())
+		elif control is TagPicker:
+			values[key] = (control as TagPicker).text
 		else:
 			values[key] = (control as SpinBox).value
 	var why := ""
@@ -234,3 +247,47 @@ func _unhandled_input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
 		close()
 		get_viewport().set_input_as_handled()
+
+
+## A historian tag field: a line to type part of a tag into and a
+## short list of the tags that match, one click to take one.
+class TagPicker:
+	extends VBoxContainer
+	var edit: LineEdit
+	var list: ItemList
+	var all_tags: PackedStringArray
+	var text: String:
+		get:
+			return edit.text.strip_edges()
+
+	func _init(tags: PackedStringArray, current: String) -> void:
+		all_tags = tags
+		edit = LineEdit.new()
+		edit.text = current
+		edit.placeholder_text = "type part of a tag, e.g. r_301.temp"
+		edit.custom_minimum_size = Vector2(260, 0)
+		add_child(edit)
+		list = ItemList.new()
+		list.custom_minimum_size = Vector2(260, 0)
+		list.auto_height = true
+		list.visible = false
+		add_child(list)
+		edit.text_changed.connect(_filter)
+		list.item_selected.connect(func(i: int) -> void:
+			edit.text = list.get_item_text(i)
+			list.visible = false)
+
+	func _filter(typed: String) -> void:
+		list.clear()
+		var needle := typed.strip_edges().to_lower()
+		if needle == "":
+			list.visible = false
+			return
+		var shown := 0
+		for tag in all_tags:
+			if tag.to_lower().contains(needle):
+				list.add_item(tag)
+				shown += 1
+				if shown >= 8:
+					break
+		list.visible = shown > 0

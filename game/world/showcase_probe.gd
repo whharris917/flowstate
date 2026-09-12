@@ -269,6 +269,10 @@ func _run(world: Node) -> void:
 			await get_tree().create_timer(0.4).timeout
 			await _shot("user://probe_showcase_u400_hmi_%s.png" % page_name)
 		hmi.use()
+	# The trend screen by the filler: Unit 300's composition story,
+	# replayed from the historian after the soak.
+	await _vantage(player, Vector3(49.8, 0.15, 2.8), Vector2(0.0, -1.0), 0.0, 0.05)
+	await _shot("user://probe_showcase_u300_trend.png")
 	# The local control station: STOP holds the sequence where it is
 	# with everything shut, START resumes it. Six seconds each way,
 	# long enough for every valve to finish its stroke.

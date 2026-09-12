@@ -455,6 +455,23 @@ const PAGES := {
 			"It resists in both directions equally and will not check reverse flow.",
 		],
 	},
+	"hmi_trend": {
+		"title": "Trend Screen",
+		"tier": "control",
+		"summary": "An operator screen on two posts showing up to four historian tags over a window you choose. Every pen is replayed from the historian's own samples -- the same record every gauge, HMI and balance page reads -- so what it shows is what happened, not a smoothed picture of it. Pick the pens in the right-click CONFIGURE tab: type part of a tag and take one from the matches. Each pen carries its own scale; the legend shows the live value and the range over the window.",
+		"ports": {},
+		"equations": [
+			["y(t) = historian[tag](t)   for t in [now - window, now]", "A plain replay. The historian samples every tag every scan, so a pen has one point per scan and the screen thins them only to fit its pixels."],
+		],
+		"params": [
+			["tags", "-", "none", "Up to four historian tags, one per pen. Any tag: a level, a flow, a composition fraction, a controller output, a valve position."],
+			["window_s", "s", "600", "How far back the screen looks."],
+		],
+		"assumptions": [
+			"It shows the historian and nothing else: no alarms, no setpoints, no cursors yet.",
+			"Each pen has its own scale, so two pens crossing on the screen means nothing about their values -- read the legend.",
+		],
+	},
 	"float_switch": {
 		"title": "Level Switch",
 		"tier": "control",

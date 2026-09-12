@@ -423,6 +423,8 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as PumpView).setup(record as SimPump)
 		"relay":
 			(view as RelayView).setup(record as SimRelay)
+		"hmi_trend":
+			(view as TrendScreenView).setup_trend(record as SimTrendScreen, self)
 		"float_switch":
 			(view as FloatSwitchView).setup(record as SimFloatSwitch)
 		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", \
@@ -984,8 +986,19 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 		if field.has("options"):
 			if SimSpecies.index_of(str(values[key])) < 0:
 				return "unknown species"
+		elif str(field.get("kind", "")) == "tag":
+			if str(values[key]) != "" and not historian.data.has(str(values[key])):
+				return "no historian tag named %s" % str(values[key])
 		elif float(values[key]) < float(field["min"]) or float(values[key]) > float(field["max"]):
 			return "%s must be %s to %s" % [field["label"], field["min"], field["max"]]
+	if record is SimTrendScreen:
+		var screen := record as SimTrendScreen
+		for key: String in values:
+			if key.begins_with("tag"):
+				screen.tags[int(key.substr(3)) - 1] = str(values[key])
+			elif key == "window_s":
+				screen.window_s = clampf(float(values[key]), 60.0, 3600.0)
+		return ""
 	if record is SimTank:
 		var tank_rec := record as SimTank
 		if values.has("nozzle_cv_lps"):
@@ -2100,6 +2113,9 @@ func _params_for(record: SimComponent) -> Dictionary:
 			"out_min": pid.out_min, "out_max": pid.out_max}
 	if record is SimTerminal:
 		return {"kind": (record as SimTerminal).kind}
+	if record is SimTrendScreen:
+		var screen := record as SimTrendScreen
+		return {"tags": screen.tags.duplicate(), "window_s": screen.window_s}
 	if record is SimDrain:
 		return {"rate_lps": (record as SimDrain).rate_lps}
 	if record is SimReactor:

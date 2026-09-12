@@ -59,7 +59,7 @@ const LADDER: Array[Dictionary] = [
 		"requires": [
 			{"kind": "pid_hold", "target": 60.0, "label": "a loop in AUTO within 3 % of setpoint", "unit": "s"},
 		],
-		"unlocks": ["hx", "steamgen", "reactor", "crystallizer"],
+		"unlocks": ["hmi_trend", "hx", "steamgen", "reactor", "crystallizer"],
 	},
 	{
 		"id": "make_something", "tier": "TIER 4 — REACTION", "title": "Make something",

@@ -45,6 +45,7 @@ const CATALOG_CONTROL: Array[Dictionary] = [
 	{"type": "cabinet", "label": "Control cabinet"},
 	{"type": "junction_box", "label": "Junction box"},
 	{"type": "control_station", "label": "Control station"},
+	{"type": "hmi_trend", "label": "Trend screen"},
 	{"type": "mains", "label": "Mains feeder 480VAC"},
 	{"type": "psu", "label": "Power supply 24VDC"},
 ]
@@ -55,6 +56,7 @@ const FOOTPRINTS := {
 	"tank": Vector3(1.8, 2.3, 1.8),
 	"pump": Vector3(0.85, 0.95, 0.7),
 	"relay": Vector3(1.0, 2.2, 0.55),
+	"hmi_trend": Vector3(1.5, 2.3, 0.5),
 	"gauge_level": Vector3(0.5, 1.8, 0.5),
 	"gauge_flow": Vector3(0.5, 1.8, 0.5),
 	"gauge_dp": Vector3(0.5, 1.8, 0.5),
@@ -84,7 +86,7 @@ const FOOTPRINTS := {
 	"still": Vector3(1.5, 7.0, 1.5),
 }
 const Y_OFFSETS := {
-	"tank": 0.0, "pump": 0.0, "relay": 1.5,
+	"tank": 0.0, "pump": 0.0, "relay": 1.5, "hmi_trend": 1.6,
 	"gauge_level": 0.0, "gauge_flow": 0.0, "gauge_dp": 0.0,
 	"gauge_press": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
@@ -271,6 +273,9 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 				params.get("mode", "auto"), params.get("head_m", 30.0)))
 		"relay":
 			return sim.add(SimRelay.new(name_))
+		"hmi_trend":
+			return sim.add(SimTrendScreen.new(name_, params.get("tags", []),
+				params.get("window_s", 600.0)))
 		"float_switch":
 			return sim.add(SimFloatSwitch.new(name_,
 				params.get("low_l", 40.0), params.get("high_l", 80.0)))
@@ -363,6 +368,8 @@ static func make_view(type_id: String, record: SimComponent,
 			view = PumpView.new()
 		"relay":
 			view = RelayView.new()
+		"hmi_trend":
+			view = TrendScreenView.new()
 		"float_switch":
 			view = FloatSwitchView.new()
 		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", \
@@ -609,6 +616,13 @@ const CONFIG := {
 	],
 	"dryer": [
 		{"key": "rate_lps", "label": "Rated feed", "unit": "L/s", "min": 0.1, "max": 100.0, "step": 0.1},
+	],
+	"hmi_trend": [
+		{"key": "tag1", "label": "Pen 1", "kind": "tag"},
+		{"key": "tag2", "label": "Pen 2", "kind": "tag"},
+		{"key": "tag3", "label": "Pen 3", "kind": "tag"},
+		{"key": "tag4", "label": "Pen 4", "kind": "tag"},
+		{"key": "window_s", "label": "Window", "unit": "s", "min": 60.0, "max": 3600.0, "step": 30.0},
 	],
 	"still": [
 		{"key": "rate_lps", "label": "Boilup", "unit": "L/s", "min": 0.1, "max": 100.0, "step": 0.1},
