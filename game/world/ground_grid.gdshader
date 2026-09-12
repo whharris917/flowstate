@@ -9,9 +9,11 @@ shader_type spatial;
 // Uniformly green (director, 2026-09-12: the straw drifts read as a
 // drought): the "dry" tone is only a lighter, warmer green, and it
 // mixes in lightly.
-uniform vec3 base_color : source_color = vec3(0.22, 0.36, 0.12);
-uniform vec3 dry_color : source_color = vec3(0.34, 0.44, 0.15);
-uniform vec3 dark_color : source_color = vec3(0.13, 0.24, 0.08);
+// Darker and quieter than the first cut (director, 2026-09-12: too
+// bright): a mown field under trees, not a sports pitch.
+uniform vec3 base_color : source_color = vec3(0.15, 0.26, 0.09);
+uniform vec3 dry_color : source_color = vec3(0.23, 0.32, 0.11);
+uniform vec3 dark_color : source_color = vec3(0.09, 0.17, 0.06);
 
 varying vec3 world_pos;
 

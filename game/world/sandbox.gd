@@ -45,6 +45,20 @@ func _build_world() -> void:
 	_ground.material_override = mat
 	add_child(_ground)
 
+	# The clearing: two rings of trees round the developed area, the
+	# near ring dense and shadowed, the far ring taller and sparser so
+	# no gap shows the horizon from ground level.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260912
+	var near := Forest.new()
+	near.plant_ring(Vector3(16.0, 0.0, 10.0), 88.0, 130.0, 5.2, 15.0, rng)
+	near.finish(true)
+	add_child(near)
+	var far := Forest.new()
+	far.plant_ring(Vector3(16.0, 0.0, 10.0), 130.0, 210.0, 7.5, 22.0, rng)
+	far.finish(false)
+	add_child(far)
+
 	# Home pad under the starter loop: a tiled plant floor with a safety
 	# stripe at its edge.
 	_static_box(PAD_SIZE, Vector3(0, 0, -1.0), COL_PAD, WorldBase.tile_floor())
