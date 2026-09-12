@@ -131,6 +131,11 @@ func _build_environment() -> void:
 ## detail on top: overhead pressure gauge on the platform, wired to the
 ## vapor-line tap. E at the base (or the platform) cycles the reboiler.
 func _after_plant() -> void:
+	# The developed area stands on one tiled slab, its top flush with
+	# the home pad, so the showcase units are on a plant floor and not
+	# on the grass; the blank map keeps just the pad.
+	_static_box(Vector3(72.0, 0.5, 58.0), Vector3(22.0, plant_height - 0.25, 17.0), COL_PAD,
+		WorldBase.tile_floor())
 	plant.place("column", "still_column", {}, Vector3(7.0, 0.08, -4.0), 0.0, true)
 	plant.place("gauge_press", "pi_still_top", {}, Vector3(7.5, 9.72, -3.4), PI, true)
 	plant.connect_equipment("still_column", "p_top", "pi_still_top", "process",

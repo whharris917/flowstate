@@ -124,7 +124,7 @@ static func glow(color: Color, energy: float = 1.6) -> StandardMaterial3D:
 	return mat
 
 
-static func box(parent: Node3D, size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> MeshInstance3D:
+static func box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size
 	var inst := MeshInstance3D.new()
@@ -135,7 +135,7 @@ static func box(parent: Node3D, size: Vector3, pos: Vector3, mat: StandardMateri
 	return inst
 
 
-static func cylinder(parent: Node3D, radius: float, height: float, pos: Vector3, mat: StandardMaterial3D) -> MeshInstance3D:
+static func cylinder(parent: Node3D, radius: float, height: float, pos: Vector3, mat: Material) -> MeshInstance3D:
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = radius
 	mesh.bottom_radius = radius

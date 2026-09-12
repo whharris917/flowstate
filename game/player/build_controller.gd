@@ -218,7 +218,7 @@ func _update_hud() -> void:
 				% [_edit_name, handles])
 		Mode.PLACE:
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
-				"ROUTING & SIGNS", "CONTROL", "UTILITIES"]
+				"ROUTING · FLOOR · SIGNS", "CONTROL", "UTILITIES"]
 			var entries := _catalog()
 			catalog_index = mini(catalog_index, maxi(entries.size() - 1, 0))
 			var heading := "%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 7]]

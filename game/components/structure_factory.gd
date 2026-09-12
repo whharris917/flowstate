@@ -21,6 +21,7 @@ const CATALOG_ROUTING: Array[Dictionary] = [
 	{"type": "run_conduit", "label": "Conduit run"},
 	{"type": "run_tray", "label": "Cable tray"},
 	{"type": "s_sign", "label": "Sign — E edits"},
+	{"type": "s_slab", "label": "Floor slab 4 m (tile)"},
 ]
 
 # Standalone routed infrastructure — laid before any equipment exists,
@@ -52,6 +53,7 @@ const SIZES := {
 	"s_catwalk": Vector3(4.0, 1.2, 1.3),
 	"s_railing": Vector3(2.0, 1.1, 0.1),
 	"s_sign": Vector3(0.9, 2.2, 0.12),
+	"s_slab": Vector3(4.0, 0.06, 4.0),
 }
 
 const COL_STEEL := Color(0.16, 0.17, 0.19)
@@ -71,16 +73,28 @@ const COLORS := {
 	"s_catwalk": COL_DECK,
 	"s_railing": COL_STEEL,
 	"s_sign": Color(0.10, 0.32, 0.52),
+	"s_slab": Color(0.86, 0.85, 0.80),
 }
 
 
 ## Walls, doors and windows are painted panels, not polished steel;
 ## the finish heuristic in ViewUtil.flat would read their light grey
 ## as stainless.
-static func material_for(type_id: String) -> StandardMaterial3D:
+static func material_for(type_id: String) -> Material:
+	if type_id == "s_slab":
+		return tile_floor()
 	if type_id in ["s_wall", "s_door", "s_window"]:
 		return ViewUtil.matte(COLORS[type_id])
 	return ViewUtil.flat(COLORS[type_id])
+
+
+## The plant floor: matte off-white tiles with grout, laid in world
+## space on whichever face is drawn, so a placed slab, the home pad and
+## a hall floor all tile alike (director, 2026-09-12).
+static func tile_floor() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://world/tile_floor.gdshader")
+	return mat
 
 
 static func beam_size(length: float) -> Vector3:
@@ -333,7 +347,7 @@ static func placement_ok(type_id: String, base_pos: Vector3, rot_y: float,
 		space: PhysicsDirectSpaceState3D, length: float = -1.0) -> String:
 	var basis := Basis.from_euler(Vector3(0, rot_y, 0))
 	match type_id:
-		"s_column", "s_wall", "s_door", "s_window", "s_stairs", "s_sign":
+		"s_column", "s_wall", "s_door", "s_window", "s_stairs", "s_sign", "s_slab":
 			if not bears_point(base_pos, space, 0.6):
 				return "needs bearing below"
 		"s_beam", "s_railing":

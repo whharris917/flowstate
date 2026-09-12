@@ -431,6 +431,4 @@ func _static_box(size: Vector3, pos: Vector3, color: Color, material: Material =
 ## The plant floor: matte off-white tiles with grout, world-space, so
 ## every slab tiles alike (director, 2026-09-12).
 static func tile_floor() -> ShaderMaterial:
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://world/tile_floor.gdshader")
-	return mat
+	return StructureFactory.tile_floor()
