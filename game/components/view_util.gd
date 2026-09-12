@@ -1,13 +1,77 @@
 class_name ViewUtil
-## Shared placeholder-art helpers. Boxes, cylinders, flat color, one
-## emissive variant — nothing prettier until systems are proven.
+## Shared art helpers. Boxes, cylinders, a material factory, one
+## emissive variant, the interact volume and the floating label.
+##
+## Finish (director, 2026-09-11: "as realistic as possible", which
+## retires the flat-colour placeholder policy): every view already
+## encodes what a part is made of in the colour it asks for, so flat()
+## reads the finish off the colour. A low-saturation light grey is
+## brushed stainless; a low-saturation dark grey is painted or cast
+## steel; anything with colour in it is enamel paint; anything with
+## alpha is glass. Concrete, rubber and fabric ask for matte() by name.
 
 
+## A material whose finish follows the colour. See the class comment.
 static func flat(color: Color) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
-	mat.roughness = 0.85
+	if color.a < 0.999:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.roughness = 0.08
+		mat.metallic = 0.0
+		mat.metallic_specular = 0.9
+	elif color.s < 0.13 and color.v > 0.45:
+		_stainless(mat)
+	elif color.s < 0.13:
+		mat.metallic = 0.55
+		mat.roughness = 0.58
+	else:
+		mat.metallic = 0.04
+		mat.roughness = 0.42
+		mat.clearcoat_enabled = true
+		mat.clearcoat = 0.25
+		mat.clearcoat_roughness = 0.35
 	return mat
+
+
+## Brushed stainless, whatever the tint: the vessel shells, the
+## sanitary lines, the handrails.
+static func steel(color: Color = Color(0.62, 0.66, 0.70)) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	_stainless(mat)
+	return mat
+
+
+## Enamel paint, whatever the tint: pump casings, cabinets, steelwork.
+static func painted(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.metallic = 0.04
+	mat.roughness = 0.42
+	mat.clearcoat_enabled = true
+	mat.clearcoat = 0.25
+	mat.clearcoat_roughness = 0.35
+	return mat
+
+
+## Dull and dielectric: concrete, rubber, grating paint, fabric.
+static func matte(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.metallic = 0.0
+	mat.roughness = 0.92
+	return mat
+
+
+static func _stainless(mat: StandardMaterial3D) -> void:
+	mat.metallic = 0.92
+	mat.roughness = 0.34
+	mat.metallic_specular = 0.6
+	# The brushing: anisotropic highlights along the surface, which the
+	# primitive meshes' tangents carry for free.
+	mat.anisotropy_enabled = true
+	mat.anisotropy = 0.55
 
 
 static func glow(color: Color, energy: float = 1.6) -> StandardMaterial3D:

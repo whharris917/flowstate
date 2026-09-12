@@ -74,6 +74,15 @@ const COLORS := {
 }
 
 
+## Walls, doors and windows are painted panels, not polished steel;
+## the finish heuristic in ViewUtil.flat would read their light grey
+## as stainless.
+static func material_for(type_id: String) -> StandardMaterial3D:
+	if type_id in ["s_wall", "s_door", "s_window"]:
+		return ViewUtil.matte(COLORS[type_id])
+	return ViewUtil.flat(COLORS[type_id])
+
+
 static func beam_size(length: float) -> Vector3:
 	return Vector3(clampf(length, 1.0, 8.0), 0.35, 0.3)
 
@@ -128,7 +137,7 @@ static func _collide(body: StructureView, size: Vector3, pos: Vector3) -> Collis
 
 static func _build_basic(body: StructureView, type_id: String, size: Vector3) -> void:
 	_collide(body, size, Vector3.ZERO)
-	ViewUtil.box(body, size, Vector3.ZERO, ViewUtil.flat(COLORS[type_id]))
+	ViewUtil.box(body, size, Vector3.ZERO, material_for(type_id))
 	# Flange lines on steel members so they read as sections, not slabs.
 	var steel := ViewUtil.flat(COLORS[type_id])
 	var bolt := ViewUtil.flat(Color(0.35, 0.36, 0.38))
@@ -163,7 +172,7 @@ static func _build_basic(body: StructureView, type_id: String, size: Vector3) ->
 ## and its blocker slide together, and the blocker disables once the
 ## leaf is mostly open so the doorway is passable.
 static func _build_door(body: StructureView, size: Vector3) -> void:
-	var mat := ViewUtil.flat(COLORS["s_door"])
+	var mat := material_for("s_door")
 	var half_h := size.y / 2.0
 	for side: float in [-1.0, 1.0]:
 		var jamb := Vector3(0.18, size.y, size.z)
@@ -186,7 +195,7 @@ static func _build_door(body: StructureView, size: Vector3) -> void:
 
 
 static func _build_window(body: StructureView, size: Vector3) -> void:
-	var mat := ViewUtil.flat(COLORS["s_window"])
+	var mat := material_for("s_window")
 	_collide(body, size, Vector3.ZERO)
 	ViewUtil.box(body, Vector3(size.x, 1.0, size.z), Vector3(0, -size.y / 2.0 + 0.5, 0), mat)
 	ViewUtil.box(body, Vector3(size.x, 0.6, size.z), Vector3(0, size.y / 2.0 - 0.3, 0), mat)

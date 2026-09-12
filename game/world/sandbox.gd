@@ -66,10 +66,19 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.8
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ambient_light_energy = 0.55
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_white = 4.0
+	env.tonemap_exposure = 0.9
 	env.glow_enabled = true
-	env.glow_intensity = 0.25
+	env.glow_intensity = 0.18
+	env.glow_bloom = 0.05
+	# Contact shadow in the corners and under the skirts: the cheapest
+	# thing that makes steel look like it stands on the ground.
+	env.ssao_enabled = true
+	env.ssao_radius = 1.2
+	env.ssao_intensity = 2.0
+	env.ssao_power = 1.8
 	# A whisper of distance fog gives the infinite plane a horizon.
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.72, 0.78, 0.84)
@@ -86,6 +95,10 @@ func _build_environment() -> void:
 	_sun_base_color = sun.light_color
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 120.0
+	sun.shadow_blur = 1.5
+	sun.directional_shadow_split_1 = 0.08
+	sun.directional_shadow_split_2 = 0.2
+	sun.directional_shadow_split_3 = 0.5
 	add_child(sun)
 
 

@@ -165,7 +165,7 @@ func set_time_of_day(hours: float) -> void:
 		sky_mat.sky_horizon_color = night_horizon.lerp(dusk_horizon.lerp(day_horizon, horizon), twilight)
 		sky_mat.ground_horizon_color = sky_mat.sky_horizon_color.darkened(0.15)
 	if sky_env != null:
-		sky_env.ambient_light_energy = lerpf(0.15, 0.35 + 0.45 * horizon, twilight)
+		sky_env.ambient_light_energy = lerpf(0.15, 0.28 + 0.30 * horizon, twilight)
 		sky_env.fog_light_color = sky_mat.sky_horizon_color if sky_mat != null else sky_env.fog_light_color
 
 
@@ -265,6 +265,6 @@ func _static_box(size: Vector3, pos: Vector3, color: Color) -> void:
 	var box_mesh := BoxMesh.new()
 	box_mesh.size = size
 	mesh.mesh = box_mesh
-	mesh.material_override = ViewUtil.flat(color)
+	mesh.material_override = ViewUtil.matte(color)  # pads, floors, walls: concrete and paint
 	body.add_child(mesh)
 	add_child(body)

@@ -176,3 +176,6 @@ options={
 [rendering]
 
 environment/defaults/default_clear_color=Color(0.04, 0.045, 0.055, 1)
+anti_aliasing/quality/msaa_3d=2
+lights_and_shadows/directional_shadow/size=8192
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
