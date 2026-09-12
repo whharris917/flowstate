@@ -1464,7 +1464,7 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 						where = got[1]
 			var shared: bool = str(paths[i]["from"]) != "" and (str(paths[i]["from"]) == str(paths[j]["from"])
 				or str(paths[i]["to"]) == str(paths[j]["to"]))
-			if worst >= (maxf(min_length, 2.0) if shared else min_length):
+			if worst >= (maxf(min_length, 1.0) if shared else min_length):
 				found.append([worst, "%s ∥ %s for %.1f m near (%.1f, %.1f, %.1f)" % [
 					paths[i]["name"], paths[j]["name"], worst, where.x, where.y, where.z]])
 	found.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) > float(b[0]))
@@ -1617,19 +1617,28 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	return PipeRoute.routed(from, from_dir, to, to_dir, shifted)
 
 
-## Lanes step out either side of the run, across the stub it leaves
-## by; a stub pointing up or down has no across, so those step
-## diagonally.
+## Lanes step out sideways from the stub a run leaves by, alternately
+## either side, a step further each time — never up or down, which
+## would carry a ground-run past the support rule's reach. A stub
+## pointing up or down has no sideways, so those use the world axes.
 static func _lane_offset(lane: int, radius: float, from_dir: Vector3) -> Vector3:
 	if lane <= 0:
 		return Vector3.ZERO
-	@warning_ignore("integer_division")
-	var k := (lane + 1) / 2
-	var side := 1.0 if lane % 2 == 1 else -1.0
 	var across := Vector3(-from_dir.z, 0.0, from_dir.x)
+	var dirs: Array[Vector3]
 	if across.length() < 0.5:
-		across = Vector3(1, 0, 1)
-	return across.normalized() * (side * k * (2.0 * radius + 0.03))
+		dirs = [Vector3(1, 0, 1).normalized(), Vector3(-1, 0, -1).normalized(),
+			Vector3(1, 0, -1).normalized(), Vector3(-1, 0, 1).normalized()]
+	else:
+		# Mostly across, a little along: a shift purely across the stub
+		# cannot part two legs that run in that same direction (the two
+		# feeds to P-301A and P-301B did, for 1.2 m).
+		across = across.normalized()
+		var along := Vector3(from_dir.x, 0.0, from_dir.z).normalized()
+		dirs = [(across + along * 0.5).normalized(), (-across + along * 0.5).normalized()]
+	@warning_ignore("integer_division")
+	var k := (lane - 1) / dirs.size() + 1
+	return dirs[(lane - 1) % dirs.size()] * (k * (2.0 * radius + 0.03))
 
 
 func _visual_path(visual: Dictionary) -> Array[Vector3]:
@@ -1640,8 +1649,9 @@ func _visual_path(visual: Dictionary) -> Array[Vector3]:
 
 ## The longest stretch this route would share with a run already laid,
 ## or 0. Trays do not count: a conduit belongs in one. Runs leaving
-## the same fitting are allowed two metres of company — the fan-out at
-## a gland plate is physics, not a mistake.
+## the same fitting are allowed the stub and a jog, a metre — the
+## fan-out at a nozzle or a gland plate is physics, not a mistake — and
+## no more (the director saw two metres of it at T-403, 2026-09-12).
 func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: String,
 		b: String, b_port: String) -> float:
 	var worst := 0.0
@@ -1652,7 +1662,7 @@ func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: Str
 		var shared := (str(visual["a"]) == a and str(visual["a_port"]) == a_port) \
 			or (str(visual["b"]) == b and str(visual["b_port"]) == b_port)
 		var got := _paths_overlap(path, visual.get("path", []), radius + other.radius())
-		if got >= (2.0 if shared else 0.5):
+		if got >= (1.0 if shared else 0.5):
 			worst = maxf(worst, got)
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
