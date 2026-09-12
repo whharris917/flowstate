@@ -143,7 +143,7 @@ func _process(delta: float) -> void:
 				names.append(PlantFactory.label_for(type_id))
 			hud.toast("MILESTONE — %s.%s" % [finished["title"],
 				("  Unlocked: " + ", ".join(names)) if not names.is_empty() else "  The ladder is complete."])
-			EquipmentAudio.play_once(player, "res://audio/beep.wav", Vector3.ZERO, -6.0, 1.6)
+			EquipmentAudio.play_once(player, "res://audio/milestone.wav", Vector3.ZERO, -4.0, 1.0)
 			builder.refresh_menu()
 		if journal.visible:
 			_journal_refresh -= delta

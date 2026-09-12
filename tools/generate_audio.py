@@ -548,6 +548,27 @@ def make_servo() -> None:
     write_wav(OUT_DIR / "servo.wav", [buf], normalize_to=0.30)
 
 
+def make_milestone() -> None:
+    """Milestone chime (campaign, 2026-09-11): three rising notes of a D
+    major triad with a soft octave under each, bell-like decays, a
+    touch under a second. Pure sines and no RNG, so every other file
+    stays byte-identical."""
+    duration = 1.1
+    n = int(duration * SR)
+    buf = [0.0] * n
+    notes = [(587.33, 0.00), (739.99, 0.16), (880.00, 0.32), (1174.66, 0.50)]
+    for freq, start in notes:
+        start_i = int(start * SR)
+        for i in range(start_i, n):
+            t = (i - start_i) / SR
+            attack = min(t / 0.012, 1.0)
+            env = attack * math.exp(-t * 3.2)
+            buf[i] += (math.sin(2.0 * math.pi * freq * t)
+                       + 0.35 * math.sin(2.0 * math.pi * freq * 2.0 * t) * math.exp(-t * 6.0)
+                       + 0.18 * math.sin(2.0 * math.pi * freq * 0.5 * t)) * env
+    write_wav(OUT_DIR / "milestone.wav", [buf], normalize_to=0.36)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -564,6 +585,7 @@ def main() -> None:
     make_vent_blast()
     make_gurgle()
     make_servo()
+    make_milestone()
     for idx, (f0, decay, noise_amp) in enumerate(
             [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):
