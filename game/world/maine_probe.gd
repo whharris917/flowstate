@@ -53,6 +53,45 @@ func _run(world: WorldBase) -> void:
 		await _shot("user://%sgraphics_%s.png" % [_prefix, preset.to_lower()])
 		print("[probe] graphics %s: %.0f fps (loop %.0f ms) — %s" % [preset, best, loop_ms,
 			world.graphics.summary()])
+	# What each part of the landscape costs on Low (director, 2026-09-13:
+	# "not even reaching 60 fps on Low"): the rate with each part hidden
+	# in turn, and with the cheaper upscaler.
+	world.graphics.set_preset("Low")
+	world.graphics.apply(world)
+	var forests: Array[Forest] = []
+	for child in coast.get_children():
+		if child is Forest:
+			forests.append(child as Forest)
+	var terrain_mesh: MeshInstance3D = null
+	for child in coast.find_child("Terrain", false, false).get_children():
+		if child is MeshInstance3D:
+			terrain_mesh = child as MeshInstance3D
+	var stars: MeshInstance3D = (world as Object).get("_stars") as MeshInstance3D
+	var parts: Array = [
+		["everything", func(on: bool) -> void: pass],
+		["without the far wood", func(on: bool) -> void: forests[1].visible = on],
+		["without the near wood", func(on: bool) -> void: forests[0].visible = on],
+		["without the sea", func(on: bool) -> void: coast.sea.visible = on],
+		["without the terrain", func(on: bool) -> void: terrain_mesh.visible = on],
+		["without the star dome", func(on: bool) -> void: if stars != null: stars.visible = on],
+		["with FSR 2 instead of FSR 1", func(on: bool) -> void:
+			world.graphics.values["upscaler"] = "fsr1" if on else "fsr2"
+			world.graphics.apply(world)],
+		["at 100% scale, no upscaler", func(on: bool) -> void:
+			world.graphics.values["scale"] = 0.59 if on else 1.0
+			world.graphics.values["upscaler"] = "fsr2" if on else "bilinear"
+			world.graphics.apply(world)],
+	]
+	for part: Array in parts:
+		(part[1] as Callable).call(false)
+		await get_tree().create_timer(1.5).timeout
+		var best := 0.0
+		for _k in 4:
+			await get_tree().create_timer(0.5).timeout
+			best = maxf(best, Engine.get_frames_per_second())
+		print("[probe] Low %-30s %.0f fps · %.2f M tris" % [str(part[0]), best,
+			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1.0e6])
+		(part[1] as Callable).call(true)
 	world.graphics.set_preset("High")
 	world.graphics.apply(world)
 	# From the east shore ledge, back up at the site.

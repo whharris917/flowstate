@@ -227,6 +227,9 @@ func _process(delta: float) -> void:
 func _on_time_of_day(_horizon: float, twilight: float) -> void:
 	if _stars_mat != null:
 		_stars_mat.set_shader_parameter("visibility", 1.0 - twilight)
+		# The dome covers the whole sky; by day it drew nothing and still
+		# cost the fill (4 fps on the laptop, 2026-09-13).
+		_stars.visible = twilight < 0.999
 	# Night level set with the director (2026-09-12): 3 was too dim, 9
 	# too bright; 5.5 is a lit night shift.
 	for light in _hall_lights:

@@ -14,11 +14,14 @@ const PRESET_NAMES: Array[String] = ["Low", "Medium", "High", "Ultra"]
 # What each preset sets. High is the game as it was tuned on
 # 2026-09-11; Low is what an integrated GPU can hold; Ultra adds the
 # global illumination and fog the old "high lighting" toggle held.
+# Low and Medium upscale with FSR 1, not FSR 2: on the director's
+# integrated GPU FSR 2's temporal pass cost half the frame (the Maine
+# coast on Low: 41 fps with it, 78 without, 2026-09-13).
 const PRESETS: Dictionary = {
-	"Low": {"scale": 0.59, "upscaler": "fsr2", "aa": "off", "shadow_size": 2048,
+	"Low": {"scale": 0.59, "upscaler": "fsr1", "aa": "off", "shadow_size": 2048,
 		"shadow_filter": "hard", "shadow_distance": 60, "shadow_splits": 2, "ssao": false, "ssr": false,
 		"glow": false, "sdfgi": false, "volumetric_fog": false, "tree_shadows": false},
-	"Medium": {"scale": 0.67, "upscaler": "fsr2", "aa": "off", "shadow_size": 4096,
+	"Medium": {"scale": 0.77, "upscaler": "fsr1", "aa": "fxaa", "shadow_size": 4096,
 		"shadow_filter": "soft_low", "shadow_distance": 120, "shadow_splits": 2, "ssao": true, "ssr": false,
 		"glow": true, "sdfgi": false, "volumetric_fog": false, "tree_shadows": true},
 	"High": {"scale": 1.0, "upscaler": "bilinear", "aa": "msaa4", "shadow_size": 8192,
