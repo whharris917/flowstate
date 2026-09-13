@@ -42,7 +42,7 @@ var settings: SettingsPanel
 var music_player: AudioStreamPlayer = null
 var time_of_day := 10.0
 var music_on := false
-var high_lighting := false           # SDFGI and volumetric fog, for machines that can afford them
+var graphics := GraphicsSettings.new()   # presets and knobs; see ui/graphics_settings.gd
 var _sun_base_energy := 1.5
 var _sun_base_color := Color(1.0, 0.97, 0.90)
 
@@ -90,8 +90,9 @@ func _ready() -> void:
 	settings.on_music_changed = func(on: bool) -> void:
 		set_music(on)
 		_save_settings()
-	settings.on_lighting_changed = func(on: bool) -> void:
-		set_high_lighting(on)
+	settings.graphics = graphics
+	settings.on_graphics_changed = func() -> void:
+		graphics.apply(self)
 		_save_settings()
 	builder = BuildController.new()
 	add_child(builder)
@@ -283,6 +284,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.toast("saved" if plant.save_game() else "save FAILED")
 	elif event.is_action_pressed("quickload"):
 		hud.toast("loaded" if plant.load_game() else "no save found")
+	elif event.is_action_pressed("graphics_preset"):
+		# F7: the next preset, applied on the spot, so the frame rate and
+		# the picture can be compared without leaving the plant.
+		graphics.next_preset()
+		graphics.apply(self)
+		_save_settings()
+		settings.refresh()
+		hud.toast("Graphics: " + graphics.summary())
 
 
 ## ---- options: the sun and the music ---------------------------------------
@@ -361,18 +370,12 @@ func _on_time_of_day(_horizon: float, _twilight: float) -> void:
 	pass
 
 
-## High lighting: signed-distance-field global illumination (bounce
-## light in the corners, stainless reflecting the plant around it) and
-## volumetric fog outdoors. Off by default: it costs real GPU time.
-func set_high_lighting(on: bool) -> void:
-	high_lighting = on
-	if sky_env == null:
-		return
-	sky_env.sdfgi_enabled = on
-	sky_env.sdfgi_use_occlusion = true
-	sky_env.sdfgi_bounce_feedback = 0.5
-	if sky_mat != null:  # outdoors; the hall keeps its own fog either way
-		sky_env.volumetric_fog_enabled = on
+## The graphics options (2026-09-12): GraphicsSettings holds the values
+## and applies them; the options panel edits them, F7 cycles the
+## presets, and the frame-rate overlay shows what each costs. The old
+## "high lighting" toggle (SDFGI and volumetric fog) is the Ultra preset.
+func apply_graphics() -> void:
+	graphics.apply(self)
 
 
 func set_music(on: bool) -> void:
@@ -393,25 +396,28 @@ func _save_settings() -> void:
 	if file == null:
 		return
 	file.store_string(JSON.stringify({"time_of_day": time_of_day, "music": music_on,
-		"high_lighting": high_lighting}))
+		"graphics": graphics.to_dict()}))
 
 
 func _load_settings() -> void:
 	var hours := time_of_day
 	var on := music_on
-	var high := high_lighting
 	if FileAccess.file_exists(SETTINGS_PATH):
 		var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
 		if file != null:
 			var parsed: Variant = JSON.parse_string(file.get_as_text())
 			if parsed is Dictionary:
-				hours = float((parsed as Dictionary).get("time_of_day", hours))
-				on = bool((parsed as Dictionary).get("music", on))
-				high = bool((parsed as Dictionary).get("high_lighting", high))
+				var saved := parsed as Dictionary
+				hours = float(saved.get("time_of_day", hours))
+				on = bool(saved.get("music", on))
+				if saved.get("graphics") is Dictionary:
+					graphics.from_dict(saved["graphics"])
+				elif bool(saved.get("high_lighting", false)):
+					graphics.set_preset("Ultra")  # the toggle this replaced
 	set_time_of_day(hours)
 	set_music(on)
-	set_high_lighting(high)
-	settings.set_values(time_of_day, music_on, high_lighting)
+	graphics.apply(self)
+	settings.set_values(time_of_day, music_on)
 
 
 func _fmt_time(seconds: float) -> String:

@@ -8,6 +8,9 @@ var _readout_label: Label
 var _toast_label: Label
 var _mode_label: Label
 var _alarm_label: Label
+var _fps_label: Label
+var _fps_note := ""
+var _fps_left := 0.0
 var _toast_tween: Tween
 
 
@@ -56,6 +59,15 @@ func _ready() -> void:
 	_alarm_label.add_theme_color_override("font_color", Color(0.98, 0.45, 0.35))
 	_alarm_label.visible = false
 
+	# The frame-rate overlay (2026-09-12): under the readout, what the
+	# frame costs and what the graphics preset is, so the balance
+	# between speed and looks can be read while walking.
+	_fps_label = _make_label(HORIZONTAL_ALIGNMENT_LEFT)
+	_fps_label.set_anchors_and_offsets_preset(PRESET_TOP_LEFT)
+	_fps_label.position = Vector2(12, 32)
+	_fps_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.65))
+	_fps_label.visible = false
+
 
 func _make_label(align: HorizontalAlignment) -> Label:
 	var label := Label.new()
@@ -71,8 +83,31 @@ func _draw() -> void:
 	draw_circle(size / 2.0, 2.5, Color(0.95, 0.95, 0.93, 0.9))
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	queue_redraw()
+	if not _fps_label.visible:
+		return
+	_fps_left -= delta
+	if _fps_left > 0.0:
+		return
+	_fps_left = 0.25
+	var fps := Performance.get_monitor(Performance.TIME_FPS)
+	# The window's pixels, not the stretched 1280x720 the HUD is laid out in.
+	var out := Vector2(get_window().size)
+	var scale := get_viewport().scaling_3d_scale
+	var tris := Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+	var draws := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+	var vram := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED)
+	_fps_label.text = "%d fps · %.1f ms · %dx%d of %dx%d · %.2f M tris · %d draws · %.0f MB\n%s" % [
+		fps, 1000.0 / maxf(fps, 1.0), roundi(out.x * scale), roundi(out.y * scale),
+		roundi(out.x), roundi(out.y), tris / 1.0e6, draws, vram / (1024.0 * 1024.0), _fps_note]
+
+
+## The overlay on or off, with the graphics summary it shows under the numbers.
+func set_fps_overlay(on: bool, note: String) -> void:
+	_fps_note = note
+	_fps_label.visible = on
+	_fps_left = 0.0
 
 
 func set_look_text(text: String) -> void:

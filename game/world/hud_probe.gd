@@ -23,9 +23,25 @@ func _run() -> void:
 	_press(KEY_TAB)
 	await get_tree().create_timer(0.4).timeout
 	await _shot("user://probe_structure.png")
-	# The same view at noon and at dusk: the lighting pass reads here.
+	# The options panel, with the graphics section and the live frame rate.
 	_press(KEY_B)
 	world.player.camera.rotation.x = 0.0
+	_press(KEY_O)
+	await get_tree().create_timer(0.5).timeout
+	await _shot("user://probe_options.png")
+	_press(KEY_O)
+	# Each graphics preset from the same spot, with its frame rate.
+	for preset: String in GraphicsSettings.PRESET_NAMES:
+		world.graphics.set_preset(preset)
+		world.graphics.apply(world)
+		# Pipelines compile on the first frames after a switch; the rate
+		# is read once they have.
+		await get_tree().create_timer(3.5).timeout
+		await _shot("user://probe_graphics_%s.png" % preset.to_lower())
+		print("[probe] graphics %s: %.0f fps — %s" % [preset, Engine.get_frames_per_second(), world.graphics.summary()])
+	world.graphics.set_preset("High")
+	world.graphics.apply(world)
+	# The same view at noon and at dusk: the lighting pass reads here.
 	for shot: Array in [[12.0, "noon"], [17.7, "dusk"], [21.0, "night"]]:
 		world.set_time_of_day(float(shot[0]))
 		await get_tree().create_timer(0.5).timeout

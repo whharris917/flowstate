@@ -197,4 +197,6 @@ func _multimesh(mesh: Mesh, xforms: Array[Transform3D], colors: Array[Color],
 	inst.material_override = mat
 	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast_shadows \
 		else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if cast_shadows:
+		inst.add_to_group("foliage_shadows")  # the graphics option "Tree shadows" switches these
 	add_child(inst)

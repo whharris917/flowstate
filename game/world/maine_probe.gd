@@ -35,8 +35,18 @@ func _run(world: WorldBase) -> void:
 		get_tree().quit()
 		return
 	var coast := (world as MaineMap).coast
-	# Across the cove to the lighthouse.
+	# Across the cove to the lighthouse, then the same view under each
+	# graphics preset with its frame rate, once the pipelines have compiled.
 	await _view(player, Vector3(-20.0, 0.35, 70.0), 2.64, -0.05, 0.0, "lighthouse")
+	for preset: String in GraphicsSettings.PRESET_NAMES:
+		world.graphics.set_preset(preset)
+		world.graphics.apply(world)
+		await get_tree().create_timer(3.5).timeout
+		await _shot("user://%sgraphics_%s.png" % [_prefix, preset.to_lower()])
+		print("[probe] graphics %s: %.0f fps — %s" % [preset, Engine.get_frames_per_second(),
+			world.graphics.summary()])
+	world.graphics.set_preset("High")
+	world.graphics.apply(world)
 	# From the east shore ledge, back up at the site.
 	var y := coast.height_at(104.0, 30.0)
 	await _view(player, Vector3(104.0, y + 0.4, 30.0), PI / 2.0, 0.08, 0.0, "shore")
