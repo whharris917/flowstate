@@ -72,6 +72,14 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 func _build_body() -> void:
 	var path := _path
 	var bend := _radius * 1.5
+	# A bend of any angle: each straight gives up the bend's tangent
+	# length at its end, and the elbow sweeps the angle between them.
+	# The tangents are fitted to the legs first, so a short leg gets a
+	# tighter bend rather than a ball joint (director, 2026-09-13: "some
+	# bends still look weirdly bulbous").
+	var tangents: Array[float] = []
+	if _style != "tray":
+		tangents = _tangents(path, bend)
 	for i in range(path.size() - 1):
 		var from := path[i]
 		var to := path[i + 1]
@@ -80,10 +88,8 @@ func _build_body() -> void:
 		var direction := (to - from).normalized()
 		var seg_from := from
 		var seg_to := to
-		# A bend of any angle: each straight gives up the bend's tangent
-		# length at its end, and the elbow sweeps the angle between them.
-		var t_from := _tangent(path, i, bend) if _style != "tray" else -1.0
-		var t_to := _tangent(path, i + 1, bend) if _style != "tray" else -1.0
+		var t_from := float(tangents[i]) if not tangents.is_empty() else -1.0
+		var t_to := float(tangents[i + 1]) if not tangents.is_empty() else -1.0
 		if t_from > 0.0:
 			seg_from = from + direction * t_from
 		if t_to > 0.0:
@@ -95,7 +101,8 @@ func _build_body() -> void:
 		if i > 0:
 			var joint: Node3D = null
 			if t_from > 0.0:
-				joint = elbow_node(from, (from - path[i - 1]).normalized(), direction, _radius, bend, _cold)
+				var corner_bend := t_from / tan(_turn_angle(path, i) / 2.0)
+				joint = elbow_node(from, (from - path[i - 1]).normalized(), direction, _radius, corner_bend, _cold)
 			if joint == null and _turns_at(path, i):
 				joint = joint_node(from, _radius, _style, _cold)
 			if joint != null:
@@ -324,20 +331,55 @@ static func _turn_angle(path: Array[Vector3], k: int) -> float:
 	return acos(clampf(before.dot(after), -1.0, 1.0))
 
 
-## The tangent length of a swept bend at point k — how much of each
-## straight the elbow takes — or -1 where the corner keeps a ball
-## joint: no turn, a hairpin the bend radius cannot sweep, or a leg
-## too short to give up its share.
-static func _tangent(path: Array[Vector3], k: int, bend: float) -> float:
-	if not _turns_at(path, k):
-		return -1.0
-	var theta := _turn_angle(path, k)
-	if theta > deg_to_rad(150.0):
-		return -1.0
-	var t := bend * tan(theta / 2.0)
-	if (path[k] - path[k - 1]).length() < 2.0 * t or (path[k + 1] - path[k]).length() < 2.0 * t:
-		return -1.0
-	return t
+## The tangent length of the swept bend at every corner — how much of
+## each straight its elbow takes — fitted to the legs: where two bends
+## share a leg shorter than both their tangents, both tighten to fit,
+## and a bend that would have to tighten below a short-radius elbow
+## (its centreline radius under the pipe's own radius) keeps a ball
+## joint instead. -1 marks a corner with no elbow: a path end, no
+## turn, a hairpin past 150 degrees, or one too tight to sweep.
+static func _tangents(path: Array[Vector3], bend: float) -> Array[float]:
+	var n := path.size()
+	var out: Array[float] = []
+	out.resize(n)
+	var half_tan: Array[float] = []
+	half_tan.resize(n)
+	for k in n:
+		out[k] = -1.0
+		half_tan[k] = 0.0
+		if k <= 0 or k >= n - 1 or not _turns_at(path, k):
+			continue
+		var theta := _turn_angle(path, k)
+		if theta > deg_to_rad(150.0):
+			continue
+		half_tan[k] = tan(theta / 2.0)
+		out[k] = bend * half_tan[k]
+	# Fit: a leg carries the tangents of both its corners. A corner that
+	# would tighten past the floor becomes a ball, and the fit is run
+	# again without it, so its leg's slack goes to the other end.
+	var floor_bend := bend / 1.5   # the pipe's own radius: as tight as an elbow goes
+	for pass_ in 3:
+		for k in n:
+			if half_tan[k] > 0.0:
+				out[k] = bend * half_tan[k]
+		for i in n - 1:
+			var length := path[i].distance_to(path[i + 1])
+			var need := maxf(out[i], 0.0) + maxf(out[i + 1], 0.0)
+			if need <= length or need <= 0.0:
+				continue
+			var scale := length / need
+			for k in [i, i + 1]:
+				if out[k] > 0.0:
+					out[k] *= scale
+		var demoted := false
+		for k in n:
+			if out[k] > 0.0 and out[k] / half_tan[k] < floor_bend - 1e-4:
+				out[k] = -1.0
+				half_tan[k] = 0.0
+				demoted = true
+		if not demoted:
+			break
+	return out
 
 
 ## A swept bend of any angle: a torus section of the pipe's radius
@@ -406,8 +448,10 @@ static func joint_node(at: Vector3, radius: float, style: String,
 		return box
 	var joint := MeshInstance3D.new()
 	var elbow := SphereMesh.new()
-	elbow.radius = radius * 1.2
-	elbow.height = radius * 2.4
+	# The pipe's own radius: a ball no wider than the pipe fills the
+	# corner without a bulge (2026-09-13: 1.2 read as bulbous).
+	elbow.radius = radius * 1.02
+	elbow.height = radius * 2.04
 	joint.mesh = elbow
 	joint.material_override = mat
 	joint.position = at
