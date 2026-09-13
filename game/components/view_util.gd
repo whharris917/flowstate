@@ -156,6 +156,25 @@ static func cylinder(parent: Node3D, radius: float, height: float, pos: Vector3,
 ## The raycast hits this and follows the "view" meta to describe()/use().
 ## Lives on layer 4: rays probe it, but the player walks through it —
 ## otherwise a door's interact volume would block its own doorway.
+## A round interaction volume for a vessel: it follows the shell, so
+## the nozzles on it stand proud of it and nothing lights up in the
+## empty air a box would put at the corners.
+static func interact_cylinder(view: Node3D, radius: float, height: float, pos: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.collision_layer = 4
+	body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = radius
+	cyl.height = height
+	shape.shape = cyl
+	body.add_child(shape)
+	body.position = pos
+	body.set_meta("view", view)
+	view.add_child(body)
+	return body
+
+
 static func interact_body(view: Node3D, size: Vector3, pos: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.collision_layer = 4

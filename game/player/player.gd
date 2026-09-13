@@ -30,6 +30,7 @@ const BASE_REACH := 3.0
 
 @onready var camera: Camera3D = $Camera3D
 @onready var ray: RayCast3D = $Camera3D/InteractRay
+var port_ray: RayCast3D
 
 var zoom_t: float = 0.0        # 0 = blade tip (first person), 1 = top of the curve
 var _zoom_now: float = 0.0     # smoothed follower
@@ -50,6 +51,16 @@ func _ready() -> void:
 	# World (1) + interact volumes (4) + routed runs (8); connect mode
 	# adds port markers (2).
 	ray.collision_mask = 1 | 4 | 8
+	# A second ray that sees only port fittings (director, 2026-09-13:
+	# G and the connect click did nothing on a placed tank). A fitting
+	# lies inside its equipment's interaction volume, and a ray that
+	# sees both stops at the volume; whenever the main ray admits
+	# fittings, this one is asked first.
+	port_ray = RayCast3D.new()
+	port_ray.collision_mask = 2
+	port_ray.target_position = ray.target_position
+	port_ray.add_exception(self)
+	camera.add_child(port_ray)
 	MouseMode.capture()
 	_build_body()
 	for i in range(1, 5):
@@ -147,6 +158,25 @@ func _update_camera(delta: float) -> void:
 	camera.position = to_local(target)
 	camera.fov = lerpf(camera.fov, _fov_target, 1.0 - exp(-12.0 * delta))
 	ray.target_position = Vector3(0, 0, -(BASE_REACH + zoom_offset()))
+	port_ray.target_position = ray.target_position
+
+
+## What the crosshair is on. When the main ray admits port fittings
+## (connect mode), a fitting under the crosshair wins over the
+## interaction volume it sits inside; otherwise the main ray answers.
+func aimed_collider() -> Node:
+	if (ray.collision_mask & 2) != 0 and port_ray.is_colliding():
+		return port_ray.get_collider() as Node
+	if ray.is_colliding():
+		return ray.get_collider() as Node
+	return null
+
+
+## The ray that answered aimed_collider(), for its point and normal.
+func aimed_ray() -> RayCast3D:
+	if (ray.collision_mask & 2) != 0 and port_ray.is_colliding():
+		return port_ray
+	return ray
 
 
 func _zoom_point(t: float) -> Vector3:

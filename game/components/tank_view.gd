@@ -124,7 +124,10 @@ func rebuild() -> void:
 	# The body hangs from the rebuilt geometry but must answer for the
 	# tank itself: hover, E, X and G all ask the collider for its view
 	# (director, 2026-09-05: X could not remove a tank).
-	var body := ViewUtil.interact_body(_built, Vector3(r * 2.2, h, r * 2.2), Vector3(0, h / 2.0, 0))
+	# Round, and the size of the shell: a box reached 41 % past the
+	# shell at its corners and buried the nozzles there, so the connect
+	# ray stopped at the box and G never saw a nozzle (2026-09-13).
+	var body := ViewUtil.interact_cylinder(_built, r + 0.03, h, Vector3(0, h / 2.0, 0))
 	body.set_meta("view", self)
 
 	var markers := {}

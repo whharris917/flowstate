@@ -290,8 +290,8 @@ var _labelled: Node = null
 
 func _reveal_labels(view: Node3D) -> void:
 	var target: Node = view
-	if target == null and player.ray.is_colliding():
-		var collider := player.ray.get_collider() as Node
+	if target == null:
+		var collider := player.aimed_collider()
 		if collider != null and collider.has_meta("owner_view"):
 			target = collider.get_meta("owner_view") as Node
 	if target == _labelled:

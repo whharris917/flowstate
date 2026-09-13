@@ -278,9 +278,7 @@ func _toggle_nozzle_grab() -> void:
 		_nozzle_grab = {}
 		hud.toast("nozzle move cancelled")
 		return
-	if not player.ray.is_colliding():
-		return
-	var collider := player.ray.get_collider() as Node
+	var collider := player.aimed_collider()
 	if collider == null or not collider.has_meta("movable"):
 		hud.toast("aim at a vessel nozzle to move it")
 		return
@@ -297,8 +295,12 @@ func _update_nozzle_grab() -> void:
 		return
 	var collider := player.ray.get_collider() as Node
 	# Only spots on this vessel count: its interact volume stands in
-	# for the shell.
-	if collider == null or collider.get_meta("view", null) != view:
+	# for the shell, and the nozzle being carried is on the shell too.
+	if collider == null:
+		return
+	var on_vessel: bool = (collider.has_meta("view") and collider.get_meta("view") == view) \
+		or (collider.has_meta("owner_view") and collider.get_meta("owner_view") == view)
+	if not on_vessel:
 		return
 	var local: Vector3 = view.to_local(player.ray.get_collision_point())
 	var angle := atan2(local.z, local.x)
@@ -407,9 +409,9 @@ func _clear_route() -> void:
 ## Where a clicked waypoint would land: the aimed surface, pushed out
 ## along its normal, grid-snapped. INF when aiming at nothing.
 func _aim_point() -> Vector3:
-	if not player.ray.is_colliding():
+	var collider := player.aimed_collider()
+	if collider == null:
 		return Vector3.INF
-	var collider := player.ray.get_collider() as Node
 	if collider.has_meta("port_name"):
 		return (collider as Node3D).global_position
 	var normal := player.ray.get_collision_normal()
@@ -788,10 +790,9 @@ func _finish_run() -> void:
 
 
 func _try_pick_port() -> void:
-	var collider := player.ray.get_collider() if player.ray.is_colliding() else null
-	if collider == null:
+	var node := player.aimed_collider()
+	if node == null:
 		return
-	var node := collider as Node
 	if not node.has_meta("port_name"):
 		# A surface click while routing lays a waypoint.
 		if _pending_marker != null:
@@ -800,7 +801,7 @@ func _try_pick_port() -> void:
 				_waypoints.append(aim)
 				_update_hud()
 		return
-	var marker := collider as StaticBody3D
+	var marker := node as StaticBody3D
 	if _pending_marker == null:
 		if bool(marker.get_meta("is_input")):
 			hud.toast("start from an outlet or output fitting")
