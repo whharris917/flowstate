@@ -566,6 +566,9 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	tag.font_size = 24
 	tag.pixel_size = 0.0028
+	tag.visibility_range_end = 30.0
+	tag.visible = false  # floating text shows on hover only
+	tag.set_meta("floating", true)
 	body.add_child(tag)
 	body.set_meta("record_name", record_name)
 	body.set_meta("port_name", port_name)
@@ -573,6 +576,9 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	body.set_meta("kind", kind)
 	body.set_meta("owner_view", view)
 	view.add_child(body)
+	# The fitting's parts as one mesh per look under the body: the body
+	# is what the plant positions and picks, its meshes are never touched.
+	MeshMerge.merge_view(body)
 	return body
 
 

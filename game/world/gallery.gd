@@ -145,7 +145,7 @@ static func _collide_cyl(parent: Node3D, r: float, h: float, pos: Vector3) -> vo
 
 
 static func _label(parent: Node3D, text: String, pos: Vector3, size: int = 40) -> Label3D:
-	var l := ViewUtil.label(parent, text, pos)
+	var l := ViewUtil.plate(parent, text, pos)
 	l.font_size = size
 	return l
 

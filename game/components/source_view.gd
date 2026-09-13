@@ -59,7 +59,7 @@ func setup(source_: SimSource) -> void:
 	add_child(wheel)
 	ViewUtil.box(self, Vector3(0.52, 0.22, 0.04), Vector3(0, 1.15, 0.12),
 		ViewUtil.flat(Color(0.10, 0.32, 0.52)))
-	var plate := ViewUtil.label(self, "SUPPLY", Vector3(0, 1.15, 0.15))
+	var plate := ViewUtil.plate(self, "SUPPLY", Vector3(0, 1.15, 0.15))
 	plate.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	plate.font_size = 26
 	_total = ViewUtil.label(self, "", Vector3(0, 1.95, 0))

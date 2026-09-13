@@ -206,8 +206,12 @@ func _after_plant() -> void:
 	# The full unit-area showcase: pipe rack, Unit 100 PID loop, MCC
 	# room with a PLC-run batch tank, signage.
 	Showcase.build(plant)
-	# Unit 500: the geometry gallery, art only, nothing simulated.
+	# Unit 500: the geometry gallery, art only, nothing simulated — and
+	# static, so its thousand primitives become a mesh per look.
 	Gallery.build(plant, self)
+	var gallery := find_child("Gallery", false, false)
+	if gallery != null:
+		MeshMerge.merge_view(gallery as Node3D)
 
 
 func _process(delta: float) -> void:
@@ -234,6 +238,13 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 ## ---- the hall -------------------------------------------------------------
 
 func _build_enclosure() -> void:
+	# Everything the hall is made of goes under one node and is merged
+	# into a mesh per look at the end (2026-09-13): the lamp lenses
+	# share their material, so the night glow still reaches them.
+	var hall := Node3D.new()
+	hall.name = "Hall"
+	add_child(hall)
+	_box_parent = hall
 	var y0 := plant_height
 	var top := HALL_MAX.y
 	var cx := (HALL_MIN.x + HALL_MAX.x) / 2.0
@@ -277,6 +288,8 @@ func _build_enclosure() -> void:
 			_high_bay(Vector3(fx, y0 + top - 1.3, fz))
 			fz += 12.0
 		fx += 12.0
+	_box_parent = null
+	MeshMerge.merge_view(hall)
 
 
 ## One wall as its bands; a door interval (in the wall's long axis,
@@ -323,13 +336,14 @@ func _glass_box(size: Vector3, pos: Vector3) -> void:
 	mesh.material_override = ViewUtil.flat(COL_HALL_GLASS)
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	body.add_child(mesh)
-	add_child(body)
+	(_box_parent if _box_parent != null else self).add_child(body)
 
 
 ## A high-bay fixture: a lit housing and the light it throws.
 func _high_bay(pos: Vector3) -> void:
-	ViewUtil.box(self, Vector3(1.2, 0.18, 0.5), pos + Vector3(0, 0.12, 0), ViewUtil.flat(COL_HALL_STEEL))
-	var lens := ViewUtil.box(self, Vector3(1.1, 0.04, 0.42), pos, _hall_lamp_mat)
+	var holder: Node3D = _box_parent if _box_parent != null else self
+	ViewUtil.box(holder, Vector3(1.2, 0.18, 0.5), pos + Vector3(0, 0.12, 0), ViewUtil.flat(COL_HALL_STEEL))
+	var lens := ViewUtil.box(holder, Vector3(1.1, 0.04, 0.42), pos, _hall_lamp_mat)
 	lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var light := OmniLight3D.new()
 	light.position = pos + Vector3(0, -0.3, 0)

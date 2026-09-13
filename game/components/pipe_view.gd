@@ -89,6 +89,39 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 	if style == "pipe" and path.size() >= 2:
 		_end_fitting(path[0], path[1])
 		_end_fitting(path[path.size() - 1], path[path.size() - 2])
+	_merge_body()
+	_merge_fittings()
+
+
+## One mesh for the run's body — every straight, bend and joint shares
+## the service material and is repainted as one — and one or two for
+## the end fittings (2026-09-13: a run was thirty draw calls).
+func _merge_body() -> void:
+	var body: Array = []
+	for inst in _meshes:
+		if not _fitting_nodes.has(inst):
+			body.append(inst)
+	if body.size() < 2:
+		return
+	var merged := MeshMerge.merge_list(self, body, _cold)
+	if merged == null:
+		return
+	for inst in body:
+		_meshes.erase(inst)
+	_meshes.append(merged)
+
+
+func _merge_fittings() -> void:
+	if _fitting_nodes.size() < 2:
+		return
+	var merged := MeshMerge.merge_group(self, _fitting_nodes)
+	for old in _fitting_nodes:
+		_meshes.erase(old)  # flange discs were repainted with the body
+	_fitting_nodes.clear()
+	for inst in merged:
+		_fitting_nodes.append(inst)
+		if inst.material_override == _cold:
+			_meshes.append(inst)
 
 
 ## Where the run terminates, pipes bolt on, they don't just touch: a
@@ -150,6 +183,7 @@ func set_fitting(style: String) -> void:
 	if _style == "pipe" and _path.size() >= 2:
 		_end_fitting(_path[0], _path[1])
 		_end_fitting(_path[_path.size() - 1], _path[_path.size() - 2])
+		_merge_fittings()
 		_repaint()
 
 
@@ -197,6 +231,11 @@ func _line_label(text: String, at: Vector3) -> Label3D:
 	label.pixel_size = 0.0035
 	label.outline_size = 8
 	label.modulate = Color(0.95, 0.95, 0.90)
+	label.visibility_range_end = 30.0  # unreadable further off, and each label is a draw
+	# Floating text shows only for the run under the crosshair
+	# (director, 2026-09-13).
+	label.visible = false
+	label.set_meta("floating", true)
 	add_child(label)
 	return label
 
@@ -237,6 +276,8 @@ static func segment_node(from: Vector3, to: Vector3, radius: float,
 		mesh.top_radius = radius
 		mesh.bottom_radius = radius
 		mesh.height = length
+		mesh.radial_segments = 16  # a pipe a few centimetres across needs no 64 sides
+		mesh.rings = 1
 		inst.mesh = mesh
 		inst.material_override = mat
 		# Cylinder axis is Y; map it onto the segment direction (-Z of
@@ -401,6 +442,11 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 			foot.rotation = Vector3(0, 0, PI / 2.0) if absf(direction.x) > 0.5 \
 				else Vector3(PI / 2.0, 0, 0)
 		_brackets.append(foot)
+	# All the clamp hardware of a run in one mesh.
+	var merged := MeshMerge.merge_group(self, _brackets)
+	_brackets.clear()
+	for inst in merged:
+		_brackets.append(inst)
 
 
 func describe() -> String:

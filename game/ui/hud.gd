@@ -83,10 +83,18 @@ func _draw() -> void:
 	draw_circle(size / 2.0, 2.5, Color(0.95, 0.95, 0.93, 0.9))
 
 
+var _cpu_acc := 0.0
+var _phys_acc := 0.0
+var _cpu_n := 0
+
+
 func _process(delta: float) -> void:
 	queue_redraw()
 	if not _fps_label.visible:
 		return
+	_cpu_acc += Performance.get_monitor(Performance.TIME_PROCESS)
+	_phys_acc += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+	_cpu_n += 1
 	_fps_left -= delta
 	if _fps_left > 0.0:
 		return
@@ -98,8 +106,17 @@ func _process(delta: float) -> void:
 	var tris := Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
 	var draws := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 	var vram := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED)
-	_fps_label.text = "%d fps · %.1f ms · %dx%d of %dx%d · %.2f M tris · %d draws · %.0f MB\n%s" % [
-		fps, 1000.0 / maxf(fps, 1.0), roundi(out.x * scale), roundi(out.y * scale),
+	# The CPU's share of the frame, averaged over the window: the main
+	# loop and a physics tick. When the loop is close to the frame
+	# time, no graphics knob will help.
+	var n := maxi(_cpu_n, 1)
+	var cpu := _cpu_acc / n * 1000.0
+	var phys := _phys_acc / n * 1000.0
+	_cpu_acc = 0.0
+	_phys_acc = 0.0
+	_cpu_n = 0
+	_fps_label.text = "%d fps · %.1f ms (loop %.1f · physics %.1f) · %dx%d of %dx%d · %.2f M tris · %d draws · %.0f MB\n%s" % [
+		fps, 1000.0 / maxf(fps, 1.0), cpu, phys, roundi(out.x * scale), roundi(out.y * scale),
 		roundi(out.x), roundi(out.y), tris / 1.0e6, draws, vram / (1024.0 * 1024.0), _fps_note]
 
 

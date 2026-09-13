@@ -16,16 +16,16 @@ const PRESET_NAMES: Array[String] = ["Low", "Medium", "High", "Ultra"]
 # global illumination and fog the old "high lighting" toggle held.
 const PRESETS: Dictionary = {
 	"Low": {"scale": 0.59, "upscaler": "fsr2", "aa": "off", "shadow_size": 2048,
-		"shadow_filter": "hard", "shadow_distance": 60, "ssao": false, "ssr": false,
+		"shadow_filter": "hard", "shadow_distance": 60, "shadow_splits": 2, "ssao": false, "ssr": false,
 		"glow": false, "sdfgi": false, "volumetric_fog": false, "tree_shadows": false},
-	"Medium": {"scale": 0.77, "upscaler": "fsr2", "aa": "off", "shadow_size": 4096,
-		"shadow_filter": "soft_low", "shadow_distance": 120, "ssao": true, "ssr": false,
+	"Medium": {"scale": 0.67, "upscaler": "fsr2", "aa": "off", "shadow_size": 4096,
+		"shadow_filter": "soft_low", "shadow_distance": 120, "shadow_splits": 2, "ssao": true, "ssr": false,
 		"glow": true, "sdfgi": false, "volumetric_fog": false, "tree_shadows": true},
 	"High": {"scale": 1.0, "upscaler": "bilinear", "aa": "msaa4", "shadow_size": 8192,
-		"shadow_filter": "soft_medium", "shadow_distance": 200, "ssao": true, "ssr": true,
+		"shadow_filter": "soft_medium", "shadow_distance": 200, "shadow_splits": 4, "ssao": true, "ssr": true,
 		"glow": true, "sdfgi": false, "volumetric_fog": false, "tree_shadows": true},
 	"Ultra": {"scale": 1.0, "upscaler": "bilinear", "aa": "msaa4", "shadow_size": 8192,
-		"shadow_filter": "soft_ultra", "shadow_distance": 200, "ssao": true, "ssr": true,
+		"shadow_filter": "soft_ultra", "shadow_distance": 200, "shadow_splits": 4, "ssao": true, "ssr": true,
 		"glow": true, "sdfgi": true, "volumetric_fog": true, "tree_shadows": true},
 }
 
@@ -41,10 +41,12 @@ const CHOICES: Dictionary = {
 	"shadow_filter": [["hard", "Hard"], ["soft_low", "Soft low"], ["soft_medium", "Soft medium"],
 		["soft_high", "Soft high"], ["soft_ultra", "Soft ultra"]],
 	"shadow_distance": [[60, "60 m"], [120, "120 m"], [200, "200 m"]],
+	"shadow_splits": [[1, "1"], [2, "2"], [4, "4"]],
 }
 const LABELS: Dictionary = {
 	"upscaler": "Upscaler", "aa": "Anti-aliasing", "shadow_size": "Shadow map",
 	"shadow_filter": "Shadow filter", "shadow_distance": "Shadow distance",
+	"shadow_splits": "Shadow cascades",
 }
 # The switches, as [key, label] pairs.
 const BOOLS: Array = [
@@ -58,7 +60,9 @@ var values: Dictionary = {}
 
 
 func _init() -> void:
-	set_preset("High")
+	# Medium is the balance found on the director's laptop (2026-09-13):
+	# a fresh install starts there; F7 and the panel go either way.
+	set_preset("Medium")
 	for key: String in EXTRAS:
 		values[key] = EXTRAS[key]
 
@@ -192,6 +196,14 @@ func apply(world: WorldBase) -> void:
 	RenderingServer.positional_soft_shadow_filter_set_quality(quality)
 	if world.sun != null:
 		world.sun.directional_shadow_max_distance = float(values["shadow_distance"])
+		# Every cascade draws every caster again: the count is a cost knob.
+		match int(values["shadow_splits"]):
+			1:
+				world.sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+			2:
+				world.sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+			_:
+				world.sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	var env := world.sky_env
 	if env == null:
 		for node in world.find_children("*", "WorldEnvironment", true, false):

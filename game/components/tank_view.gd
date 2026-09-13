@@ -204,6 +204,9 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	tag.font_size = 24
 	tag.pixel_size = 0.003
+	tag.visibility_range_end = 30.0
+	tag.visible = false  # floating text shows on hover only
+	tag.set_meta("floating", true)
 	body.add_child(tag)
 
 	body.set_meta("record_name", tank.comp_name)
@@ -215,6 +218,7 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	body.set_meta("movable", true)
 	_built.add_child(body)
 	_nozzle_nodes[port] = body
+	MeshMerge.merge_view(body)  # the nozzle's parts as one mesh per look; the body is what moves
 	_place_nozzle(body, spot)
 	return body
 

@@ -140,6 +140,10 @@ static func cylinder(parent: Node3D, radius: float, height: float, pos: Vector3,
 	mesh.top_radius = radius
 	mesh.bottom_radius = radius
 	mesh.height = height
+	# Sides by size (2026-09-13): the default 64 on a bolt is vertices
+	# for nothing; a vessel a metre across still gets 48.
+	mesh.radial_segments = clampi(int(radius * 48.0), 12, 48)
+	mesh.rings = 1
 	var inst := MeshInstance3D.new()
 	inst.mesh = mesh
 	inst.material_override = mat
@@ -175,5 +179,18 @@ static func label(parent: Node3D, text: String, pos: Vector3) -> Label3D:
 	lbl.font_size = 40
 	lbl.pixel_size = 0.004
 	lbl.modulate = Color(0.85, 0.85, 0.82)
+	lbl.visibility_range_end = 30.0  # unreadable further off, and each label is a draw call
+	# Floating text shows only on the equipment under the crosshair
+	# (director, 2026-09-13); the world reveals it by this meta.
+	lbl.visible = false
+	lbl.set_meta("floating", true)
 	parent.add_child(lbl)
+	return lbl
+
+
+## Engraved text: a legend plate, a rating plate, a sign. Always shown.
+static func plate(parent: Node3D, text: String, pos: Vector3) -> Label3D:
+	var lbl := label(parent, text, pos)
+	lbl.remove_meta("floating")
+	lbl.visible = true
 	return lbl

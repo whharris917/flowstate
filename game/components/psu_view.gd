@@ -37,7 +37,7 @@ func setup(psu_: SimPowerSupply) -> void:
 	_lamp_on = ViewUtil.glow(Color(0.30, 0.95, 0.45), 1.6)
 	_lamp_off = ViewUtil.flat(Color(0.20, 0.30, 0.22))
 	_lamp = ViewUtil.box(self, Vector3(0.07, 0.07, 0.03), Vector3(0.15, 1.38, 0.15), _lamp_off)
-	var tag := ViewUtil.label(self, "480VAC → 24VDC", Vector3(0, 1.62, 0))
+	var tag := ViewUtil.plate(self, "480VAC → 24VDC", Vector3(0, 1.62, 0))
 	tag.font_size = 24
 	ViewUtil.label(self, psu.comp_name, Vector3(0, 1.80, 0))
 	ViewUtil.interact_body(self, Vector3(0.6, 1.5, 0.4), Vector3(0, 0.85, 0))

@@ -41,6 +41,7 @@ func setup(pid_: SimPID) -> void:
 	_screen.pixel_size = 0.0028
 	_screen.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_screen.modulate = Color(0.55, 0.95, 0.65)
+	_screen.visibility_range_end = 25.0
 	add_child(_screen)
 	ViewUtil.label(self, pid.comp_name, Vector3(0, 1.78, 0))
 	ViewUtil.interact_body(self, Vector3(0.55, 0.9, 0.35), Vector3(0, 1.3, 0))

@@ -149,6 +149,15 @@ func _headless_reports() -> void:
 	print("[flowstate] ports with more than one wire: %d" % fanouts.size())
 	for line in fanouts:
 		print("    " + line)
+	# Where the draw calls come from, by owner: the map for any merge.
+	for line in DrawCensus.report(self):
+		print(line)
+	# What a frame's main loop costs without rendering: the views'
+	# _process, the HUD, the world. The sim ticks in physics, not here.
+	print("[flowstate] main loop: %.1f ms a frame over %d headless frames"
+		% [_loop_acc / maxi(_loop_n, 1) * 1000.0, _loop_n])
+	if OS.get_environment("FLOWSTATE_LOOP_PROFILE") != "":
+		LoopProfile.run(self)  # bisects that loop by node group, then quits
 
 
 ## Environment, geometry, lighting. Override in each world.
@@ -199,9 +208,15 @@ func _notification(what: int) -> void:
 		plant.save_game()
 
 
+var _loop_acc := 0.0
+var _loop_n := 0
+
+
 func _process(delta: float) -> void:
 	if _report_in > 0:
 		_report_in -= 1
+		_loop_acc += Performance.get_monitor(Performance.TIME_PROCESS)
+		_loop_n += 1
 		if _report_in == 0:
 			_headless_reports()
 	if autosave_s > 0.0 and DisplayServer.get_name() != "headless":
@@ -239,6 +254,7 @@ func _process(delta: float) -> void:
 	var view := player.look_view()
 	if builder.is_editing():
 		view = null  # the pointer, not the player's crosshair, is what matters
+	_reveal_labels(view)
 	if view != null and view.has_method("describe"):
 		hud.set_look_text(str(view.call("describe")))
 	else:
@@ -261,6 +277,35 @@ func _process(delta: float) -> void:
 	hud.set_readout_text("t %s   level %.1f L   relay %d cyc   pump %s" % [
 		_fmt_time(plant.sim.time), plant.tank.level_l, plant.relay.cycles,
 		"RUN" if plant.pump.running else "stop"])
+
+
+## Floating text (equipment names, port tags, line labels) shows only
+## on what the crosshair is over (director, 2026-09-13: "remove the
+## floating text, perhaps only showing it on hover"). Signs and
+## instrument faces are physical and stay. A port fitting under the
+## crosshair reveals its owner's labels.
+var _labelled: Node = null
+
+
+func _reveal_labels(view: Node3D) -> void:
+	var target: Node = view
+	if target == null and player.ray.is_colliding():
+		var collider := player.ray.get_collider() as Node
+		if collider != null and collider.has_meta("owner_view"):
+			target = collider.get_meta("owner_view") as Node
+	if target == _labelled:
+		return
+	if _labelled != null and is_instance_valid(_labelled):
+		_set_floating(_labelled, false)
+	_labelled = target
+	if target != null:
+		_set_floating(target, true)
+
+
+static func _set_floating(root: Node, on: bool) -> void:
+	for label in root.find_children("*", "Label3D", true, false):
+		if label.has_meta("floating"):
+			(label as Label3D).visible = on
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -469,6 +514,11 @@ func _exit_tree() -> void:
 		audio_player.stop()
 
 
+## Where the static boxes go: the world itself, or a container a world
+## sets while it builds something it will merge as one (the hall).
+var _box_parent: Node3D = null
+
+
 func _static_box(size: Vector3, pos: Vector3, color: Color, material: Material = null) -> void:
 	var body := StaticBody3D.new()
 	body.position = pos
@@ -484,7 +534,7 @@ func _static_box(size: Vector3, pos: Vector3, color: Color, material: Material =
 	# Pads, floors, walls: concrete and paint, or a floor shader.
 	mesh.material_override = material if material != null else ViewUtil.matte(color)
 	body.add_child(mesh)
-	add_child(body)
+	(_box_parent if _box_parent != null else self).add_child(body)
 
 
 ## The plant floor: matte off-white tiles with grout, world-space, so

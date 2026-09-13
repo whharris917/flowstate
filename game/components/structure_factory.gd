@@ -337,6 +337,7 @@ static func _build_sign(body: StructureView, size: Vector3) -> void:
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.modulate = Color(0.96, 0.96, 0.93)
+	label.visibility_range_end = 45.0
 	body.add_child(label)
 	body._sign_label = label
 

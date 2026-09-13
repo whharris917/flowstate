@@ -41,9 +41,17 @@ func _run(world: WorldBase) -> void:
 	for preset: String in GraphicsSettings.PRESET_NAMES:
 		world.graphics.set_preset(preset)
 		world.graphics.apply(world)
-		await get_tree().create_timer(3.5).timeout
+		# Pipelines compile first; then three seconds of samples, and the
+		# best second is reported, as the least disturbed by the laptop's clock.
+		await get_tree().create_timer(2.5).timeout
+		var best := 0.0
+		var loop_ms := 0.0
+		for _k in 6:
+			await get_tree().create_timer(0.5).timeout
+			best = maxf(best, Engine.get_frames_per_second())
+			loop_ms += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0 / 6.0
 		await _shot("user://%sgraphics_%s.png" % [_prefix, preset.to_lower()])
-		print("[probe] graphics %s: %.0f fps — %s" % [preset, Engine.get_frames_per_second(),
+		print("[probe] graphics %s: %.0f fps (loop %.0f ms) — %s" % [preset, best, loop_ms,
 			world.graphics.summary()])
 	world.graphics.set_preset("High")
 	world.graphics.apply(world)

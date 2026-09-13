@@ -487,6 +487,9 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as StillView).setup(record as SimStill)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
+	# One mesh per look for the furniture; the port fittings come after
+	# and stay separate, since the plant colours and grabs them.
+	MeshMerge.merge_view(view)
 	if type_id == "mains":
 		PlantFactory.attach_port_markers(view, record, type_id,
 			PlantFactory.mains_anchors((record as SimMainsFeed).ways))
@@ -529,6 +532,7 @@ func mount_instrument(type_id: String, name_: String, params: Dictionary,
 		(view as FloatSwitchView).setup(record as SimFloatSwitch, true)
 	else:
 		(view as GaugeView).setup(record as SimGauge, true)
+	MeshMerge.merge_view(view)
 	host_view.mount(view, frac, angle)
 	var skip: Array[String] = [str(PlantFactory.MOUNTED_INPUT[type_id])]
 	PlantFactory.attach_port_markers(view, record, type_id,
@@ -579,6 +583,7 @@ func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 	view.rotation.y = rot_y
 	add_child(view)
 	view.setup(name_)
+	MeshMerge.merge_view(view)
 	view.config_cb = _configure_cabinet
 	cabinets[name_] = {"node": view, "modules": [], "next_id": 1}
 	return true
@@ -927,6 +932,7 @@ func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
 		return
 	record.set_size(height_m, diameter_m)
 	view.rebuild()
+	MeshMerge.merge_view(view)
 	refresh_wires_of(name_)
 	# Instruments on the shell moved with it; their cables follow.
 	for inst_name: String in mounted:
@@ -1400,6 +1406,7 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 			var host_view := views.get(str((mounted[name_] as Dictionary)["host"])) as TankView
 			if host_view != null:
 				host_view.rebuild()  # its trip rings
+				MeshMerge.merge_view(host_view)
 	else:
 		for key: String in values:
 			if key != "species":
@@ -1550,6 +1557,7 @@ func place_structure(type_id: String, name_: String, base_pos: Vector3, rot_y: f
 	add_child(node)
 	node.global_position = base_pos + Vector3(0, (StructureFactory.SIZES[type_id] as Vector3).y / 2.0, 0)
 	node.rotation.y = rot_y
+	MeshMerge.merge_view(node)  # the door leaf, the sign face and the like are held and stay
 	if type_id == "s_sign":
 		node.config_cb = _configure_sign
 	structures[name_] = {"type": type_id, "node": node, "length": length, "text": ""}
@@ -1592,6 +1600,7 @@ func place_junction_box(name_: String, world_pos: Vector3, rot_y: float, channel
 	view.rotation.y = rot_y
 	add_child(view)
 	view.setup(name_, channels, on_post)
+	MeshMerge.merge_view(view)
 	var records: Array[String] = []
 	for i in channels:
 		var record_name := "%s_t%d" % [name_, i + 1]
@@ -1694,6 +1703,7 @@ func place_control_station(name_: String, world_pos: Vector3, rot_y: float, devi
 		built.append({"record": record, "legend": str(d.get("legend", str(d["id"]).to_upper())),
 			"color": str(d.get("color", "green"))})
 	view.setup(name_, built, on_post)
+	MeshMerge.merge_view(view)
 	control_stations[name_] = {"node": view, "records": records, "devices": devices.duplicate(true),
 		"on_post": on_post}
 	# Circuits leave on the right flank, one row per device.

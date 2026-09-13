@@ -39,7 +39,7 @@ class ButtonNode extends Node3D:
 			_cap = ViewUtil.cylinder(self, 0.03, 0.025, Vector3(0, 0, 0.03), ViewUtil.flat(color))
 		_cap.rotation_degrees = Vector3(90, 0, 0)
 		_rest_z = _cap.position.z
-		var plate := ViewUtil.label(self, legend, Vector3(0, -0.07, 0.02))
+		var plate := ViewUtil.plate(self, legend, Vector3(0, -0.07, 0.02))
 		plate.font_size = 20
 		plate.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		ViewUtil.interact_body(self, Vector3(0.11, 0.14, 0.1), Vector3(0, -0.02, 0.03))
@@ -77,7 +77,7 @@ class LightNode extends Node3D:
 		_off = ViewUtil.flat(color.darkened(0.6))
 		_lens = ViewUtil.cylinder(self, 0.032, 0.03, Vector3(0, 0, 0.03), _off)
 		_lens.rotation_degrees = Vector3(90, 0, 0)
-		var plate := ViewUtil.label(self, legend, Vector3(0, -0.065, 0.02))
+		var plate := ViewUtil.plate(self, legend, Vector3(0, -0.065, 0.02))
 		plate.font_size = 20
 		plate.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		ViewUtil.interact_body(self, Vector3(0.1, 0.12, 0.08), Vector3(0, -0.02, 0.03))

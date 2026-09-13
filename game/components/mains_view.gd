@@ -34,7 +34,7 @@ func setup(mains_: SimMainsFeed) -> void:
 		ViewUtil.cylinder(self, 0.03, 0.26, Vector3(sx, 1.85, 0), ViewUtil.flat(Color(0.72, 0.72, 0.75)))
 	ViewUtil.box(self, Vector3(0.06, 0.18, 0.18), Vector3(0.36, 1.05, 0), steel)
 	ViewUtil.box(self, Vector3(0.14, 0.04, 0.006), Vector3(-0.15, 1.55, 0.262), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
-	var tag := ViewUtil.label(self, "⚡ %s" % mains.spec, Vector3(0, 0.85, 0.30))
+	var tag := ViewUtil.plate(self, "⚡ %s" % mains.spec, Vector3(0, 0.85, 0.30))
 	tag.font_size = 30
 	tag.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	ViewUtil.label(self, mains.comp_name, Vector3(0, 1.95, 0))
