@@ -234,6 +234,10 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 	# too bright; 5.5 is a lit night shift.
 	for light in _hall_lights:
 		light.light_energy = lerpf(5.5, 1.2, twilight)
+		# By full day the sun and the skylights light the hall; thirty
+		# omni lights cost every pixel under them (4 fps on the laptop
+		# at Low, 2026-09-13), so they come on with the dusk.
+		light.visible = twilight < 0.999
 	if _hall_lamp_mat != null:
 		_hall_lamp_mat.emission_energy_multiplier = lerpf(4.5, 1.5, twilight)
 

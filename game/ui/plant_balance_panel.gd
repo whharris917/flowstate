@@ -19,7 +19,7 @@ const COL_WARN := Color(0.95, 0.70, 0.15)
 const COL_BAD := Color(0.92, 0.28, 0.22)
 const COL_SERIES := Color(0.30, 0.78, 0.95)
 const TREND_S := 600.0
-const REDRAW_S := 0.2
+const REDRAW_S := 1.0  # a ten-minute trend and a residual: once a second is plenty (2026-09-13)
 
 var plant: Plant
 var _held0: Dictionary = {}   # unit -> held when first seen, corrected for the scans before

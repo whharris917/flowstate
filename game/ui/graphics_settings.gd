@@ -18,8 +18,8 @@ const PRESET_NAMES: Array[String] = ["Low", "Medium", "High", "Ultra"]
 # integrated GPU FSR 2's temporal pass cost half the frame (the Maine
 # coast on Low: 41 fps with it, 78 without, 2026-09-13).
 const PRESETS: Dictionary = {
-	"Low": {"scale": 0.59, "upscaler": "fsr1", "aa": "off", "shadow_size": 2048,
-		"shadow_filter": "hard", "shadow_distance": 60, "shadow_splits": 2, "ssao": false, "ssr": false,
+	"Low": {"scale": 0.5, "upscaler": "fsr1", "aa": "off", "shadow_size": 2048,
+		"shadow_filter": "hard", "shadow_distance": 60, "shadow_splits": 1, "ssao": false, "ssr": false,
 		"glow": false, "sdfgi": false, "volumetric_fog": false, "tree_shadows": false},
 	"Medium": {"scale": 0.77, "upscaler": "fsr1", "aa": "fxaa", "shadow_size": 4096,
 		"shadow_filter": "soft_low", "shadow_distance": 120, "shadow_splits": 2, "ssao": true, "ssr": false,

@@ -77,9 +77,11 @@ func _process(delta: float) -> void:
 		if not names.is_empty():
 			var acc := SimBalance.accounts(plant.sim, names)
 			_held0 = float(acc["held"]) - (float(acc["fed"]) - float(acc["out"]))
-	# The balance page replays historian samples; five times a second is plenty.
+	# Five redraws a second on every page (2026-09-13: the overview
+	# replayed its trend every frame): the process is 20 Hz, the eye
+	# reads a screen slower than that, and a redraw is real work.
 	_since_redraw += delta
-	if page != 2 or _since_redraw >= 0.2:
+	if _since_redraw >= 0.2:
 		_since_redraw = 0.0
 		queue_redraw()
 

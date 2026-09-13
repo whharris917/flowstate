@@ -52,6 +52,29 @@ static func merge_list(parent: Node3D, nodes: Array, mat: Material) -> MeshInsta
 	return out[0]
 
 
+## The port fittings of a view as one mesh per look under the view
+## (2026-09-13: two draws a port, 500 draws a frame in the showcase).
+## A fitting's body keeps its collision and its tag; its meshes join
+## the view's. A movable fitting (a tank's nozzle) keeps its own. An
+## earlier merged fitting mesh is a source again, so fittings attached
+## in several calls accumulate; whoever frees the bodies (the cabinet
+## sync) frees the merged meshes too, by their merged_markers meta.
+static func merge_markers(view: Node3D) -> int:
+	var groups: Dictionary = {}
+	for child in view.get_children():
+		if child.has_meta("merged_markers") and child is MeshInstance3D:
+			_add(child as MeshInstance3D, view, groups, null)
+		elif child.has_meta("port_name") and not child.has_meta("movable"):
+			for inner in child.get_children():
+				if inner is MeshInstance3D and inner.get_child_count() == 0:
+					_add(inner as MeshInstance3D, view, groups, null)
+	var out: Array = []
+	var gone := _build(groups, out)
+	for node in out:
+		(node as Node).set_meta("merged_markers", true)
+	return gone
+
+
 ## ---- the held set ---------------------------------------------------------
 
 ## Every object a script member of root refers to, directly or inside

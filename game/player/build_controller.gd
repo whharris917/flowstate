@@ -253,6 +253,7 @@ func _update_hud() -> void:
 
 func _physics_process(_delta: float) -> void:
 	if not _nozzle_grab.is_empty():
+		plant._finish_scans()  # a grab moves a nozzle's elevation in the sim
 		_update_nozzle_grab()
 		return
 	if mode == Mode.PLACE:

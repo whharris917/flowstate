@@ -165,17 +165,23 @@ static func residual_points(historian: SimHistorian, tagset: Dictionary, held0: 
 	var start := times.size() - 1
 	while start > 0 and times[start - 1] >= t0:
 		start -= 1
+	# Each tag's series and start index once, then plain array reads:
+	# a historian call per tag per sample was tens of thousands of
+	# script calls a redraw, five redraws a second, on every world's
+	# pad — the hitch under the whole game (2026-09-13).
+	var terms: Array = []   # [series, start_index, weight]
+	for group: Array in [["fed", 1.0], ["out", -1.0], ["held", -1.0]]:
+		for pair: Array in tagset[str(group[0])]:
+			var tag := str(pair[0])
+			terms.append([historian.series(tag), historian.start_index(tag), float(pair[1]) * float(group[1])])
 	var i := start
 	while i < times.size():
-		var value := 0.0
-		for pair: Array in tagset["fed"]:
-			value += _at(historian, str(pair[0]), i) * float(pair[1])
-		for pair: Array in tagset["out"]:
-			value -= _at(historian, str(pair[0]), i) * float(pair[1])
-		var held := 0.0
-		for pair: Array in tagset["held"]:
-			held += _at(historian, str(pair[0]), i) * float(pair[1])
-		value -= held - held0
+		var value := held0
+		for term: Array in terms:
+			var local: int = i - int(term[1])
+			var series: PackedFloat64Array = term[0]
+			if local >= 0 and local < series.size():
+				value += series[local] * float(term[2])
 		points.append(Vector2(times[i], value))
 		i += maxi(stride, 1)
 	return points

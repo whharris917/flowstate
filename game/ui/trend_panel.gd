@@ -34,8 +34,17 @@ func setup(historian_: SimHistorian, tank_: SimTank, switch_: SimFloatSwitch,
 	_level_tag = tank_.level.path()
 
 
-func _process(_delta: float) -> void:
-	queue_redraw()
+## Five redraws a second, like the other screens: the trend replays
+## ten minutes of samples each time, and at every frame that was a
+## visible slice of the loop (2026-09-13).
+var _redraw_left := 0.0
+
+
+func _process(delta: float) -> void:
+	_redraw_left -= delta
+	if _redraw_left <= 0.0:
+		_redraw_left = 0.2
+		queue_redraw()
 
 
 func _draw() -> void:

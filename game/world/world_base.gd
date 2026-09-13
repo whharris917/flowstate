@@ -309,6 +309,14 @@ static func _set_floating(root: Node, on: bool) -> void:
 			(label as Label3D).visible = on
 
 
+## A key or a button may act on the sim (E turns a valve, a click
+## places a machine): the scan thread is collected before any handler
+## sees the event. Mouse motion never touches the sim and is left alone.
+func _input(event: InputEvent) -> void:
+	if plant != null and (event is InputEventKey or event is InputEventMouseButton):
+		plant._finish_scans()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("library"):
 		library.toggle()

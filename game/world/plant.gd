@@ -41,6 +41,76 @@ const ORDER_ALL := 1 << 30
 
 var _accumulator: float = 0.0
 var last_tick_ms: float = 0.0     # what the latest scan cost, for the frame-rate overlay
+
+# The scans a frame owes run on a worker thread while the frame is
+# drawn (director, 2026-09-13: the showcase must reach 60 fps on Low,
+# and a 9 ms scan on the main thread was a third of the frame). The
+# window is RenderingServer.frame_pre_draw to frame_post_draw: every
+# script that reads the sim — the views' _process, the HUD, the
+# alarms, the screens' _draw (flushed after _process), input handlers,
+# saves — runs outside it, and the sim itself never touches a node.
+# The thread is joined before the draw ends, so nothing ever sees a
+# scan in progress. Headless runs, and FLOWSTATE_SYNC_SCAN=1, scan in
+# the physics step as before.
+const MAX_SCANS_PER_FRAME := 3
+var threaded_scan: bool = DisplayServer.get_name() != "headless" \
+	and OS.get_environment("FLOWSTATE_SYNC_SCAN") == ""
+var _scans_due: int = 0
+var _scan_thread: Thread = null
+var _scan_hooked := false
+
+
+func _run_scans(count: int) -> void:
+	for _i in count:
+		var started := Time.get_ticks_usec()
+		sim.tick()
+		var elapsed := Time.get_ticks_usec() - started
+		last_tick_ms = elapsed / 1000.0
+		_note_cost(elapsed)
+
+
+func _start_scans() -> void:
+	if _scans_due <= 0 or _scan_thread != null:
+		return
+	_scan_thread = Thread.new()
+	_scan_thread.start(_run_scans.bind(_scans_due))
+	_scans_due = 0
+
+
+func _finish_scans() -> void:
+	if _scan_thread == null:
+		return
+	var started := Time.get_ticks_usec()
+	_scan_thread.wait_to_finish()
+	_scan_thread = null
+	# How long the frame waited for the scan: the part of it still on
+	# the critical path when the draw was shorter than the scan.
+	last_join_ms = (Time.get_ticks_usec() - started) / 1000.0
+
+
+var last_join_ms: float = 0.0
+
+
+## At the end of the draw the scan is collected only if it is done;
+## otherwise it runs on through the next frame's input and physics
+## and is collected before the first _process (SceneTree.process_frame,
+## emitted just before every node's _process), on any key or button
+## (WorldBase._input, since a keypress may act on the sim), before a
+## routing sweep, and during a nozzle grab (the build controller).
+## Everything that reads or writes the sim lives past one of those.
+func _join_if_done() -> void:
+	if _scan_thread != null and not _scan_thread.is_alive():
+		_finish_scans()
+
+
+func _exit_tree() -> void:
+	_finish_scans()
+	if _scan_hooked:
+		_scan_hooked = false
+		RenderingServer.frame_pre_draw.disconnect(_start_scans)
+		RenderingServer.frame_post_draw.disconnect(_join_if_done)
+		if get_tree() != null:
+			get_tree().process_frame.disconnect(_finish_scans)
 # One-off kernel cost report, taken over the first few hundred scans.
 var _cost_ticks: int = 0
 var _cost_total_us: int = 0
@@ -371,15 +441,24 @@ func _exercise_build_api() -> void:
 func _physics_process(delta: float) -> void:
 	_accumulator += delta
 	while _accumulator >= SIM_DT:
-		var started := Time.get_ticks_usec()
-		sim.tick()
-		var elapsed := Time.get_ticks_usec() - started
-		last_tick_ms = elapsed / 1000.0
-		_note_cost(elapsed)
+		_scans_due += 1
 		_accumulator -= SIM_DT
+	if _scans_due > MAX_SCANS_PER_FRAME:
+		# A hitch is not repaid with a longer hitch: the sim slips behind
+		# the clock by the scans it drops.
+		_scans_due = MAX_SCANS_PER_FRAME
+	if not threaded_scan:
+		_run_scans(_scans_due)
+		_scans_due = 0
+	elif not _scan_hooked:
+		_scan_hooked = true
+		RenderingServer.frame_pre_draw.connect(_start_scans)
+		RenderingServer.frame_post_draw.connect(_join_if_done)
+		get_tree().process_frame.connect(_finish_scans)
 	if _revalidate_in > 0:
 		_revalidate_in -= 1
 		if _revalidate_in == 0:
+			_finish_scans()  # the sweep repaints runs off the kernel's flows
 			_revalidate_supports()
 	if _support_exercise_phase > 0:
 		_support_exercise_wait -= 1
@@ -865,6 +944,11 @@ func _sync_cabinet(cab: String) -> void:
 		if is_instance_valid(marker):
 			marker.queue_free()
 	view.set_meta("port_markers", {})
+	# The fittings' meshes were merged under the view; they go with the bodies.
+	for child in view.get_children():
+		if child.has_meta("merged_markers"):
+			view.remove_child(child)
+			child.queue_free()
 	var y := 1.72
 	for module_v: Variant in entry["modules"]:
 		var module := module_v as Dictionary

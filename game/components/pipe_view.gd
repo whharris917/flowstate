@@ -57,7 +57,21 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 	# read as bulbs): each straight is shortened by the bend radius at
 	# a corner that bends, and a quarter-torus elbow fills the gap. A
 	# corner too tight for a bend keeps the old ball joint.
-	var bend := radius * 1.5
+	# Colliders once; the geometry in _build_body, which set_fitting
+	# runs again, since the flanges are baked into the body.
+	if collider_layer > 0:
+		for i in range(path.size() - 1):
+			if path[i].distance_to(path[i + 1]) >= 0.005:
+				_segment_collider(path[i], path[i + 1], maxf(radius * 2.5, 0.12), collider_layer)
+	_build_body()
+
+
+## The run's geometry — straights, bends, joints, end fittings — then
+## merged: one mesh for the body with its flanges, one or two for the
+## clamp parts (2026-09-13: a run was three draws; two now).
+func _build_body() -> void:
+	var path := _path
+	var bend := _radius * 1.5
 	for i in range(path.size() - 1):
 		var from := path[i]
 		var to := path[i + 1]
@@ -66,27 +80,25 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 		var direction := (to - from).normalized()
 		var seg_from := from
 		var seg_to := to
-		if style != "tray":
+		if _style != "tray":
 			if _bends_at(path, i, bend):
 				seg_from = from + direction * bend
 			if _bends_at(path, i + 1, bend):
 				seg_to = to - direction * bend
 		if seg_from.distance_to(seg_to) > 0.005:
-			var seg := segment_node(seg_from, seg_to, radius, style, _cold)
+			var seg := segment_node(seg_from, seg_to, _radius, _style, _cold)
 			add_child(seg)
 			_collect_meshes(seg)
-		if collider_layer > 0:
-			_segment_collider(from, to, maxf(radius * 2.5, 0.12), collider_layer)
 		if i > 0:
 			var joint: Node3D = null
-			if style != "tray" and _bends_at(path, i, bend):
-				joint = elbow_node(from, (from - path[i - 1]).normalized(), direction, radius, bend, _cold)
+			if _style != "tray" and _bends_at(path, i, bend):
+				joint = elbow_node(from, (from - path[i - 1]).normalized(), direction, _radius, bend, _cold)
 			if joint == null:
-				joint = joint_node(from, radius, style, _cold)
+				joint = joint_node(from, _radius, _style, _cold)
 			if joint != null:
 				add_child(joint)
 				_collect_meshes(joint)
-	if style == "pipe" and path.size() >= 2:
+	if _style == "pipe" and path.size() >= 2:
 		_end_fitting(path[0], path[1])
 		_end_fitting(path[path.size() - 1], path[path.size() - 2])
 	_merge_body()
@@ -154,6 +166,7 @@ func _end_fitting(at: Vector3, toward: Vector3) -> void:
 	var disc := _fitting_disc(_radius * 1.8, 0.045, _cold)
 	disc.position = at + direction * 0.03
 	disc.basis = basis
+	_fitting_nodes.erase(disc)  # a flange is body: repainted with it, baked with it
 	_meshes.append(disc)
 
 
@@ -176,15 +189,19 @@ func set_fitting(style: String) -> void:
 	if style == fitting:
 		return
 	fitting = style
+	# The flanges are baked into the body, so the body is built again.
 	for node in _fitting_nodes:
-		_meshes.erase(node)
+		if node.get_parent() != null:
+			node.get_parent().remove_child(node)
 		node.queue_free()
 	_fitting_nodes.clear()
-	if _style == "pipe" and _path.size() >= 2:
-		_end_fitting(_path[0], _path[1])
-		_end_fitting(_path[_path.size() - 1], _path[_path.size() - 2])
-		_merge_fittings()
-		_repaint()
+	for inst in _meshes:
+		if inst.get_parent() != null:
+			inst.get_parent().remove_child(inst)
+		inst.queue_free()
+	_meshes.clear()
+	_build_body()
+	_repaint()
 
 
 func service_color() -> Color:

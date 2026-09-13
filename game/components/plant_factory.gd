@@ -497,6 +497,7 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 				(record.outputs[port_name] as SimOutputPort).kind,
 				_anchor_pos(raw), false, _anchor_dir(raw))
 	view.set_meta("port_markers", markers)
+	MeshMerge.merge_markers(view)
 
 
 static func _anchor_pos(raw: Variant) -> Vector3:

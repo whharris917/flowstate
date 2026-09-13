@@ -7,6 +7,13 @@ extends Node
 ## switched off in turn — the runs, the equipment views, the HUD, the
 ## world's own _process — and prints what each group cost. Headless
 ## only, under FLOWSTATE_LOOP_PROFILE=1; it quits when done.
+##
+## Caveat (2026-09-13): headless has no GPU to cache glyphs, so every
+## Label and every screen's text is rasterised again each frame it
+## changes, and that swamps the loop — the world's HUD readout alone
+## read a second a frame here. Read this profile only for groups that
+## draw no text; the windowed HUD probe's "at 25%, … not processing"
+## phases are the honest measure of script cost.
 
 const FRAMES := 20
 
@@ -33,13 +40,20 @@ func _ready() -> void:
 		if child is PipeView:
 			runs.append(child)
 	var views: Array = plant.views.values()
+	var screens: Array = []
+	_find_screens(world, screens)
+	# Headless, a screen's text is rasterised again at every redraw (no
+	# GPU to cache the glyphs), which swamps the loop; the screens are
+	# switched off for every phase after the first, and the rest is
+	# read against "without the HMI screens".
 	_phases = [
 		["everything", [], []],
-		["without the runs", runs, []],
-		["without the equipment views", views, []],
-		["without the HUD", [world.hud], []],
-		["without the plant node itself", [plant], ["plant"]],
-		["without the world's own _process", [world], ["world"]],
+		["without the HMI screens", screens, []],
+		["… and the runs", screens + runs, []],
+		["… and the equipment views", screens + views, []],
+		["… and the HUD", screens + [world.hud], []],
+		["… and the plant node itself", screens + [plant], [plant]],
+		["… and the world's own _process", screens + [world], [world]],
 	]
 	_next()
 
@@ -61,23 +75,43 @@ func _next() -> void:
 	_n = 0
 
 
+## The in-world screens: each hosts a Control that redraws from the
+## historian on its own clock.
+func _find_screens(node: Node, out: Array) -> void:
+	if node is HmiScreenView or node is HmiView:
+		out.append(node)
+		return
+	for child in node.get_children():
+		_find_screens(child, out)
+
+
 ## Switch a phase's nodes off or on. Views take their children with
 ## them (mounted instruments, audio); the plant and the world keep
 ## their children and lose only their own callbacks.
 func _set_group(phase: Array, on: bool) -> void:
-	var flags: Array = phase[2]
+	var shallow: Array = phase[2]   # these lose only their own callbacks
 	for node in phase[1]:
 		if node == null or not is_instance_valid(node):
 			continue
-		if flags.is_empty():
-			(node as Node).propagate_call("set_process", [on])
-			(node as Node).propagate_call("set_physics_process", [on])
-		else:
+		if shallow.has(node):
 			(node as Node).set_process(on)
 			(node as Node).set_physics_process(on)
+		else:
+			(node as Node).propagate_call("set_process", [on])
+			(node as Node).propagate_call("set_physics_process", [on])
 
 
 func _process(_delta: float) -> void:
+	# The headless support exercise and the deferred routing sweeps run
+	# in the plant's physics step during the first seconds and cost a
+	# second a frame; the profile waits for the plant to go idle.
+	var plant := world.plant
+	if plant._support_exercise_phase > 0 or plant._revalidate_in > 0:
+		_settle = 3
+		_acc = 0.0
+		_phys = 0.0
+		_n = 0
+		return
 	if _settle > 0:
 		_settle -= 1
 		return
