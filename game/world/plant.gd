@@ -2272,8 +2272,8 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 		if preferred > 0:
 			lane_order.append(preferred)
 		for try_lane in 2 * LANE_TIERS * LANE_STEPS + 1:
-			if try_lane != preferred:
-				lane_order.append(try_lane)
+			if try_lane != preferred or try_lane == 0:
+				lane_order.append(try_lane)  # lane 0, the route as laid, is always tried
 		var costs := PackedStringArray()
 		for try_lane in lane_order:
 			var candidate := _route_points(src_name, src_port, dst_name, dst_port, corners, try_lane, radius)
@@ -2361,6 +2361,15 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	var base := PipeRoute.routed(from, from_dir, to, to_dir, corners)
 	if lane <= 0:
 		return base
+	if corners.is_empty():
+		# A run with no corner of its own has nothing a lane can shift
+		# once the stub ends are fixed: give it one at the middle of its
+		# horizontal, so the lane bends it there in two shallow angles.
+		var stub_a := from + from_dir * PipeRoute.STUB
+		var stub_b := to + to_dir * PipeRoute.STUB
+		var mid := (stub_a + stub_b) / 2.0
+		mid.y = minf(stub_a.y, stub_b.y)
+		base = PipeRoute.routed(from, from_dir, to, to_dir, [mid])
 	# Lane slots: either side, then the same two one tier up, then a
 	# step further out. A tier is a run's width, the way cables stack
 	# in a tray; a whole tier would carry a ground run past the
@@ -2445,7 +2454,24 @@ func _offset_polyline(base: Array[Vector3], side: int, want: float, lift: float,
 		offs.append(normal * minf(want, room[i]))
 	var vertical_shift := {"ignore": ignore}
 	var out: Array = []
+	# A lane steps sideways off a stub end at a right angle, square to
+	# the stub (2026-09-13: the old shift moved the stub end itself
+	# where the offset lines met, a diagonal jog off the nozzle, an
+	# acute elbow now that legs run direct); the routed path keeps the
+	# stub end and adds this corner after it, and a vertical leg off a
+	# stub takes the same step so it stays plumb. Lane 0 never comes
+	# here, so a lone line is stub, straight, riser, stub.
+	var stub_a_shift := Vector3.ZERO
+	var stub_b_shift := Vector3.ZERO
+	if n >= 4:
+		if room[0] != INF:
+			stub_a_shift = normals[0] * minf(want, room[0])
+		if room[n - 2] != INF:
+			stub_b_shift = normals[n - 2] * minf(want, room[n - 2])
 	for j in range(1, n - 1):
+		if j == 1 or j == n - 2:
+			out.append(base[j] + (stub_a_shift if j == 1 else stub_b_shift))
+			continue
 		var shift := Vector3.ZERO
 		if normals[j - 1] != Vector3.ZERO and normals[j] != Vector3.ZERO:
 			shift = _corner_shift(offs[j - 1], normals[j - 1], offs[j], normals[j])
@@ -2453,6 +2479,10 @@ func _offset_polyline(base: Array[Vector3], side: int, want: float, lift: float,
 			shift = _vertical_offset(j, base, dirs, normals, offs, side, want, lift, from, to, vertical_shift)
 		else:
 			shift = _vertical_offset(j - 1, base, dirs, normals, offs, side, want, lift, from, to, vertical_shift)
+		if room[j - 1] == INF and j - 1 == 1:
+			shift = stub_a_shift   # the foot of a drop straight off the stub
+		elif room[j] == INF and j + 1 == n - 2:
+			shift = stub_b_shift   # the head of a rise straight into the stub
 		out.append(base[j] + shift + Vector3.UP * lift)
 	return out
 
