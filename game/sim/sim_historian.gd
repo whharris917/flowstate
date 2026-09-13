@@ -6,9 +6,26 @@ class_name SimHistorian
 ## instrument) and retired (it was removed — history kept, growth
 ## stopped). A tag's series aligns with the shared time axis via its
 ## start index.
+##
+## Each tag's samples live in a Series object of their own (2026-09-13):
+## a packed array fetched out of a dictionary is a copy, so appending
+## to it and writing it back copied the whole series every scan, for
+## every tag — 700 copies a tick, each growing with the session, and
+## the tick grew with them until frames carrying it stuttered. Inside
+## its own object the array is appended in place.
+
+class Series extends RefCounted:
+	var values: PackedFloat64Array = PackedFloat64Array()
+
+	func push(value: float) -> void:
+		values.append(value)
+
+	func cut(count: int) -> void:
+		values = values.slice(count)
+
 
 var time: PackedFloat64Array = PackedFloat64Array()
-var data: Dictionary = {}       # String -> PackedFloat64Array
+var data: Dictionary = {}       # String -> Series
 var _starts: Dictionary = {}    # String -> int
 var _readers: Dictionary = {}   # String -> Callable () -> float
 
@@ -41,7 +58,7 @@ func register(tag: String, read: Callable) -> void:
 		_starts.erase(tag)
 	_readers[tag] = read
 	_starts[tag] = time.size()
-	data[tag] = PackedFloat64Array()
+	data[tag] = Series.new()
 
 
 func retire(tag: String) -> void:
@@ -58,28 +75,33 @@ func start_index(tag: String) -> int:
 func sample(t: float) -> void:
 	time.append(t)
 	for tag: String in _readers:
-		var series_arr: PackedFloat64Array = data[tag]
-		series_arr.append(float((_readers[tag] as Callable).call()))
-		data[tag] = series_arr
+		(data[tag] as Series).push(float((_readers[tag] as Callable).call()))
 	if time.size() > max_samples + _TRIM_CHUNK:
 		var drop := time.size() - max_samples
 		time = time.slice(drop)
 		for tag: String in data:
 			var start := int(_starts[tag])
-			var cut := clampi(drop - start, 0, (data[tag] as PackedFloat64Array).size())
+			var series_obj := data[tag] as Series
+			var cut := clampi(drop - start, 0, series_obj.values.size())
 			if cut > 0:
-				data[tag] = (data[tag] as PackedFloat64Array).slice(cut)
+				series_obj.cut(cut)
 			_starts[tag] = maxi(0, start - drop)
 
 
+## The tag's samples. A shared buffer, not a copy, until someone
+## writes to their reference.
 func series(tag: String) -> PackedFloat64Array:
-	return data.get(tag, PackedFloat64Array())
+	if not data.has(tag):
+		return PackedFloat64Array()
+	return (data[tag] as Series).values
 
 
 ## Value at a global sample index, or NAN where the tag did not exist.
 func value_at(tag: String, index: int) -> float:
 	var local := index - start_index(tag)
-	var values: PackedFloat64Array = data.get(tag, PackedFloat64Array())
+	if not data.has(tag):
+		return NAN
+	var values: PackedFloat64Array = (data[tag] as Series).values
 	if local >= 0 and local < values.size():
 		return values[local]
 	return NAN

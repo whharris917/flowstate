@@ -251,6 +251,7 @@ func _process(delta: float) -> void:
 			if _journal_refresh <= 0.0:
 				_journal_refresh = 0.5
 				journal.refresh(campaign, plant)
+	hud.sim_ms = plant.last_tick_ms
 	var view := player.look_view()
 	if builder.is_editing():
 		view = null  # the pointer, not the player's crosshair, is what matters

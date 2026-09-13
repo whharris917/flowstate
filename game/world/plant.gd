@@ -40,12 +40,16 @@ var _wire_serial: int = 0   # the order runs were laid in: a run yields only to 
 const ORDER_ALL := 1 << 30
 
 var _accumulator: float = 0.0
+var last_tick_ms: float = 0.0     # what the latest scan cost, for the frame-rate overlay
 # One-off kernel cost report, taken over the first few hundred scans.
 var _cost_ticks: int = 0
 var _cost_total_us: int = 0
 var _cost_solve_ms: float = 0.0
 var _cost_newton_ms: float = 0.0
 var _cost_iterations: int = 0
+var _cost_signal_ms: float = 0.0
+var _cost_components_ms: float = 0.0
+var _cost_historian_ms: float = 0.0
 # Support re-validation runs a few physics frames after geometry
 # changes, once new/freed colliders have actually reached the space.
 var _revalidate_in: int = 0
@@ -369,7 +373,9 @@ func _physics_process(delta: float) -> void:
 	while _accumulator >= SIM_DT:
 		var started := Time.get_ticks_usec()
 		sim.tick()
-		_note_cost(Time.get_ticks_usec() - started)
+		var elapsed := Time.get_ticks_usec() - started
+		last_tick_ms = elapsed / 1000.0
+		_note_cost(elapsed)
 		_accumulator -= SIM_DT
 	if _revalidate_in > 0:
 		_revalidate_in -= 1
@@ -391,9 +397,15 @@ func _note_cost(elapsed_us: int) -> void:
 	_cost_total_us += elapsed_us
 	_cost_solve_ms += sim.solve_ms
 	_cost_newton_ms += sim.newton_ms
+	_cost_signal_ms += sim.signal_ms
+	_cost_components_ms += sim.components_ms
+	_cost_historian_ms += sim.historian_ms
 	var net := sim.network()
 	_cost_iterations += net.iterations if net != null else 0
 	if _cost_ticks >= 150:
+		print("[flowstate] scan phases: signals %.2f ms, components %.2f ms, historian %.2f ms (%d tags)" % [
+			_cost_signal_ms / _cost_ticks, _cost_components_ms / _cost_ticks,
+			_cost_historian_ms / _cost_ticks, historian.active_tags().size()])
 		print("[flowstate] kernel cost: %.2f ms/scan; hydraulic pass %.2f ms, of which the Newton solve %.2f ms (%d nodes, %d branches, band %d, %.1f iterations a scan, residual %.6f L/s)" % [
 			_cost_total_us / 1000.0 / _cost_ticks, _cost_solve_ms / _cost_ticks,
 			_cost_newton_ms / _cost_ticks,

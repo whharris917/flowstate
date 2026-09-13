@@ -134,7 +134,7 @@ func _build_graphics(column: VBoxContainer) -> void:
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 4)
 	column.add_child(grid)
-	for key: String in ["upscaler", "aa", "shadow_size", "shadow_filter", "shadow_distance", "shadow_splits"]:
+	for key: String in ["upscaler", "aa", "shadow_size", "shadow_filter", "shadow_distance", "shadow_splits", "vsync"]:
 		var name_label := Label.new()
 		name_label.text = str(GraphicsSettings.LABELS[key])
 		grid.add_child(name_label)

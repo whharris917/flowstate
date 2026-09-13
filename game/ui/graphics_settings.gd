@@ -31,7 +31,7 @@ const PRESETS: Dictionary = {
 
 # Knobs outside the presets: they change how the picture is measured
 # and shown, not how it looks, so they never make a preset "Custom".
-const EXTRAS: Dictionary = {"vsync": true, "fps_overlay": true}
+const EXTRAS: Dictionary = {"vsync": "fast", "fps_overlay": true}
 
 # The choice lists, as [value, label] pairs, in the order the panel shows them.
 const CHOICES: Dictionary = {
@@ -42,18 +42,22 @@ const CHOICES: Dictionary = {
 		["soft_high", "Soft high"], ["soft_ultra", "Soft ultra"]],
 	"shadow_distance": [[60, "60 m"], [120, "120 m"], [200, "200 m"]],
 	"shadow_splits": [[1, "1"], [2, "2"], [4, "4"]],
+	# Below the display's rate, On presents frames at alternating one
+	# and two refreshes and the look stutters; Fast (mailbox) never
+	# waits and never tears; Off never waits and may tear.
+	"vsync": [["off", "Off"], ["fast", "Fast (no wait)"], ["on", "On"]],
 }
 const LABELS: Dictionary = {
 	"upscaler": "Upscaler", "aa": "Anti-aliasing", "shadow_size": "Shadow map",
 	"shadow_filter": "Shadow filter", "shadow_distance": "Shadow distance",
-	"shadow_splits": "Shadow cascades",
+	"shadow_splits": "Shadow cascades", "vsync": "VSync",
 }
 # The switches, as [key, label] pairs.
 const BOOLS: Array = [
 	["ssao", "Ambient occlusion"], ["ssr", "Screen-space reflections"],
 	["glow", "Glow"], ["sdfgi", "Global illumination (SDFGI)"],
 	["volumetric_fog", "Volumetric fog"], ["tree_shadows", "Tree shadows"],
-	["vsync", "VSync"], ["fps_overlay", "Frame-rate overlay"],
+	["fps_overlay", "Frame-rate overlay"],
 ]
 
 var values: Dictionary = {}
@@ -107,6 +111,8 @@ func from_dict(saved: Dictionary) -> void:
 			continue
 		var current: Variant = values[key]
 		var incoming: Variant = saved[key]
+		if key == "vsync" and incoming is bool:
+			incoming = "on" if bool(incoming) else "off"  # the switch this was
 		if current is bool:
 			values[key] = bool(incoming)
 		elif current is int:
@@ -223,8 +229,13 @@ func apply(world: WorldBase) -> void:
 	for node in world.get_tree().get_nodes_in_group("foliage_shadows"):
 		(node as GeometryInstance3D).cast_shadow = cast
 	if DisplayServer.get_name() != "headless":
-		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(values["vsync"])
-			else DisplayServer.VSYNC_DISABLED)
+		match str(values["vsync"]):
+			"off":
+				DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+			"on":
+				DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+			_:
+				DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_MAILBOX)
 	if world.hud != null:
 		world.hud.set_fps_overlay(bool(values["fps_overlay"]), summary())
 

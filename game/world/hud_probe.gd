@@ -47,6 +47,33 @@ func _run() -> void:
 			loop_ms += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0 / 6.0
 		await _shot("user://probe_graphics_%s.png" % preset.to_lower())
 		print("[probe] graphics %s: %.0f fps (loop %.0f ms) — %s" % [preset, best, loop_ms, world.graphics.summary()])
+	# Frame pacing on Medium (director, 2026-09-13: "looking around is a
+	# bit jumpy"): a jumpy look is frames of uneven length, not a low
+	# average, so every frame's length is sampled for three seconds and
+	# the spread is printed with the mean.
+	world.graphics.set_preset("Medium")
+	world.graphics.apply(world)
+	await get_tree().create_timer(2.0).timeout
+	var frames: Array[float] = []
+	var t_end := Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < t_end:
+		await get_tree().process_frame
+		frames.append(get_process_delta_time() * 1000.0)
+	var mean := 0.0
+	for f in frames:
+		mean += f
+	mean /= maxi(frames.size(), 1)
+	var worst := 0.0
+	var spread := 0.0
+	var long_frames := 0
+	for f in frames:
+		worst = maxf(worst, f)
+		spread += (f - mean) * (f - mean)
+		if f > 1.5 * mean:
+			long_frames += 1
+	spread = sqrt(spread / maxi(frames.size(), 1))
+	print("[probe] pacing on Medium: %d frames, mean %.1f ms, spread %.1f ms, worst %.1f ms, %d frames over 1.5x the mean"
+		% [frames.size(), mean, spread, worst, long_frames])
 	world.graphics.set_preset("High")
 	world.graphics.apply(world)
 	# The same view at noon and at dusk: the lighting pass reads here.

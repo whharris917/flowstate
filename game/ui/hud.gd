@@ -115,9 +115,13 @@ func _process(delta: float) -> void:
 	_cpu_acc = 0.0
 	_phys_acc = 0.0
 	_cpu_n = 0
-	_fps_label.text = "%d fps · %.1f ms (loop %.1f · physics %.1f) · %dx%d of %dx%d · %.2f M tris · %d draws · %.0f MB\n%s" % [
-		fps, 1000.0 / maxf(fps, 1.0), cpu, phys, roundi(out.x * scale), roundi(out.y * scale),
+	_fps_label.text = "%d fps · %.1f ms (loop %.1f · physics %.1f · sim tick %.1f) · %dx%d of %dx%d · %.2f M tris · %d draws · %.0f MB\n%s" % [
+		fps, 1000.0 / maxf(fps, 1.0), cpu, phys, sim_ms, roundi(out.x * scale), roundi(out.y * scale),
 		roundi(out.x), roundi(out.y), tris / 1.0e6, draws, vram / (1024.0 * 1024.0), _fps_note]
+
+
+## What the latest simulation scan cost; the world sets it each frame.
+var sim_ms := 0.0
 
 
 ## The overlay on or off, with the graphics summary it shows under the numbers.

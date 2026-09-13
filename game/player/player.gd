@@ -121,8 +121,15 @@ func _physics_process(delta: float) -> void:
 	velocity.x = direction.x * SPEED
 	velocity.z = direction.z * SPEED
 	move_and_slide()
-	_update_camera(delta)
 	_update_footsteps(delta)
+
+
+## The camera follows every rendered frame, not every physics step:
+## at a frame rate off the physics rate the step count per frame
+## alternates, and a camera moved in steps looked jumpy (director,
+## 2026-09-13).
+func _process(delta: float) -> void:
+	_update_camera(delta)
 
 
 ## Slide the camera along the zoom track, pulling it in when a wall,

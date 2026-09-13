@@ -415,24 +415,42 @@ func remove_component(name_: String) -> bool:
 	return true
 
 
+## What the other phases of a scan cost, beside solve_ms: the signal
+## propagation, the component ticks and the historian's sample. The
+## plant's kernel-cost line prints them (2026-09-13: a 13 ms scan on
+## the main thread is the stutter the director sees).
+var signal_ms: float = 0.0
+var components_ms: float = 0.0
+var historian_ms: float = 0.0
+
+
 func tick() -> void:
 	# Signals first, so a valve knows its command and a pump knows
 	# whether it is running before the network is solved on them.
+	var started := Time.get_ticks_usec()
 	for component in components:
 		for port_name: String in component.inputs:
 			(component.inputs[port_name] as SimInputPort).reset()
 	for wire in wires:
 		wire.propagate()
+	var now := Time.get_ticks_usec()
+	signal_ms = (now - started) / 1000.0
 	# Then solve the hydraulics: what actually flows, and which way.
-	var started := Time.get_ticks_usec()
+	started = now
 	_solve_hydraulics()
-	solve_ms = (Time.get_ticks_usec() - started) / 1000.0
+	now = Time.get_ticks_usec()
+	solve_ms = (now - started) / 1000.0
 	# Then let the components act on it.
+	started = now
 	for component in components:
 		component.tick(dt)
 	time += dt
+	now = Time.get_ticks_usec()
+	components_ms = (now - started) / 1000.0
+	started = now
 	if historian != null:
 		historian.sample(time)
+	historian_ms = (Time.get_ticks_usec() - started) / 1000.0
 
 
 func run_for(seconds: float) -> void:
