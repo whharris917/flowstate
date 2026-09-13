@@ -124,6 +124,12 @@ var _cost_historian_ms: float = 0.0
 # changes, once new/freed colliders have actually reached the space.
 var _revalidate_in: int = 0
 var _relay_round: int = 0   # deferred re-lays since the last change; capped, see _revalidate_supports
+var _relay_capped: int = 0  # runs a sweep would have re-laid past the cap
+# A run yields only to earlier runs, so one sweep in laying order should
+# settle it; but a re-laid run's new body is unknown to physics until
+# the next frame, so the search's steering round it lags a round, and
+# a plant of a hundred and fifty interacting runs takes a few.
+const RELAY_ROUNDS := 6
 var _support_exercise_phase: int = 0
 var _support_exercise_wait: int = 0
 
@@ -1055,6 +1061,7 @@ func _refresh_visual(visual: Dictionary) -> void:
 	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
 		print("[relay] %s.%s -> %s.%s" % [visual["a"], visual["a_port"], visual["b"], visual["b_port"]])
 	(visual["node"] as Node).queue_free()
+	var before: Array = visual.get("path", [])
 	visual["path"] = []  # not a collision with its own old route
 	visual["base_path"] = []
 	var pipe := _build_pipe(str(visual["a"]), str(visual["a_port"]),
@@ -1065,6 +1072,10 @@ func _refresh_visual(visual: Dictionary) -> void:
 	visual["path"] = pipe.get_meta("path", [])
 	visual["corners"] = pipe.get_meta("corners", [])
 	visual["base_path"] = pipe.get_meta("base_path", [])
+	# A re-lay that changed nothing: whatever still crosses this run is
+	# a crossing no lane or bridge of it can fix, and the sweep must not
+	# re-lay it again for that reason until something round it moves.
+	visual["same_relay"] = _same_path(visual["path"], before)
 	if str(visual.get("color", "")) != "":
 		pipe.apply_service(Color.html(str(visual["color"])), str(visual.get("label", "")))
 	if str(visual.get("fitting", "")) != "":
@@ -1105,8 +1116,8 @@ func _crossings(path: Array[Vector3], radius: float, skip: Dictionary, ignore: A
 				var e: Vector3 = other_path[j + 1]
 				if not seg_box.intersects(AABB(c, Vector3.ZERO).expand(e)):
 					continue
-				if dir.cross((e - c).normalized()).length() < 0.05:
-					continue  # parallel: the lanes' business
+				if dir.cross((e - c).normalized()).length() < 0.15:
+					continue  # parallel, or within nine degrees of it: a stretch, the lanes' business
 				var hit := _segment_closest(a, b, c, e)
 				if float(hit[0]) > radius + other_r + margin:
 					continue
@@ -1153,7 +1164,7 @@ func _crossing_targets(skip: Dictionary, ignore: Array, order: int) -> Array:
 		var entry: Dictionary = runs[name_]
 		if (entry["node"] as PipeView).style() == "tray":
 			continue  # a conduit lands on a tray, it does not hop it
-		var run_path := PipeRoute.orthogonalize(entry["points"])
+		var run_path := PipeRoute.lay(entry["points"])
 		if run_path.size() >= 2:
 			others.append([run_path, (entry["node"] as PipeView).radius(), _path_box(run_path), name_, [], false])
 	return others
@@ -1248,6 +1259,8 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 					last[4] = maxf(float(last[4]), float(crossing["other_r"]))
 					if sideways == Vector3.ZERO:
 						last[5] = Vector3.ZERO   # any horizontal in the span: go over it
+					elif last[9] == Vector3.ZERO:
+						last[9] = sideways       # and round the riser beside it, if any
 					last[6] = maxf(float(last[6]), lateral)
 					last[7] = minf(float(last[7]), lateral)
 					for end_name in crossing["ends"]:
@@ -1255,7 +1268,7 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 							(last[8] as Array).append(end_name)
 				else:
 					spans.append([s0, s1, crossing["top"], crossing["bottom"], crossing["other_r"], sideways,
-						lateral, lateral, (crossing["ends"] as Array).duplicate()])
+						lateral, lateral, (crossing["ends"] as Array).duplicate(), sideways])
 			for span: Array in spans:
 				var s0: float = span[0]
 				var s1: float = span[1]
@@ -1281,7 +1294,12 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 						var side := 1.0 if jog == plus else -1.0
 						candidates.append(side_normal * side * maxf(jog, 3.0 * radius + 0.03))
 					for candidate in candidates:
-						if _bridge_clear(p0 + candidate, p1 + candidate, radius, clear_of):
+						# Clear of solids, and not landed on another run: a jog
+						# round a riser must not come down on the line that
+						# riser feeds (2026-09-13).
+						var jog: Array[Vector3] = [p0 - dir * 0.5, p0, p0 + candidate, p1 + candidate, p1, p1 + dir * 0.5]
+						if _bridge_clear(p0 + candidate, p1 + candidate, radius, clear_of) \
+								and _crossings(jog, radius, skip, ignore, order, 0.0).is_empty():
 							rise = candidate
 							break
 				else:
@@ -1297,17 +1315,47 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 						over = deck_top + radius + JUMPER_GAP
 					var up := Vector3.UP * (over - a.y)
 					var down := Vector3.UP * (under - a.y)
-					var under_ok := under > radius + 0.05 and under < a.y - 0.001 \
-						and _bridge_clear(p0 + down, p1 + down, radius, clear_of)
-					var over_ok := over > a.y + 0.001 and _bridge_clear(p0 + up, p1 + up, radius, clear_of)
+					# A span with a riser in it as well (a line's own bridge, deck
+					# and ramps) is passed over or under the deck and beside the
+					# ramp at once (2026-09-13); without one, straight over or under.
+					var jogs: Array[Vector3] = [Vector3.ZERO]
+					var riser_normal: Vector3 = span[9]
+					if riser_normal != Vector3.ZERO:
+						var clearance := radius + float(span[4]) + JUMPER_GAP
+						var plus := maxf(float(span[6]), 0.0) + clearance
+						var minus := maxf(-float(span[7]), 0.0) + clearance
+						jogs = []
+						for jog: float in [plus, minus] if plus <= minus else [minus, plus]:
+							var side := 1.0 if jog == plus else -1.0
+							jogs.append(riser_normal * side * maxf(jog, 3.0 * radius + 0.03))
 					# A conduit dips under a pipe; a pipe goes over a conduit.
 					var thinner: bool = radius < float(span[4])
-					if thinner and under_ok:
-						rise = down
-					elif over_ok:
-						rise = up
-					elif under_ok:
-						rise = down
+					var under_possible := under > radius + 0.05 and under < a.y - 0.001
+					var over_possible := over > a.y + 0.001
+					var vertical: Array[Vector3] = []
+					if thinner:
+						if under_possible:
+							vertical.append(down)
+						if over_possible:
+							vertical.append(up)
+					else:
+						if over_possible:
+							vertical.append(up)
+						if under_possible:
+							vertical.append(down)
+					for v in vertical:
+						for jog in jogs:
+							var move := v + jog
+							var deck: Array[Vector3] = [p0 - dir * 0.5, p0, p0 + move, p1 + move, p1, p1 + dir * 0.5]
+							# The deck clears what it bridges by the gap, so the check
+							# here is for touching, with no margin.
+							if _bridge_clear(p0 + move, p1 + move, radius, clear_of) \
+									and (jog == Vector3.ZERO or _crossings(deck, radius, skip, ignore, order,
+										0.0).is_empty()):
+								rise = move
+								break
+						if rise.length() > 0.001:
+							break
 				if rise.length() < 0.001:
 					refused += 1
 					continue
@@ -1835,7 +1883,7 @@ func place_run(kind: String, name_: String, sparse_local: Array, getter: Callabl
 	var view := PipeView.new()
 	add_child(view)
 	var live := getter if getter.is_valid() else func() -> float: return 0.0
-	view.setup(PipeRoute.orthogonalize(sparse_local), live,
+	view.setup(PipeRoute.lay(sparse_local), live,
 		spec["color"], spec["radius"], name_, spec["style"], 1)
 	view.config_cb = _configure_run
 	runs[name_] = {"kind": kind, "node": view, "points": sparse_local,
@@ -1942,6 +1990,9 @@ static func _same_path(a: Array, b: Array) -> bool:
 func _schedule_revalidate() -> void:
 	_revalidate_in = 3
 	_relay_round = 0
+	_relay_capped = 0
+	for visual in _wire_visuals:
+		visual.erase("same_relay")  # the plant changed: everything is worth a look again
 
 
 func _revalidate_supports() -> void:
@@ -1974,7 +2025,7 @@ func _revalidate_supports() -> void:
 				str(visual["b"]), str(visual["b_port"]), fresh, int(visual.get("lane", 0)), view.radius()),
 				view.radius(), visual, [str(visual["a"]), str(visual["b"])], order)
 			moved = not _same_path(fresh_path, visual.get("path", []))
-		if not moved:
+		if not moved and not bool(visual.get("same_relay", false)):
 			# Or an earlier run has moved onto it since it was laid.
 			var stored: Array[Vector3] = _visual_path(visual)
 			var view2 := visual["node"] as PipeView
@@ -1983,9 +2034,15 @@ func _revalidate_supports() -> void:
 			var crossed := not _crossings(stored, view2.radius(), visual,
 				[str(visual["a"]), str(visual["b"])], order).is_empty()
 			moved = collides or crossed
-		if moved and _relay_round < 3:
+		if not moved and not bool(visual.get("same_relay", false)):
+			# Or its lane left it unsupported, laid before physics knew
+			# what would carry it: another lane may pass now.
+			moved = (visual["node"] as PipeView).is_unsupported()
+		if moved and _relay_round < RELAY_ROUNDS:
 			_refresh_visual(visual)
 			relaid += 1
+		elif moved:
+			_relay_capped += 1
 	if relaid > 0:
 		_relay_round += 1
 		_revalidate_in = 3  # once more, to confirm it settled
@@ -2001,8 +2058,10 @@ func _revalidate_supports() -> void:
 		var entry: Dictionary = runs[name_]
 		_apply_support(entry["node"] as PipeView, entry["points"], space)
 	if DisplayServer.get_name() == "headless":
-		print("[flowstate] revalidate: corners %d ms, re-lay %d ms (%d runs), supports %d ms"
-			% [t1 - t0, t2 - t1, relay.size(), Time.get_ticks_msec() - t2])
+		print("[flowstate] revalidate: corners %d ms, re-lay %d ms (%d runs%s), supports %d ms"
+			% [t1 - t0, t2 - t1, relay.size(),
+				(", %d more past the round cap" % _relay_capped) if _relay_capped > 0 else "",
+				Time.get_ticks_msec() - t2])
 
 
 ## Runs sharing the same space (director's walkdown, 2026-09-12): every
@@ -2017,8 +2076,11 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 		var view := visual["node"] as PipeView
 		if view.style() == "tray":
 			continue
-		paths.append({"name": "%s.%s -> %s.%s [lane %d]" % [visual["a"], visual["a_port"], visual["b"],
-				visual["b_port"], int(visual.get("lane", 0))],
+		var shown := "%s.%s -> %s.%s [lane %d]" % [visual["a"], visual["a_port"], visual["b"],
+				visual["b_port"], int(visual.get("lane", 0))]
+		if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
+			shown += " path %s" % str(_visual_path(visual))
+		paths.append({"name": shown,
 			"path": _visual_path(visual), "r": view.radius(),
 			"from": "%s.%s" % [visual["a"], visual["a_port"]], "to": "%s.%s" % [visual["b"], visual["b_port"]]})
 	for name_: String in runs:
@@ -2026,7 +2088,7 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 		var view := entry["node"] as PipeView
 		if view.style() == "tray":
 			continue
-		paths.append({"name": name_, "path": PipeRoute.orthogonalize(entry["points"]), "r": view.radius(),
+		paths.append({"name": name_, "path": PipeRoute.lay(entry["points"]), "r": view.radius(),
 			"from": "", "to": ""})
 	var found: Array = []
 	for i in paths.size():
@@ -2074,6 +2136,13 @@ func fanout_report() -> PackedStringArray:
 
 ## How far two segments run side by side within `gap` of each other,
 ## and where: [length, midpoint]. Zero unless they are parallel.
+## The stretch of segment ab that lies within gap of segment ce, at
+## whatever angle they meet: [length, its midpoint]. For parallel
+## segments it is the length they run side by side; for segments
+## that cross it is short, and the steeper the crossing the shorter
+## (a right angle gives about a pipe's width, which no rule minds);
+## a shallow crossing (2026-09-13: legs run at any bearing now) is a
+## long stretch, and is the lanes' business like a parallel one.
 static func _segment_overlap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3,
 		gap: float) -> Array:
 	var da := a1 - a0
@@ -2083,23 +2152,43 @@ static func _segment_overlap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3,
 	if la < 1e-6 or lb < 1e-6:
 		return [0.0, Vector3.ZERO]
 	var na := da / la
-	if na.cross(db / lb).length() > 0.02:
-		return [0.0, Vector3.ZERO]
-	var off := b0 - a0
-	var perp := off - na * off.dot(na)
-	if perp.length() > gap:
-		return [0.0, Vector3.ZERO]
-	var t0 := off.dot(na)
-	var t1 := (b1 - a0).dot(na)
-	var lo := maxf(0.0, minf(t0, t1))
-	var hi := minf(la, maxf(t0, t1))
+	var nb := db / lb
+	var r := a0 - b0
+	var c := na.dot(nb)
+	var u := na - nb * c              # how fast a point along ab leaves the line of ce
+	var w := r - nb * r.dot(nb)       # where a0 stands off that line
+	var lo := 0.0
+	var hi := la
+	var uu := u.dot(u)
+	if uu < 1e-6:
+		if w.length() > gap:
+			return [0.0, Vector3.ZERO]
+	else:
+		# |w + u s|^2 <= gap^2 is a quadratic in s.
+		var half_b := w.dot(u) / uu
+		var disc := half_b * half_b - (w.dot(w) - gap * gap) / uu
+		if disc < 0.0:
+			return [0.0, Vector3.ZERO]
+		var root := sqrt(disc)
+		lo = maxf(lo, -half_b - root)
+		hi = minf(hi, -half_b + root)
+	# And within ce's own extent.
+	var t0 := r.dot(nb)               # a0 projected along ce
+	if absf(c) < 1e-6:
+		if t0 < -gap or t0 > lb + gap:
+			return [0.0, Vector3.ZERO]
+	else:
+		var s_lo := -t0 / c
+		var s_hi := (lb - t0) / c
+		lo = maxf(lo, minf(s_lo, s_hi))
+		hi = minf(hi, maxf(s_lo, s_hi))
 	if hi <= lo:
 		return [0.0, Vector3.ZERO]
 	return [hi - lo, a0 + na * ((lo + hi) / 2.0)]
 
 
 func _apply_support(view: PipeView, sparse_local: Array, space: PhysicsDirectSpaceState3D) -> void:
-	_apply_support_path(view, PipeRoute.orthogonalize(sparse_local), space)
+	_apply_support_path(view, PipeRoute.lay(sparse_local), space)
 
 
 func _apply_support_path(view: PipeView, path: Array[Vector3],
@@ -2192,8 +2281,25 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 			var cost := 0.0
 			if overlap > 0.0:
 				cost += 1000.0 + overlap
-			cost += 4.0 * _crossings(candidate, radius, {}, [src_name, dst_name], order, 0.03, targets).size()
-			costs.append("%d:%.0f" % [try_lane, cost])
+			var crossed := _crossings(candidate, radius, {}, [src_name, dst_name], order, 0.03, targets)
+			cost += 4.0 * crossed.size()
+			# A tier can lift a ground run out of reach of the floor: a lane
+			# the support rule refuses costs more than any crossing, since a
+			# crossing is bridged and an unsupported span is a rule broken.
+			# Checked only for a lane that would win, it is a few physics
+			# queries a lay.
+			if cost < best_cost and not _lane_supported(candidate):
+				cost += 50.0
+			costs.append("%d:%.0f%s" % [try_lane, cost,
+				("@(%.1f,%.1f,%.1f)" % [_last_overlap_at.x, _last_overlap_at.y, _last_overlap_at.z])
+					if overlap > 0.0 and OS.has_environment("FLOWSTATE_ROUTE_DEBUG") else ""])
+			if costs.size() == 1 and OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
+				var names: Array = []
+				for crossing in crossed:
+					names.append("%s@%.1f" % [crossing["other"], float(crossing["at"])])
+				if overlap > 0.0:
+					names.append("overlap %.2f m at %s" % [overlap, _last_overlap_at])
+				costs.append("(%s)" % ", ".join(names))
 			if cost < best_cost:
 				best_cost = cost
 				best_overlap = overlap
@@ -2203,12 +2309,14 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 				break
 		chosen = best_lane
 		if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
-			print("[lane] %s.%s -> %s.%s: lane %d%s" % [src_name, src_port, dst_name, dst_port, chosen,
-				(" still overlaps %.2f m; costs %s" % [best_overlap, " ".join(costs)]) if best_overlap > 0.0 else ""])
+			print("[lane] %s.%s -> %s.%s: lane %d%s; costs %s" % [src_name, src_port, dst_name, dst_port, chosen,
+				(" still overlaps %.2f m" % best_overlap) if best_overlap > 0.0 else "", " ".join(costs)])
 	else:
 		path = _route_points(src_name, src_port, dst_name, dst_port, corners, chosen, radius)
 	var base_path := path
 	path = _with_jumpers(path, radius, {}, [src_name, dst_name], order)
+	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
+		print("[laid] %s.%s -> %s.%s lane %d: %s" % [src_name, src_port, dst_name, dst_port, chosen, str(path)])
 	var pipe := PipeView.new()
 	add_child(pipe)
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
@@ -2229,6 +2337,14 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 		pipe.set_pressure_getter(func() -> float:
 			return maxf(kernel.pressure_at(live.src), kernel.pressure_at(live.dst)))
 	return pipe
+
+
+## Does the support rule pass a candidate route as it would be laid?
+func _lane_supported(path: Array[Vector3]) -> bool:
+	var global_path: Array[Vector3] = []
+	for point in path:
+		global_path.append(to_global(point))
+	return bool(SupportCheck.evaluate(global_path, get_world_3d().direct_space_state)["ok"])
 
 
 ## A run's route in its lane: the waypoints shifted sideways so runs
@@ -2332,16 +2448,28 @@ func _offset_polyline(base: Array[Vector3], side: int, want: float, lift: float,
 	for j in range(1, n - 1):
 		var shift := Vector3.ZERO
 		if normals[j - 1] != Vector3.ZERO and normals[j] != Vector3.ZERO:
-			if absf(normals[j - 1].dot(normals[j])) < 0.5:
-				shift = offs[j - 1] + offs[j]
-			else:
-				shift = offs[j - 1]
+			shift = _corner_shift(offs[j - 1], normals[j - 1], offs[j], normals[j])
 		elif normals[j] == Vector3.ZERO:
 			shift = _vertical_offset(j, base, dirs, normals, offs, side, want, lift, from, to, vertical_shift)
 		else:
 			shift = _vertical_offset(j - 1, base, dirs, normals, offs, side, want, lift, from, to, vertical_shift)
 		out.append(base[j] + shift + Vector3.UP * lift)
 	return out
+
+
+## Where two offset lines meet: the corner between a leg shifted by
+## o1 along its normal n1 and one shifted by o2 along n2, at whatever
+## angle the legs meet (2026-09-13: legs run at any bearing now). At a
+## right angle it is the sum of the two shifts; between parallel legs,
+## or across a hairpin the lines never meet cleanly, the first leg's.
+static func _corner_shift(o1: Vector3, n1: Vector3, o2: Vector3, n2: Vector3) -> Vector3:
+	var c := n1.dot(n2)
+	var det := 1.0 - c * c
+	if det < 0.05:
+		return o1
+	var w1 := o1.dot(n1)
+	var w2 := o2.dot(n2)
+	return (n1 * (w1 - c * w2) + n2 * (w2 - c * w1)) / det
 
 
 func _vertical_offset(v: int, base: Array[Vector3], dirs: Array[Vector3], normals: Array[Vector3],
@@ -2361,27 +2489,33 @@ func _vertical_offset(v: int, base: Array[Vector3], dirs: Array[Vector3], normal
 			break
 	var shift := Vector3.ZERO
 	if h1 >= 0 and h2 >= 0:
-		if absf(dirs[h1].dot(dirs[h2])) < 0.5:
-			shift = offs[h1] + offs[h2]
+		# The longer of the two legs it joins keeps its line: a bundle's
+		# shared leg is the long one, and the short leg from a fitting
+		# or off a tray corner takes the difference in its bearing.
+		var long_leg := h1 if (base[h1 + 1] - base[h1]).length() >= (base[h2 + 1] - base[h2]).length() else h2
+		if absf(dirs[h1].dot(dirs[h2])) < 0.95:
+			shift = _corner_shift(offs[h1], normals[h1], offs[h2], normals[h2])
 		else:
-			shift = offs[h1]
-			# A tier lifts a horizontal leg clear of its neighbour but does
-			# nothing for a vertical, so a riser slides along the legs it
-			# joins by its tier instead — and by the whole lane offset when
-			# there was no room beside those legs at all. Sliding along
-			# parallel legs needs no room beside anything.
-			# A quarter metre at most: further and a riser leaves the reach
-			# of whatever carried it.
-			var along := minf(lift + (want if shift.length() < 0.001 else 0.0), 0.3)
-			if along > 0.001:
-				var slide := dirs[h1] * (side * along)
-				for attempt in 3:
-					if _leg_clear(base[v] + shift + slide + Vector3.UP * lift,
-							base[v + 1] + shift + slide + Vector3.UP * lift,
-							from, to, [] if cache.get("ignore") == null else cache["ignore"]):
-						shift += slide
-						break
-					slide *= 0.5
+			# Parallel legs share a line; legs doubling back (a drop that
+			# comes back under the tray it left) have opposite normals for
+			# one side, and the riser cannot stand on both lines.
+			shift = offs[long_leg]
+		# A tier lifts a horizontal leg clear of its neighbour but does
+		# nothing for a vertical, so a riser slides along the leg by its
+		# tier instead — and by the whole lane offset when there was no
+		# room beside those legs at all. Sliding along the leg needs no
+		# room beside anything. A quarter metre at most: further and a
+		# riser leaves the reach of whatever carried it.
+		var along := minf(lift + (want if shift.length() < 0.001 else 0.0), 0.3)
+		if along > 0.001:
+			var slide := dirs[long_leg] * (side * along)
+			for attempt in 3:
+				if _leg_clear(base[v] + shift + slide + Vector3.UP * lift,
+						base[v + 1] + shift + slide + Vector3.UP * lift,
+						from, to, [] if cache.get("ignore") == null else cache["ignore"]):
+					shift += slide
+					break
+				slide *= 0.5
 	elif h1 >= 0:
 		shift = offs[h1]
 	elif h2 >= 0:
@@ -2552,6 +2686,12 @@ var _route_block_by: Dictionary = {}
 ## two runs may share. Cabinet modules (`<cab>_m3`, `<cab>_m5_t6`)
 ## count as their cabinet.
 func _allowed_overlap(a1: String, b1: String, a2: String, b2: String, at: Vector3) -> float:
+	# Two runs from one source (a feeder's ways down one trunk) fan out
+	# from the corner where they part, each on the direct line to its
+	# own load (2026-09-13): for a metre or so past that corner they
+	# lie within a hand of each other, as they would in a real fan.
+	if a1 == a2:
+		return 1.5
 	var g2 := [_approach_group(a2), _approach_group(b2)]
 	for end_name: String in [a1, b1]:
 		if _approach_group(end_name) in g2 and _near_record(at, end_name, 2.5):
@@ -2598,7 +2738,7 @@ func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: Str
 		var other := entry["node"] as PipeView
 		if other.style() == "tray":
 			continue
-		var got := _paths_overlap(path, PipeRoute.orthogonalize(entry["points"]), radius + other.radius())
+		var got := _paths_overlap(path, PipeRoute.lay(entry["points"]), radius + other.radius())
 		if got >= 0.5:
 			worst = maxf(worst, got)
 	return worst

@@ -24,7 +24,7 @@ const _RAY_DIRS: Array[Vector3] = [
 ]
 
 
-## path: global-space polyline (an orthogonalized route). exclude
+## path: global-space polyline (a laid route). exclude
 ## lists collider RIDs to ignore — a run re-validating itself must not
 ## count as its own support.
 ## Returns {"ok": bool, "max_span": float, "brackets": [{from, to}]}.

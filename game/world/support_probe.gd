@@ -61,7 +61,7 @@ func _run(world: Node) -> void:
 			var sparse: Array = [plant._marker_pos(str(visual["a"]), str(visual["a_port"]))]
 			sparse.append_array(visual["waypoints"])
 			sparse.append(plant._marker_pos(str(visual["b"]), str(visual["b_port"])))
-			var path := PipeRoute.orthogonalize(sparse)
+			var path := PipeRoute.lay(sparse)
 			var global_path: Array[Vector3] = []
 			for point in path:
 				global_path.append(plant.to_global(point))

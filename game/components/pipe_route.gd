@@ -1,10 +1,13 @@
 class_name PipeRoute
-## Turns a sparse waypoint list into an orthogonal pipe path.
+## Turns a sparse waypoint list into a pipe path.
 ##
-## Each leg between waypoints becomes axis-aligned segments with a
-## consistent trade convention: rising legs run horizontal first and
-## come up at the destination; falling legs drop straight down first,
-## then run horizontal — the way real pipe drops are routed.
+## Each leg between waypoints is the shortest path with vertical
+## elevation changes (director, 2026-09-13: the auto-route favoured
+## the world axes and looked wrong; a run should take the direct
+## line, and only its risers and drops are vertical). One horizontal
+## straight at whatever bearing, and one vertical, with the trade's
+## convention for which comes first: a rising leg runs horizontal and
+## comes up at the destination; a falling leg drops first.
 
 
 const STUB := 0.35   # a run leaves its fitting straight, this far
@@ -12,8 +15,8 @@ const STUB := 0.35   # a run leaves its fitting straight, this far
 
 ## A full equipment-to-equipment route: leave the source fitting
 ## along its outward axis, approach the destination along its own,
-## and route orthogonally in between. Zero directions degrade to no
-## stub (free endpoints).
+## and take the direct line in between. Zero directions degrade to
+## no stub (free endpoints).
 static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector3,
 		waypoints: Array) -> Array[Vector3]:
 	var stub_a := from + from_dir * STUB
@@ -21,7 +24,7 @@ static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector
 	var sparse: Array = [stub_a]
 	sparse.append_array(waypoints)
 	sparse.append(stub_b)
-	var path := orthogonalize(sparse)
+	var path := lay(sparse)
 	path.insert(0, from)
 	path.append(to)
 	return path
@@ -29,10 +32,12 @@ static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector
 
 ## The same route, but each leg found by search on a half-metre grid
 ## round whatever `blocked` says is solid (director, 2026-09-12:
-## intersection avoidance for every run). A leg that cannot be found
-## within the search budget falls back to the plain orthogonal leg.
-## `blocked` takes a cell centre (plant-local) and answers true for a
-## cell a run must not pass through.
+## intersection avoidance for every run), then pulled straight: the
+## grid walks in six directions, so its path is a staircase, and every
+## stretch of it with a clear direct line collapses to one. A leg that
+## cannot be found within the search budget falls back to the plain
+## leg. `blocked` takes a cell centre (plant-local) and answers true
+## for a cell a run must not pass through.
 const CELL := 0.5
 const CELL_Y0 := 0.35       # the y a ground run sits at is a cell centre
 const SEARCH_BUDGET := 3000
@@ -67,12 +72,7 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 			for corner in plain:
 				_append(out, corner)
 			continue
-		_snap_end(cells, b)
-		for corner in _leg(a, cells[0]):
-			_append(out, corner)
-		for corner in cells:
-			_append(out, corner)
-		for corner in _leg(out[out.size() - 1], b):
+		for corner in _pull_straight(cells, b, blocked, busy):
 			_append(out, corner)
 	out.append(to)
 	return _straighten(out)
@@ -82,16 +82,20 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 ## something solid? Sampled every quarter metre at the run's own
 ## height — snapping a sample to the grid put a conduit lying on a
 ## tray down into the beam under it. The first and last STUB_CLEAR
-## are exempt, since a stub leaves through its own equipment's volume.
-static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable) -> bool:
-	var finish := points[points.size() - 1]
+## of the leg are exempt, since a stub leaves through its own
+## equipment's volume; `ends` names the leg's ends when the polyline
+## is only part of one.
+static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable,
+		ends: Array[Vector3] = []) -> bool:
+	var leg_a := start if ends.is_empty() else ends[0]
+	var leg_b := points[points.size() - 1] if ends.is_empty() else ends[1]
 	var a := start
 	for b in points:
 		var length := a.distance_to(b)
 		var steps := maxi(1, ceili(length / 0.25))
 		for i in range(1, steps + 1):
 			var p := a.lerp(b, float(i) / steps)
-			if p.distance_to(start) < STUB_CLEAR or p.distance_to(finish) < STUB_CLEAR:
+			if p.distance_to(leg_a) < STUB_CLEAR or p.distance_to(leg_b) < STUB_CLEAR:
 				continue
 			if bool(blocked.call(p)):
 				last_block = p
@@ -100,38 +104,53 @@ static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable) ->
 	return true
 
 
-## Pull a searched path's last straight onto `target` so the grid's
-## quarter-metre misfit does not become a pair of elbows a hand apart.
-## Each off-axis difference walks back along the path until a straight
-## that runs on that axis absorbs it; a difference nothing absorbs is
-## left for the closing leg.
-static func _snap_end(cells: Array[Vector3], target: Vector3) -> void:
-	if cells.size() < 2:
-		return
-	var last := cells.size() - 1
-	var along := _axis(cells[last] - cells[last - 1])
-	for axis in 3:
-		if axis == along:
-			cells[last][axis] = target[axis]   # the last straight simply ends at the target
-			continue
-		var delta: float = target[axis] - cells[last][axis]
-		if absf(delta) < 0.001 or absf(delta) > CELL * 0.51:
-			continue
-		var absorber := -1
-		for i in range(last, 0, -1):
-			if _axis(cells[i] - cells[i - 1]) == axis:
-				absorber = i
+## A searched path pulled straight: from each corner, the farthest
+## later corner (the target itself first) whose direct leg is clear
+## replaces the staircase between them, so a detour becomes the few
+## straights it needs and the last one ends on the target exactly.
+## A straight may not lie through more of other runs' cells than the
+## staircase it replaces did: the search side-stepped a neighbouring
+## run at a cost, and a straight that grazes it the whole way would
+## throw that away (a crossing costs both the same and stays). The
+## grid's own steps are taken as passable; the search checked them.
+## Returns the corners after the first cell, which is the start.
+static func _pull_straight(cells: Array[Vector3], target: Vector3, blocked: Callable,
+		busy: Callable) -> Array[Vector3]:
+	var pts: Array[Vector3] = cells.duplicate()
+	if pts[pts.size() - 1].distance_to(target) > 0.001:
+		pts.append(target)
+	var ends: Array[Vector3] = [pts[0], target]
+	var out: Array[Vector3] = [pts[0]]
+	var i := 0
+	while i < pts.size() - 1:
+		var j := pts.size() - 1
+		while j > i + 1:
+			var straight := _leg(pts[i], pts[j])
+			if _clear(pts[i], straight, blocked, ends) \
+					and _busy_along(pts[i], straight, busy) <= _busy_along(pts[i], pts.slice(i + 1, j + 1), busy) + 1:
 				break
-		if absorber < 0:
-			continue
-		for i in range(absorber, last + 1):
-			cells[i][axis] += delta
+			j -= 1
+		for corner in _leg(pts[i], pts[j]):
+			_append(out, corner)
+		i = j
+	out.remove_at(0)
+	return out
 
 
-static func _axis(v: Vector3) -> int:
-	if absf(v.x) >= absf(v.y) and absf(v.x) >= absf(v.z):
+## How many quarter-metre samples of a polyline lie in cells another
+## run occupies.
+static func _busy_along(start: Vector3, points: Array[Vector3], busy: Callable) -> int:
+	if not busy.is_valid():
 		return 0
-	return 1 if absf(v.y) >= absf(v.z) else 2
+	var count := 0
+	var a := start
+	for b in points:
+		var steps := maxi(1, ceili(a.distance_to(b) / 0.25))
+		for k in range(1, steps + 1):
+			if bool(busy.call(a.lerp(b, float(k) / steps))):
+				count += 1
+		a = b
+	return count
 
 
 ## Router statistics for the smoke run's cost line, and the cell that
@@ -187,7 +206,8 @@ static func _astar(a: Vector3, b: Vector3, blocked: Callable, busy: Callable) ->
 
 ## The grid is anchored at `a`: the start is a cell centre exactly, so
 ## the found path leaves `a` with no jog, and the goal is the cell that
-## holds `b`, a quarter metre off at most, which _snap_end absorbs.
+## holds `b`, a quarter metre off at most, which _pull_straight takes
+## up by ending its last straight on `b` itself.
 static func _search(a: Vector3, b: Vector3, blocked: Callable, busy: Callable) -> Array[Vector3]:
 	var start := Vector3i.ZERO
 	var goal := Vector3i(roundi((b.x - a.x) / CELL), roundi((b.y - a.y) / CELL), roundi((b.z - a.z) / CELL))
@@ -294,16 +314,17 @@ static func _straighten(path: Array[Vector3]) -> Array[Vector3]:
 
 
 ## The open-ended variant for live previews: stub out of the source,
-## then orthogonal to wherever the aim is.
+## then the direct line to wherever the aim is.
 static func routed_open(from: Vector3, from_dir: Vector3, tail: Array) -> Array[Vector3]:
 	var sparse: Array = [from + from_dir * STUB]
 	sparse.append_array(tail)
-	var path := orthogonalize(sparse)
+	var path := lay(sparse)
 	path.insert(0, from)
 	return path
 
 
-static func orthogonalize(waypoints: Array) -> Array[Vector3]:
+## The path through a list of waypoints, each leg laid by _leg.
+static func lay(waypoints: Array) -> Array[Vector3]:
 	var out: Array[Vector3] = []
 	for point: Vector3 in waypoints:
 		if out.is_empty():
@@ -315,14 +336,18 @@ static func orthogonalize(waypoints: Array) -> Array[Vector3]:
 	return out
 
 
+## One leg: the direct horizontal line and a vertical, rising at the
+## far end or dropping at the near one. A level leg is one straight;
+## a leg straight up or down is one vertical.
 static func _leg(a: Vector3, b: Vector3) -> Array[Vector3]:
 	var pts: Array[Vector3] = []
-	if b.y >= a.y:
-		pts.append(Vector3(b.x, a.y, a.z))
-		pts.append(Vector3(b.x, a.y, b.z))
-	else:
-		pts.append(Vector3(a.x, b.y, a.z))
-		pts.append(Vector3(b.x, b.y, a.z))
+	var level := absf(b.y - a.y) < 0.001
+	var plumb := absf(b.x - a.x) < 0.001 and absf(b.z - a.z) < 0.001
+	if not level and not plumb:
+		if b.y > a.y:
+			pts.append(Vector3(b.x, a.y, b.z))
+		else:
+			pts.append(Vector3(a.x, b.y, a.z))
 	pts.append(b)
 	return pts
 

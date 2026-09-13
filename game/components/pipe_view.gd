@@ -80,20 +80,23 @@ func _build_body() -> void:
 		var direction := (to - from).normalized()
 		var seg_from := from
 		var seg_to := to
-		if _style != "tray":
-			if _bends_at(path, i, bend):
-				seg_from = from + direction * bend
-			if _bends_at(path, i + 1, bend):
-				seg_to = to - direction * bend
+		# A bend of any angle: each straight gives up the bend's tangent
+		# length at its end, and the elbow sweeps the angle between them.
+		var t_from := _tangent(path, i, bend) if _style != "tray" else -1.0
+		var t_to := _tangent(path, i + 1, bend) if _style != "tray" else -1.0
+		if t_from > 0.0:
+			seg_from = from + direction * t_from
+		if t_to > 0.0:
+			seg_to = to - direction * t_to
 		if seg_from.distance_to(seg_to) > 0.005:
 			var seg := segment_node(seg_from, seg_to, _radius, _style, _cold)
 			add_child(seg)
 			_collect_meshes(seg)
 		if i > 0:
 			var joint: Node3D = null
-			if _style != "tray" and _bends_at(path, i, bend):
+			if t_from > 0.0:
 				joint = elbow_node(from, (from - path[i - 1]).normalized(), direction, _radius, bend, _cold)
-			if joint == null:
+			if joint == null and _turns_at(path, i):
 				joint = joint_node(from, _radius, _style, _cold)
 			if joint != null:
 				add_child(joint)
@@ -304,35 +307,61 @@ static func segment_node(from: Vector3, to: Vector3, radius: float,
 	return root
 
 
-## Does the path turn at point k with room on both sides for a bend?
-static func _bends_at(path: Array[Vector3], k: int, bend: float) -> bool:
+## Does the path change direction at point k at all? A corner that
+## does not is a leftover of the lay and gets no fitting.
+static func _turns_at(path: Array[Vector3], k: int) -> bool:
 	if k <= 0 or k >= path.size() - 1:
 		return false
-	var before := path[k] - path[k - 1]
-	var after := path[k + 1] - path[k]
-	if before.length() < 2.0 * bend or after.length() < 2.0 * bend:
-		return false
-	return absf(before.normalized().dot(after.normalized())) < 0.99
+	var before := (path[k] - path[k - 1]).normalized()
+	var after := (path[k + 1] - path[k]).normalized()
+	return before.dot(after) < 0.999
 
 
-## A swept 90-degree bend: a quarter torus of the pipe's radius round
-## the corner, tangent to both straights. Built once per corner with
-## SurfaceTool; the tube's normals are set explicitly and the pipe
-## materials are two-sided, so the winding need not be argued about.
+## The angle the path turns through at point k.
+static func _turn_angle(path: Array[Vector3], k: int) -> float:
+	var before := (path[k] - path[k - 1]).normalized()
+	var after := (path[k + 1] - path[k]).normalized()
+	return acos(clampf(before.dot(after), -1.0, 1.0))
+
+
+## The tangent length of a swept bend at point k — how much of each
+## straight the elbow takes — or -1 where the corner keeps a ball
+## joint: no turn, a hairpin the bend radius cannot sweep, or a leg
+## too short to give up its share.
+static func _tangent(path: Array[Vector3], k: int, bend: float) -> float:
+	if not _turns_at(path, k):
+		return -1.0
+	var theta := _turn_angle(path, k)
+	if theta > deg_to_rad(150.0):
+		return -1.0
+	var t := bend * tan(theta / 2.0)
+	if (path[k] - path[k - 1]).length() < 2.0 * t or (path[k + 1] - path[k]).length() < 2.0 * t:
+		return -1.0
+	return t
+
+
+## A swept bend of any angle: a torus section of the pipe's radius
+## round the corner, tangent to both straights, its centre on the
+## corner's bisector. Built once per corner with SurfaceTool; the
+## tube's normals are set explicitly and the pipe materials are
+## two-sided, so the winding need not be argued about.
 static func elbow_node(at: Vector3, dir_in: Vector3, dir_out: Vector3, radius: float,
 		bend: float, mat: Material) -> MeshInstance3D:
 	var normal := dir_in.cross(dir_out)
 	if normal.length() < 1e-4:
 		return null
 	normal = normal.normalized()
-	var center := at - dir_in * bend + dir_out * bend
-	var arc_steps := 8
+	var theta := acos(clampf(dir_in.dot(dir_out), -1.0, 1.0))
+	var tangent_len := bend * tan(theta / 2.0)
+	var center := at + (dir_out - dir_in).normalized() * (bend / cos(theta / 2.0))
+	var start := at - dir_in * tangent_len
+	var arc_steps := maxi(2, ceili(8.0 * theta / (PI / 2.0)))
 	var ring := 12
 	var rings: Array = []
 	for s in arc_steps + 1:
-		var theta := PI / 2.0 * s / arc_steps
-		var p := center - dir_out * bend * cos(theta) + dir_in * bend * sin(theta)
-		var tangent := (dir_out * sin(theta) + dir_in * cos(theta)).normalized()
+		var swept := theta * s / arc_steps
+		var p := center + (start - center).rotated(normal, swept)
+		var tangent := dir_in.rotated(normal, swept)
 		var n2 := tangent.cross(normal).normalized()
 		var verts: Array[Vector3] = []
 		var norms: Array[Vector3] = []
@@ -341,7 +370,7 @@ static func elbow_node(at: Vector3, dir_in: Vector3, dir_out: Vector3, radius: f
 			var nrm := (normal * cos(phi) + n2 * sin(phi)).normalized()
 			verts.append(p + nrm * radius)
 			norms.append(nrm)
-		rings.append([verts, norms, theta / (PI / 2.0)])
+		rings.append([verts, norms, swept / theta])
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for s in arc_steps:
@@ -407,11 +436,13 @@ func _segment_collider(from: Vector3, to: Vector3, thickness: float, layer: int)
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	var delta := to - from
-	box.size = Vector3(maxf(absf(delta.x), thickness), maxf(absf(delta.y), thickness),
-		maxf(absf(delta.z), thickness))
+	# Along the segment, whatever its bearing: an axis-aligned box round
+	# a diagonal would cover the whole floor between its ends.
+	box.size = Vector3(thickness, thickness, maxf(delta.length(), thickness))
 	shape.shape = box
 	body.add_child(shape)
 	body.position = (from + to) / 2.0
+	body.basis = _segment_basis(delta.normalized())
 	body.set_meta("view", self)
 	add_child(body)
 	_collider_rids.append(body.get_rid())
@@ -465,6 +496,10 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 	_brackets.clear()
 	for inst in merged:
 		_brackets.append(inst)
+
+
+func is_unsupported() -> bool:
+	return _unsupported
 
 
 func describe() -> String:

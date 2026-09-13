@@ -363,7 +363,7 @@ func _update_run_preview() -> void:
 	if sparse.size() < 2:
 		_clear_route()
 		return
-	var path := PipeRoute.orthogonalize(sparse)
+	var path := PipeRoute.lay(sparse)
 	if path.size() < 2:
 		_clear_route()
 		return
@@ -771,7 +771,7 @@ func _finish_run() -> void:
 	if _run_points.size() < 2:
 		hud.toast("lay at least two points, then E to finish")
 		return
-	var path := PipeRoute.orthogonalize(_run_points)
+	var path := PipeRoute.lay(_run_points)
 	var check := SupportCheck.evaluate(path,
 		player.camera.get_world_3d().direct_space_state)
 	if not bool(check["ok"]):
