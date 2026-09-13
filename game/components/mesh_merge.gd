@@ -153,10 +153,19 @@ static func _build(groups: Dictionary, out: Array) -> int:
 			continue
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var expected := 0
 		for item: Array in group["items"]:
-			st.append_from(item[0], 0, item[1])
+			var source := _indexed(item[0])
+			expected += _triangles(source)
+			st.append_from(source, 0, item[1])
 		var inst := MeshInstance3D.new()
 		inst.mesh = st.commit()
+		# Every source triangle must come out the other side: the day the
+		# elbows went missing, nothing said so.
+		var got := _triangles(inst.mesh)
+		if got != expected:
+			push_error("MeshMerge: merged %d triangles of %d under %s" % [got, expected,
+				(group["parent"] as Node).name])
 		inst.material_override = group["mat"]
 		inst.cast_shadow = group["cast"]
 		# Every shadow cascade draws every caster again; a fitting or a
@@ -172,6 +181,35 @@ static func _build(groups: Dictionary, out: Array) -> int:
 		out.append(inst)
 		gone += nodes.size() - 1
 	return gone
+
+
+## Triangles in a mesh's first surface, from its arrays.
+static func _triangles(mesh: Mesh) -> int:
+	if mesh == null or mesh.get_surface_count() < 1:
+		return 0
+	var arrays := mesh.surface_get_arrays(0)
+	var idx: Variant = arrays[Mesh.ARRAY_INDEX]
+	if idx != null and not (idx as PackedInt32Array).is_empty():
+		@warning_ignore("integer_division")
+		return (idx as PackedInt32Array).size() / 3
+	@warning_ignore("integer_division")
+	return (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
+
+
+## A source with an index array, always. SurfaceTool.append_from copies
+## a source's vertices and its indices; once the tool has any indices,
+## only indexed vertices are drawn, so a non-indexed source (a swept
+## elbow built by SurfaceTool) appended after an indexed primitive
+## vanished (director, 2026-09-13: "many pipe bends are now gone").
+static func _indexed(mesh: Mesh) -> Mesh:
+	var arrays := mesh.surface_get_arrays(0)
+	var idx: Variant = arrays[Mesh.ARRAY_INDEX]
+	if idx != null and not (idx as PackedInt32Array).is_empty():
+		return mesh
+	var tool := SurfaceTool.new()
+	tool.create_from(mesh, 0)
+	tool.index()
+	return tool.commit()
 
 
 ## Free a merged source, and the plain Node3D it may have been the

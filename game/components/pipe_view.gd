@@ -340,6 +340,7 @@ static func elbow_node(at: Vector3, dir_in: Vector3, dir_out: Vector3, radius: f
 					st.set_normal((ringref[1] as Array[Vector3])[jj])
 					st.set_uv(Vector2(float(jj) / ring, float(ringref[2])))
 					st.add_vertex((ringref[0] as Array[Vector3])[jj])
+	st.index()  # indexed like the primitives it is merged with, or the merge drops it
 	st.generate_tangents()
 	var inst := MeshInstance3D.new()
 	inst.mesh = st.commit()
