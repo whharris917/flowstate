@@ -29,9 +29,17 @@ var data: Dictionary = {}       # String -> Series
 var _starts: Dictionary = {}    # String -> int
 var _readers: Dictionary = {}   # String -> Callable () -> float
 
-## Oldest samples are trimmed beyond this (~1 h at 20 Hz).
-var max_samples: int = 72000
-const _TRIM_CHUNK := 2000
+## One sample a second of sim time (director, 2026-09-13: "the
+## historian need only sample tags once per second"; it sampled every
+## 50 ms scan before, and its 970 reads were a third of the scan). A
+## real plant historian records slower still. The first scan samples,
+## then every second.
+var sample_interval_s: float = 1.0
+var _next_sample_t: float = -INF
+
+## Oldest samples are trimmed beyond this (2 h at one a second).
+var max_samples: int = 7200
+const _TRIM_CHUNK := 600
 
 
 func tags() -> Array:
@@ -73,6 +81,9 @@ func start_index(tag: String) -> int:
 
 
 func sample(t: float) -> void:
+	if t < _next_sample_t:
+		return
+	_next_sample_t = (t if _next_sample_t == -INF else _next_sample_t) + sample_interval_s
 	time.append(t)
 	for tag: String in _readers:
 		(data[tag] as Series).push(float((_readers[tag] as Callable).call()))
