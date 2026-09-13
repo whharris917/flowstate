@@ -41,7 +41,14 @@ func _init() -> void:
 
 func _build_world() -> void:
 	_build_environment()
+	_build_ground()
+	_build_forest()
+	_build_pad()
 
+
+## The ground under everything. A site with a landscape (the Maine
+## coast) overrides this and _build_forest to put a terrain here.
+func _build_ground() -> void:
 	# Infinite walkable plane.
 	var body := StaticBody3D.new()
 	var shape := CollisionShape3D.new()
@@ -60,9 +67,11 @@ func _build_world() -> void:
 	_ground.material_override = mat
 	add_child(_ground)
 
-	# The clearing: two rings of trees round the developed area, the
-	# near ring dense and shadowed, the far ring taller and sparser so
-	# no gap shows the horizon from ground level.
+
+## The clearing: two rings of trees round the developed area, the
+## near ring dense and shadowed, the far ring taller and sparser so
+## no gap shows the horizon from ground level.
+func _build_forest() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 20260912
 	var clearing := Vector3(16.0, 0.0, 10.0)
@@ -76,8 +85,10 @@ func _build_world() -> void:
 	far.finish(false)
 	add_child(far)
 
-	# Home pad under the starter loop: a tiled plant floor with a safety
-	# stripe at its edge.
+
+## Home pad under the starter loop: a tiled plant floor with a safety
+## stripe at its edge.
+func _build_pad() -> void:
 	_static_box(PAD_SIZE, Vector3(0, 0, -1.0), COL_PAD, WorldBase.tile_floor())
 	var stripe := ViewUtil.box(self, Vector3(PAD_SIZE.x, 0.012, 0.12),
 		Vector3(0, 0.09, -1.0 + PAD_SIZE.z / 2.0 - 0.2), ViewUtil.flat(COL_SAFETY))
@@ -201,8 +212,9 @@ func _after_plant() -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
-	_ground.position = Vector3(snappedf(player.global_position.x, 2.0), 0.0,
-		snappedf(player.global_position.z, 2.0))
+	if _ground != null:
+		_ground.position = Vector3(snappedf(player.global_position.x, 2.0), 0.0,
+			snappedf(player.global_position.z, 2.0))
 	if _stars != null:
 		_stars.position = player.global_position
 

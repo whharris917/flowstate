@@ -9,10 +9,12 @@ extends Node3D
 ## from a seed. Art only: no records, no collision, nothing simulated.
 
 const TRUNK_COLOR := Color(0.20, 0.14, 0.09)
+const SNAG_COLOR := Color(0.33, 0.31, 0.28)
 const CONIFER_COLOR := Color(0.05, 0.12, 0.05)
 const BROADLEAF_COLOR := Color(0.08, 0.17, 0.06)
 
 var _trunk_xforms: Array[Transform3D] = []
+var _trunk_colors: Array[Color] = []
 var _cone_xforms: Array[Transform3D] = []
 var _cone_colors: Array[Color] = []
 var _ball_xforms: Array[Transform3D] = []
@@ -55,12 +57,57 @@ func plant_bushes(center: Vector3, r_in: float, r_out: float, spacing: float,
 	return count
 
 
+## Trees scattered over a rectangle wherever the ground will take one
+## (a landscape, 2026-09-12): sampler.call(x, z) answers the ground
+## height for a tree there, or -INF for none — water, ledge, the
+## graded site. conifer_frac is the share of conifers; the Maine coast
+## is spruce and fir nearly to the water, with a few grey snags where
+## the salt has killed them.
+func plant_scatter(min_xz: Vector2, max_xz: Vector2, spacing: float, height: float,
+		conifer_frac: float, rng: RandomNumberGenerator, sampler: Callable) -> int:
+	var count := int((max_xz.x - min_xz.x) * (max_xz.y - min_xz.y) / (spacing * spacing))
+	var planted := 0
+	for _i in count:
+		var x := rng.randf_range(min_xz.x, max_xz.x)
+		var z := rng.randf_range(min_xz.y, max_xz.y)
+		var kind := rng.randf()
+		var h := height * rng.randf_range(0.7, 1.35)
+		var yaw := rng.randf_range(0.0, TAU)
+		var y: float = sampler.call(x, z)
+		if y == -INF:
+			continue
+		var at := Vector3(x, y, z)
+		if kind < conifer_frac * 0.06:
+			_snag(at, h * 0.6, yaw)
+		elif kind < conifer_frac:
+			_conifer(at, h, yaw, rng)
+		else:
+			_broadleaf(at, h, yaw, rng)
+		planted += 1
+	return planted
+
+
+## A dead spruce: a bare grey trunk, tapered, with two broken limbs.
+func _snag(at: Vector3, h: float, yaw: float) -> void:
+	var trunk_r := h * 0.03
+	_trunk_xforms.append(_xform(at + Vector3(0, h / 2.0, 0), yaw, Vector3(trunk_r, h, trunk_r)))
+	_trunk_colors.append(SNAG_COLOR)
+	for k in 2:
+		var a := yaw + 1.2 + 2.4 * k
+		var limb := h * 0.12
+		var tilt := Basis.from_euler(Vector3(0, a, 0)) * Basis.from_euler(Vector3(0, 0, -1.1))
+		_trunk_xforms.append(Transform3D(tilt.scaled(Vector3(trunk_r * 0.5, limb, trunk_r * 0.5)),
+			at + Vector3(cos(a) * limb * 0.4, h * (0.5 + 0.2 * k), -sin(a) * limb * 0.4)))
+		_trunk_colors.append(SNAG_COLOR.darkened(0.1))
+
+
 func _conifer(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> void:
 	# Proportions of a real spruce: a trunk a thirtieth of the height,
 	# a crown about a third as wide as it is tall.
 	var trunk_h := h * 0.25
 	var trunk_r := h * 0.035
 	_trunk_xforms.append(_xform(at + Vector3(0, trunk_h / 2.0, 0), yaw, Vector3(trunk_r, trunk_h, trunk_r)))
+	_trunk_colors.append(TRUNK_COLOR)
 	var tint := CONIFER_COLOR.lightened(rng.randf_range(-0.03, 0.05))
 	var base_r := h * rng.randf_range(0.12, 0.16)
 	# Three cones, each narrower and higher, overlapping into one crown.
@@ -77,6 +124,7 @@ func _broadleaf(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -
 	var trunk_h := h * 0.48
 	var trunk_r := h * 0.04
 	_trunk_xforms.append(_xform(at + Vector3(0, trunk_h / 2.0, 0), yaw, Vector3(trunk_r, trunk_h, trunk_r)))
+	_trunk_colors.append(TRUNK_COLOR)
 	var tint := BROADLEAF_COLOR.lightened(rng.randf_range(-0.03, 0.06))
 	var crown_r := h * rng.randf_range(0.17, 0.22)
 	# A crown of four lobes: one on top, three around it.
@@ -94,25 +142,27 @@ func _xform(at: Vector3, yaw: float, scale: Vector3) -> Transform3D:
 	return Transform3D(Basis.from_euler(Vector3(0, yaw, 0)).scaled(scale), at)
 
 
-## Build the three MultiMeshes from what plant_ring gathered.
-func finish(cast_shadows: bool) -> void:
+## Build the three MultiMeshes from what the planters gathered. A far
+## wood (low_detail) draws its cones and crowns with fewer sides: a
+## tree three hundred metres off in the haze is a silhouette.
+func finish(cast_shadows: bool, low_detail: bool = false) -> void:
 	var trunk := CylinderMesh.new()
 	trunk.top_radius = 0.7
 	trunk.bottom_radius = 1.0
 	trunk.height = 1.0
-	trunk.radial_segments = 8
-	_multimesh(trunk, _trunk_xforms, [], ViewUtil.matte(TRUNK_COLOR), cast_shadows)
+	trunk.radial_segments = 5 if low_detail else 8
+	_multimesh(trunk, _trunk_xforms, _trunk_colors, _leaf_material(), cast_shadows)
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.0
 	cone.bottom_radius = 1.0
 	cone.height = 1.0
-	cone.radial_segments = 10
+	cone.radial_segments = 6 if low_detail else 10
 	_multimesh(cone, _cone_xforms, _cone_colors, _leaf_material(), cast_shadows)
 	var ball := SphereMesh.new()
 	ball.radius = 1.0
 	ball.height = 2.0
-	ball.radial_segments = 12
-	ball.rings = 7
+	ball.radial_segments = 7 if low_detail else 12
+	ball.rings = 4 if low_detail else 7
 	_multimesh(ball, _ball_xforms, _ball_colors, _leaf_material(), cast_shadows)
 
 

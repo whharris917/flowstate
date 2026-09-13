@@ -1,0 +1,288 @@
+class_name MaineCoast
+extends Landscape
+## A site on the coast of Maine (director, 2026-09-12: "let's start by
+## building a site at a scenic spot in coastal Maine"). A graded pad on
+## a granite headland seven metres over the Gulf of Maine, with the
+## sea to the east and south; a cove with a cobble beach at its head
+## to the south-west and a lighthouse on the next point across it;
+## spruce-fir woods rising to hills in the north-west; islands and a
+## ledge offshore.
+##
+## The coast is a signed distance field: a wavy mainland edge east and
+## south, a cove cut out of it, discs added for the point and the
+## islands. The ground is a profile of that distance — seabed sloping
+## away, ledge rising to a shelf, then rolling hills — with the ledges
+## stepped where the sea works them, and the site and the light
+## station graded flat. The lighthouse is art, like the trees: its
+## beam turns, and the lens flashes as it sweeps past the viewer.
+
+const SEA := -7.0
+const SITE := Vector2(15.0, 10.0)
+const SITE_HALF := Vector2(60.0, 50.0)       # x -45..75, z -40..60
+const GRADE_BLEND := 30.0
+const COVE := Vector2(-30.0, 150.0)
+const COVE_R := 62.0
+const BEACH := Vector2(-30.0, 104.0)         # the cove's head
+const HEAD := Vector2(-95.0, 185.0)          # the lighthouse point
+const HEAD_R := 48.0
+const LIGHTHOUSE := Vector2(-78.0, 178.0)
+const LIGHT_Y := 4.5
+const BEAM_PERIOD := 10.0                    # one turn; the flash is every ten seconds
+# Islands: centre, radius, stretch along x and z, rotation.
+const ISLANDS: Array = [
+	[Vector2(340.0, 30.0), 60.0, 1.8, 0.8, 0.5],
+	[Vector2(255.0, 195.0), 9.0, 1.0, 1.0, 0.0],       # a ledge, awash at high water
+	[Vector2(520.0, -190.0), 75.0, 1.3, 1.0, -0.4],
+	[Vector2(160.0, 330.0), 34.0, 1.0, 1.4, 0.2],
+	[Vector2(430.0, 250.0), 12.0, 1.0, 1.0, 0.0],
+]
+
+var _n: FastNoiseLite
+var _hills: FastNoiseLite
+var _flats: Array[Dictionary] = []
+var _beam: SpotLight3D
+var _lamp_mat: StandardMaterial3D
+var _lens: MeshInstance3D
+var _beam_angle := 0.0
+var _night := 0.0
+
+
+func _init() -> void:
+	centre = Vector3(SITE.x, 0.0, SITE.y)
+	sea_level = SEA
+	_n = FastNoiseLite.new()
+	_n.seed = 207
+	_n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	_n.fractal_type = FastNoiseLite.FRACTAL_NONE
+	_n.frequency = 1.0
+	_hills = FastNoiseLite.new()
+	_hills.seed = 1820
+	_hills.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	_hills.fractal_type = FastNoiseLite.FRACTAL_FBM
+	_hills.fractal_octaves = 4
+	_hills.fractal_gain = 0.5
+	_hills.fractal_lacunarity = 2.1
+	_hills.frequency = 1.0
+	_flats = [
+		{"c": SITE, "half": SITE_HALF, "blend": GRADE_BLEND, "y": 0.0},
+		{"c": LIGHTHOUSE + Vector2(3.0, 2.0), "half": Vector2(14.0, 10.0), "blend": 12.0, "y": LIGHT_Y},
+	]
+
+
+## ---- the ground ----------------------------------------------------------
+
+func coast_distance(x: float, z: float) -> float:
+	var d_e := (112.0 + 14.0 * _n.get_noise_2d(0.0, z * 0.011) + 5.0 * _n.get_noise_2d(50.0, z * 0.045)) - x
+	var d_s := (108.0 + 14.0 * _n.get_noise_2d(x * 0.011, 70.0) + 5.0 * _n.get_noise_2d(x * 0.045, 120.0)) - z
+	var d := minf(d_e, d_s)
+	var p := Vector2(x, z)
+	d = minf(d, p.distance_to(COVE) - COVE_R)
+	d = maxf(d, HEAD_R - p.distance_to(HEAD))
+	for island: Array in ISLANDS:
+		var c: Vector2 = island[0]
+		var q := (p - c).rotated(-float(island[4]))
+		var e := Vector2(q.x / float(island[2]), q.y / float(island[3])).length()
+		d = maxf(d, float(island[1]) - e)
+	return d
+
+
+func height_at(x: float, z: float) -> float:
+	var d := coast_distance(x, z)
+	var h: float
+	if d < 0.0:
+		h = SEA + maxf(d * 0.22, -22.0)
+	else:
+		h = SEA + 9.5 * pow(minf(d, 30.0) / 30.0, 0.75) + 0.07 * maxf(d - 30.0, 0.0)
+	var inland := smoothstep(12.0, 80.0, d)
+	var rise := 0.05 * maxf((-(x - SITE.x) - (z - SITE.y)) * 0.7071, 0.0)
+	var hills := 9.0 * _hills.get_noise_2d(x * 0.0035, z * 0.0035) + 5.0 + rise
+	var rolls := 2.4 * _n.get_noise_2d(x * 0.03 + 3.0, z * 0.03) + 1.2 * _n.get_noise_2d(x * 0.09, z * 0.09 + 9.0) \
+		+ 0.35 * _n.get_noise_2d(x * 0.25 + 17.0, z * 0.25)
+	h += inland * hills + rolls * (0.35 + 0.65 * inland)
+	h += 0.9 * _outcrop(x, z, d)
+	# Ledges: stepped shelves in the band the sea works, except where
+	# the cove's head is a beach.
+	var band := smoothstep(-4.0, -1.5, h - SEA) * (1.0 - smoothstep(4.0, 7.0, h - SEA)) * (1.0 - beach_at(x, z))
+	if band > 0.0:
+		h = lerpf(h, _terrace(h, 1.3), 0.55 * band)
+	# The world's edge goes under the sea.
+	var r := Vector2(x - SITE.x, z - SITE.y).length()
+	if r > 650.0:
+		h = lerpf(h, SEA - 25.0, smoothstep(650.0, 780.0, r))
+	for flat in _flats:
+		var w := _flat_weight(x, z, flat)
+		if w > 0.0:
+			h = lerpf(h, float(flat["y"]), w)
+	return h
+
+
+func _terrace(h: float, step: float) -> float:
+	var k := floorf(h / step)
+	var f := h / step - k
+	return (k + smoothstep(0.3, 0.7, f)) * step
+
+
+## 1 inside a graded rectangle, falling to 0 over its blend.
+func _flat_weight(x: float, z: float, flat: Dictionary) -> float:
+	var c: Vector2 = flat["c"]
+	var half: Vector2 = flat["half"]
+	var q := Vector2(absf(x - c.x), absf(z - c.y)) - half
+	var outside := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0)
+	return 1.0 - smoothstep(0.0, float(flat["blend"]), outside)
+
+
+func is_graded(x: float, z: float) -> bool:
+	for flat in _flats:
+		if _flat_weight(x, z, flat) > 0.0:
+			return true
+	return false
+
+
+func graded_at(x: float, z: float) -> float:
+	var w := 0.0
+	for flat in _flats:
+		w = maxf(w, _flat_weight(x, z, flat))
+	return w
+
+
+## Ledge outcrops: bedrock breaking through the turf in patches on
+## the low ground behind the shore, never on a graded flat. The
+## height function raises them a little with a sharp edge, and the
+## shader paints them rock.
+func _outcrop(x: float, z: float, d: float) -> float:
+	if d < 8.0 or d > 110.0 or graded_at(x, z) > 0.5:
+		return 0.0
+	var n := _n.get_noise_2d(x * 0.045 + 91.0, z * 0.045)
+	return smoothstep(0.30, 0.40, n) * (1.0 - smoothstep(80.0, 110.0, d))
+
+
+func outcrop_at(x: float, z: float) -> float:
+	return _outcrop(x, z, coast_distance(x, z))
+
+
+func beach_at(x: float, z: float) -> float:
+	return 1.0 - smoothstep(30.0, 55.0, Vector2(x, z).distance_to(BEACH))
+
+
+## Spruce and fir stand to within a few metres of the ledge; the
+## graded ground and the barrens (open heath on the headland) take none.
+func tree_ground(x: float, z: float) -> float:
+	var d := coast_distance(x, z)
+	if d < 10.0:
+		return -INF
+	var h := height_at(x, z)
+	if h < SEA + 2.0 or is_graded(x, z):
+		return -INF
+	if _n.get_noise_2d(x * 0.02 + 33.0, z * 0.02) > 0.42:
+		return -INF
+	return h
+
+
+## ---- the light station ---------------------------------------------------
+
+func _build_landmarks() -> void:
+	var at := Vector3(LIGHTHOUSE.x, LIGHT_Y, LIGHTHOUSE.y)
+	var white := ViewUtil.painted(Color(0.93, 0.92, 0.88))
+	var black := ViewUtil.painted(Color(0.10, 0.10, 0.11))
+	var red := ViewUtil.painted(Color(0.55, 0.12, 0.10))
+	var brick := ViewUtil.matte(Color(0.48, 0.28, 0.22))
+	var plinth := ViewUtil.matte(Color(0.55, 0.50, 0.46))
+	# The tower: a tapered white cylinder on a granite plinth, a
+	# gallery with a railing, the lantern glazed under a red cap.
+	_solid_cylinder(3.2, 3.2, 0.6, at + Vector3(0, 0.3, 0), plinth)
+	_solid_cylinder(2.5, 1.9, 11.0, at + Vector3(0, 6.1, 0), white)
+	_solid_cylinder(2.6, 2.6, 0.35, at + Vector3(0, 11.75, 0), black)
+	var rail := TorusMesh.new()
+	rail.inner_radius = 2.45
+	rail.outer_radius = 2.55
+	var rail_inst := MeshInstance3D.new()
+	rail_inst.mesh = rail
+	rail_inst.position = at + Vector3(0, 12.9, 0)
+	rail_inst.material_override = black
+	add_child(rail_inst)
+	for k in 12:
+		var a := TAU * k / 12.0
+		ViewUtil.cylinder(self, 0.03, 1.0, at + Vector3(cos(a) * 2.5, 12.4, sin(a) * 2.5), black)
+	_solid_cylinder(1.6, 1.6, 0.25, at + Vector3(0, 12.05, 0), black)
+	_solid_cylinder(1.55, 1.55, 2.6, at + Vector3(0, 13.45, 0), ViewUtil.flat(Color(0.75, 0.85, 0.95, 0.30)))
+	for k in 8:
+		var a := TAU * k / 8.0
+		ViewUtil.cylinder(self, 0.05, 2.6, at + Vector3(cos(a) * 1.55, 13.45, sin(a) * 1.55), black)
+	_solid_cylinder(1.7, 1.7, 0.2, at + Vector3(0, 14.85, 0), black)
+	var cap := ViewUtil.cylinder(self, 1.75, 1.6, at + Vector3(0, 15.75, 0), red)
+	(cap.mesh as CylinderMesh).top_radius = 0.25
+	ViewUtil.cylinder(self, 0.28, 0.5, at + Vector3(0, 16.7, 0), black)
+	# The lamp: a lens that flashes as the beam sweeps past the viewer,
+	# and the beam itself, which turns day and night and only shows at
+	# night. Art: it is no record.
+	_lamp_mat = ViewUtil.glow(Color(1.0, 0.95, 0.80), 1.0)
+	var lens := SphereMesh.new()
+	lens.radius = 0.5
+	lens.height = 1.0
+	_lens = MeshInstance3D.new()
+	_lens.mesh = lens
+	_lens.position = at + Vector3(0, 13.45, 0)
+	_lens.material_override = _lamp_mat
+	_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_lens)
+	_beam = SpotLight3D.new()
+	_beam.position = at + Vector3(0, 13.45, 0)
+	_beam.spot_range = 350.0
+	_beam.spot_angle = 6.0
+	_beam.spot_attenuation = 0.6
+	_beam.light_color = Color(1.0, 0.95, 0.82)
+	_beam.light_energy = 0.0
+	_beam.shadow_enabled = false
+	add_child(_beam)
+	# The keeper's house: white clapboard, a red gable roof, a chimney;
+	# an oil house in brick beside it.
+	var house := at + Vector3(9.0, 0.0, 3.0)
+	_solid_box(Vector3(8.0, 3.4, 6.5), house + Vector3(0, 1.7, 0), white)
+	var roof := PrismMesh.new()
+	roof.size = Vector3(7.4, 2.2, 8.8)
+	var roof_inst := MeshInstance3D.new()
+	roof_inst.mesh = roof
+	roof_inst.position = house + Vector3(0, 4.5, 0)
+	roof_inst.rotation.y = PI / 2.0
+	roof_inst.material_override = red
+	add_child(roof_inst)
+	_solid_box(Vector3(0.7, 2.4, 0.7), house + Vector3(2.4, 5.0, 1.2), brick)
+	for k in 3:
+		ViewUtil.box(self, Vector3(0.9, 1.2, 0.05), house + Vector3(-2.4 + 2.4 * k, 1.9, 3.26),
+			ViewUtil.flat(Color(0.55, 0.65, 0.75, 0.5)))
+	ViewUtil.box(self, Vector3(0.9, 2.0, 0.05), house + Vector3(0, 1.0, -3.26), red)
+	var shed := at + Vector3(-7.0, 0.0, 5.0)
+	_solid_box(Vector3(2.6, 2.3, 2.6), shed + Vector3(0, 1.15, 0), brick)
+	var shed_roof := PrismMesh.new()
+	shed_roof.size = Vector3(3.0, 0.9, 3.0)
+	var shed_roof_inst := MeshInstance3D.new()
+	shed_roof_inst.mesh = shed_roof
+	shed_roof_inst.position = shed + Vector3(0, 2.75, 0)
+	shed_roof_inst.material_override = red
+	add_child(shed_roof_inst)
+	# A flagpole on the lawn.
+	ViewUtil.cylinder(self, 0.05, 9.0, at + Vector3(4.0, 4.5, -5.0), white)
+
+
+func _on_time_of_day(_horizon: float, twilight: float) -> void:
+	_night = 1.0 - twilight
+	if _beam != null:
+		_beam.light_energy = 40.0 * _night
+
+
+func _process(delta: float) -> void:
+	super._process(delta)
+	if _beam == null:
+		return
+	_beam_angle = fmod(_beam_angle + delta * TAU / BEAM_PERIOD, TAU)
+	_beam.rotation.y = _beam_angle
+	# The lens is bright for the moment the beam points at the viewer.
+	var cam := get_viewport().get_camera_3d()
+	var flash := 0.0
+	if cam != null:
+		var to_cam := cam.global_position - _lens.global_position
+		to_cam.y = 0.0
+		if to_cam.length() > 1.0:
+			var beam_dir := Vector3(-sin(_beam_angle), 0.0, -cos(_beam_angle))
+			flash = smoothstep(0.985, 0.999, beam_dir.dot(to_cam.normalized()))
+	_lamp_mat.emission_energy_multiplier = 1.0 + (8.0 + 80.0 * flash) * _night

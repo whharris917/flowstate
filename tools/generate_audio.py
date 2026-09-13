@@ -12,6 +12,9 @@ Writes to game/audio/:
                   and a whisper of low noise
   step_1..4.wav   footstep thumps (pitch-swept sine + noise burst)
   land.wav        heavier landing thump
+  surf_loop.wav   16 s seamless surf on a ledge, swells breaking as hiss
+  wind_loop.wav   12 s seamless wind off the water, gusting
+  gull_1..3.wav   herring gull cries: one long, a long call, a pair
 
 Loops are made seamless by quantizing every sustained frequency to an
 integer number of cycles per loop and forcing envelopes to zero at the
@@ -569,6 +572,104 @@ def make_milestone() -> None:
     write_wav(OUT_DIR / "milestone.wav", [buf], normalize_to=0.36)
 
 
+# ---- the coast --------------------------------------------------------------
+# The Maine coast's ambience (2026-09-12). Each has its own RNG so the
+# files above stay byte-identical whatever is added here.
+
+def _noise_r(r: random.Random, n: int) -> list[float]:
+    return [r.random() * 2.0 - 1.0 for _ in range(n)]
+
+
+def _lowpass(buf: list[float], alpha: float) -> list[float]:
+    """One-pole low-pass; the cutoff is about alpha * SR / 2 pi."""
+    out = [0.0] * len(buf)
+    acc = 0.0
+    for i, value in enumerate(buf):
+        acc += alpha * (value - acc)
+        out[i] = acc
+    return out
+
+
+def make_surf() -> None:
+    """Surf on a ledge: the sea's low body under swells that break as a
+    rising hiss and drag back. Two swell periods share the loop, so the
+    seam falls where both are quiet."""
+    r = random.Random(20260913)
+    dur = 16.0
+    n = int(SR * dur)
+    fade = int(0.6 * SR)
+    total = n + fade
+    white = _noise_r(r, total)
+    body = _lowpass(white, 0.012)
+    high = _lowpass(white, 0.25)
+    hiss = [w - h for w, h in zip(white, high)]
+    out = [0.0] * total
+    for i in range(total):
+        t = i / SR
+        s1 = math.sin(2.0 * math.pi * t * 2.0 / dur)
+        s2 = math.sin(2.0 * math.pi * t * 3.0 / dur + 1.3)
+        env = max(0.0, 0.55 * s1 + 0.45 * s2) ** 1.6
+        out[i] = body[i] * (0.35 + 0.65 * env) * 4.0 + hiss[i] * env * 0.9
+    out = loop_crossfade(out, 0.6)
+    write_wav(OUT_DIR / "surf_loop.wav", [out], normalize_to=0.45)
+
+
+def make_wind() -> None:
+    """Wind off the water: filtered noise breathing in gusts, quiet."""
+    r = random.Random(20260914)
+    dur = 12.0
+    n = int(SR * dur)
+    fade = int(0.5 * SR)
+    total = n + fade
+    white = _noise_r(r, total)
+    low = _lowpass(white, 0.05)
+    mid = _lowpass(white, 0.18)
+    out = [0.0] * total
+    for i in range(total):
+        t = i / SR
+        gust = 0.5 + 0.3 * math.sin(2.0 * math.pi * t * 1.0 / dur + 0.4) \
+            + 0.2 * math.sin(2.0 * math.pi * t * 3.0 / dur + 2.0)
+        gust = max(0.0, gust)
+        out[i] = low[i] * (0.4 + 0.6 * gust) * 3.0 + (mid[i] - low[i]) * gust * gust * 1.2
+    out = loop_crossfade(out, 0.5)
+    write_wav(OUT_DIR / "wind_loop.wav", [out], normalize_to=0.35)
+
+
+def make_gull(path: Path, calls: list[tuple[float, float, float, float]],
+              r: random.Random) -> None:
+    """A herring gull: a reedy descending cry — a stack of harmonics
+    under a fast vibrato, with a scratch at the onset. calls are
+    (start Hz, end Hz, length s, gap s), one per note."""
+    out: list[float] = []
+    phase = 0.0
+    for f0, f1, length, gap in calls:
+        m = int(SR * length)
+        for i in range(m):
+            t = i / m
+            tt = i / SR
+            f = f0 * (f1 / f0) ** t
+            vib = 1.0 + 0.025 * math.sin(2.0 * math.pi * 38.0 * tt)
+            phase += 2.0 * math.pi * f * vib / SR
+            attack = min(1.0, tt / 0.015)
+            release = min(1.0, (length - tt) / (0.3 * length))
+            env = attack * release
+            tone = (math.sin(phase) + 0.55 * math.sin(2.0 * phase) + 0.35 * math.sin(3.0 * phase)
+                    + 0.2 * math.sin(4.0 * phase) + 0.12 * math.sin(5.0 * phase))
+            scratch = (r.random() * 2.0 - 1.0) * 0.10 * (1.0 - t) ** 2
+            out.append((tone * 0.5 + scratch) * env)
+        out.extend([0.0] * int(SR * gap))
+    write_wav(path, [out], normalize_to=0.40)
+
+
+def make_gulls() -> None:
+    r = random.Random(20260915)
+    make_gull(OUT_DIR / "gull_1.wav", [(1250.0, 820.0, 0.75, 0.05)], r)
+    make_gull(OUT_DIR / "gull_2.wav",
+              [(1150.0, 950.0, 0.16, 0.08)] * 4 + [(1300.0, 800.0, 0.55, 0.05)], r)
+    make_gull(OUT_DIR / "gull_3.wav",
+              [(1380.0, 900.0, 0.45, 0.12), (1300.0, 880.0, 0.45, 0.05)], r)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -586,6 +687,9 @@ def main() -> None:
     make_gurgle()
     make_servo()
     make_milestone()
+    make_surf()
+    make_wind()
+    make_gulls()
     for idx, (f0, decay, noise_amp) in enumerate(
             [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):
