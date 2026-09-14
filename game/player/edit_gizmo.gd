@@ -26,6 +26,9 @@ var base_y_offset := 0.0   # the view sits this far above its placement point
 var _move_meshes: Array[MeshInstance3D] = []
 var _move_mats: Array[StandardMaterial3D] = []
 var _blocked_mat: StandardMaterial3D = ViewUtil.glow(Color(0.95, 0.25, 0.2), 1.2)
+# The selection highlight: a translucent box round the footprint, so
+# what is selected reads at a glance (director, 2026-09-13).
+var highlight_size := Vector3.ZERO
 
 
 func setup(view_: Node3D, tank_: SimTank, base_y_offset_: float = 0.0) -> void:
@@ -49,10 +52,34 @@ func refresh() -> void:
 	_move_mats.clear()
 	global_position = base()
 	rotation = Vector3.ZERO
+	_build_highlight()
 	_build_move()
 	if tank != null:
 		_build_ring()
 		_build_post()
+
+
+func _build_highlight() -> void:
+	var size := highlight_size
+	if tank != null:
+		size = Vector3(tank.diameter_m + 0.3, tank.height_m + 0.2, tank.diameter_m + 0.3)
+	if size == Vector3.ZERO:
+		return
+	var box := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size + Vector3(0.1, 0.0, 0.1)
+	box.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.35, 0.8, 1.0, 0.12)
+	mat.cull_mode = BaseMaterial3D.CULL_FRONT   # the inside face, so it never hides the handles
+	mat.no_depth_test = false
+	box.material_override = mat
+	box.position = Vector3(0, size.y * 0.5, 0)
+	box.rotation.y = view.rotation.y
+	box.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(box)
 
 
 ## The move arrows turn red while the spot under them is taken.

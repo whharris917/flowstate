@@ -1046,13 +1046,20 @@ func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
 ## Rebuild the pipe visuals touching one record — after its nozzles
 ## moved or its vessel was resized.
 func refresh_wires_of(name_: String) -> void:
+	preview_wires_of(name_)
+	_schedule_revalidate()
+
+
+## The same re-lay without the plant-wide sweep after it: a nozzle
+## being carried has its lines follow it a few times a second, and the
+## sweep waits for the weld (director, 2026-09-13).
+func preview_wires_of(name_: String) -> void:
 	for visual in _wire_visuals:
 		if visual["node"] == null:
 			continue
 		if str(visual["a"]) != name_ and str(visual["b"]) != name_:
 			continue
 		_refresh_visual(visual)
-	_schedule_revalidate()
 
 
 ## Lay one run again from its record: its lane is chosen afresh

@@ -68,6 +68,7 @@ var _right_down := false
 var _right_moved := false
 var _right_wheeled := false
 var _right_grab := false   # the right button is carrying a nozzle
+var _grab_preview_ms := 0  # when the carried nozzle's lines were last re-laid
 
 
 func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
@@ -166,12 +167,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif mode == Mode.CONNECT and event.is_action_pressed("place"):
 		_try_pick_port()
 	elif mode == Mode.NORMAL and event.is_action_pressed("place"):
-		# Clicking a clickable affordance (the cabinet's EDIT button).
+		# Clicking a clickable affordance (the cabinet's EDIT button),
+		# else a click on equipment selects it (director, 2026-09-13).
 		var clicked := player.look_view()
 		if clicked != null and clicked.has_method("use") \
 				and player.ray.is_colliding() \
 				and (player.ray.get_collider() as Node).has_meta("clickable"):
 			clicked.call("use")
+		elif _click_select() and (event as InputEventMouseButton).double_click:
+			# A double click's first press deselected it; the second
+			# selects it again and opens its properties.
+			_open_config_menu(_edit_name)
 	else:
 		for i in range(_catalog().size()):
 			if event.is_action_pressed("catalog_%d" % (i + 1)):
@@ -221,7 +227,7 @@ func _update_hud() -> void:
 			var handles := "arrows move it (red X, blue Z, gold cube free)"
 			if plant.sim.get_component(_edit_name) is SimTank:
 				handles = "ring = diameter · post = height · " + handles
-			hud.set_mode_text("MODIFY %s — drag a handle: %s · middle-drag pan · shift+middle or right-drag orbit · wheel zoom · R rotate · right-click/M/Esc done"
+			hud.set_mode_text("SELECTED %s — %s · right-hold moves · right+wheel turns · double-click properties · click again or right-click done · middle pan · shift+middle orbit"
 				% [_edit_name, handles])
 		Mode.PLACE:
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
@@ -283,6 +289,7 @@ func _toggle_nozzle_grab(by_button: bool = false) -> void:
 		var was: Dictionary = _nozzle_grab["was"]
 		view.set_nozzle(str(_nozzle_grab["port"]), float(was["frac"]), float(was["angle"]))
 		_nozzle_grab = {}
+		plant.refresh_wires_of(view.tank.comp_name)  # the lines followed the preview
 		hud.toast("nozzle move cancelled")
 		return
 	var collider := player.aimed_collider()
@@ -313,7 +320,17 @@ func _update_nozzle_grab() -> void:
 	var local: Vector3 = view.to_local(player.ray.get_collision_point())
 	var angle := atan2(local.z, local.x)
 	var frac := clampf(local.y / view.tank.height_m, 0.04, 0.97)
+	var spot: Dictionary = view.nozzles[str(_nozzle_grab["port"])]
+	if is_equal_approx(float(spot["frac"]), frac) and is_equal_approx(float(spot["angle"]), angle):
+		return
 	view.set_nozzle(str(_nozzle_grab["port"]), frac, angle)
+	# The lines on it follow as it moves (director, 2026-09-13): re-laid
+	# a few times a second while it is carried, the plant-wide sweep
+	# waiting for the weld.
+	var now := Time.get_ticks_msec()
+	if now - _grab_preview_ms >= 150:
+		_grab_preview_ms = now
+		plant.preview_wires_of(view.tank.comp_name)
 
 
 func _commit_nozzle_grab() -> void:
@@ -1022,18 +1039,47 @@ func _toggle_edit() -> void:
 	if why != "":
 		hud.toast(why)
 		return
+	_select(name_)
+
+
+## A left click in normal play on movable equipment selects it
+## (director, 2026-09-13). False when the crosshair is on none.
+func _click_select() -> bool:
+	var view := player.look_view()
+	if view == null or not view.has_meta("record_name"):
+		return false
+	var name_ := str(view.get_meta("record_name"))
+	if plant.movable(name_) != "":
+		return false
+	_select(name_)
+	return true
+
+
+## Select a piece of equipment: highlighted, with its handles, under
+## the CAD camera with the pointer free. Selecting another while one
+## is selected moves the handles to it and keeps the camera.
+func _select(name_: String) -> void:
+	var keep_camera := mode == Mode.EDIT and _edit_cam != null
+	var cam_was: EditCamera = null
+	if keep_camera:
+		cam_was = _edit_cam
+		_edit_cam = null  # _end_edit would hand the camera back
 	_set_mode(Mode.EDIT)
 	_edit_name = name_
 	_gizmo = EditGizmo.new()
 	add_child(_gizmo)
+	_gizmo.highlight_size = _edit_footprint()
 	_gizmo.setup(plant.views[name_] as Node3D, plant.sim.get_component(name_) as SimTank,
 		float(PlantFactory.Y_OFFSETS.get(plant.equip_types[name_], 0.0)))
-	# The camera leaves the player: a CAD viewport orbiting the
-	# equipment, the pointer free to drag its handles.
-	_edit_cam = EditCamera.new()
-	add_child(_edit_cam)
-	_edit_cam.start_from(player.camera, _gizmo.base() + Vector3(0, _edit_footprint().y * 0.5, 0))
-	_edit_cam.make_current()
+	if keep_camera:
+		_edit_cam = cam_was
+	else:
+		# The camera leaves the player: a CAD viewport orbiting the
+		# equipment, the pointer free to drag its handles.
+		_edit_cam = EditCamera.new()
+		add_child(_edit_cam)
+		_edit_cam.start_from(player.camera, _gizmo.base() + Vector3(0, _edit_footprint().y * 0.5, 0))
+		_edit_cam.make_current()
 	player.input_locked = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_update_hud()
@@ -1123,11 +1169,26 @@ func _edit_mouse(event: InputEvent) -> bool:
 		match button.button_index:
 			MOUSE_BUTTON_LEFT:
 				if button.pressed:
+					# A double click opens the properties of the selected
+					# equipment (director, 2026-09-13).
+					if button.double_click:
+						_drag = ""
+						_open_config_menu(_edit_name)
+						return true
 					_begin_drag()
+					if _drag == "":
+						# Not a handle: the selected equipment again deselects
+						# it, another piece selects that one instead.
+						var under := _equipment_under_pointer()
+						if under == _edit_name:
+							_set_mode(Mode.NORMAL)
+						elif under != "" and plant.movable(under) == "":
+							_select(under)
 				else:
-					_drag = ""
-					if _gizmo != null:
-						_gizmo.set_blocked(false)
+					if _drag != "" and not _right_down:
+						_drag = ""
+						if _gizmo != null:
+							_gizmo.set_blocked(false)
 				return true
 			MOUSE_BUTTON_MIDDLE:
 				_orbiting = button.pressed and button.shift_pressed
@@ -1135,34 +1196,83 @@ func _edit_mouse(event: InputEvent) -> bool:
 				return true
 			MOUSE_BUTTON_RIGHT:
 				if button.pressed:
+					# Held: reposition — the equipment follows the pointer
+					# over the ground until the button is released.
 					_right_down = true
 					_right_moved = false
+					_right_wheeled = false
+					_drag = "move_xz"
+					var hit := _drag_hit(_gizmo.base()) if _gizmo != null else Vector3.INF
+					if hit == Vector3.INF:
+						_drag = ""
+					else:
+						_drag_offset_v = _gizmo.base() - hit
 				else:
-					var was_click := _right_down and not _right_moved
+					var was_click := _right_down and not _right_moved and not _right_wheeled
 					_right_down = false
+					_drag = ""
+					if _gizmo != null:
+						_gizmo.set_blocked(false)
 					if was_click:
 						_set_mode(Mode.NORMAL)  # a right click leaves the mode (director, 2026-09-13)
 				return true
-			MOUSE_BUTTON_WHEEL_UP:
+			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
 				if button.pressed:
-					_edit_cam.zoom(1.0)
-				return true
-			MOUSE_BUTTON_WHEEL_DOWN:
-				if button.pressed:
-					_edit_cam.zoom(-1.0)
+					var up := button.button_index == MOUSE_BUTTON_WHEEL_UP
+					if _right_down:
+						# Right button and wheel: turn it, fifteen degrees a notch.
+						_right_wheeled = true
+						_rotate_edited_by(-deg_to_rad(15.0) if up else deg_to_rad(15.0))
+					else:
+						_edit_cam.zoom(1.0 if up else -1.0)
 				return true
 		return false
 	if event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
-		if _orbiting or _right_down:
-			if motion.relative.length() > 0.5:
-				_right_moved = true
+		if _right_down and motion.relative.length() > 0.5:
+			_right_moved = true
+		if _orbiting:
 			_edit_cam.orbit(motion.relative)
 			return true
 		if _panning:
 			_edit_cam.pan(motion.relative)
 			return true
 	return false
+
+
+## The record whose equipment is under the pointer, or "".
+func _equipment_under_pointer() -> String:
+	if _edit_cam == null:
+		return ""
+	var ray := _edit_ray()
+	var query := PhysicsRayQueryParameters3D.create(ray[0], ray[0] + ray[1] * 200.0, 1 | 4)
+	query.exclude = [player.get_rid()]
+	var hit := player.camera.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return ""
+	var collider := hit["collider"] as Node
+	if collider == null or not collider.has_meta("view"):
+		return ""
+	var view := collider.get_meta("view") as Node
+	if view == null or not view.has_meta("record_name"):
+		return ""
+	return str(view.get_meta("record_name"))
+
+
+## The properties of a record: its device menu, I/O and CONFIGURE.
+func _open_config_menu(name_: String) -> void:
+	if name_ == "":
+		return
+	var type_id := str(plant.equip_types.get(name_, ""))
+	port_menu.open(plant, "%s — %s" % [name_, type_id if type_id != "" else "device"], [name_], type_id,
+		_port_picked,
+		func(record_name: String, values: Dictionary) -> String:
+			var why := plant.configure_equipment(record_name, values)
+			if why == "":
+				hud.toast("%s configured" % record_name)
+				if _gizmo != null:
+					_gizmo.refresh()
+			return why)
 
 
 func _edit_footprint() -> Vector3:
@@ -1259,10 +1369,14 @@ func _update_drag() -> void:
 
 
 func _rotate_edited() -> void:
+	_rotate_edited_by(PI / 2.0)
+
+
+func _rotate_edited_by(angle: float) -> void:
 	var view := plant.views.get(_edit_name) as Node3D
 	if view == null or _gizmo == null:
 		return
-	var rot := wrapf(view.rotation.y + PI / 2.0, 0.0, TAU)
+	var rot := wrapf(view.rotation.y + angle, 0.0, TAU)
 	if _footprint_clear(_edit_footprint(), _gizmo.base(), rot, view):
 		plant.move_equipment(_edit_name, _gizmo.base(), rot)
 		_gizmo.refresh()
