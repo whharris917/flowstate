@@ -253,8 +253,6 @@ func _process(delta: float) -> void:
 				journal.refresh(campaign, plant)
 	hud.sim_ms = plant.last_tick_ms
 	var view := player.look_view()
-	if builder.is_editing():
-		view = null  # the pointer, not the player's crosshair, is what matters
 	_reveal_labels(view)
 	if view != null and view.has_method("describe"):
 		hud.set_look_text(str(view.call("describe")))
