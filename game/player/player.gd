@@ -161,11 +161,13 @@ func _update_camera(delta: float) -> void:
 	port_ray.target_position = ray.target_position
 
 
-## What the crosshair is on. When the main ray admits port fittings
-## (connect mode), a fitting under the crosshair wins over the
-## interaction volume it sits inside; otherwise the main ray answers.
+## What the crosshair is on. A port fitting under the crosshair wins
+## over the interaction volume it sits inside, in any mode (director,
+## 2026-09-13: a click on a fitting starts a line, a right-hold moves
+## a nozzle), unless the main ray stops well short of it — a fitting
+## behind a wall is not under the crosshair. Otherwise the main ray.
 func aimed_collider() -> Node:
-	if (ray.collision_mask & 2) != 0 and port_ray.is_colliding():
+	if _fitting_in_front():
 		return port_ray.get_collider() as Node
 	if ray.is_colliding():
 		return ray.get_collider() as Node
@@ -174,9 +176,19 @@ func aimed_collider() -> Node:
 
 ## The ray that answered aimed_collider(), for its point and normal.
 func aimed_ray() -> RayCast3D:
-	if (ray.collision_mask & 2) != 0 and port_ray.is_colliding():
+	if _fitting_in_front():
 		return port_ray
 	return ray
+
+
+func _fitting_in_front() -> bool:
+	if not port_ray.is_colliding():
+		return false
+	if not ray.is_colliding():
+		return true
+	var origin := camera.global_position
+	return port_ray.get_collision_point().distance_to(origin) \
+		<= ray.get_collision_point().distance_to(origin) + 0.5
 
 
 func _zoom_point(t: float) -> Vector3:

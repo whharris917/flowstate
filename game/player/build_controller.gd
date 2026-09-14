@@ -67,6 +67,7 @@ var _panning := false
 var _right_down := false
 var _right_moved := false
 var _right_wheeled := false
+var _right_grab := false   # the right button is carrying a nozzle
 
 
 func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
@@ -111,6 +112,9 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if OS.has_environment("FLOWSTATE_INPUT_DEBUG") and event is InputEventMouseButton:
+		print("[input] mode %d button %d pressed %s aimed %s" % [mode, (event as InputEventMouseButton).button_index,
+			str((event as InputEventMouseButton).pressed), str(player.aimed_collider())])
 	if event.is_action_pressed("build_mode"):
 		_set_mode(Mode.NORMAL if mode == Mode.PLACE else Mode.PLACE)
 	elif event.is_action_pressed("connect_mode"):
@@ -144,7 +148,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_toggle_nozzle_grab()
 	elif event.is_action_pressed("move_item"):
 		_toggle_edit()
-	elif (mode == Mode.PLACE or mode == Mode.CONNECT) and _mode_mouse(event):
+	elif mode != Mode.EDIT and _mode_mouse(event):
 		get_viewport().set_input_as_handled()
 	elif mode == Mode.EDIT and _edit_mouse(event):
 		get_viewport().set_input_as_handled()
@@ -153,8 +157,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif mode == Mode.CONNECT and not _nozzle_grab.is_empty() \
 			and event.is_action_pressed("place"):
 		_commit_nozzle_grab()
-	elif event.is_action_pressed("port_menu"):
-		_open_port_menu()
+	elif mode == Mode.NORMAL and event.is_action_pressed("place") and _click_fitting():
+		pass  # a click on a fitting starts a line from it (director, 2026-09-13)
 	elif event.is_action_pressed("delete_item"):
 		_try_delete()
 	elif mode == Mode.PLACE and event.is_action_pressed("place"):
@@ -211,7 +215,7 @@ func _update_hud() -> void:
 	match mode:
 		Mode.NORMAL:
 			menu.visible = false
-			hud.set_mode_text("B build · C connect · M modify · X remove · right-click: I/O & configure")
+			hud.set_mode_text("B build · C connect · M modify · X remove · click a fitting to start a line · right-hold a nozzle to move it · right-click: I/O & configure")
 		Mode.EDIT:
 			menu.visible = false
 			var handles := "arrows move it (red X, blue Z, gold cube free)"
@@ -244,9 +248,9 @@ func _update_hud() -> void:
 				hud.set_mode_text("BUILD — click place · R or right-hold+wheel rotate · right-click/B/Esc exit")
 		Mode.CONNECT:
 			menu.visible = false
-			var step := "click an outlet fitting · G moves a vessel nozzle" if _pending_marker == null \
-				else "lay the run: click surfaces for waypoints (%d), finish on an inlet fitting · R undo point" \
-				% _waypoints.size()
+			var step := "click a fitting at either end · right-hold or G moves a vessel nozzle" if _pending_marker == null \
+				else "lay the run: click surfaces for waypoints (%d), finish on an %s fitting · R undo point" \
+				% [_waypoints.size(), "outlet" if bool(_pending_marker.get_meta("is_input")) else "inlet"]
 			var support := "" if _pending_marker == null else \
 				("\nsupport OK (span %.1f m)" % _route_span if _route_ok
 				else "\nUNSUPPORTED — span %.1f m over %.1f m max: route along structure" \
@@ -272,7 +276,7 @@ func _physics_process(_delta: float) -> void:
 
 ## ---- nozzle relocation (G in connect mode) --------------------------------
 
-func _toggle_nozzle_grab() -> void:
+func _toggle_nozzle_grab(by_button: bool = false) -> void:
 	if not _nozzle_grab.is_empty():
 		# Cancel: restore the original spot.
 		var view := _nozzle_grab["view"] as TankView
@@ -289,7 +293,8 @@ func _toggle_nozzle_grab() -> void:
 	var port := str(collider.get_meta("port_name"))
 	_nozzle_grab = {"view": view, "port": port,
 		"was": (view.nozzles[port] as Dictionary).duplicate()}
-	hud.toast("moving %s — aim on the shell, click to weld, G cancels" % port)
+	hud.toast(("moving %s — aim on the shell, release to weld" if by_button
+		else "moving %s — aim on the shell, click to weld, G cancels") % port)
 
 
 func _update_nozzle_grab() -> void:
@@ -804,41 +809,64 @@ func _try_pick_port() -> void:
 				_waypoints.append(aim)
 				_update_hud()
 		return
-	var marker := node as StaticBody3D
+	_pick_marker(node as StaticBody3D)
+
+
+## A fitting picked in connect mode: the first of either kind starts
+## the line, one of the other kind finishes it (director, 2026-09-13:
+## inlet to outlet or outlet to inlet, not outlet first).
+func _pick_marker(marker: StaticBody3D) -> void:
 	if _pending_marker == null:
-		if bool(marker.get_meta("is_input")):
-			hud.toast("start from an outlet or output fitting")
-			return
 		_pending_marker = marker
 		_update_hud()
 		return
-	if not bool(marker.get_meta("is_input")):
-		hud.toast("finish on an inlet or input fitting")
+	if marker == _pending_marker:
 		return
-	_complete_connection(str(marker.get_meta("record_name")),
-		str(marker.get_meta("port_name")), marker.global_position,
-		marker.global_basis.x.normalized())
+	if bool(marker.get_meta("is_input")) == bool(_pending_marker.get_meta("is_input")):
+		hud.toast("finish on an %s fitting" % ("outlet or output"
+			if bool(_pending_marker.get_meta("is_input")) else "inlet or input"))
+		return
+	_complete_connection(marker)
+
+
+## A click in normal play on a fitting: into connect mode with the
+## line started there. False when the crosshair is on no fitting.
+func _click_fitting() -> bool:
+	var aimed := player.aimed_collider()
+	if aimed == null or not aimed.has_meta("port_name"):
+		return false
+	_set_mode(Mode.CONNECT)
+	_pick_marker(aimed as StaticBody3D)
+	return true
 
 
 ## Land the pending routed connection on an input port. The support
 ## rule gets its veto before the kernel does; routing state is kept on
 ## refusal so the run can be fixed with more waypoints.
-func _complete_connection(dst_name: String, dst_port: String, dst_pos: Vector3,
-		dst_dir: Vector3 = Vector3.ZERO) -> void:
+func _complete_connection(other: StaticBody3D) -> void:
+	# The line may have been started at either end: the kernel wire runs
+	# output to input, so the waypoints are read in that order.
+	var src := _pending_marker
+	var dst := other
+	var waypoints: Array[Vector3] = _waypoints.duplicate()
+	if bool(_pending_marker.get_meta("is_input")):
+		src = other
+		dst = _pending_marker
+		waypoints.reverse()
 	var check := SupportCheck.evaluate(PipeRoute.routed(
-			_pending_marker.global_position, _pending_marker.global_basis.x.normalized(),
-			dst_pos, dst_dir, _waypoints),
+			src.global_position, src.global_basis.x.normalized(),
+			dst.global_position, dst.global_basis.x.normalized(), waypoints),
 		player.camera.get_world_3d().direct_space_state)
 	if not bool(check["ok"]):
 		hud.toast("unsupported span %.1f m (max %.1f) — route along structure"
 			% [float(check["max_span"]), SupportCheck.MAX_SPAN])
 		return
 	var local_points: Array = []
-	for point in _waypoints:
+	for point in waypoints:
 		local_points.append(plant.to_local(point))
 	var error := plant.connect_equipment(
-		str(_pending_marker.get_meta("record_name")), str(_pending_marker.get_meta("port_name")),
-		dst_name, dst_port, local_points)
+		str(src.get_meta("record_name")), str(src.get_meta("port_name")),
+		str(dst.get_meta("record_name")), str(dst.get_meta("port_name")), local_points)
 	hud.toast("connected" if error == "" else error)
 	_pending_marker = null
 	_waypoints.clear()
@@ -889,19 +917,13 @@ func _port_picked(record_name: String, port_name: String, is_input: bool) -> voi
 	if marker == null:
 		hud.toast("that port has no field connection point")
 		return
-	if is_input:
-		if _pending_marker == null:
-			hud.toast("pick an output on a SOURCE first (its menu, or C and click its outlet)")
-			return
-		_complete_connection(record_name, port_name, marker.global_position,
-			marker.global_basis.x.normalized())
-		return
 	if mode != Mode.CONNECT:
 		_set_mode(Mode.CONNECT)
-	_pending_marker = marker
-	_update_hud()
-	hud.toast("routing from %s.%s — lay waypoints, finish by clicking an inlet fitting"
-		% [record_name, port_name])
+	var started := _pending_marker == null
+	_pick_marker(marker)
+	if started:
+		hud.toast("routing from %s.%s — lay waypoints, finish by clicking an %s fitting"
+			% [record_name, port_name, "outlet" if is_input else "inlet"])
 
 
 ## Headless smoke: the device menu's CONFIGURE path, which no script
@@ -1061,11 +1083,25 @@ func _mode_mouse(event: InputEvent) -> bool:
 			if button.pressed:
 				_right_down = true
 				_right_wheeled = false
+				_right_grab = false
+				# Pressed on a vessel nozzle: carry it while the button is
+				# held and weld it where it is released.
+				var aimed := player.aimed_collider()
+				if _nozzle_grab.is_empty() and aimed != null and aimed.has_meta("movable"):
+					_toggle_nozzle_grab(true)
+					_right_grab = not _nozzle_grab.is_empty()
 			else:
-				var was_click := _right_down and not _right_wheeled
+				var was_click := _right_down and not _right_wheeled and not _right_grab
 				_right_down = false
-				if was_click:
-					_set_mode(Mode.NORMAL)
+				if _right_grab:
+					_right_grab = false
+					if not _nozzle_grab.is_empty():
+						_commit_nozzle_grab()
+				elif was_click:
+					if mode == Mode.NORMAL:
+						_open_port_menu()
+					else:
+						_set_mode(Mode.NORMAL)
 			return true
 		MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
 			if not _right_down:

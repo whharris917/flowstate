@@ -186,18 +186,21 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	body.collision_mask = 0
 	var shape := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
-	sphere.radius = 0.14
+	sphere.radius = 0.12
 	shape.shape = sphere
 	body.add_child(shape)
 
+	# The neck is the line's own bore (director, 2026-09-13: the old
+	# nozzle, fatter than its pipe with a flange twice its width, read
+	# as cartoonish), with a slimmer flange and a thin colour band.
 	var is_level := port == "level"
-	var neck_r := 0.045 if is_level else 0.085
+	var neck_r := 0.035 if is_level else 0.07
 	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
-	var neck := ViewUtil.cylinder(body, neck_r, 0.22, Vector3.ZERO, steel)
+	var neck := ViewUtil.cylinder(body, neck_r, 0.2, Vector3(-0.01, 0, 0), steel)
 	neck.rotation_degrees = Vector3(0, 0, 90)
-	var flange := ViewUtil.cylinder(body, neck_r * 1.9, 0.045, Vector3(0.13, 0, 0), steel)
+	var flange := ViewUtil.cylinder(body, neck_r * 1.5, 0.03, Vector3(0.12, 0, 0), steel)
 	flange.rotation_degrees = Vector3(0, 0, 90)
-	var ring := ViewUtil.cylinder(body, neck_r * 1.35, 0.05, Vector3(0.155, 0, 0),
+	var ring := ViewUtil.cylinder(body, neck_r * 1.2, 0.025, Vector3(0.148, 0, 0),
 		ViewUtil.flat(PlantFactory.KIND_COLORS[SimTypes.PortKind.PROCESS_LEVEL if is_level
 			else SimTypes.PortKind.PROCESS_MATERIAL]))
 	ring.rotation_degrees = Vector3(0, 0, 90)
