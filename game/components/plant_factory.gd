@@ -27,6 +27,7 @@ const CATALOG_UTILITIES: Array[Dictionary] = [
 	{"type": "vaclock", "label": "Vacuum lock"},
 	{"type": "tee_split", "label": "Tee — splitter"},
 	{"type": "tee_mix", "label": "Tee — mixer"},
+	{"type": "cap", "label": "Pipe cap"},
 ]
 
 const CATALOG_INSTRUMENTS: Array[Dictionary] = [
@@ -74,6 +75,7 @@ const FOOTPRINTS := {
 	"mains": Vector3(0.85, 1.85, 0.65),
 	"tee_split": Vector3(0.7, 0.6, 0.7),
 	"tee_mix": Vector3(0.7, 0.6, 0.7),
+	"cap": Vector3(0.45, 0.5, 0.3),
 	"psu": Vector3(0.65, 1.6, 0.45),
 	"source": Vector3(0.75, 1.9, 0.75),
 	"drain": Vector3(0.95, 0.5, 0.95),
@@ -96,7 +98,7 @@ const Y_OFFSETS := {
 	"float_switch": 0.0, "air_cascade": 0.0,
 	"valve": 0.0, "block_valve": 0.0, "controller": 0.0, "cabinet": 0.0, "junction_box": 0.0,
 	"control_station": 0.0,
-	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0, "tee_split": 0.0, "tee_mix": 0.0,
+	"mains": 0.0, "psu": 0.0, "source": 0.0, "drain": 0.0, "tee_split": 0.0, "tee_mix": 0.0, "cap": 0.0,
 	"reactor": 0.0, "centrifuge": 0.0, "hx": 0.0, "steamgen": 0.0,
 	"vaclock": 0.0, "vialfill": 0.0,
 	"gauge_temp": 0.0, "gauge_conc": 0.0,
@@ -168,6 +170,10 @@ const PORT_ANCHORS := {
 		"out": {"pos": Vector3(0.27, 0.35, 0), "dir": Vector3.RIGHT},
 		"b": {"pos": Vector3(0, 0.35, -0.27), "dir": Vector3.FORWARD},
 		"c": {"pos": Vector3(0, 0.35, 0.27), "dir": Vector3.BACK}},
+	# The cap's nozzles sit at the line's own height: cap_anchors(line_y).
+	"cap": {
+		"a": {"pos": Vector3(-0.18, 0.35, 0), "dir": Vector3.LEFT},
+		"b": {"pos": Vector3(0.18, 0.35, 0), "dir": Vector3.RIGHT}},
 	"reactor": {
 		"inlet_a": {"pos": Vector3(-0.42, 2.42, 0), "dir": Vector3.UP},
 		"inlet_b": {"pos": Vector3(0.42, 2.42, 0), "dir": Vector3.UP},
@@ -342,6 +348,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimTee.new(name_, "split"))
 		"tee_mix":
 			return sim.add(SimTee.new(name_, "mix"))
+		"cap":
+			return sim.add(SimCap.new(name_))
 		"psu":
 			return sim.add(SimPowerSupply.new(name_))
 		"source":
@@ -391,6 +399,8 @@ static func make_view(type_id: String, record: SimComponent,
 			view = TrendScreenView.new()
 		"tee_split", "tee_mix":
 			view = TeeView.new()
+		"cap":
+			view = CapView.new()
 		"float_switch":
 			view = FloatSwitchView.new()
 		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", \
@@ -442,6 +452,12 @@ static func make_view(type_id: String, record: SimComponent,
 
 ## A mains feeder's ways, down its right flank in columns of twelve,
 ## one fitting per way so each cable has its own place to land.
+## A cap's two nozzles at the height of the line it caps.
+static func cap_anchors(line_y: float) -> Dictionary:
+	return {"a": {"pos": Vector3(-0.18, line_y, 0), "dir": Vector3.LEFT},
+		"b": {"pos": Vector3(0.18, line_y, 0), "dir": Vector3.RIGHT}}
+
+
 static func mains_anchors(ways: int) -> Dictionary:
 	var out := {}
 	@warning_ignore("integer_division")

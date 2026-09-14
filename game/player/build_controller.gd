@@ -58,6 +58,11 @@ var _nozzle_grab: Dictionary = {}   # {view, port, was: {frac, angle}}
 # Edit mode: the equipment under the handles, and the handle being dragged.
 var _edit_name := ""
 var _gizmo: EditGizmo = null
+# Or one leg of a line (director, 2026-09-13: per-leg selection).
+var _edit_run: PipeView = null
+var _edit_leg := -1
+var _leg_gizmo: LegGizmo = null
+var _leg_relay_ms := 0
 var _drag := ""
 var _drag_offset_f := 0.0          # size the grab started at, less the raw hit
 var _drag_offset_v := Vector3.ZERO  # base less the grab point, so it stays under the pointer
@@ -222,7 +227,11 @@ func _update_hud() -> void:
 	match mode:
 		Mode.NORMAL:
 			menu.visible = false
-			hud.set_mode_text("B build · C connect · M modify · X remove · click a fitting to start a line · right-hold a nozzle to move it · right-click: I/O & configure")
+			hud.set_mode_text("B build · C connect · X remove · click: select (a fitting starts a line) · double-click: properties · right-hold: move (a line: pull to cut) · right-click: cancel")
+		Mode.EDIT when _edit_run != null:
+			menu.visible = false
+			hud.set_mode_text("SELECTED %s, leg %d — aim at a gold corner and hold click to move it · right-hold and pull across it cuts · double-click: colour/label · click again or right-click done"
+				% [_edit_run.describe().get_slice("\n", 0), _edit_leg])
 		Mode.EDIT:
 			menu.visible = false
 			var handles := "arrows move it (red X, blue Z, gold cube free)"
@@ -273,6 +282,9 @@ func _physics_process(_delta: float) -> void:
 	if _carry_name != "":
 		plant._finish_scans()  # a move re-lays runs, which read the kernel's flows
 		_update_carry()
+	if not _cut.is_empty():
+		plant._finish_scans()
+		_update_cut()
 	if mode == Mode.PLACE:
 		_update_ghost()
 	elif mode == Mode.CONNECT and _pending_marker != null:
@@ -1031,6 +1043,11 @@ func _toggle_edit() -> void:
 ## A left click in normal play on movable equipment selects it
 ## (director, 2026-09-13). False when the crosshair is on none.
 func _click_select() -> bool:
+	var aimed := player.aimed_collider()
+	if aimed != null and aimed.has_meta("run") and aimed.has_meta("leg"):
+		var pipe := aimed.get_meta("run") as PipeView
+		if pipe != null and int(aimed.get_meta("leg")) >= 0:
+			return _select_leg(pipe, int(aimed.get_meta("leg")))
 	var view := player.look_view()
 	if view == null or not view.has_meta("record_name"):
 		return false
@@ -1038,6 +1055,23 @@ func _click_select() -> bool:
 	if plant.movable(name_) != "":
 		return false
 	_select(name_)
+	return true
+
+
+## Select one straight of a line: the sleeve and a handle at each end
+## that is a corner of the player's to move. Only a line between two
+## fittings (a wire) is selectable; standalone runs are laid by hand.
+func _select_leg(pipe: PipeView, leg: int) -> bool:
+	var path := plant.wire_path(pipe)
+	if path.size() < 2:
+		return false
+	_set_mode(Mode.EDIT)
+	_edit_run = pipe
+	_edit_leg = leg
+	_leg_gizmo = LegGizmo.new()
+	plant.add_child(_leg_gizmo)
+	_leg_gizmo.setup(pipe, leg, path, plant.wire_corners(pipe))
+	_update_hud()
 	return true
 
 
@@ -1065,9 +1099,14 @@ func _end_edit() -> void:
 	_drag = ""
 	_right_down = false
 	_carry_name = ""
+	_edit_run = null
+	_edit_leg = -1
 	if _gizmo != null:
 		_gizmo.queue_free()
 		_gizmo = null
+	if _leg_gizmo != null:
+		_leg_gizmo.queue_free()
+		_leg_gizmo = null
 
 
 ## The crosshair's ray, from the player's camera: [origin, direction].
@@ -1102,10 +1141,15 @@ func _mode_mouse(event: InputEvent) -> bool:
 					_right_grab = not _nozzle_grab.is_empty()
 				elif mode != Mode.PLACE and mode != Mode.CONNECT:
 					_begin_carry()
+					if _carry_name == "" and aimed != null and aimed.has_meta("run"):
+						_begin_cut(aimed)
 			else:
 				var carried := _carry_name != "" and _carry_moved
-				var was_click := _right_down and not _right_wheeled and not _right_grab and not carried
+				var was_click := _right_down and not _right_wheeled and not _right_grab and not carried \
+					and not _cut_done
 				_right_down = false
+				_cut = {}
+				_cut_done = false
 				if _right_grab:
 					_right_grab = false
 					if not _nozzle_grab.is_empty():
@@ -1132,6 +1176,40 @@ func _mode_mouse(event: InputEvent) -> bool:
 				_rotate_edited_by(notch)
 			return true
 	return false
+
+
+## ---- cutting a line: the right button held on it, then a pull -------------
+
+var _cut: Dictionary = {}      # {pipe, point, forward}: the pull is measured from the look at pick-up
+var _cut_done := false
+const CUT_PULL := deg_to_rad(9.0)   # the look has to swing this far sideways
+
+
+func _begin_cut(collider: Node) -> void:
+	var pipe := collider.get_meta("run") as PipeView
+	if pipe == null or not player.ray.is_colliding():
+		return
+	_cut = {"pipe": pipe, "point": player.ray.get_collision_point(),
+		"forward": -player.camera.global_basis.z}
+	_cut_done = false
+
+
+## Each physics frame while the button is held on a line: once the look
+## has pulled far enough across it, the line is cut where it was picked.
+func _update_cut() -> void:
+	if _cut.is_empty() or _cut_done:
+		return
+	var forward: Vector3 = _cut["forward"]
+	var now := -player.camera.global_basis.z
+	if forward.angle_to(now) < CUT_PULL:
+		return
+	_cut_done = true
+	var pipe := _cut["pipe"] as PipeView
+	if not is_instance_valid(pipe):
+		return
+	var why := plant.cut_wire(pipe, _cut["point"])
+	hud.toast("cut — capped both sides" if why == "" else why)
+	_cut = {}
 
 
 ## ---- carrying equipment: the right button held on it ---------------------
@@ -1222,7 +1300,7 @@ func _ground_hit(y: float) -> Vector3:
 
 
 func _edit_mouse(event: InputEvent) -> bool:
-	if _gizmo == null:
+	if _gizmo == null and _leg_gizmo == null:
 		return false
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
@@ -1230,17 +1308,30 @@ func _edit_mouse(event: InputEvent) -> bool:
 			MOUSE_BUTTON_LEFT:
 				if button.pressed:
 					# A double click opens the properties of the selected
-					# equipment (director, 2026-09-13).
+					# equipment, or a selected line's service editor
+					# (director, 2026-09-13).
 					if button.double_click:
 						_drag = ""
-						_open_config_menu(_edit_name)
+						if _edit_run != null:
+							_edit_run.use()
+						else:
+							_open_config_menu(_edit_name)
 						return true
 					_begin_drag()
 					if _drag == "":
-						# Not a handle: the selected equipment again deselects
-						# it, another piece selects that one instead.
+						# Not a handle: the selected thing again deselects it,
+						# another leg or piece of equipment selects that.
+						var aimed := player.aimed_collider()
+						if aimed != null and aimed.has_meta("run") and aimed.has_meta("leg"):
+							var pipe := aimed.get_meta("run") as PipeView
+							var leg := int(aimed.get_meta("leg"))
+							if pipe == _edit_run and leg == _edit_leg:
+								_set_mode(Mode.NORMAL)
+							elif leg >= 0:
+								_select_leg(pipe, leg)
+							return true
 						var under := _equipment_under_pointer()
-						if under == _edit_name:
+						if under != "" and under == _edit_name:
 							_set_mode(Mode.NORMAL)
 						elif under != "" and plant.movable(under) == "":
 							_select(under)
@@ -1320,7 +1411,7 @@ func _drag_hit(base: Vector3) -> Vector3:
 
 
 func _begin_drag() -> void:
-	if _gizmo == null:
+	if _gizmo == null and _leg_gizmo == null:
 		return
 	var ray := _edit_ray()
 	var query := PhysicsRayQueryParameters3D.create(ray[0], ray[0] + ray[1] * 200.0,
@@ -1334,6 +1425,19 @@ func _begin_drag() -> void:
 	if collider == null or not collider.has_meta("handle"):
 		return
 	_drag = str(collider.get_meta("handle"))
+	if _drag.begins_with("end"):
+		# A corner of a selected leg: it moves in its own level plane.
+		var slot := _leg_gizmo.corner_slot(_leg_gizmo.corner_index(_drag))
+		if slot < 0:
+			_drag = ""
+			return
+		var corner := plant.to_global(_leg_gizmo.corners[slot])
+		var corner_hit := _drag_hit(corner)
+		if corner_hit == Vector3.INF:
+			_drag = ""
+			return
+		_drag_offset_v = corner - corner_hit
+		return
 	var base := _gizmo.base()
 	var hit := _drag_hit(base)
 	if hit == Vector3.INF:
@@ -1350,6 +1454,9 @@ func _begin_drag() -> void:
 
 
 func _update_drag() -> void:
+	if _drag.begins_with("end"):
+		_update_corner_drag()
+		return
 	var view := plant.views.get(_edit_name) as Node3D
 	if view == null or _gizmo == null:
 		_drag = ""
@@ -1380,6 +1487,51 @@ func _update_drag() -> void:
 				_gizmo.set_blocked(false)
 			else:
 				_gizmo.set_blocked(true)
+
+
+## A selected leg's corner follows the crosshair in its own level
+## plane, snapped to a quarter metre; the line is laid again through
+## its corners a few times a second while the handle is held, and
+## from then on those corners are the line's own.
+func _update_corner_drag() -> void:
+	if _leg_gizmo == null or not is_instance_valid(_edit_run):
+		_drag = ""
+		return
+	var index := _leg_gizmo.corner_index(_drag)
+	var slot := _leg_gizmo.corner_slot(index)
+	if slot < 0 or slot >= _leg_gizmo.corners.size():
+		_drag = ""
+		return
+	var corner := plant.to_global(_leg_gizmo.corners[slot])
+	var hit := _drag_hit(corner)
+	if hit == Vector3.INF:
+		return
+	var target := hit + _drag_offset_v
+	target = Vector3(snappedf(target.x, 0.25), corner.y, snappedf(target.z, 0.25))
+	if target.is_equal_approx(corner):
+		return
+	var now := Time.get_ticks_msec()
+	if now - _leg_relay_ms < 150:
+		return
+	_leg_relay_ms = now
+	var corners: Array = _leg_gizmo.corners.duplicate()
+	var old: Vector3 = corners[slot]
+	var moved := plant.to_local(target)
+	# A riser's corners stand on one spot at different heights: moving
+	# its foot moves its head, or the line would double back.
+	for k in corners.size():
+		var c: Vector3 = corners[k]
+		if absf(c.x - old.x) < 0.02 and absf(c.z - old.z) < 0.02:
+			corners[k] = Vector3(moved.x, c.y, moved.z)
+	var relaid := plant.set_wire_corners(_edit_run, corners)
+	# The line is a new node now; the selection follows it. The moved
+	# corner keeps its slot, so the handle stays under the crosshair.
+	if relaid == null:
+		_set_mode(Mode.NORMAL)
+		return
+	_edit_run = relaid
+	_leg_gizmo.pipe = relaid
+	_leg_gizmo.refresh(plant.wire_path(relaid), plant.wire_corners(relaid))
 
 
 func _rotate_edited() -> void:

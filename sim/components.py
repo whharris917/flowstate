@@ -484,6 +484,27 @@ class Tee(Component):
         pass
 
 
+class Cap(Component):
+    """A pipe cap: a two-nozzle fitting that is one hydraulic node, a
+    blind end while only one nozzle carries a line and a plain
+    coupling once both do. A cut leaves one on each side of the cut
+    (director, 2026-09-13: cutting is putting a closed cap on a pipe
+    until it is connected again). A node with one branch carries no
+    flow, so a capped line stands at pressure and moves nothing.
+    """
+
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.add_input("a", PortKind.PROCESS_MATERIAL)
+        self.add_output("b", PortKind.PROCESS_MATERIAL)
+
+    def shared_node_ports(self) -> list[list[str]]:
+        return [list(self.material_ports().keys())]
+
+    def tick(self, dt: float) -> None:
+        pass
+
+
 class SplitTee(Tee):
     """A tee with one inlet and three outlets: the library's splitter."""
 

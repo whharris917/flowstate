@@ -472,6 +472,25 @@ const PAGES := {
 			"Each pen has its own scale, so two pens crossing on the screen means nothing about their values -- read the legend.",
 		],
 	},
+	"cap": {
+		"title": "Pipe cap",
+		"tier": "utility",
+		"summary": "A short spool with a nozzle at each end and a blind flange on whichever end carries no line. The two nozzles are one point in the network. A line cut in play leaves a cap on each side of the cut; the pipe behind it stands at pressure and moves nothing, since a dead end has nowhere for material to go. Run a line from a capped end and the blind comes off: the cap is then a plain coupling.",
+		"ports": {
+			"a": "The upstream nozzle: the line arriving at the cap.",
+			"b": "The downstream nozzle: the line leaving it, if any.",
+		},
+		"equations": [
+			["P_a = P_b", "One node: both nozzles see the same pressure."],
+			["Q_a = Q_b", "What arrives leaves; with one nozzle blind, both are zero."],
+		],
+		"params": [],
+		"assumptions": [
+			"No pressure drop through the fitting: the lines carry the resistance.",
+			"A blind end holds pressure without leaking; nothing is vented or drained by a cut.",
+			"The cap has no volume: material in the cut line is not stored in it.",
+		],
+	},
 	"tee_split": {
 		"title": "Tee — Splitter",
 		"tier": "utility",

@@ -1,0 +1,111 @@
+class_name LegGizmo
+extends Node3D
+## The selection of one straight of a line (director, 2026-09-13:
+## per-leg selection): a translucent sleeve along the leg, and a cube
+## handle at each of its ends that is a corner the player may move —
+## the stubs and the fittings' own points are not. Handles live on
+## EditGizmo.LAYER like the equipment gizmo's, so the same drag picks
+## them. Positions are plant-local; the gizmo sits under the plant.
+
+const HANDLE := 0.22
+
+var pipe: PipeView = null
+var leg := -1
+var path: Array[Vector3] = []
+var corners: Array = []          # the line's own corners (Plant.wire_corners)
+var _slots: Array[int] = []      # path index -> its corner's slot, or -1
+var _handles: Array[StaticBody3D] = []
+var _sleeve: MeshInstance3D = null
+
+
+func setup(pipe_: PipeView, leg_: int, path_: Array[Vector3], corners_: Array) -> void:
+	pipe = pipe_
+	leg = leg_
+	refresh(path_, corners_)
+
+
+## Rebuild round the leg as it is now laid. A rendered corner is the
+## player's to move when one of the line's own corners lies within a
+## lane's width of it; a lane sidestep or a bridge ramp has none.
+func refresh(path_: Array[Vector3], corners_: Array) -> void:
+	path = path_
+	corners = corners_
+	_slots.clear()
+	for i in path.size():
+		var slot := -1
+		var nearest := 0.6
+		for k in corners.size():
+			var d := (corners[k] as Vector3).distance_to(path[i])
+			if d < nearest:
+				nearest = d
+				slot = k
+		_slots.append(slot)
+	for child in get_children():
+		child.queue_free()
+	_handles.clear()
+	_sleeve = null
+	if leg < 0 or leg >= path.size() - 1:
+		return
+	var a := path[leg]
+	var b := path[leg + 1]
+	var length := a.distance_to(b)
+	if length < 0.01:
+		return
+	# The sleeve: unshaded, translucent, a little fatter than the pipe.
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = pipe.radius() + 0.05
+	mesh.bottom_radius = mesh.top_radius
+	mesh.height = length
+	mesh.radial_segments = 16
+	_sleeve = MeshInstance3D.new()
+	_sleeve.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.35, 0.8, 1.0, 0.35)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_sleeve.material_override = mat
+	_sleeve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_sleeve)
+	_sleeve.position = (a + b) / 2.0
+	var dir := (b - a).normalized()
+	var up := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	_sleeve.basis = Basis.looking_at(dir, up) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
+	for k in 2:
+		var index := leg + k
+		if not movable_corner(index):
+			continue
+		var body := StaticBody3D.new()
+		body.collision_layer = EditGizmo.LAYER
+		body.collision_mask = 0
+		body.set_meta("handle", "end%d" % k)
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3.ONE * HANDLE
+		shape.shape = box
+		body.add_child(shape)
+		var cube := MeshInstance3D.new()
+		var cube_mesh := BoxMesh.new()
+		cube_mesh.size = Vector3.ONE * HANDLE
+		cube.mesh = cube_mesh
+		cube.material_override = ViewUtil.glow(Color(0.95, 0.80, 0.30), 0.9)
+		body.add_child(cube)
+		body.position = path[index]
+		add_child(body)
+		_handles.append(body)
+
+
+## A corner the player may move: one of the line's own, strictly
+## between the two stubs.
+func movable_corner(index: int) -> bool:
+	return index >= 2 and index <= path.size() - 3 and index < _slots.size() and _slots[index] >= 0
+
+
+## The corner a handle stands on: the path index for "end0"/"end1".
+func corner_index(handle: String) -> int:
+	return leg + (1 if handle == "end1" else 0)
+
+
+## The slot in `corners` behind a path index, or -1.
+func corner_slot(index: int) -> int:
+	return _slots[index] if index >= 0 and index < _slots.size() else -1

@@ -62,7 +62,7 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 	if collider_layer > 0:
 		for i in range(path.size() - 1):
 			if path[i].distance_to(path[i + 1]) >= 0.005:
-				_segment_collider(path[i], path[i + 1], maxf(radius * 2.5, 0.12), collider_layer)
+				_segment_collider(path[i], path[i + 1], maxf(radius * 2.5, 0.12), collider_layer, i)
 	_build_body()
 
 
@@ -472,11 +472,12 @@ func _collect_meshes(node: Node) -> void:
 
 ## Thin box collider along one segment: the interact ray sees it
 ## (describe / X removes the run); on layer 1 it is also real support.
-func _segment_collider(from: Vector3, to: Vector3, thickness: float, layer: int) -> void:
+func _segment_collider(from: Vector3, to: Vector3, thickness: float, layer: int, leg: int = -1) -> void:
 	var body := StaticBody3D.new()
 	body.collision_layer = layer
 	body.collision_mask = 0
 	body.set_meta("run", self)  # the router routes round equipment, never round runs
+	body.set_meta("leg", leg)   # which straight of the path this is: selection is per leg
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	var delta := to - from

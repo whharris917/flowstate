@@ -558,6 +558,8 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as MainsView).setup(record as SimMainsFeed)
 		"tee_split", "tee_mix":
 			(view as TeeView).setup(record as SimTee)
+		"cap":
+			(view as CapView).setup(record as SimCap, float(params.get("line_y", 0.35)))
 		"psu":
 			(view as PsuView).setup(record as SimPowerSupply)
 		"source":
@@ -590,6 +592,9 @@ func place(type_id: String, name_: String, params: Dictionary,
 	if type_id == "mains":
 		PlantFactory.attach_port_markers(view, record, type_id,
 			PlantFactory.mains_anchors((record as SimMainsFeed).ways))
+	elif type_id == "cap":
+		PlantFactory.attach_port_markers(view, record, type_id,
+			PlantFactory.cap_anchors((view as CapView).line_y))
 	elif type_id != "tank":  # a tank's nozzles are its own
 		PlantFactory.attach_port_markers(view, record, type_id)
 	views[record.comp_name] = view
@@ -1636,6 +1641,7 @@ func connect_equipment(src_name: String, src_port: String,
 		return "connection refused"
 	if visible:
 		_wire_visual(src_name, src_port, dst_name, dst_port, waypoints)
+		_sync_caps([src_name, dst_name])
 	else:
 		_wire_visuals.append({
 			"node": null, "a": src_name, "a_port": src_port,
@@ -1966,8 +1972,150 @@ func remove_run(view: PipeView) -> bool:
 			_disconnect_visual(visual)
 			(visual["node"] as Node).queue_free()
 			_wire_visuals.erase(visual)
+			_sync_caps([str(visual["a"]), str(visual["b"])])
 			return true
 	return false
+
+
+## Cut a line where the player pulled across it (director, 2026-09-13:
+## "cutting is equivalent to putting a closed cap on a pipe until it
+## is connected again"): the wire goes, a cap stands on each side of
+## the cut, and the two pieces are laid again from the corners the
+## line had, so they keep their shape; each cap's outer nozzle is a
+## blind end a later line can land on. Returns "" or why not.
+func cut_wire(view: PipeView, at_global: Vector3) -> String:
+	var visual: Dictionary = {}
+	for candidate in _wire_visuals:
+		if candidate["node"] == view:
+			visual = candidate
+	if visual.is_empty():
+		return "only a line between two fittings can be cut"
+	var path: Array[Vector3] = _visual_path(visual)
+	if path.size() < 2:
+		return "nothing to cut"
+	var at := to_local(at_global)
+	# The nearest point on the laid path, and how far along it lies.
+	var best_d := INF
+	var best_seg := 0
+	var best_point := path[0]
+	var arc := 0.0
+	var best_arc := 0.0
+	for i in range(path.size() - 1):
+		var a := path[i]
+		var b := path[i + 1]
+		var length := a.distance_to(b)
+		var t := 0.0 if length < 1e-6 else clampf((at - a).dot(b - a) / (length * length), 0.0, 1.0)
+		var p := a.lerp(b, t)
+		var d := p.distance_to(at)
+		if d < best_d:
+			best_d = d
+			best_seg = i
+			best_point = p
+			best_arc = arc + t * length
+		arc += length
+	var seg_dir := (path[best_seg + 1] - path[best_seg]).normalized()
+	if absf(seg_dir.y) > 0.7:
+		return "cut a horizontal stretch, not a riser"
+	if best_arc < 0.9 or arc - best_arc < 0.9:
+		return "too close to the fitting to cut there"
+	# The corners the line was laid through, split about the cut; the
+	# stubs and the ends belong to the fittings.
+	var before: Array = []
+	var after: Array = []
+	var walked := 0.0
+	for i in range(1, path.size() - 1):
+		walked += path[i].distance_to(path[i - 1])
+		if i >= 2 and i <= path.size() - 3:
+			if walked < best_arc:
+				before.append(path[i])
+			else:
+				after.append(path[i])
+	var a_name := str(visual["a"])
+	var a_port := str(visual["a_port"])
+	var b_name := str(visual["b"])
+	var b_port := str(visual["b_port"])
+	var color := str(visual.get("color", ""))
+	var label_ := str(visual.get("label", ""))
+	var fitting := str(visual.get("fitting", ""))
+	remove_run(view)
+	# Two caps, a hand apart either side of the cut, their spools along
+	# the line: the first takes the upstream piece on its a-nozzle, the
+	# second feeds the downstream piece from its b-nozzle.
+	var rot := atan2(-seg_dir.z, seg_dir.x)
+	var names: Array[String] = []
+	for side: float in [-1.0, 1.0]:
+		var cap_name := unique_name("cap")
+		var spot := best_point + seg_dir * (side * 0.45)
+		place("cap", cap_name, {"line_y": spot.y}, to_global(Vector3(spot.x, 0.0, spot.z)), rot, false)
+		names.append(cap_name)
+	var why := connect_equipment(a_name, a_port, names[0], "a", before)
+	if why == "":
+		why = connect_equipment(names[1], "b", b_name, b_port, after)
+	if why != "":
+		return why
+	for pair: Array in [[a_name, a_port, names[0], "a"], [names[1], "b", b_name, b_port]]:
+		if color != "":
+			for candidate in _wire_visuals:
+				if str(candidate["a"]) == str(pair[0]) and str(candidate["b"]) == str(pair[2]) \
+						and candidate["node"] != null:
+					set_run_service(candidate["node"] as PipeView, Color.html(color), label_, fitting)
+	return ""
+
+
+## Lay a line again through the corners the player set (director,
+## 2026-09-13: a selected leg's ends can be moved). The corners become
+## the line's own waypoints, so from here on it is laid the player's
+## way and the router only fills between them.
+func set_wire_corners(view: PipeView, corners: Array) -> PipeView:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			visual["waypoints"] = corners
+			_refresh_visual(visual)   # a new node: the caller keeps the one returned
+			_schedule_revalidate()
+			return visual["node"] as PipeView
+	return null
+
+
+## The path a wire's line is laid on (plant-local), or [] for a run
+## that is not a wire.
+func wire_path(view: PipeView) -> Array[Vector3]:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			return _visual_path(visual)
+	return []
+
+
+## The corners a line was routed through before its lane and bridges
+## were added — the player's waypoints and the search's detours — as
+## laid, plant-local: what becomes its waypoints when the player takes
+## it in hand. The lane's sidesteps and a bridge's ramps are not
+## corners of the line's own and are laid again over these.
+func wire_corners(view: PipeView) -> Array:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			var out: Array = []
+			for corner: Vector3 in visual.get("corners", []):
+				out.append(corner)
+			return out
+	return []
+
+
+## The next free name with a prefix among the placed records.
+func unique_name(prefix: String) -> String:
+	var index := 1
+	while views.has("%s_%d" % [prefix, index]) or sim.get_component("%s_%d" % [prefix, index]) != null:
+		index += 1
+	return "%s_%d" % [prefix, index]
+
+
+## A cap shows a blind flange on each nozzle without a line.
+func _sync_caps(names: Array) -> void:
+	for name_ in names:
+		var view := views.get(str(name_)) as CapView
+		if view == null:
+			continue
+		for port: String in ["a", "b"]:
+			view.set_capped(port, visible_wire_count(str(name_), port) == 0)
 
 
 ## Drop the kernel wire behind a visual entry.
@@ -2601,10 +2749,14 @@ func _avoided_corners(src_name: String, src_port: String, dst_name: String, dst_
 	var full := PipeRoute.routed_avoiding(_marker_pos(src_name, src_port), _marker_dir(src_name, src_port),
 		_marker_pos(dst_name, dst_port), _marker_dir(dst_name, dst_port), waypoints,
 		_route_blocked.bind([src_name, dst_name]), _route_busy.bind([src_name], order))
-	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG") and PipeRoute.last_searched:
-		var b := PipeRoute.last_block
-		print("[route] %s.%s -> %s.%s detours at %s (%s): %s" % [src_name, src_port, dst_name, dst_port,
-			b, _route_block_by.get(_route_key(b), "?"), full.slice(2, full.size() - 2)])
+	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
+		if PipeRoute.last_searched:
+			var b := PipeRoute.last_block
+			print("[route] %s.%s -> %s.%s detours at %s (%s): %s" % [src_name, src_port, dst_name, dst_port,
+				b, _route_block_by.get(_route_key(b), "?"), full.slice(2, full.size() - 2)])
+		else:
+			print("[route] %s.%s -> %s.%s plain through %s: %s" % [src_name, src_port, dst_name, dst_port,
+				str(waypoints), full.slice(2, full.size() - 2)])
 	return full.slice(2, full.size() - 2)
 
 
@@ -3453,6 +3605,9 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"spec": (record as SimMainsFeed).spec, "ways": (record as SimMainsFeed).ways}
 	if record is SimTee:
 		return {"mode": (record as SimTee).mode}
+	if record is SimCap:
+		var cap_view := views.get(record.comp_name) as CapView
+		return {"line_y": cap_view.line_y if cap_view != null else 0.35}
 	if record is SimTrendScreen:
 		var screen := record as SimTrendScreen
 		return {"tags": screen.tags.duplicate(), "window_s": screen.window_s}
