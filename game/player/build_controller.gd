@@ -66,6 +66,7 @@ var _orbiting := false
 var _panning := false
 var _right_down := false
 var _right_moved := false
+var _right_wheeled := false
 
 
 func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
@@ -143,6 +144,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_toggle_nozzle_grab()
 	elif event.is_action_pressed("move_item"):
 		_toggle_edit()
+	elif (mode == Mode.PLACE or mode == Mode.CONNECT) and _mode_mouse(event):
+		get_viewport().set_input_as_handled()
 	elif mode == Mode.EDIT and _edit_mouse(event):
 		get_viewport().set_input_as_handled()
 	elif mode == Mode.EDIT and event.is_action_pressed("rotate_item"):
@@ -214,7 +217,7 @@ func _update_hud() -> void:
 			var handles := "arrows move it (red X, blue Z, gold cube free)"
 			if plant.sim.get_component(_edit_name) is SimTank:
 				handles = "ring = diameter · post = height · " + handles
-			hud.set_mode_text("MODIFY %s — drag a handle: %s · middle-drag pan · shift+middle or right-drag orbit · wheel zoom · R rotate · M/Esc done"
+			hud.set_mode_text("MODIFY %s — drag a handle: %s · middle-drag pan · shift+middle or right-drag orbit · wheel zoom · R rotate · right-click/M/Esc done"
 				% [_edit_name, handles])
 		Mode.PLACE:
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
@@ -229,16 +232,16 @@ func _update_hud() -> void:
 				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
 				var step := "click a supported START point" if _beam_anchor == Vector3.INF \
 					else "click the END point (max %.0f m) · R restart" % float(spec["max"])
-				hud.set_mode_text("STRETCH — %s · B/Esc exit" % step)
+				hud.set_mode_text("STRETCH — %s · right-click/B/Esc exit" % step)
 			elif _is_run():
 				var support := "" if _run_points.size() < 2 else \
 					("\nsupport OK (span %.1f m)" % _route_span if _route_ok
 					else "\nUNSUPPORTED — span %.1f m over %.1f m max" \
 					% [_route_span, SupportCheck.MAX_SPAN])
-				hud.set_mode_text("RUN — click surfaces to lay points (%d) · E finish · R undo · B/Esc exit%s"
+				hud.set_mode_text("RUN — click surfaces to lay points (%d) · E finish · R undo · right-click/B/Esc exit%s"
 					% [_run_points.size(), support])
 			else:
-				hud.set_mode_text("BUILD — click place · R rotate · B/Esc exit")
+				hud.set_mode_text("BUILD — click place · R or right-hold+wheel rotate · right-click/B/Esc exit")
 		Mode.CONNECT:
 			menu.visible = false
 			var step := "click an outlet fitting · G moves a vessel nozzle" if _pending_marker == null \
@@ -248,7 +251,7 @@ func _update_hud() -> void:
 				("\nsupport OK (span %.1f m)" % _route_span if _route_ok
 				else "\nUNSUPPORTED — span %.1f m over %.1f m max: route along structure" \
 				% [_route_span, SupportCheck.MAX_SPAN])
-			hud.set_mode_text("CONNECT — %s · C/Esc exit%s" % [step, support])
+			hud.set_mode_text("CONNECT — %s · right-click/C/Esc exit%s" % [step, support])
 
 
 func _physics_process(_delta: float) -> void:
@@ -888,7 +891,7 @@ func _port_picked(record_name: String, port_name: String, is_input: bool) -> voi
 		return
 	if is_input:
 		if _pending_marker == null:
-			hud.toast("right-click a SOURCE and pick an output first")
+			hud.toast("pick an output on a SOURCE first (its menu, or C and click its outlet)")
 			return
 		_complete_connection(record_name, port_name, marker.global_position,
 			marker.global_basis.x.normalized())
@@ -897,7 +900,7 @@ func _port_picked(record_name: String, port_name: String, is_input: bool) -> voi
 		_set_mode(Mode.CONNECT)
 	_pending_marker = marker
 	_update_hud()
-	hud.toast("routing from %s.%s — lay waypoints, finish on an input (click or right-click the target)"
+	hud.toast("routing from %s.%s — lay waypoints, finish by clicking an inlet fitting"
 		% [record_name, port_name])
 
 
@@ -1044,6 +1047,38 @@ func _edit_ray() -> Array[Vector3]:
 ## Mouse in edit mode: left drags a handle, middle pans (shift: orbits),
 ## right orbits, a right click that did not move opens the device
 ## menu, the wheel zooms. Returns true when the event was ours.
+## The right button in build and connect mode (director, 2026-09-13):
+## a right click leaves the mode, and the wheel with the right button
+## held turns the thing being placed, fifteen degrees a notch, instead
+## of zooming the camera. A wheel turn under the button makes the
+## release no longer a click.
+func _mode_mouse(event: InputEvent) -> bool:
+	if not (event is InputEventMouseButton):
+		return false
+	var button := event as InputEventMouseButton
+	match button.button_index:
+		MOUSE_BUTTON_RIGHT:
+			if button.pressed:
+				_right_down = true
+				_right_wheeled = false
+			else:
+				var was_click := _right_down and not _right_wheeled
+				_right_down = false
+				if was_click:
+					_set_mode(Mode.NORMAL)
+			return true
+		MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
+			if not _right_down:
+				return false
+			_right_wheeled = true
+			if button.pressed and mode == Mode.PLACE and not _is_run() and not _is_stretch():
+				var notch := deg_to_rad(15.0) if button.button_index == MOUSE_BUTTON_WHEEL_DOWN else -deg_to_rad(15.0)
+				rot_y = wrapf(rot_y + notch, 0.0, TAU)
+				_update_hud()
+			return true
+	return false
+
+
 func _edit_mouse(event: InputEvent) -> bool:
 	if _edit_cam == null:
 		return false
@@ -1070,7 +1105,7 @@ func _edit_mouse(event: InputEvent) -> bool:
 					var was_click := _right_down and not _right_moved
 					_right_down = false
 					if was_click:
-						_open_port_menu_at_pointer()
+						_set_mode(Mode.NORMAL)  # a right click leaves the mode (director, 2026-09-13)
 				return true
 			MOUSE_BUTTON_WHEEL_UP:
 				if button.pressed:
@@ -1092,31 +1127,6 @@ func _edit_mouse(event: InputEvent) -> bool:
 			_edit_cam.pan(motion.relative)
 			return true
 	return false
-
-
-## Right-click in edit mode: the device under the pointer, or the one
-## being edited.
-func _open_port_menu_at_pointer() -> void:
-	var ray := _edit_ray()
-	var query := PhysicsRayQueryParameters3D.create(ray[0], ray[0] + ray[1] * 200.0, 1 | 4)
-	query.exclude = [player.get_rid()]
-	var hit := player.camera.get_world_3d().direct_space_state.intersect_ray(query)
-	var name_ := _edit_name
-	if not hit.is_empty():
-		var collider := hit["collider"] as Node
-		if collider != null and collider.has_meta("view"):
-			var view := collider.get_meta("view") as Node
-			if view != null and view.has_meta("record_name"):
-				name_ = str(view.get_meta("record_name"))
-	var type_id := str(plant.equip_types.get(name_, ""))
-	port_menu.open(plant, "%s — %s" % [name_, type_id], [name_], type_id, _port_picked,
-		func(record_name: String, values: Dictionary) -> String:
-			var why := plant.configure_equipment(record_name, values)
-			if why == "":
-				hud.toast("%s configured" % record_name)
-				if _gizmo != null:
-					_gizmo.refresh()
-			return why)
 
 
 func _edit_footprint() -> Vector3:
