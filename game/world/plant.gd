@@ -156,6 +156,7 @@ var startup_ms: Dictionary = {}
 
 func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
+	clearance = RunClearance.new(self)
 	_new_graph()
 	# The kernel self-checks simulate ten minutes of plant and cost
 	# about eight seconds; they are for the headless smoke runs, not for
@@ -960,19 +961,27 @@ func _sync_cabinet(cab: String) -> void:
 		if child.has_meta("merged_markers"):
 			view.remove_child(child)
 			child.queue_free()
+	# Flank fittings run down each side in rows; a cabinet with more
+	# terminals than one column holds starts a second column further
+	# along the flank rather than putting a fitting below the floor
+	# (2026-09-18: a station lamp circuit left its cabinet at -0.085 m).
 	var y := 1.72
+	var z := 0.12
 	for module_v: Variant in entry["modules"]:
 		var module := module_v as Dictionary
 		var type_id := str(module["type"])
 		for record_name: String in module["records"]:
 			var record := sim.get_component(record_name)
+			if y < 0.25:
+				y = 1.72
+				z += 0.16
 			if record is SimTerminal:
 				PlantFactory.attach_port_markers(view, record, "terminal",
-					{"in": Vector3(-0.72, y, 0.12), "out": Vector3(0.72, y, 0.12)})
+					{"in": Vector3(-0.72, y, z), "out": Vector3(0.72, y, z)})
 				y -= 0.115
 			elif record is SimPowerSupply:
 				PlantFactory.attach_port_markers(view, record, "psu",
-					{"ac_in": Vector3(-0.72, y, 0.12), "dc_out": Vector3(0.72, y, 0.12)})
+					{"ac_in": Vector3(-0.72, y, z), "dc_out": Vector3(0.72, y, z)})
 				y -= 0.115
 	view.set_layout(entry["modules"], _cabinet_wire_specs(cab))
 	var relays: Array[SimRelay] = []
@@ -1298,15 +1307,14 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 				var rise := Vector3.ZERO
 				# A bridge in front of a nozzle cluster is not inside the machine:
 				# the other run's two records are as open to it as this run's own.
-				var clear_of: Array = ignore.duplicate()
-				clear_of.append_array(span[8])
+				var bridge_ctx := clearance.context(ignore, path[0], path[path.size() - 1], radius, span[8])
 				var side_normal: Vector3 = span[5]
 				if side_normal != Vector3.ZERO:
 					# Round a riser, or a row of them: past the farthest on
 					# that side, and a jog big enough for its elbows to sweep.
-					var clearance := radius + float(span[4]) + JUMPER_GAP
-					var plus := maxf(float(span[6]), 0.0) + clearance
-					var minus := maxf(-float(span[7]), 0.0) + clearance
+					var gap_needed := radius + float(span[4]) + JUMPER_GAP
+					var plus := maxf(float(span[6]), 0.0) + gap_needed
+					var minus := maxf(-float(span[7]), 0.0) + gap_needed
 					var candidates: Array[Vector3] = []
 					for jog: float in [plus, minus] if plus <= minus else [minus, plus]:
 						var side := 1.0 if jog == plus else -1.0
@@ -1316,9 +1324,7 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 						# round a riser must not come down on the line that
 						# riser feeds (2026-09-13).
 						var jog: Array[Vector3] = [p0 - dir * 0.5, p0, p0 + candidate, p1 + candidate, p1, p1 + dir * 0.5]
-						if _bridge_clear(p0 + candidate, p1 + candidate, radius, clear_of) \
-								and _bridge_clear(p0, p0 + candidate, radius, clear_of) \
-								and _bridge_clear(p1 + candidate, p1, radius, clear_of) \
+						if clearance.hits([p0, p0 + candidate, p1 + candidate, p1], bridge_ctx).is_empty() \
 								and _crossings(jog, radius, skip, ignore, order, 0.0).is_empty():
 							rise = candidate
 							break
@@ -1341,9 +1347,9 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 					var jogs: Array[Vector3] = [Vector3.ZERO]
 					var riser_normal: Vector3 = span[9]
 					if riser_normal != Vector3.ZERO:
-						var clearance := radius + float(span[4]) + JUMPER_GAP
-						var plus := maxf(float(span[6]), 0.0) + clearance
-						var minus := maxf(-float(span[7]), 0.0) + clearance
+						var gap_needed := radius + float(span[4]) + JUMPER_GAP
+						var plus := maxf(float(span[6]), 0.0) + gap_needed
+						var minus := maxf(-float(span[7]), 0.0) + gap_needed
 						jogs = []
 						for jog: float in [plus, minus] if plus <= minus else [minus, plus]:
 							var side := 1.0 if jog == plus else -1.0
@@ -1369,9 +1375,7 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 							var deck: Array[Vector3] = [p0 - dir * 0.5, p0, p0 + move, p1 + move, p1, p1 + dir * 0.5]
 							# The deck clears what it bridges by the gap, so the check
 							# here is for touching, with no margin.
-							if _bridge_clear(p0 + move, p1 + move, radius, clear_of) \
-									and _bridge_clear(p0, p0 + move, radius, clear_of) \
-									and _bridge_clear(p1 + move, p1, radius, clear_of) \
+							if clearance.hits([p0, p0 + move, p1 + move, p1], bridge_ctx).is_empty() \
 									and (jog == Vector3.ZERO or _crossings(deck, radius, skip, ignore, order,
 										0.0).is_empty()):
 								rise = move
@@ -1392,7 +1396,7 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 		for crossing in crossings:
 			names.append("%s@%.1f" % [crossing["other"], float(crossing["at"])])
 		print("[jumper] %s: hopped %d, refused %d (last blocked by %s); crossings %s" % [str(ignore),
-			hopped, refused, _last_bridge_block, str(names)])
+			hopped, refused, clearance.last_block, str(names)])
 	return out
 
 
@@ -1405,34 +1409,6 @@ func _highest_under(p0: Vector3, p1: Vector3, radius: float, skip: Dictionary, i
 	for crossing in _crossings(deck, radius, skip, ignore, order, JUMPER_GAP + 0.05):
 		top = maxf(top, float(crossing["top"]))
 	return top
-
-
-## Is the straight from p0 to p1 free of anything solid? A bridge needs
-## only its own diameter of room, so this looks with a probe the size
-## of the pipe, not the router's half-metre cell; the run's own two
-## pieces of equipment do not count, it approaches them anyway.
-func _bridge_clear(p0: Vector3, p1: Vector3, radius: float, ignore: Array) -> bool:
-	var shape := BoxShape3D.new()
-	shape.size = Vector3.ONE * (2.0 * radius + 0.04)
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = shape
-	query.collision_mask = 1 | 4
-	var steps := maxi(1, ceili(p0.distance_to(p1) / 0.2))
-	for i in range(steps + 1):
-		query.transform = Transform3D(Basis(), to_global(p0.lerp(p1, float(i) / steps)))
-		for found: Dictionary in get_world_3d().direct_space_state.intersect_shape(query, 4):
-			var collider: Object = found["collider"]
-			if not (collider is Node) or (collider as Node).has_meta("run"):
-				continue
-			var owner: Variant = _owner_of_body(collider as Node)
-			if ignore.has(owner):
-				continue
-			_last_bridge_block = str(owner)
-			return false
-	return true
-
-
-var _last_bridge_block: String = ""
 
 
 static func _append_point(out: Array[Vector3], p: Vector3) -> void:
@@ -1469,151 +1445,34 @@ func crossing_report() -> PackedStringArray:
 
 ## Every run failing the support rule, with where its longest
 ## unsupported span begins and how long it is.
-## Every place a laid run passes through solid geometry — world,
-## structure, equipment — with a probe the run's own size (director,
-## 2026-09-18: "pipes must not intersect or travel through the volume
-## of tanks or other equipment"). A run's own two pieces of equipment
-## are open to it within STUB_CLEAR of its ends and on a vertical (a
-## drop down its flank); nothing else is. One line per run and owner.
+## Every place a laid run passes through solid geometry, by the one
+## rule in RunClearance (director, 2026-09-18: "pipes must not intersect
+## or travel through the volume of tanks or other equipment"). One line
+## per run and owner.
 func intersection_report() -> PackedStringArray:
 	var lines := PackedStringArray()
-	var space := get_world_3d().direct_space_state
-	var runs_to_check: Array = []
+	var checks: Array = []
 	for visual in _wire_visuals:
 		if visual["node"] == null:
 			continue
-		runs_to_check.append([_visual_path(visual), visual["node"] as PipeView,
+		var path: Array[Vector3] = _visual_path(visual)
+		if path.size() < 2:
+			continue
+		checks.append([path, (visual["node"] as PipeView).radius(),
 			"%s.%s -> %s.%s" % [visual["a"], visual["a_port"], visual["b"], visual["b_port"]],
 			[str(visual["a"]), str(visual["b"])]])
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
-		runs_to_check.append([PipeRoute.lay(entry["points"]), entry["node"] as PipeView, name_, []])
-	for item: Array in runs_to_check:
+		var laid: Array[Vector3] = PipeRoute.lay(entry["points"])
+		if laid.size() >= 2:
+			checks.append([laid, (entry["node"] as PipeView).radius(), name_, []])
+	for item: Array in checks:
 		var path: Array[Vector3] = item[0]
-		var view := item[1] as PipeView
-		if path.size() < 2 or view == null:
-			continue
-		var shape := SphereShape3D.new()
-		shape.radius = view.radius() * 0.9
-		var query := PhysicsShapeQueryParameters3D.new()
-		query.shape = shape
-		query.collision_mask = 1 | 4
-		query.exclude = view.collider_rids()
-		var start := path[0]
-		var finish := path[path.size() - 1]
-		var own: Array = item[3]
-		var reach_a := _own_reach(str(own[0])) if own.size() > 0 else 0.0
-		var reach_b := _own_reach(str(own[1])) if own.size() > 1 else 0.0
-		var seen := {}
-		for i in range(path.size() - 1):
-			var a := path[i]
-			var b := path[i + 1]
-			var length := a.distance_to(b)
-			if length < 0.01:
-				continue
-			var vertical := absf(b.y - a.y) > maxf(absf(b.x - a.x), absf(b.z - a.z))
-			var steps := maxi(1, ceili(length / 0.15))
-			for s in range(steps + 1):
-				var p := a.lerp(b, float(s) / steps)
-				query.transform = Transform3D(Basis(), to_global(p))
-				for found: Dictionary in space.intersect_shape(query, 6):
-					var collider: Object = found["collider"]
-					if not (collider is Node) or (collider as Node).has_meta("run"):
-						continue
-					if (collider as Node).has_meta("handle") or (collider as Node).has_meta("port_name"):
-						continue
-					if _rests_on(to_global(p), collider, view.radius()):
-						continue
-					var owner: Variant = _owner_of_body(collider as Node)
-					if owner is String and own.size() > 0 and owner == str(own[0]) \
-							and (vertical or p.distance_to(start) < reach_a):
-						continue
-					if owner is String and own.size() > 1 and owner == str(own[1]) \
-							and (vertical or p.distance_to(finish) < reach_b):
-						continue
-					# A run lying on the floor touches the floor: world geometry
-					# under a run at ground level is what carries it, not a hit.
-					if not (owner is String) and p.y <= view.radius() + 0.08:
-						continue
-					var key := str(owner)
-					if seen.has(key):
-						continue
-					seen[key] = true
-					lines.append("%s through %s at (%.1f, %.2f, %.1f)" % [item[2], key, p.x, p.y, p.z])
+		var ctx := clearance.context(item[3], path[0], path[path.size() - 1], float(item[1]))
+		for hit: Dictionary in clearance.hits(path, ctx):
+			var p: Vector3 = hit["at"]
+			lines.append("%s through %s at (%.1f, %.2f, %.1f)" % [item[2], str(hit["owner"]), p.x, p.y, p.z])
 	return lines
-
-
-## Does a run at p rest on this body — a tray on its beam, a cable on
-## the floor — rather than pass through it? The body's top is just
-## under the run.
-func _rests_on(p_global: Vector3, collider: Object, radius: float) -> bool:
-	var query := PhysicsRayQueryParameters3D.create(p_global, p_global - Vector3.UP * (radius + 0.1), 1 | 4)
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	return not hit.is_empty() and hit["collider"] == collider \
-		and (hit["normal"] as Vector3).y > 0.7
-
-
-## How far from its fitting a run's own equipment is open to it on a
-## level leg: the stub clearance, plus half the equipment's footprint,
-## since a bottom outlet's line runs out from under its vessel.
-func _own_reach(name_: String) -> float:
-	var reach := PipeRoute.STUB_CLEAR
-	var tank := sim.get_component(name_) as SimTank
-	if tank != null:
-		return reach + tank.diameter_m * 0.5
-	var footprint: Vector3 = PlantFactory.FOOTPRINTS.get(equip_types.get(name_, ""), Vector3.ZERO)
-	return reach + maxf(footprint.x, footprint.z) * 0.5
-
-
-## How many places a candidate route passes through solid geometry,
-## with a probe the run's own size, the run's own equipment open to it
-## within STUB_CLEAR of its ends and on a vertical, the floor under a
-## ground run not counted. What a lane is charged for (2026-09-18).
-func _solid_hits(path: Array[Vector3], radius: float, own: Array) -> int:
-	if path.size() < 2:
-		return 0
-	var space := get_world_3d().direct_space_state
-	var shape := SphereShape3D.new()
-	shape.radius = radius * 0.9
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = shape
-	query.collision_mask = 1 | 4
-	var start := path[0]
-	var finish := path[path.size() - 1]
-	var reach_a := _own_reach(str(own[0])) if own.size() > 0 else 0.0
-	var reach_b := _own_reach(str(own[1])) if own.size() > 1 else 0.0
-	var hits := 0
-	for i in range(path.size() - 1):
-		var a := path[i]
-		var b := path[i + 1]
-		var length := a.distance_to(b)
-		if length < 0.01:
-			continue
-		var vertical := absf(b.y - a.y) > maxf(absf(b.x - a.x), absf(b.z - a.z))
-		var steps := maxi(1, ceili(length / 0.15))
-		for s in range(steps + 1):
-			var p := a.lerp(b, float(s) / steps)
-			if p.y <= radius + 0.08:
-				continue  # on the floor
-			query.transform = Transform3D(Basis(), to_global(p))
-			for found: Dictionary in space.intersect_shape(query, 8):
-				var collider: Object = found["collider"]
-				if not (collider is Node) or (collider as Node).has_meta("run") \
-						or (collider as Node).has_meta("handle") or (collider as Node).has_meta("port_name"):
-					continue
-				if _rests_on(to_global(p), collider, radius):
-					continue
-				var owner: Variant = _owner_of_body(collider as Node)
-				if not (owner is String):
-					hits += 1   # world geometry: never a run's own
-					break
-				if own.size() > 0 and owner == str(own[0]) and (vertical or p.distance_to(start) < reach_a):
-					continue
-				if own.size() > 1 and owner == str(own[1]) and (vertical or p.distance_to(finish) < reach_b):
-					continue
-				hits += 1
-				break
-	return hits
 
 
 func unsupported_report() -> PackedStringArray:
@@ -2314,8 +2173,7 @@ func _revalidate_supports() -> void:
 	# re-lays never change: cleared once per schedule, not every round
 	# (2026-09-18: probing them again cost 1.3 s a round with nothing moved).
 	if _relay_round == 0:
-		_route_cells.clear()
-		_body_owners.clear()
+		clearance.clear()
 		PipeRoute.clear_cache()
 	# Runs laid before physics knew the bodies round them: re-lay any
 	# whose avoiding route now differs.
@@ -2568,6 +2426,8 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 	var t_start := Time.get_ticks_usec()
 	var corners := _avoided_corners(src_name, src_port, dst_name, dst_port, waypoints, order)
 	_lay_us["corners"] = int(_lay_us.get("corners", 0)) + Time.get_ticks_usec() - t_start
+	var lay_ctx := clearance.context([src_name, dst_name], _marker_pos(src_name, src_port),
+		_marker_pos(dst_name, dst_port), radius)
 	t_start = Time.get_ticks_usec()
 	var searched := PipeRoute.last_searched
 	_lane_room.clear()  # the room beside each leg is this run's, for its lanes
@@ -2625,7 +2485,7 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 			# win, like the support rule.
 			if cost < best_cost:
 				var t_check := Time.get_ticks_usec()
-				cost += 200.0 * _solid_hits(candidate, radius, [src_name, dst_name])
+				cost += 200.0 * clearance.hits(candidate, lay_ctx).size()
 				_lay_us["solid"] = int(_lay_us.get("solid", 0)) + Time.get_ticks_usec() - t_check
 			costs.append("%d:%.0f%s" % [try_lane, cost,
 				("@(%.1f,%.1f,%.1f)" % [_last_overlap_at.x, _last_overlap_at.y, _last_overlap_at.z])
@@ -2771,7 +2631,9 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	var from_dir := _marker_dir(src_name, src_port)
 	var to := _marker_pos(dst_name, dst_port)
 	var to_dir := _marker_dir(dst_name, dst_port)
-	var base := PipeRoute.routed(from, from_dir, to, to_dir, corners)
+	var lane_ctx := clearance.context([src_name, dst_name], from, to, radius)
+	var squaring := clearance.router_blocked.bind(lane_ctx)   # a square-turn leg goes the clear way
+	var base := PipeRoute.routed(from, from_dir, to, to_dir, corners, squaring)
 	if lane <= 0:
 		return base
 	if corners.is_empty():
@@ -2800,9 +2662,9 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	# the base route passed under (2026-09-18).
 	var room_key := "%s.%s>%s.%s|%d|%d" % [src_name, src_port, dst_name, dst_port, side, tier]
 	if not _lane_room.has(room_key):
-		_lane_room[room_key] = _leg_room(base, side, step, lift, [src_name, dst_name])
-	var shifted := _offset_polyline(base, side, k * step, lift, _lane_room[room_key], [src_name, dst_name])
-	return PipeRoute.routed(from, from_dir, to, to_dir, shifted)
+		_lane_room[room_key] = _leg_room(base, side, step, lift, lane_ctx)
+	var shifted := _offset_polyline(base, side, k * step, lift, _lane_room[room_key], lane_ctx)
+	return PipeRoute.routed(from, from_dir, to, to_dir, shifted, squaring)
 
 
 const LANE_TIERS := 4
@@ -2820,15 +2682,15 @@ static func _lane_rank(lane: int) -> int:
 	var k := slot / (2 * LANE_TIERS)
 	return tier * 100 + k * 10 + slot % 2
 var _lane_room: Dictionary = {}
+# The one answer to "may a run pass here?": see world/run_clearance.gd.
+var clearance: RunClearance
 
 
 ## How far each horizontal leg of `base` can move to `side` before it
 ## meets something solid, in steps, up to LANE_STEPS of them; INF for
 ## a vertical leg, which moves with its neighbour.
-func _leg_room(base: Array[Vector3], side: int, step: float, lift: float, ignore: Array) -> Array[float]:
+func _leg_room(base: Array[Vector3], side: int, step: float, lift: float, ctx: Dictionary) -> Array[float]:
 	var n := base.size()
-	var from := base[0]
-	var to := base[n - 1]
 	var room: Array[float] = []
 	for i in n - 1:
 		var d := base[i + 1] - base[i]
@@ -2840,8 +2702,8 @@ func _leg_room(base: Array[Vector3], side: int, step: float, lift: float, ignore
 		var clear := 0.0
 		for k in range(1, LANE_STEPS + 1):
 			var o := k * step
-			if not _leg_clear(base[i] + normal * o + Vector3.UP * lift,
-					base[i + 1] + normal * o + Vector3.UP * lift, from, to, ignore):
+			if not clearance.leg_clear(base[i] + normal * o + Vector3.UP * lift,
+					base[i + 1] + normal * o + Vector3.UP * lift, ctx):
 				break
 			clear = o
 		room.append(clear)
@@ -2861,7 +2723,7 @@ func _leg_room(base: Array[Vector3], side: int, step: float, lift: float, ignore
 ## legs still disagree, the re-routing that follows turns the misfit
 ## into a short jog. `lift` raises every corner: the tier.
 func _offset_polyline(base: Array[Vector3], side: int, want: float, lift: float,
-		room: Array[float], ignore: Array) -> Array:
+		room: Array[float], ctx: Dictionary) -> Array:
 	var n := base.size()
 	var from := base[0]
 	var to := base[n - 1]
@@ -2880,7 +2742,7 @@ func _offset_polyline(base: Array[Vector3], side: int, want: float, lift: float,
 		dirs.append(dir)
 		normals.append(normal)
 		offs.append(normal * minf(want, room[i]))
-	var vertical_shift := {"ignore": ignore}
+	var vertical_shift := {"ctx": ctx}
 	var out: Array = []
 	# A lane steps sideways off a stub end at a right angle, square to
 	# the stub (2026-09-13: the old shift moved the stub end itself
@@ -2968,9 +2830,8 @@ func _vertical_offset(v: int, base: Array[Vector3], dirs: Array[Vector3], normal
 		if along > 0.001:
 			var slide := dirs[long_leg] * (side * along)
 			for attempt in 3:
-				if _leg_clear(base[v] + shift + slide + Vector3.UP * lift,
-						base[v + 1] + shift + slide + Vector3.UP * lift,
-						from, to, [] if cache.get("ignore") == null else cache["ignore"]):
+				if clearance.leg_clear(base[v] + shift + slide + Vector3.UP * lift,
+						base[v + 1] + shift + slide + Vector3.UP * lift, cache["ctx"]):
 					shift += slide
 					break
 				slide *= 0.5
@@ -2980,22 +2841,6 @@ func _vertical_offset(v: int, base: Array[Vector3], dirs: Array[Vector3], normal
 		shift = offs[h2]
 	cache[v] = shift
 	return shift
-
-
-## Is the straight from a to b clear of solids, the run's own two
-## pieces of equipment aside and its stubs exempt?
-func _leg_clear(a: Vector3, b: Vector3, from: Vector3, to: Vector3, ignore: Array) -> bool:
-	# A quarter metre: a column is 0.3 m wide and fell between the old
-	# half-metre samples (2026-09-18). Near a fitting the run's own
-	# equipment is open to it; everything else counts everywhere.
-	var steps := maxi(1, ceili(a.distance_to(b) / 0.25))
-	var vertical := absf(b.y - a.y) > maxf(absf(b.x - a.x), absf(b.z - a.z))
-	for i in range(steps + 1):
-		var p := a.lerp(b, float(i) / steps)
-		var near_end := p.distance_to(from) < PipeRoute.STUB_CLEAR or p.distance_to(to) < PipeRoute.STUB_CLEAR
-		if _route_blocked(p, ignore if (near_end or vertical) else []):
-			return false
-	return true
 
 
 ## The path a run was laid on. Reports and the support check read
@@ -3024,142 +2869,18 @@ func _avoided_corners(src_name: String, src_port: String, dst_name: String, dst_
 		waypoints: Array, order: int = ORDER_ALL) -> Array:
 	var full := PipeRoute.routed_avoiding(_marker_pos(src_name, src_port), _marker_dir(src_name, src_port),
 		_marker_pos(dst_name, dst_port), _marker_dir(dst_name, dst_port), waypoints,
-		_route_blocked_for.bind([src_name, dst_name]), _route_busy.bind([src_name], order))
+		clearance.router_blocked.bind(clearance.context([src_name, dst_name], _marker_pos(src_name, src_port),
+			_marker_pos(dst_name, dst_port), _radius_of(src_name, src_port))),
+		clearance.busy.bind([src_name], order))
 	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
 		if PipeRoute.last_searched:
 			var b := PipeRoute.last_block
 			print("[route] %s.%s -> %s.%s detours at %s (%s): %s" % [src_name, src_port, dst_name, dst_port,
-				b, _route_block_by.get(_route_key(b), "?"), full.slice(2, full.size() - 2)])
+				b, clearance.last_block, full.slice(2, full.size() - 2)])
 		else:
 			print("[route] %s.%s -> %s.%s plain through %s: %s" % [src_name, src_port, dst_name, dst_port,
 				str(waypoints), full.slice(2, full.size() - 2)])
 	return full.slice(2, full.size() - 2)
-
-
-var _route_cells: Dictionary = {}
-var _route_probe: BoxShape3D = null
-
-
-## Is this half-metre cell solid? World geometry (1) and equipment
-## volumes (4); other runs are not solid, lanes see to those. Cells
-## within a metre of the endpoints are open: a stub leaves through
-## its own equipment's volume. Cached until the plant changes.
-func _route_blocked(center: Vector3, ignore: Array) -> bool:
-	for owner in _route_owners(center)["solid"]:
-		if not ignore.has(owner):
-			if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
-				_route_block_by[_route_key(center)] = str(owner)
-			return true
-	return false
-
-
-## The router's own question: a run's two pieces of equipment are open
-## to it on a vertical — a drop down a tall vessel's flank lies inside
-## its volume the whole way — but not on a level leg, which must go
-## round them like anything else (2026-09-18: a line to a nozzle facing
-## away from its source went straight through the tank). The stubs are
-## exempt anyway, within STUB_CLEAR of either fitting.
-func _route_blocked_for(center: Vector3, vertical: bool, ignore: Array) -> bool:
-	return _route_blocked(center, ignore if vertical else [])
-
-
-## Does a run from some other source already pass through this cell?
-## Runs from the same record — sixteen feeds down one trunk — are
-## bundle-mates: they detour together and the lanes part them.
-func _route_busy(center: Vector3, own_sources: Array, order: int) -> bool:
-	for entry in _route_owners(center)["runs"]:
-		if int(entry[1]) < order and not own_sources.has(entry[0]):
-			return true
-	return false
-
-
-func _route_key(center: Vector3) -> Vector3i:
-	return Vector3i(roundi(center.x * 10.0), roundi(maxf(center.y, PROBE_Y_MIN) * 10.0),
-		roundi(center.z * 10.0))
-
-
-# The lowest the obstacle probe goes: its box then spans 0.03..0.29,
-# clear of the floor but catching a stair's foot or a base ring, which
-# the old floor of 0.35 stepped over (2026-09-18).
-const PROBE_Y_MIN := 0.16
-
-
-## What occupies this cell: {"solid": owners, "runs": bool}. Solid is
-## the record names of equipment, or the node for structure; runs
-## (trays, racks, other lines) are only noted, never solid, and the
-## probe never dips below a ground run, so the floor is not either.
-## A run ignores its own two pieces of equipment: a drop down the
-## flank of a column is inside the column volume the whole way.
-func _route_owners(center: Vector3) -> Dictionary:
-	var key := _route_key(center)
-	if _route_cells.has(key):
-		return _route_cells[key]
-	if _route_probe == null:
-		# Shallower than it is wide: a run lying on a tray or a deck is
-		# a hand above the beam under it, and that is not a collision.
-		_route_probe = BoxShape3D.new()
-		_route_probe.size = Vector3(0.42, 0.26, 0.42)
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = _route_probe
-	query.transform = Transform3D(Basis(),
-		to_global(Vector3(center.x, maxf(center.y, PROBE_Y_MIN), center.z)))
-	query.collision_mask = 1 | 4 | 8
-	var owners: Array = []
-	var runs_here: Array = []
-	for found: Dictionary in get_world_3d().direct_space_state.intersect_shape(query, 12):
-		var collider: Object = found["collider"]
-		if not (collider is Node):
-			continue
-		var body := collider as Node
-		if body.has_meta("run"):
-			# Only a run laid where its waypoints put it is something to
-			# steer round. A searched run is itself steering, and two of
-			# those steering round each other never settle; they share a
-			# corridor and the lanes part them.
-			var run_view: Variant = body.get_meta("run")
-			if run_view is Node and bool(run_view.get_meta("searched", false)):
-				continue
-			var src := str(run_view.get_meta("src", "")) if run_view is Node else ""
-			var run_order := int(run_view.get_meta("order", -1)) if run_view is Node else -1
-			runs_here.append([src, run_order])
-			continue
-		var owner: Variant = _owner_of_body(body)
-		if not owners.has(owner):
-			owners.append(owner)
-	var cell := {"solid": owners, "runs": runs_here}
-	_route_cells[key] = cell
-	return cell
-
-
-## The record a collider belongs to — its view may be tagged on the
-## body, or be an ancestor — or the body itself for structure and
-## world geometry. Cached with the cells.
-var _body_owners: Dictionary = {}
-
-func _owner_of_body(body: Node) -> Variant:
-	if _body_owners.has(body):
-		return _body_owners[body]
-	var owner: Variant = body
-	var node: Node = body.get_meta("view") if body.has_meta("view") else body
-	while node != null and node != self:
-		var found_key: Variant = views.find_key(node)
-		if found_key != null and not node.has_meta("mount_frac"):
-			owner = found_key
-			break
-		# A shell-mounted instrument is part of its vessel for routing:
-		# the vessel's own line leaves past it (2026-09-18).
-		for structure_name: String in structures:
-			if structures[structure_name]["node"] == node:
-				owner = "structure:" + structure_name
-				break
-		if owner is String:
-			break
-		node = node.get_parent()
-	_body_owners[body] = owner
-	return owner
-
-
-var _route_block_by: Dictionary = {}
 
 
 ## Two runs with an end on the same equipment — a pump's suction and
@@ -3280,6 +3001,16 @@ static func _path_box(path: Array) -> AABB:
 	for i in range(1, path.size()):
 		box = box.expand(path[i])
 	return box
+
+
+## The radius a line from this port is drawn at: process lines are
+## fatter than signal and power runs.
+func _radius_of(record_name: String, port_name: String) -> float:
+	var record := sim.get_component(record_name)
+	if record == null or not record.outputs.has(port_name):
+		return 0.07
+	var kind: SimTypes.PortKind = (record.outputs[port_name] as SimOutputPort).kind
+	return 0.07 if SimTypes.is_material(kind) or kind == SimTypes.PortKind.PROCESS_LEVEL else 0.025
 
 
 func _marker_pos(record_name: String, port_name: String) -> Vector3:

@@ -18,7 +18,7 @@ const STUB := 0.35   # a run leaves its fitting straight, this far
 ## and take the direct line in between. Zero directions degrade to
 ## no stub (free endpoints).
 static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector3,
-		waypoints: Array) -> Array[Vector3]:
+		waypoints: Array, blocked: Callable = Callable()) -> Array[Vector3]:
 	var stub_a := from + from_dir * STUB
 	var stub_b := to + to_dir * STUB
 	var sparse: Array = [stub_a]
@@ -27,7 +27,7 @@ static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector
 	var path := lay(sparse)
 	path.insert(0, from)
 	path.append(to)
-	return square_turns(path)
+	return square_turns(path, blocked)
 
 
 ## No turn sharper than a right angle (director, 2026-09-13: "we
@@ -167,7 +167,7 @@ static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable,
 	var a := start
 	for b in points:
 		var length := a.distance_to(b)
-		var steps := maxi(1, ceili(length / 0.25))
+		var steps := maxi(1, ceili(length / 0.15))   # the oracle's own spacing: a hand valve is 0.3 m
 		# `blocked` is told whether the sample is on a vertical: a run's
 		# own equipment is open to a drop down its flank, not to a leg
 		# through its body (2026-09-18).

@@ -398,7 +398,7 @@ static func _unit_300(plant: Plant) -> void:
 	# in the air (2026-09-18).
 	var tray_in := Vector3(-2.6, 3.6, 2.25)
 	const TRAY_END := 38.6
-	for load: Array in [
+	var loads: Array = [
 			["p_301a", Vector3(25.6, 0.3, -6.6)],
 			["p_301b", Vector3(25.6, 0.3, -3.0)],
 			["p_solv", Vector3(25.6, 0.3, 5.8)],
@@ -411,19 +411,24 @@ static func _unit_300(plant: Plant) -> void:
 			["st_307", Vector3(43.8, 0.3, 3.2)],
 			["p_309", Vector3(34.4, 0.3, 5.8)],
 			["vl_302", Vector3(29.6, 0.3, -7.2)],
-			["vf_310", Vector3(53.9, 0.3, -3.6)]]:
+			["vf_310", Vector3(53.9, 0.3, -3.6)]]
+	for i in loads.size():
+		var load: Array = loads[i]
 		var at: Vector3 = load[1]
+		# Sixteen risers side by side along the feeder's flank, two rows
+		# of eight, laid deliberately: one shared riser spot left the
+		# lanes to part sixteen conduits on one line (2026-09-18).
+		@warning_ignore("integer_division")
+		var riser := riser_top + Vector3(0.15 * (i / 8), 0.0, 0.12 * (i % 8))   # the second row away from the column
 		# Off the tray sideways before dropping: straight down from the
 		# tray centreline is straight through the beam under it.
 		var drop_x := _drop_x(minf(at.x, TRAY_END))
-		# Down beside the column, along the aisle at the load's own z, then
-		# to the load: laid deliberately, since a direct line from the
-		# drop foot to a far load would cross the floor through whatever
-		# stands there (2026-09-18: the vial filler's feed went through
-		# the product silo).
-		var path: Array[Vector3] = [plant.to_local(riser_top), plant.to_local(tray_in),
+		# Down beside the column, then to the load: the router routes round
+		# whatever stands between (2026-09-18: a corner at the load's own z
+		# was tried and put two drops through the crystallizer).
+		var path: Array[Vector3] = [plant.to_local(riser), plant.to_local(tray_in),
 			plant.to_local(Vector3(drop_x, 3.6, 2.25)), plant.to_local(Vector3(drop_x, 3.6, 2.65)),
-			plant.to_local(Vector3(drop_x, 0.3, at.z)), plant.to_local(at)]
+			plant.to_local(at)]
 		plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), str(load[0]), "power", path)
 
 	# ---- commissioned state ----------------------------------------
