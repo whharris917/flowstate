@@ -54,6 +54,7 @@ var _route_mat: StandardMaterial3D
 var _last_route: Array[Vector3] = []
 var _route_ok := true
 var _route_span := 0.0
+var _route_block := ""   # what the previewed route would pass through, or ""
 var _preview_target: StaticBody3D = null   # the fitting the preview was laid to
 var _preview_waypoints := -1
 var _preview_path: Array[Vector3] = []
@@ -223,6 +224,7 @@ func _set_mode(new_mode: Mode) -> void:
 		player.ray.collision_mask |= EditGizmo.LAYER
 	_route_ok = true
 	_route_span = 0.0
+	_route_block = ""
 	_update_hud()
 
 
@@ -274,6 +276,8 @@ func _update_hud() -> void:
 				("\nsupport OK (span %.1f m)" % _route_span if _route_ok
 				else "\nUNSUPPORTED — span %.1f m over %.1f m max: route along structure" \
 				% [_route_span, SupportCheck.MAX_SPAN])
+			if _pending_marker != null and _route_block != "":
+				support += "\nBLOCKED — the line would pass through %s: route round it or move it" % _route_block
 			hud.set_mode_text("CONNECT — %s · right-click/C/Esc exit%s" % [step, support])
 
 
@@ -407,12 +411,19 @@ func _update_route_preview() -> void:
 		player.camera.get_world_3d().direct_space_state)
 	var ok := bool(check["ok"])
 	var span := float(check["max_span"])
-	if ok != _route_ok or absf(span - _route_span) > 0.05:
+	var kind: SimTypes.PortKind = _pending_marker.get_meta("kind")
+	# And clear of everything solid: what it would pass through is named
+	# in the hint and turns the preview red, since the lay will refuse it.
+	var is_process_kind := kind == SimTypes.PortKind.PROCESS_MATERIAL or kind == SimTypes.PortKind.PROCESS_LEVEL
+	var through := plant.route_obstacles(path, str(_pending_marker.get_meta("record_name")),
+		str(target.get_meta("record_name")) if target != null else "", 0.07 if is_process_kind else 0.025)
+	var block := ", ".join(through)
+	if ok != _route_ok or absf(span - _route_span) > 0.05 or block != _route_block:
 		_route_ok = ok
 		_route_span = span
+		_route_block = block
 		_update_hud()
-	var kind: SimTypes.PortKind = _pending_marker.get_meta("kind")
-	var base_color: Color = PlantFactory.KIND_COLORS[kind] if ok else Color(0.9, 0.2, 0.15)
+	var base_color: Color = PlantFactory.KIND_COLORS[kind] if ok and block == "" else Color(0.9, 0.2, 0.15)
 	_route_mat.albedo_color = Color(base_color.r, base_color.g, base_color.b, 0.6)
 	if path != _last_route:
 		_last_route = path
@@ -928,10 +939,12 @@ func _complete_connection(other: StaticBody3D) -> void:
 	var local_points: Array = []
 	for point in waypoints:
 		local_points.append(plant.to_local(point))
-	var error := plant.connect_equipment(
+	var error := plant.connect_equipment_checked(
 		str(src.get_meta("record_name")), str(src.get_meta("port_name")),
 		str(dst.get_meta("record_name")), str(dst.get_meta("port_name")), local_points)
 	hud.toast("connected" if error == "" else error)
+	if error != "":
+		return  # the line is not made: keep routing, the player fixes it
 	_pending_marker = null
 	_waypoints.clear()
 	_clear_route()

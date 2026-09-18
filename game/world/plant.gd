@@ -2558,6 +2558,59 @@ func preview_route(src_name: String, src_port: String, dst_name: String, dst_por
 	return out
 
 
+## What a route (world-space) would pass through, by the clearance
+## rule, as the owners' names — empty when it is clear. The preview
+## names them and the lay refuses them (director, 2026-09-18: it is the
+## player's responsibility not to route where it is truly impossible;
+## the game's part is to say so rather than thread the line through).
+func route_obstacles(path_global: Array, src_name: String, dst_name: String, radius: float) -> PackedStringArray:
+	var out := PackedStringArray()
+	if path_global.size() < 2:
+		return out
+	var local: Array[Vector3] = []
+	for point: Vector3 in path_global:
+		local.append(to_local(point))
+	var own: Array = []
+	if src_name != "":
+		own.append(src_name)
+	if dst_name != "":
+		own.append(dst_name)
+	var ctx := clearance.context(own, local[0], local[local.size() - 1], radius)
+	for hit: Dictionary in clearance.hits(local, ctx):
+		var owner: Variant = hit["owner"]
+		var name_ := str(owner)
+		if owner is String and name_.begins_with("structure:"):
+			name_ = name_.trim_prefix("structure:")
+		elif not (owner is String):
+			name_ = "the building"
+		if not out.has(name_):
+			out.append(name_)
+	return out
+
+
+## The player's connect: laid, then held to the clearance rule. A line
+## whose route passes through something comes out again and the reason
+## is returned, like the support rule's veto.
+func connect_equipment_checked(src_name: String, src_port: String,
+		dst_name: String, dst_port: String, waypoints: Array = []) -> String:
+	var why := connect_equipment(src_name, src_port, dst_name, dst_port, waypoints)
+	if why != "":
+		return why
+	var visual: Dictionary = _wire_visuals[_wire_visuals.size() - 1]
+	var view := visual["node"] as PipeView
+	if view == null:
+		return ""
+	var path: Array[Vector3] = _visual_path(visual)
+	var path_global: Array = []
+	for point: Vector3 in path:
+		path_global.append(to_global(point))
+	var through := route_obstacles(path_global, src_name, dst_name, view.radius())
+	if through.is_empty():
+		return ""
+	remove_run(view)
+	return "no clear route: it would pass through %s — route round it or move it" % ", ".join(through)
+
+
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
 		waypoints: Array, lane: int = -1, preferred: int = 0, order: int = ORDER_ALL) -> PipeView:
 	var src := sim.get_component(src_name)
