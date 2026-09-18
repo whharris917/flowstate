@@ -113,7 +113,9 @@ func _build_environment() -> void:
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_128
-	sky.process_mode = Sky.PROCESS_MODE_REALTIME   # the dome changes with the clock every frame
+	# The radiance follows the material's changes on its own; the clock
+	# does not run by itself, so nothing here needs the per-frame realtime
+	# mode (2026-09-18: a strobe was reported with it on).
 
 	var env := Environment.new()
 	sky_env = env

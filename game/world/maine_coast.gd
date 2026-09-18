@@ -284,5 +284,8 @@ func _process(delta: float) -> void:
 		to_cam.y = 0.0
 		if to_cam.length() > 1.0:
 			var beam_dir := Vector3(-sin(_beam_angle), 0.0, -cos(_beam_angle))
-			flash = smoothstep(0.985, 0.999, beam_dir.dot(to_cam.normalized()))
-	_lamp_mat.emission_energy_multiplier = 1.0 + (8.0 + 80.0 * flash) * _night
+			flash = smoothstep(0.975, 0.999, beam_dir.dot(to_cam.normalized()))
+	# A sweep, not a strobe: the flash rises and falls over a wider arc
+	# and peaks lower (2026-09-18: at eighty times white it bloomed
+	# across the whole sky every ten seconds).
+	_lamp_mat.emission_energy_multiplier = 1.0 + (6.0 + 24.0 * flash) * _night

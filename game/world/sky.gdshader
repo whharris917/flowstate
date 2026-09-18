@@ -86,11 +86,14 @@ void sky() {
 	// A last warmth of the whole dome at sunrise and sunset.
 	col *= mix(vec3(1.0), vec3(1.08, 0.94, 0.86), dusk * (1.0 - day) * 0.6 + dusk * day * 0.3);
 
-	// ---- the sun's disc, only while it is up, softened by haze.
-	float disc = smoothstep(cos(SUN_RADIUS * 3.0), cos(SUN_RADIUS * 1.2), cos_sun);
+	// ---- the sun's disc, only while it is up, softened by haze. Its
+	// edge is a few times its own radius wide and its peak modest: a
+	// pin-sharp disc many times over white flickered through the glow
+	// as it crossed pixels (2026-09-18).
+	float disc = smoothstep(cos(SUN_RADIUS * 5.0), cos(SUN_RADIUS * 1.5), cos_sun);
 	float sun_up = smoothstep(-0.02, 0.03, s);
 	vec3 disc_color = mix(twilight_warm.rgb, sun_glow_day.rgb, smoothstep(0.0, 0.3, s));
-	col += disc_color * disc * sun_up * mix(30.0, 8.0, haze) * mix(0.35, 1.0, smoothstep(0.0, 0.25, s));
+	col += disc_color * disc * sun_up * mix(6.0, 3.0, haze) * mix(0.4, 1.0, smoothstep(0.0, 0.25, s));
 
 	// ---- under the horizon: the ground's colour, lit as the dome is.
 	float under = smoothstep(0.0, -0.06, v);
