@@ -228,6 +228,7 @@ func _build_nozzle(port: String) -> StaticBody3D:
 		else SimTypes.PortKind.PROCESS_MATERIAL)
 	body.set_meta("owner_view", self)
 	body.set_meta("movable", true)
+	body.set_meta("face", 0.16)   # the ring's outer face: where a line meets the nozzle
 	_built.add_child(body)
 	_nozzle_nodes[port] = body
 	MeshMerge.merge_view(body)  # the nozzle's parts as one mesh per look; the body is what moves

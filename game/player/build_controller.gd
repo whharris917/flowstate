@@ -398,7 +398,7 @@ func _update_route_preview() -> void:
 		if tail.is_empty():
 			_clear_route()
 			return
-		path = PipeRoute.routed_open(_pending_marker.global_position,
+		path = PipeRoute.routed_open(Plant.marker_face(_pending_marker),
 			_pending_marker.global_basis.x.normalized(), tail)
 	if path.size() < 2:
 		_clear_route()
@@ -918,8 +918,8 @@ func _complete_connection(other: StaticBody3D) -> void:
 		dst = _pending_marker
 		waypoints.reverse()
 	var check := SupportCheck.evaluate(PipeRoute.routed(
-			src.global_position, src.global_basis.x.normalized(),
-			dst.global_position, dst.global_basis.x.normalized(), waypoints),
+			Plant.marker_face(src), src.global_basis.x.normalized(),
+			Plant.marker_face(dst), dst.global_basis.x.normalized(), waypoints),
 		player.camera.get_world_3d().direct_space_state)
 	if not bool(check["ok"]):
 		hud.toast("unsupported span %.1f m (max %.1f) — route along structure"

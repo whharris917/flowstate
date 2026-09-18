@@ -27,7 +27,58 @@ static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector
 	var path := lay(sparse)
 	path.insert(0, from)
 	path.append(to)
-	return path
+	return square_turns(path)
+
+
+## No turn sharper than a right angle (director, 2026-09-13: "we
+## should avoid acute angles"; 2026-09-18: a line arriving from behind
+## a nozzle folded back through it). A corner that turns further is
+## split in two: a short leg square to the way in, then the rest of
+## the turn — so a line leaving a stub for a point behind it goes out,
+## turns square, and turns again, and the elbows' sweeps stay clear of
+## the fitting.
+const SQUARE_LEG := 0.45
+
+
+static func square_turns(path: Array[Vector3]) -> Array[Vector3]:
+	if path.size() < 3:
+		return path
+	var out: Array[Vector3] = [path[0]]
+	for i in range(1, path.size() - 1):
+		var corner := path[i]
+		var d_in := (corner - out[out.size() - 1]).normalized()
+		var d_out := (path[i + 1] - corner).normalized()
+		if d_in.length() < 0.5 or d_out.length() < 0.5:
+			out.append(corner)
+			continue
+		var len_in := corner.distance_to(out[out.size() - 1])
+		var len_out := corner.distance_to(path[i + 1])
+		# 93 degrees or less is fine; so is a turn off a lane's short
+		# sidestep, which is a jog, not a fold (a stub, 0.35 m, counts).
+		if d_in.dot(d_out) >= -0.05 or minf(len_in, len_out) < 0.3:
+			out.append(corner)
+			continue
+		# The split goes on the longer of the two legs, so a stub — the
+		# short fixed leg at a fitting — stays straight: after the corner
+		# when the way out is longer, before it when the way in is.
+		if len_out >= len_in:
+			var side := d_out - d_in * d_out.dot(d_in)   # the way out, square to the way in
+			if side.length() < 1e-3:
+				side = Vector3.UP.cross(d_in)              # straight back: any level side
+				if side.length() < 1e-3:
+					side = Vector3.RIGHT
+			out.append(corner)
+			out.append(corner + side.normalized() * SQUARE_LEG)
+		else:
+			var approach := d_in - d_out * d_in.dot(d_out)   # the way in, square to the way out
+			if approach.length() < 1e-3:
+				approach = Vector3.UP.cross(d_out)
+				if approach.length() < 1e-3:
+					approach = Vector3.RIGHT
+			out.append(corner - approach.normalized() * SQUARE_LEG)
+			out.append(corner)
+	out.append(path[path.size() - 1])
+	return out
 
 
 ## The same route, but each leg found by search on a half-metre grid
@@ -93,11 +144,15 @@ static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable,
 	for b in points:
 		var length := a.distance_to(b)
 		var steps := maxi(1, ceili(length / 0.25))
+		# `blocked` is told whether the sample is on a vertical: a run's
+		# own equipment is open to a drop down its flank, not to a leg
+		# through its body (2026-09-18).
+		var vertical := absf(b.y - a.y) > maxf(absf(b.x - a.x), absf(b.z - a.z))
 		for i in range(1, steps + 1):
 			var p := a.lerp(b, float(i) / steps)
 			if p.distance_to(leg_a) < STUB_CLEAR or p.distance_to(leg_b) < STUB_CLEAR:
 				continue
-			if bool(blocked.call(p)):
+			if bool(blocked.call(p, vertical)):
 				last_block = p
 				return false
 		a = b
@@ -253,11 +308,12 @@ static func _search(a: Vector3, b: Vector3, blocked: Callable, busy: Callable) -
 			if next != goal and centre.y < 0.05:
 				continue  # below grade
 			var open_end := centre.distance_to(a) <= STUB_CLEAR or centre.distance_to(b) <= STUB_CLEAR
-			if next != goal and not open_end and bool(blocked.call(centre)):
+			if next != goal and not open_end and bool(blocked.call(centre, step.y != 0)):
 				continue
 			# The probe is shallow, so a vertical step also looks halfway:
 			# a deck is thinner than the gap between two cells.
-			if step.y != 0 and next != goal and not open_end 					and bool(blocked.call(centre - Vector3(0.0, step.y * CELL * 0.5, 0.0))):
+			if step.y != 0 and next != goal and not open_end \
+					and bool(blocked.call(centre - Vector3(0.0, step.y * CELL * 0.5, 0.0), true)):
 				continue
 			var cost := 3 if step.y != 0 else 2
 			if not open_end and busy.is_valid() and bool(busy.call(centre)):
@@ -320,7 +376,7 @@ static func routed_open(from: Vector3, from_dir: Vector3, tail: Array) -> Array[
 	sparse.append_array(tail)
 	var path := lay(sparse)
 	path.insert(0, from)
-	return path
+	return square_turns(path)
 
 
 ## The path through a list of waypoints, each leg laid by _leg.
@@ -333,7 +389,7 @@ static func lay(waypoints: Array) -> Array[Vector3]:
 		var a: Vector3 = out[out.size() - 1]
 		for corner in _leg(a, point):
 			_append(out, corner)
-	return out
+	return square_turns(out)
 
 
 ## One leg: the direct horizontal line and a vertical, rising at the

@@ -558,6 +558,9 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	var is_pipe := SimTypes.is_material(kind) \
 		or kind == SimTypes.PortKind.PROCESS_LEVEL \
 		or kind == SimTypes.PortKind.PROCESS_PRESSURE
+	# Where a line meets it: the gasket face of a pipe fitting, the
+	# gland's end of a cable one (Plant.marker_face).
+	body.set_meta("face", 0.175 if is_pipe else 0.145)
 	if is_pipe:
 		ViewUtil.box(body, Vector3(0.06, 0.15, 0.15), Vector3(-0.02, 0, 0), steel)
 		var neck_r := 0.032

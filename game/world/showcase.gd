@@ -412,9 +412,14 @@ static func _unit_300(plant: Plant) -> void:
 		# Off the tray sideways before dropping: straight down from the
 		# tray centreline is straight through the beam under it.
 		var drop_x := _drop_x(minf(at.x, TRAY_END))
+		# Down beside the column, along the aisle at the load's own z, then
+		# to the load: laid deliberately, since a direct line from the
+		# drop foot to a far load would cross the floor through whatever
+		# stands there (2026-09-18: the vial filler's feed went through
+		# the product silo).
 		var path: Array[Vector3] = [plant.to_local(riser_top), plant.to_local(tray_in),
 			plant.to_local(Vector3(drop_x, 3.6, 2.1)), plant.to_local(Vector3(drop_x, 3.6, 2.5)),
-			plant.to_local(at)]
+			plant.to_local(Vector3(drop_x, 0.3, at.z)), plant.to_local(at)]
 		plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), str(load[0]), "power", path)
 
 	# ---- commissioned state ----------------------------------------

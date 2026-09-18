@@ -2407,9 +2407,16 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 		var lane_order: Array[int] = []
 		if preferred > 0:
 			lane_order.append(preferred)
-		for try_lane in 2 * LANE_TIERS * LANE_STEPS + 1:
-			if try_lane != preferred or try_lane == 0:
-				lane_order.append(try_lane)  # lane 0, the route as laid, is always tried
+		lane_order.append(0)  # lane 0, the route as laid, is always tried
+		# Then sideways steps before tiers (2026-09-18): a tier lifts a
+		# run, and a lifted drop beside a column leaves the floor's reach,
+		# so every step out on the ground is tried before the first lift.
+		var rest: Array[int] = []
+		for try_lane in range(1, 2 * LANE_TIERS * LANE_STEPS + 1):
+			if try_lane != preferred:
+				rest.append(try_lane)
+		rest.sort_custom(func(x: int, y: int) -> bool: return _lane_rank(x) < _lane_rank(y))
+		lane_order.append_array(rest)
 		var costs := PackedStringArray()
 		for try_lane in lane_order:
 			var candidate := _route_points(src_name, src_port, dst_name, dst_port, corners, try_lane, radius)
@@ -2585,6 +2592,18 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 
 const LANE_TIERS := 4
 const LANE_STEPS := 4   # 33 lanes over two sides and four tiers: further out, a riser leaves its column's reach
+
+
+## The order lanes are tried in: by tier first, then by step out, then
+## by side — so a lane is lifted only when every step out on its tier
+## is taken.
+static func _lane_rank(lane: int) -> int:
+	var slot := lane - 1
+	@warning_ignore("integer_division")
+	var tier := (slot / 2) % LANE_TIERS
+	@warning_ignore("integer_division")
+	var k := slot / (2 * LANE_TIERS)
+	return tier * 100 + k * 10 + slot % 2
 var _lane_room: Dictionary = {}
 
 
@@ -2787,7 +2806,7 @@ func _avoided_corners(src_name: String, src_port: String, dst_name: String, dst_
 		waypoints: Array, order: int = ORDER_ALL) -> Array:
 	var full := PipeRoute.routed_avoiding(_marker_pos(src_name, src_port), _marker_dir(src_name, src_port),
 		_marker_pos(dst_name, dst_port), _marker_dir(dst_name, dst_port), waypoints,
-		_route_blocked.bind([src_name, dst_name]), _route_busy.bind([src_name], order))
+		_route_blocked_for.bind([src_name, dst_name]), _route_busy.bind([src_name], order))
 	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
 		if PipeRoute.last_searched:
 			var b := PipeRoute.last_block
@@ -2814,6 +2833,16 @@ func _route_blocked(center: Vector3, ignore: Array) -> bool:
 				_route_block_by[_route_key(center)] = str(owner)
 			return true
 	return false
+
+
+## The router's own question: a run's two pieces of equipment are open
+## to it on a vertical — a drop down a tall vessel's flank lies inside
+## its volume the whole way — but not on a level leg, which must go
+## round them like anything else (2026-09-18: a line to a nozzle facing
+## away from its source went straight through the tank). The stubs are
+## exempt anyway, within STUB_CLEAR of either fitting.
+func _route_blocked_for(center: Vector3, vertical: bool, ignore: Array) -> bool:
+	return _route_blocked(center, ignore if vertical else [])
 
 
 ## Does a run from some other source already pass through this cell?
@@ -3016,7 +3045,15 @@ func _marker_pos(record_name: String, port_name: String) -> Vector3:
 		return Vector3.ZERO
 	var markers: Dictionary = view.get_meta("port_markers", {})
 	var marker: Node3D = markers.get("%s:%s" % [record_name, port_name])
-	return to_local(marker.global_position) if marker != null else view.position
+	return to_local(marker_face(marker)) if marker != null else view.position
+
+
+## Where a line meets a fitting: its outer face, `face` along its
+## axis from its origin (director, 2026-09-18: lines aimed at the
+## origin, at the root of the neck, and entered the nozzle behind its
+## flat face). World space.
+static func marker_face(marker: Node3D) -> Vector3:
+	return marker.global_position + marker.global_basis.x.normalized() * float(marker.get_meta("face", 0.0))
 
 
 ## The fitting's outward axis (plant-local): runs must leave along it.
