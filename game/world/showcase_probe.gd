@@ -309,6 +309,10 @@ func _run(world: Node) -> void:
 	print("[probe] run overlaps: %s" % ("none" if overlaps.is_empty() else str(overlaps.size())))
 	for line in overlaps:
 		print("    " + line)
+	var through := plant.intersection_report()
+	print("[probe] runs through solid geometry: %s" % ("none" if through.is_empty() else str(through.size())))
+	for line in through:
+		print("    " + line)
 	print("[probe] showcase screenshots written to user://")
 	get_tree().quit()
 

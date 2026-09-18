@@ -40,7 +40,7 @@ static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector
 const SQUARE_LEG := 0.45
 
 
-static func square_turns(path: Array[Vector3]) -> Array[Vector3]:
+static func square_turns(path: Array[Vector3], blocked: Callable = Callable()) -> Array[Vector3]:
 	if path.size() < 3:
 		return path
 	var out: Array[Vector3] = [path[0]]
@@ -67,18 +67,38 @@ static func square_turns(path: Array[Vector3]) -> Array[Vector3]:
 				side = Vector3.UP.cross(d_in)              # straight back: any level side
 				if side.length() < 1e-3:
 					side = Vector3.RIGHT
+			side = side.normalized()
+			# The square leg goes the other way if this side is solid.
+			if _leg_blocked(corner, corner + side * SQUARE_LEG, blocked) \
+					and not _leg_blocked(corner, corner - side * SQUARE_LEG, blocked):
+				side = -side
 			out.append(corner)
-			out.append(corner + side.normalized() * SQUARE_LEG)
+			out.append(corner + side * SQUARE_LEG)
 		else:
 			var approach := d_in - d_out * d_in.dot(d_out)   # the way in, square to the way out
 			if approach.length() < 1e-3:
 				approach = Vector3.UP.cross(d_out)
 				if approach.length() < 1e-3:
 					approach = Vector3.RIGHT
-			out.append(corner - approach.normalized() * SQUARE_LEG)
+			approach = approach.normalized()
+			if _leg_blocked(corner, corner - approach * SQUARE_LEG, blocked) \
+					and not _leg_blocked(corner, corner + approach * SQUARE_LEG, blocked):
+				approach = -approach
+			out.append(corner - approach * SQUARE_LEG)
 			out.append(corner)
 	out.append(path[path.size() - 1])
 	return out
+
+
+## Is a short level leg through something solid? Only when the router
+## gave us its question; a plain lay has none and takes the leg as is.
+static func _leg_blocked(a: Vector3, b: Vector3, blocked: Callable) -> bool:
+	if not blocked.is_valid():
+		return false
+	for i in range(1, 4):
+		if bool(blocked.call(a.lerp(b, i / 3.0), false)):
+			return true
+	return false
 
 
 ## The same route, but each leg found by search on a half-metre grid
@@ -106,6 +126,10 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 	sparse.append_array(waypoints)
 	sparse.append(stub_b)
 	var out: Array[Vector3] = [from, stub_a]
+	# The open zone round the fittings is the route's two ends only, not
+	# every waypoint (2026-09-18: with each leg's ends exempt, anything
+	# within STUB_CLEAR of a waypoint was never checked).
+	var ends: Array[Vector3] = [from, to]
 	last_searched = false
 	for k in range(1, sparse.size()):
 		var a: Vector3 = out[out.size() - 1]
@@ -113,20 +137,20 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 		# The plain leg first: a run laid where it was laid is the point,
 		# and the search only runs where that leg passes through something.
 		var plain := _leg(a, b)
-		if _clear(a, plain, blocked):
+		if _clear(a, plain, blocked, ends):
 			for corner in plain:
 				_append(out, corner)
 			continue
 		last_searched = true
-		var cells := _astar(a, b, blocked, busy)
+		var cells := _astar(a, b, blocked, busy, ends)
 		if cells.is_empty():
 			for corner in plain:
 				_append(out, corner)
 			continue
-		for corner in _pull_straight(cells, b, blocked, busy):
+		for corner in _pull_straight(cells, b, blocked, busy, ends):
 			_append(out, corner)
 	out.append(to)
-	return _straighten(out)
+	return _straighten(square_turns(out, blocked))
 
 
 ## Does a polyline from `start` through `points` pass through
@@ -150,9 +174,12 @@ static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable,
 		var vertical := absf(b.y - a.y) > maxf(absf(b.x - a.x), absf(b.z - a.z))
 		for i in range(1, steps + 1):
 			var p := a.lerp(b, float(i) / steps)
-			if p.distance_to(leg_a) < STUB_CLEAR or p.distance_to(leg_b) < STUB_CLEAR:
-				continue
-			if bool(blocked.call(p, vertical)):
+			# Near a fitting the run's own equipment is open to it (the
+			# stub leaves through its volume); everything else still counts
+			# (2026-09-18: the whole zone used to be unchecked, and lines
+			# went through railings and neighbours beside their fittings).
+			var near_end := p.distance_to(leg_a) < STUB_CLEAR or p.distance_to(leg_b) < STUB_CLEAR
+			if bool(blocked.call(p, vertical or near_end)):
 				last_block = p
 				return false
 		a = b
@@ -170,11 +197,10 @@ static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable,
 ## grid's own steps are taken as passable; the search checked them.
 ## Returns the corners after the first cell, which is the start.
 static func _pull_straight(cells: Array[Vector3], target: Vector3, blocked: Callable,
-		busy: Callable) -> Array[Vector3]:
+		busy: Callable, ends: Array[Vector3]) -> Array[Vector3]:
 	var pts: Array[Vector3] = cells.duplicate()
 	if pts[pts.size() - 1].distance_to(target) > 0.001:
 		pts.append(target)
-	var ends: Array[Vector3] = [pts[0], target]
 	var out: Array[Vector3] = [pts[0]]
 	var i := 0
 	while i < pts.size() - 1:
@@ -245,12 +271,13 @@ static func clear_cache() -> void:
 	_leg_cache.clear()
 
 
-static func _astar(a: Vector3, b: Vector3, blocked: Callable, busy: Callable) -> Array[Vector3]:
-	var cache_key := "%.2f,%.2f,%.2f>%.2f,%.2f,%.2f" % [a.x, a.y, a.z, b.x, b.y, b.z]
+static func _astar(a: Vector3, b: Vector3, blocked: Callable, busy: Callable,
+		ends: Array[Vector3]) -> Array[Vector3]:
+	var cache_key := "%.2f,%.2f,%.2f>%.2f,%.2f,%.2f|%s" % [a.x, a.y, a.z, b.x, b.y, b.z, str(ends)]
 	if _leg_cache.has(cache_key):
 		return (_leg_cache[cache_key] as Array[Vector3]).duplicate()
 	var t0 := Time.get_ticks_usec()
-	var found := _search(a, b, blocked, busy)
+	var found := _search(a, b, blocked, busy, ends)
 	search_usec += Time.get_ticks_usec() - t0
 	searches += 1
 	if found.is_empty():
@@ -263,7 +290,8 @@ static func _astar(a: Vector3, b: Vector3, blocked: Callable, busy: Callable) ->
 ## the found path leaves `a` with no jog, and the goal is the cell that
 ## holds `b`, a quarter metre off at most, which _pull_straight takes
 ## up by ending its last straight on `b` itself.
-static func _search(a: Vector3, b: Vector3, blocked: Callable, busy: Callable) -> Array[Vector3]:
+static func _search(a: Vector3, b: Vector3, blocked: Callable, busy: Callable,
+		ends: Array[Vector3]) -> Array[Vector3]:
 	var start := Vector3i.ZERO
 	var goal := Vector3i(roundi((b.x - a.x) / CELL), roundi((b.y - a.y) / CELL), roundi((b.z - a.z) / CELL))
 	if goal == start:
@@ -307,12 +335,12 @@ static func _search(a: Vector3, b: Vector3, blocked: Callable, busy: Callable) -
 			var centre := a + Vector3(next) * CELL
 			if next != goal and centre.y < 0.05:
 				continue  # below grade
-			var open_end := centre.distance_to(a) <= STUB_CLEAR or centre.distance_to(b) <= STUB_CLEAR
-			if next != goal and not open_end and bool(blocked.call(centre, step.y != 0)):
+			var open_end := centre.distance_to(ends[0]) <= STUB_CLEAR or centre.distance_to(ends[1]) <= STUB_CLEAR
+			if next != goal and bool(blocked.call(centre, step.y != 0 or open_end)):
 				continue
 			# The probe is shallow, so a vertical step also looks halfway:
 			# a deck is thinner than the gap between two cells.
-			if step.y != 0 and next != goal and not open_end \
+			if step.y != 0 and next != goal \
 					and bool(blocked.call(centre - Vector3(0.0, step.y * CELL * 0.5, 0.0), true)):
 				continue
 			var cost := 3 if step.y != 0 else 2

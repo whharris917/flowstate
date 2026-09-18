@@ -42,7 +42,7 @@ static func _pipe_rack(plant: Plant) -> void:
 	# would run straight through the columns, and on the north face
 	# they would take the head off anyone climbing the Unit 100 stairs.
 	plant.place_run("run_tray", "pr1_tray",
-		[plant.to_local(Vector3(-2.8, 3.35, 2.1)), plant.to_local(Vector3(20.8, 3.35, 2.1))])
+		[plant.to_local(Vector3(-2.8, 3.35, 2.25)), plant.to_local(Vector3(20.8, 3.35, 2.25))])
 	# A stub bent back to the feeder: the trunk risers climb beside its
 	# column and the branch tray carries them onto the rack.
 	plant.place_structure("s_column", "pr1_col_feed", Vector3(-3.0, 0.0, -0.8), 0.0)
@@ -204,7 +204,7 @@ static func _unit_300(plant: Plant) -> void:
 			plant.place_structure("s_beam", "pr1x_beam_%d_%d" % [int(tier), int(mid_x)],
 				Vector3(mid_x, tier, 1.5), 0.0, 6.0)
 	plant.place_run("run_tray", "pr1x_tray",
-		[plant.to_local(Vector3(21.2, 3.35, 2.1)), plant.to_local(Vector3(38.8, 3.35, 2.1))])
+		[plant.to_local(Vector3(21.2, 3.35, 2.25)), plant.to_local(Vector3(38.8, 3.35, 2.25))])
 
 	# ---- feed end -------------------------------------------------
 	# A header is what it carries: this is where each species enters
@@ -392,7 +392,11 @@ static func _unit_300(plant: Plant) -> void:
 	# one tray, the way a plant carries them; at grade they could not
 	# pass between the drain and the tank (2026-09-12).
 	var riser_top := Vector3(-2.6, 3.6, -0.8)
-	var tray_in := Vector3(-2.6, 3.6, 2.1)
+	# The tray hangs 0.75 m off the column line: at 2.1 the lanes toward
+	# the columns were inside them and sixteen conduits did not fit the
+	# lanes that were left; at 2.4 it was past the beams' reach and hung
+	# in the air (2026-09-18).
+	var tray_in := Vector3(-2.6, 3.6, 2.25)
 	const TRAY_END := 38.6
 	for load: Array in [
 			["p_301a", Vector3(25.6, 0.3, -6.6)],
@@ -418,7 +422,7 @@ static func _unit_300(plant: Plant) -> void:
 		# stands there (2026-09-18: the vial filler's feed went through
 		# the product silo).
 		var path: Array[Vector3] = [plant.to_local(riser_top), plant.to_local(tray_in),
-			plant.to_local(Vector3(drop_x, 3.6, 2.1)), plant.to_local(Vector3(drop_x, 3.6, 2.5)),
+			plant.to_local(Vector3(drop_x, 3.6, 2.25)), plant.to_local(Vector3(drop_x, 3.6, 2.65)),
 			plant.to_local(Vector3(drop_x, 0.3, at.z)), plant.to_local(at)]
 		plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), str(load[0]), "power", path)
 

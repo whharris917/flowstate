@@ -145,6 +145,10 @@ func _headless_reports() -> void:
 	print("[flowstate] run overlaps: %d" % overlaps.size())
 	for line in overlaps:
 		print("    " + line)
+	var through := plant.intersection_report()
+	print("[flowstate] runs through solid geometry: %s" % ("none" if through.is_empty() else str(through.size())))
+	for line in through:
+		print("    " + line)
 	var fanouts := plant.fanout_report()
 	print("[flowstate] ports with more than one wire: %d" % fanouts.size())
 	for line in fanouts:
