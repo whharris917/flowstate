@@ -21,10 +21,9 @@ func _build_environment() -> void:
 	super()
 	# Coastal air: more water in it than the sandbox's crisp autumn
 	# day, and a dark sea under the horizon in the reflections.
-	var physical := sky_mat as PhysicalSkyMaterial
-	physical.turbidity = 4.0
-	physical.mie_coefficient = 0.0035
-	physical.ground_color = Color(0.12, 0.16, 0.18)
+	var painted := sky_mat as ShaderMaterial
+	painted.set_shader_parameter("haze", 0.55)
+	painted.set_shader_parameter("ground_color", Color(0.10, 0.14, 0.17))
 	sky_env.fog_density = 0.0009
 	sky_env.fog_aerial_perspective = 0.45
 	sky_env.fog_height = MaineCoast.SEA + 4.0

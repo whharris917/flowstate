@@ -99,22 +99,21 @@ func _build_environment() -> void:
 	# A physical sky (2026-09-11): scattering, a real sun disc and the
 	# haze at the horizon all follow the sun, so dawn and dusk come from
 	# the sun's angle rather than from hand-picked colours.
-	var physical := PhysicalSkyMaterial.new()
-	# A crisp autumn day (director, 2026-09-12): clean air, deep blue,
-	# little haze around the sun.
-	physical.rayleigh_coefficient = 3.0
-	physical.rayleigh_color = Color(0.20, 0.38, 0.90)   # a saturated scatter: the blue survives tone mapping
-	physical.mie_coefficient = 0.0025
-	physical.mie_eccentricity = 0.75
-	physical.turbidity = 2.5
-	physical.sun_disk_scale = 1.0
-	physical.ground_color = Color(0.36, 0.38, 0.36)
-	# set_time_of_day sets the energy: a physical sky is dim at a low
-	# sun and needs lifting toward dawn and dusk.
-	physical.energy_multiplier = 2.0
-	sky_mat = physical
+	# Our own sky (2026-09-18, world/sky.gdshader): the physical sky went
+	# black with the sun near the horizon, so dawn and dusk were a lit
+	# ground under a dark dome. This one carries its twilight, and the
+	# ambient and reflections come from it again. A crisp autumn day
+	# here (director, 2026-09-12): little haze.
+	var painted := ShaderMaterial.new()
+	painted.shader = load("res://world/sky.gdshader")
+	painted.set_shader_parameter("haze", 0.3)
+	painted.set_shader_parameter("energy", 1.0)
+	painted.set_shader_parameter("ground_color", Color(0.30, 0.32, 0.30))
+	sky_mat = painted
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_128
+	sky.process_mode = Sky.PROCESS_MODE_REALTIME   # the dome changes with the clock every frame
 
 	var env := Environment.new()
 	sky_env = env
@@ -226,7 +225,9 @@ func _process(delta: float) -> void:
 ## Stars come out as twilight goes; the hall lights come up with it.
 func _on_time_of_day(_horizon: float, twilight: float) -> void:
 	if _stars_mat != null:
-		_stars_mat.set_shader_parameter("visibility", 1.0 - twilight)
+		# The first stars wait for the afterglow to go: the brightest at
+		# the end of civil twilight, the field once it is dark.
+		_stars_mat.set_shader_parameter("visibility", pow(1.0 - twilight, 1.8))
 		# The dome covers the whole sky; by day it drew nothing and still
 		# cost the fill (4 fps on the laptop, 2026-09-13).
 		_stars.visible = twilight < 0.999

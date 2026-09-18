@@ -380,6 +380,18 @@ func set_time_of_day(hours: float) -> void:
 	var night := Color(0.45, 0.55, 0.80)
 	sun.light_color = night.lerp(warm, twilight)
 	sun.light_energy = lerpf(0.35, _sun_base_energy * (0.25 + 0.75 * horizon), twilight)
+	if sky_mat is ShaderMaterial:
+		# Our sky (world/sky.gdshader) wants the sun's true direction,
+		# under the horizon too, and the moon's; and with a dome that is
+		# bright at dawn, the direct sun can be as weak as it really is
+		# at the horizon, coming up over the first twelve degrees.
+		var painted := sky_mat as ShaderMaterial
+		var true_elevation := 60.0 * sin(day_frac * PI)
+		var sun_basis := Basis.from_euler(Vector3(deg_to_rad(-true_elevation), deg_to_rad(azimuth), 0.0))
+		painted.set_shader_parameter("sun_dir", sun_basis.z)
+		painted.set_shader_parameter("moon_dir", Basis.from_euler(Vector3(deg_to_rad(-30.0), PI, 0.0)).z)
+		var sun_strength := smoothstep(0.0, 1.0, clampf(elevation / 12.0, 0.0, 1.0))
+		sun.light_energy = lerpf(0.3, _sun_base_energy * (0.05 + 0.95 * sun_strength), twilight)
 	var day_horizon := Color(0.72, 0.78, 0.84)
 	var dusk_horizon := Color(0.95, 0.55, 0.32)
 	var night_horizon := Color(0.10, 0.12, 0.18)
@@ -402,11 +414,12 @@ func set_time_of_day(hours: float) -> void:
 		painted.sky_horizon_color = horizon_color
 		painted.ground_horizon_color = horizon_color.darkened(0.15)
 	if sky_env != null:
-		if sky_mat is PhysicalSkyMaterial:
-			# A physical sky's dome goes dim long before the real one
-			# stops lighting the ground, so the ambient follows the clock
-			# by hand: blue-grey by day, warm at dusk, blue at night. The
-			# sky still supplies the reflections.
+		if sky_mat is PhysicalSkyMaterial or sky_mat is ShaderMaterial:
+			# The ambient follows the clock by hand: blue-grey by day, warm
+			# at dusk, blue at night (a physical sky's dome went dim long
+			# before the real one stopped lighting the ground; our own sky
+			# could supply it, but the tuned colours are kept). The sky
+			# supplies the reflections.
 			var day_amb := Color(0.62, 0.68, 0.78)
 			var dusk_amb := Color(0.62, 0.44, 0.34)
 			var night_amb := Color(0.14, 0.18, 0.28)
