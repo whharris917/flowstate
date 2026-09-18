@@ -2382,32 +2382,13 @@ func _wire_visual(src_name: String, src_port: String,
 ## meet; one stays where it was and only the other moves). Lanes,
 ## bridges and the router's busy cells all keep to it, so a sweep in
 ## order settles in one pass.
-func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
-		waypoints: Array, lane: int = -1, preferred: int = 0, order: int = ORDER_ALL) -> PipeView:
-	var src := sim.get_component(src_name)
-	var port: SimOutputPort = src.outputs[src_port]
-	var kind := port.kind
-	var getter: Callable
-	var wire: SimWire = null
-	if SimTypes.is_material(kind):
-		# The honest live value of a pipe is the flow the network solved
-		# through it. An instrument tap has no branch of its own and
-		# reads the line it is tapped into.
-		wire = sim.find_wire(src, src_port, sim.get_component(dst_name), dst_port)
-		getter = func() -> float:
-			if wire == null:
-				return 0.0
-			if wire.branch != null:
-				return absf(wire.branch.flow_lps)
-			return wire.dst.stream.flow_lps
-	else:
-		getter = func() -> float: return port.value
-	var is_process := SimTypes.is_material(kind) \
-		or kind == SimTypes.PortKind.PROCESS_LEVEL
-	var radius := 0.07 if is_process else 0.025
-	# The lane: the first one whose route does not lie inside a run
-	# already laid (director's walkdown, 2026-09-12). A run without
-	# waypoints has nothing to shift and takes the route as it comes.
+## The route a line takes, in full: its corners round what is solid,
+## its lane, its bridges. {lane, path, corners, searched, base_path}.
+## Shared by the lay itself and the preview a player sees while
+## routing (director, 2026-09-18: the preview rose to the crosshair's
+## point on the tank, not to the nozzle's stub where the line lands).
+func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		waypoints: Array, lane: int, preferred: int, order: int, radius: float) -> Dictionary:
 	var chosen := lane
 	var path: Array[Vector3] = []
 	var corners := _avoided_corners(src_name, src_port, dst_name, dst_port, waypoints, order)
@@ -2472,6 +2453,64 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	path = _with_jumpers(path, radius, {}, [src_name, dst_name], order)
 	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
 		print("[laid] %s.%s -> %s.%s lane %d: %s" % [src_name, src_port, dst_name, dst_port, chosen, str(path)])
+	return {"lane": chosen, "path": path, "corners": corners, "searched": searched, "base_path": base_path}
+
+
+## The path a line would be laid on, world-space, for the preview:
+## the same route, lane and bridges the lay would choose, laid as the
+## next run in order. Costly on a big plant (the lane search), so the
+## caller asks only when the target or the waypoints change.
+func preview_route(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		waypoints: Array) -> Array[Vector3]:
+	var src := sim.get_component(src_name)
+	var dst := sim.get_component(dst_name)
+	if src == null or dst == null or not src.outputs.has(src_port) or not dst.inputs.has(dst_port):
+		return []
+	var kind: SimTypes.PortKind = (src.outputs[src_port] as SimOutputPort).kind
+	var is_process := SimTypes.is_material(kind) or kind == SimTypes.PortKind.PROCESS_LEVEL
+	var radius := 0.07 if is_process else 0.025
+	var local: Array = []
+	for point: Vector3 in waypoints:
+		local.append(to_local(point))
+	var laid := _lay_route(src_name, src_port, dst_name, dst_port, local, -1, 0, _wire_serial, radius)
+	var out: Array[Vector3] = []
+	for point: Vector3 in laid["path"]:
+		out.append(to_global(point))
+	return out
+
+
+func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		waypoints: Array, lane: int = -1, preferred: int = 0, order: int = ORDER_ALL) -> PipeView:
+	var src := sim.get_component(src_name)
+	var port: SimOutputPort = src.outputs[src_port]
+	var kind := port.kind
+	var getter: Callable
+	var wire: SimWire = null
+	if SimTypes.is_material(kind):
+		# The honest live value of a pipe is the flow the network solved
+		# through it. An instrument tap has no branch of its own and
+		# reads the line it is tapped into.
+		wire = sim.find_wire(src, src_port, sim.get_component(dst_name), dst_port)
+		getter = func() -> float:
+			if wire == null:
+				return 0.0
+			if wire.branch != null:
+				return absf(wire.branch.flow_lps)
+			return wire.dst.stream.flow_lps
+	else:
+		getter = func() -> float: return port.value
+	var is_process := SimTypes.is_material(kind) \
+		or kind == SimTypes.PortKind.PROCESS_LEVEL
+	var radius := 0.07 if is_process else 0.025
+	# The lane: the first one whose route does not lie inside a run
+	# already laid (director's walkdown, 2026-09-12). A run without
+	# waypoints has nothing to shift and takes the route as it comes.
+	var laid := _lay_route(src_name, src_port, dst_name, dst_port, waypoints, lane, preferred, order, radius)
+	var chosen: int = laid["lane"]
+	var path: Array[Vector3] = laid["path"]
+	var corners: Array = laid["corners"]
+	var searched: bool = laid["searched"]
+	var base_path: Array[Vector3] = laid["base_path"]
 	var pipe := PipeView.new()
 	add_child(pipe)
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,

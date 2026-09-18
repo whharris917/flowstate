@@ -184,10 +184,16 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.collision_layer = 2
 	body.collision_mask = 0
+	# The pick volume is a capsule the length of the neck, so the nozzle
+	# is the same target from the side as from the front (director,
+	# 2026-09-18: a sphere at its root vanished from any other angle).
 	var shape := CollisionShape3D.new()
-	var sphere := SphereShape3D.new()
-	sphere.radius = 0.12
-	shape.shape = sphere
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.12
+	capsule.height = 0.44
+	shape.shape = capsule
+	shape.rotation_degrees = Vector3(0, 0, 90)   # along the neck's axis, local +X
+	shape.position = Vector3(0.1, 0, 0)
 	body.add_child(shape)
 
 	# The neck is the line's own bore (director, 2026-09-13: the old

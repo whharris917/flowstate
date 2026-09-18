@@ -543,11 +543,15 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	var up_ref := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.9 else Vector3.FORWARD
 	var z_axis := dir.cross(up_ref).normalized()
 	body.basis = Basis(dir, z_axis.cross(dir), z_axis)
+	# A capsule the length of the fitting, along its axis: the same
+	# target from any side (director, 2026-09-18).
 	var shape := CollisionShape3D.new()
-	var sphere_shape := SphereShape3D.new()
-	sphere_shape.radius = 0.11
-	shape.shape = sphere_shape
-	shape.position = Vector3(0.06, 0, 0)
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.11
+	capsule.height = 0.4
+	shape.shape = capsule
+	shape.rotation_degrees = Vector3(0, 0, 90)
+	shape.position = Vector3(0.08, 0, 0)
 	body.add_child(shape)
 
 	var steel := ViewUtil.flat(Color(0.45, 0.47, 0.50))

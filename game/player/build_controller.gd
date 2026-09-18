@@ -54,6 +54,9 @@ var _route_mat: StandardMaterial3D
 var _last_route: Array[Vector3] = []
 var _route_ok := true
 var _route_span := 0.0
+var _preview_target: StaticBody3D = null   # the fitting the preview was laid to
+var _preview_waypoints := -1
+var _preview_path: Array[Vector3] = []
 var _nozzle_grab: Dictionary = {}   # {view, port, was: {frac, angle}}
 # Edit mode: the equipment under the handles, and the handle being dragged.
 var _edit_name := ""
@@ -361,16 +364,42 @@ func _commit_nozzle_grab() -> void:
 ## ---- route preview -------------------------------------------------------
 
 func _update_route_preview() -> void:
-	var aim := _aim_point()
-	var tail: Array = []
-	tail.append_array(_waypoints)
-	if aim != Vector3.INF:
-		tail.append(aim)
-	if tail.is_empty():
-		_clear_route()
-		return
-	var path := PipeRoute.routed_open(_pending_marker.global_position,
-		_pending_marker.global_basis.x.normalized(), tail)
+	var path: Array[Vector3] = []
+	# Aimed at a fitting that could finish the line: the preview is the
+	# route the lay would take — corners, lane, bridges, ending at the
+	# nozzle's stub — asked of the plant once per target and waypoint
+	# count, since the lane search is not cheap (director, 2026-09-18).
+	var aimed := player.aimed_collider()
+	var target: StaticBody3D = null
+	if aimed != null and aimed.has_meta("port_name") and aimed != _pending_marker \
+			and bool(aimed.get_meta("is_input")) != bool(_pending_marker.get_meta("is_input")):
+		target = aimed as StaticBody3D
+	if target != null:
+		if target != _preview_target or _preview_waypoints != _waypoints.size():
+			_preview_target = target
+			_preview_waypoints = _waypoints.size()
+			var src := _pending_marker
+			var dst := target
+			var waypoints: Array[Vector3] = _waypoints.duplicate()
+			if bool(_pending_marker.get_meta("is_input")):
+				src = target
+				dst = _pending_marker
+				waypoints.reverse()
+			_preview_path = plant.preview_route(str(src.get_meta("record_name")), str(src.get_meta("port_name")),
+				str(dst.get_meta("record_name")), str(dst.get_meta("port_name")), waypoints)
+		path = _preview_path
+	else:
+		_preview_target = null
+		var aim := _aim_point()
+		var tail: Array = []
+		tail.append_array(_waypoints)
+		if aim != Vector3.INF:
+			tail.append(aim)
+		if tail.is_empty():
+			_clear_route()
+			return
+		path = PipeRoute.routed_open(_pending_marker.global_position,
+			_pending_marker.global_basis.x.normalized(), tail)
 	if path.size() < 2:
 		_clear_route()
 		return
@@ -440,6 +469,8 @@ func _rebuild_route(path: Array[Vector3], radius: float, style: String) -> void:
 
 
 func _clear_route() -> void:
+	_preview_target = null
+	_preview_path = []
 	if _route_node == null:
 		return
 	for old in _route_node.get_children():
