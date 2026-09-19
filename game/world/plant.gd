@@ -2097,6 +2097,15 @@ func set_wire_corners(view: PipeView, corners: Array) -> PipeView:
 	return null
 
 
+## The waypoints a wire is laid through (plant-local): the player's
+## own, never the corners the router derives from them.
+func wire_waypoints(view: PipeView) -> Array:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			return (visual["waypoints"] as Array).duplicate()
+	return []
+
+
 ## The path a wire's line is laid on (plant-local), or [] for a run
 ## that is not a wire.
 func wire_path(view: PipeView) -> Array[Vector3]:

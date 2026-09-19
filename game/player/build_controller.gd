@@ -1571,24 +1571,64 @@ func _update_corner_drag() -> void:
 	if now - _leg_relay_ms < 150:
 		return
 	_leg_relay_ms = now
-	var corners: Array = _leg_gizmo.corners.duplicate()
-	var old: Vector3 = corners[slot]
 	var moved := plant.to_local(target)
-	# A riser's corners stand on one spot at different heights: moving
-	# its foot moves its head, or the line would double back.
-	for k in corners.size():
-		var c: Vector3 = corners[k]
-		if absf(c.x - old.x) < 0.02 and absf(c.z - old.z) < 0.02:
-			corners[k] = Vector3(moved.x, c.y, moved.z)
-	var relaid := plant.set_wire_corners(_edit_run, corners)
-	# The line is a new node now; the selection follows it. The moved
-	# corner keeps its slot, so the handle stays under the crosshair.
+	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.corners, slot, moved)
+	var relaid := plant.set_wire_corners(_edit_run, waypoints)
+	# The line is a new node now; the selection follows it, and so does
+	# the leg: the corners the router derives can come and go with a
+	# lay, so the leg is found again by the moved corner.
 	if relaid == null:
 		_set_mode(Mode.NORMAL)
 		return
 	_edit_run = relaid
 	_leg_gizmo.pipe = relaid
-	_leg_gizmo.refresh(plant.wire_path(relaid), plant.wire_corners(relaid))
+	var path := plant.wire_path(relaid)
+	var nearest := -1
+	var best := 0.3
+	for i in path.size():
+		var d := path[i].distance_to(moved)
+		if d < best:
+			best = d
+			nearest = i
+	if nearest >= 0:
+		_edit_leg = nearest if _drag == "end0" else nearest - 1
+		_leg_gizmo.leg = _edit_leg
+	_leg_gizmo.refresh(path, plant.wire_corners(relaid))
+
+
+## What a dragged corner makes of a line's waypoints (2026-09-19: the
+## director dragged a handle and "a spaghetti pile rapidly emerged" —
+## every corner the router had derived, riser ends and square-turn
+## legs, was sent back as a waypoint, derived new corners of its own on
+## the next lay, and so on each tick). Only the player's waypoints are
+## kept: the dragged corner moves if it is one of them, or is inserted
+## at its place along the route if the router derived it, so a line
+## gains one waypoint per corner the player has actually touched. A
+## riser's corners stand on one spot at different heights, so a
+## waypoint over or under the dragged corner moves with it.
+static func dragged_waypoints(waypoints: Array, corners: Array, slot: int, moved: Vector3) -> Array:
+	var old: Vector3 = corners[slot]
+	var out: Array = []
+	var matched := false
+	var insert_at := 0
+	for k in corners.size():
+		var c: Vector3 = corners[k]
+		var mate := absf(c.x - old.x) < 0.02 and absf(c.z - old.z) < 0.02
+		var is_waypoint := false
+		for w: Vector3 in waypoints:
+			if w.distance_to(c) < 0.02:
+				is_waypoint = true
+				break
+		if not is_waypoint:
+			continue
+		out.append(Vector3(moved.x, c.y, moved.z) if mate else c)
+		if mate:
+			matched = true
+		if k < slot:
+			insert_at = out.size()
+	if not matched:
+		out.insert(insert_at, Vector3(moved.x, old.y, moved.z))
+	return out
 
 
 func _rotate_edited() -> void:
