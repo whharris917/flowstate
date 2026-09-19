@@ -1118,7 +1118,7 @@ func _select_leg(pipe: PipeView, leg: int) -> bool:
 	_edit_leg = leg
 	_leg_gizmo = LegGizmo.new()
 	plant.add_child(_leg_gizmo)
-	_leg_gizmo.setup(pipe, leg, path, plant.wire_corners(pipe))
+	_leg_gizmo.setup(pipe, leg, path, plant.wire_corners(pipe), plant.wire_locks(pipe))
 	_update_hud()
 	return true
 
@@ -1422,6 +1422,10 @@ func _edit_mouse(event: InputEvent) -> bool:
 					if _gizmo != null:
 						_gizmo.set_blocked(false)
 				return true
+			MOUSE_BUTTON_MIDDLE:
+				if button.pressed and _leg_gizmo != null:
+					_toggle_lock()
+				return true
 			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
 				# Over a selected line, Ctrl and the wheel is elevation: the
 				# held corner, or the whole straight (director, 2026-09-19:
@@ -1620,6 +1624,47 @@ func _grab_point() -> Vector3:
 	return a.lerp(b, t)
 
 
+## Middle click on a cube (director, 2026-09-19): lock the corner
+## where it stands, or unlock it. A corner the router laid, a stub end
+## or a riser foot, is made the line's own first, in place, so it can
+## be pinned too.
+func _toggle_lock() -> void:
+	var handle := _handle_under_crosshair()
+	if handle == null or not str(handle.get_meta("handle")).begins_with("pt") or not is_instance_valid(_edit_run):
+		return
+	var index := _leg_gizmo.corner_index(str(handle.get_meta("handle")))
+	if index < 0 or index >= _leg_gizmo.path.size():
+		return
+	var at: Vector3 = _leg_gizmo.path[index]
+	var waypoints := plant.wire_waypoints(_edit_run)
+	var locks := plant.wire_locks(_edit_run)
+	var k := match_waypoint(waypoints, at)
+	if k >= 0 and is_lock(locks, waypoints[k]):
+		locks.erase(waypoints[k])
+		plant.set_wire_locks(_edit_run, locks)
+		hud.toast("corner unlocked")
+	else:
+		plant.begin_gesture()
+		if k < 0:
+			# Not yet the line's own: plant it where it stands.
+			waypoints = dragged_waypoints(waypoints, _leg_gizmo.path, index, at, at, true, 0.02)
+			_drag = "grab"
+			_relay_selected(waypoints, at, index == _edit_leg)
+			_drag = ""
+			if not is_instance_valid(_edit_run):
+				plant.end_gesture()
+				return
+			waypoints = plant.wire_waypoints(_edit_run)
+			k = match_waypoint(waypoints, at, 0.02)
+		if k >= 0:
+			locks = plant.wire_locks(_edit_run)
+			locks.append(waypoints[k])
+			plant.set_wire_locks(_edit_run, locks)
+			hud.toast("corner locked")
+		plant.end_gesture()
+	_leg_gizmo.refresh(plant.wire_path(_edit_run), plant.wire_corners(_edit_run), plant.wire_locks(_edit_run))
+
+
 ## The gizmo handle under the crosshair, or null.
 func _handle_under_crosshair() -> Node:
 	var ray := _edit_ray()
@@ -1692,7 +1737,13 @@ func _update_corner_drag() -> void:
 		return
 	_leg_relay_ms = now
 	var moved := plant.to_local(target)
-	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, moved, origin)
+	var before := plant.wire_waypoints(_edit_run)
+	var waypoints := dragged_waypoints(before, _leg_gizmo.path, index, moved, origin, true, LANE_MATCH,
+		plant.wire_locks(_edit_run))
+	if waypoints == before:
+		hud.toast("that corner is locked — middle-click it to unlock")
+		_drag = ""
+		return
 	_relay_selected(waypoints, moved, index == _edit_leg)
 
 
@@ -1724,7 +1775,7 @@ func _relay_selected(waypoints: Array, moved: Vector3, as_start: bool) -> void:
 			_drag = "pt%d" % nearest   # the held cube is this corner now
 	elif _is_corner_drag():
 		_drag = ""
-	_leg_gizmo.refresh(path, plant.wire_corners(relaid))
+	_leg_gizmo.refresh(path, plant.wire_corners(relaid), plant.wire_locks(relaid))
 
 
 ## The wheel over a selected line (director, 2026-09-19: "how would I
@@ -1748,7 +1799,12 @@ func _raise_selected(dy: float) -> void:
 		moved.y = maxf(moved.y, 0.15)
 		if is_equal_approx(moved.y, origin.y):
 			return
-		var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), path, index, moved, origin, false)
+		var before := plant.wire_waypoints(_edit_run)
+		var waypoints := dragged_waypoints(before, path, index, moved, origin, false, LANE_MATCH,
+			plant.wire_locks(_edit_run))
+		if waypoints == before:
+			hud.toast("that corner is locked — middle-click it to unlock")
+			return
 		_relay_selected(waypoints, moved, index == _edit_leg)
 		return
 	var leg := _leg_gizmo.leg
@@ -1762,8 +1818,15 @@ func _raise_selected(dy: float) -> void:
 	b2.y = maxf(b2.y, 0.15)
 	if is_equal_approx(a2.y, a.y) and is_equal_approx(b2.y, b.y):
 		return
-	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), path, leg, a2, Vector3.INF, false)
-	waypoints = dragged_waypoints(waypoints, path, leg + 1, b2, Vector3.INF, false)
+	var locks := plant.wire_locks(_edit_run)
+	var before := plant.wire_waypoints(_edit_run)
+	for end: Vector3 in [a, b]:
+		var k := match_waypoint(before, end)
+		if k >= 0 and is_lock(locks, before[k]):
+			hud.toast("a corner of that straight is locked — middle-click it to unlock")
+			return
+	var waypoints := dragged_waypoints(before, path, leg, a2, Vector3.INF, false, LANE_MATCH, locks)
+	waypoints = dragged_waypoints(waypoints, path, leg + 1, b2, Vector3.INF, false, LANE_MATCH, locks)
 	_relay_selected(waypoints, a2, true)
 
 
@@ -1783,8 +1846,36 @@ func _raise_selected(dy: float) -> void:
 const LANE_MATCH := 0.75   # a lane steps a corner at most this far from its waypoint
 
 
+## Which waypoint a point of the laid path stands for: an exact match
+## first, else the nearest within `tolerance` at about its height; -1
+## for none.
+static func match_waypoint(waypoints: Array, old: Vector3, tolerance: float = LANE_MATCH) -> int:
+	for k in waypoints.size():
+		if (waypoints[k] as Vector3).distance_to(old) < 0.02:
+			return k
+	var found := -1
+	var best := INF
+	for k in waypoints.size():
+		var w: Vector3 = waypoints[k]
+		var d_plan := Vector2(w.x - old.x, w.z - old.z).length()
+		if d_plan < tolerance and absf(w.y - old.y) < 0.3 and w.distance_to(old) < best:
+			best = w.distance_to(old)
+			found = k
+	return found
+
+
+static func is_lock(locks: Array, w: Vector3) -> bool:
+	for lock: Vector3 in locks:
+		if lock.distance_to(w) < 0.01:
+			return true
+	return false
+
+
+## `locks` are waypoints no edit moves: the dragged point itself locked
+## returns the list unchanged, and a locked mate stays where it is.
 static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3,
-		origin: Vector3 = Vector3.INF, keep_height: bool = true, tolerance: float = LANE_MATCH) -> Array:
+		origin: Vector3 = Vector3.INF, keep_height: bool = true, tolerance: float = LANE_MATCH,
+		locks: Array = []) -> Array:
 	# `origin` is where the drag began when that is not a path point:
 	# the middle of a leg, which then becomes a corner before `index`.
 	# With `keep_height` the point stays at its own height and so do
@@ -1803,19 +1894,9 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	# position, a riser's other end.
 	# An exact match first; only failing that, the nearest within
 	# `tolerance` (a lane's reach for a drag, nothing for a plant).
-	var self_index := -1
-	var self_d := INF
-	for k in waypoints.size():
-		if (waypoints[k] as Vector3).distance_to(old) < 0.02:
-			self_index = k
-			break
-	if self_index < 0:
-		for k in waypoints.size():
-			var w: Vector3 = waypoints[k]
-			var d_plan := Vector2(w.x - old.x, w.z - old.z).length()
-			if d_plan < tolerance and absf(w.y - old.y) < 0.3 and w.distance_to(old) < self_d:
-				self_d = w.distance_to(old)
-				self_index = k
+	var self_index := match_waypoint(waypoints, old, tolerance)
+	if self_index >= 0 and is_lock(locks, waypoints[self_index]):
+		return waypoints.duplicate()
 	# A mate stands at the matched corner's own plan position (a riser's
 	# other end), never merely near the dragged point.
 	var anchor: Vector3 = waypoints[self_index] if self_index >= 0 else old
@@ -1831,7 +1912,8 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 				best = d
 				at = i
 		var itself := k == self_index
-		var mate := not itself and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02
+		var mate := not itself and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02 \
+			and not is_lock(locks, w)
 		if itself:
 			out.append(Vector3(moved.x, w.y, moved.z) if keep_height else moved)
 			matched = true

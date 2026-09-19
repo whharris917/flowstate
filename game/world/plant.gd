@@ -2198,10 +2198,38 @@ func set_wire_corners(view: PipeView, corners: Array) -> PipeView:
 	for visual in _wire_visuals:
 		if visual["node"] == view:
 			visual["waypoints"] = corners
+			# A lock stays while its waypoint does.
+			var kept: Array = []
+			for lock: Vector3 in visual.get("locks", []):
+				for w: Vector3 in corners:
+					if w.distance_to(lock) < 0.01:
+						kept.append(lock)
+						break
+			visual["locks"] = kept
 			_refresh_visual(visual)   # a new node: the caller keeps the one returned
 			_schedule_revalidate()
 			return visual["node"] as PipeView
 	return null
+
+
+## The locked waypoints of a wire (plant-local positions): corners the
+## player pinned, which no edit moves (director, 2026-09-19: "lock a
+## corner at its position so that it doesn't move as I move other
+## things around it"). Saved with the wire; a lock lapses with its
+## waypoint.
+func wire_locks(view: PipeView) -> Array:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			return (visual.get("locks", []) as Array).duplicate()
+	return []
+
+
+func set_wire_locks(view: PipeView, locks: Array) -> void:
+	checkpoint()
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			visual["locks"] = locks.duplicate()
+			return
 
 
 ## The waypoints a wire is laid through (plant-local): the player's
@@ -3765,10 +3793,13 @@ func snapshot() -> Dictionary:
 		var path_out: Array = []
 		for point: Vector3 in visual["waypoints"]:
 			path_out.append([point.x, point.y, point.z])
+		var locks_out: Array = []
+		for point: Vector3 in visual.get("locks", []):
+			locks_out.append([point.x, point.y, point.z])
 		var wire_entry := {
 			"src": visual["a"], "src_port": visual["a_port"],
 			"dst": visual["b"], "dst_port": visual["b_port"],
-			"waypoints": path_out,
+			"waypoints": path_out, "locks": locks_out,
 			"color": visual.get("color", ""), "label": visual.get("label", ""),
 			"fitting": visual.get("fitting", ""),
 			"hidden": visual.get("hidden", false),
@@ -4077,6 +4108,11 @@ func restore(payload: Dictionary) -> bool:
 		var error := connect_equipment(wire_entry["src"], wire_entry["src_port"],
 			wire_entry["dst"], wire_entry["dst_port"], waypoints,
 			not bool(wire_entry.get("hidden", false)))
+		if error == "" and not (wire_entry.get("locks", []) as Array).is_empty():
+			var locks: Array = []
+			for point: Array in wire_entry["locks"]:
+				locks.append(Vector3(point[0], point[1], point[2]))
+			(_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["locks"] = locks
 		if error == "" and str(wire_entry.get("color", "")) != "":
 			set_run_service((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
 				Color.html(str(wire_entry["color"])), str(wire_entry.get("label", "")),

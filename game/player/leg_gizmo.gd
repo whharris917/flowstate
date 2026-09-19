@@ -19,18 +19,22 @@ var _hover: MeshInstance3D = null   # where a grab on the straight would put a c
 var _sleeve: MeshInstance3D = null
 
 
-func setup(pipe_: PipeView, leg_: int, path_: Array[Vector3], corners_: Array) -> void:
+var locks: Array = []   # the line's locked waypoints, plant-local
+
+
+func setup(pipe_: PipeView, leg_: int, path_: Array[Vector3], corners_: Array, locks_: Array = []) -> void:
 	pipe = pipe_
 	leg = leg_
-	refresh(path_, corners_)
+	refresh(path_, corners_, locks_)
 
 
 ## Rebuild round the leg as it is now laid. A rendered corner is the
 ## player's to move when one of the line's own corners lies within a
 ## lane's width of it; a lane sidestep or a bridge ramp has none.
-func refresh(path_: Array[Vector3], corners_: Array) -> void:
+func refresh(path_: Array[Vector3], corners_: Array, locks_: Array = []) -> void:
 	path = path_
 	corners = corners_
+	locks = locks_
 	_slots.clear()
 	for i in path.size():
 		var slot := -1
@@ -80,7 +84,9 @@ func refresh(path_: Array[Vector3], corners_: Array) -> void:
 	# named by its path index.
 	for index in path.size():
 		if movable_corner(index):
-			_make_handle("pt%d" % index, path[index], HANDLE, Color(0.95, 0.80, 0.30))
+			# A locked corner is steel-grey; the rest gold.
+			var color := Color(0.55, 0.60, 0.68) if is_locked(index) else Color(0.95, 0.80, 0.30)
+			_make_handle("pt%d" % index, path[index], HANDLE, color)
 	# The hover cube: shown on the straight under the crosshair, so it is
 	# clear a press there makes a corner and drags it (director, 2026-09-19).
 	_hover = MeshInstance3D.new()
@@ -137,6 +143,15 @@ func _make_handle(name_: String, at: Vector3, size: float, color: Color) -> void
 ## gold cube"). A stub itself stays: its far end is the fitting.
 func movable_corner(index: int) -> bool:
 	return index >= 1 and index <= path.size() - 2
+
+
+## Is the path point a locked waypoint (through a lane's shift)?
+func is_locked(index: int) -> bool:
+	var p: Vector3 = path[index]
+	for lock: Vector3 in locks:
+		if Vector2(lock.x - p.x, lock.z - p.z).length() < 0.75 and absf(lock.y - p.y) < 0.3:
+			return true
+	return false
 
 
 ## The corner a handle stands on: the path index in its name ("pt5");
