@@ -73,16 +73,14 @@ func refresh(path_: Array[Vector3], corners_: Array) -> void:
 	var dir := (b - a).normalized()
 	var up := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
 	_sleeve.basis = Basis.looking_at(dir, up) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
-	for k in 2:
-		var index := leg + k
+	# A cube at every corner of the whole line, not only the selected
+	# straight's ends (director, 2026-09-19: "clicking any pipe segment
+	# should show the gold cube handles for all corners on the whole
+	# continuous pipe"); the middle cubes went the same day. A handle is
+	# named by its path index.
+	for index in path.size():
 		if movable_corner(index):
-			_make_handle("end%d" % k, path[index], HANDLE, Color(0.95, 0.80, 0.30))
-	# The middle of a level straight between the stubs: a smaller, paler
-	# cube that becomes a corner of the line when dragged (director,
-	# 2026-09-19: "how do I split a single straight segment such that it
-	# has a new handle I can move independent of the others?").
-	if leg >= 1 and leg <= path.size() - 3 and absf(a.y - b.y) < 0.001 and length > 1.0:
-		_make_handle("mid", (a + b) / 2.0, HANDLE * 0.7, Color(1.0, 0.92, 0.62))
+			_make_handle("pt%d" % index, path[index], HANDLE, Color(0.95, 0.80, 0.30))
 	# The hover cube: shown on the straight under the crosshair, so it is
 	# clear a press there makes a corner and drags it (director, 2026-09-19).
 	_hover = MeshInstance3D.new()
@@ -141,17 +139,18 @@ func movable_corner(index: int) -> bool:
 	return index >= 1 and index <= path.size() - 2
 
 
-## The corner a handle stands on: the path index for "end0"/"end1".
-## The middle handle stands before the leg's end, for ordering.
+## The corner a handle stands on: the path index in its name ("pt5");
+## "grab" stands before the selected leg's end, for ordering.
 func corner_index(handle: String) -> int:
-	return leg + (0 if handle == "end0" else 1)
+	if handle.begins_with("pt"):
+		return int(handle.substr(2))
+	return leg + 1
 
 
-## Where a handle's drag starts from: the corner, or the middle of the leg.
+## Where a handle's drag starts from: its corner.
 func drag_origin(handle: String) -> Vector3:
-	if handle == "mid":
-		return (path[leg] + path[leg + 1]) / 2.0
-	return path[corner_index(handle)]
+	var index := corner_index(handle)
+	return path[index] if index >= 0 and index < path.size() else Vector3.INF
 
 
 ## The slot in `corners` behind a path index, or -1.

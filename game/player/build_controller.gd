@@ -1517,7 +1517,7 @@ func _begin_drag() -> void:
 		return
 	_drag = str(collider.get_meta("handle"))
 	plant.begin_gesture()   # one undo step for the whole drag
-	if _drag.begins_with("end") or _drag == "mid" or _drag == "grab":
+	if _is_corner_drag():
 		# A corner of a selected leg, or its middle: it moves in its own
 		# level plane.
 		var index := _leg_gizmo.corner_index(_drag)
@@ -1547,7 +1547,7 @@ func _begin_drag() -> void:
 
 
 func _update_drag() -> void:
-	if _drag.begins_with("end") or _drag == "mid" or _drag == "grab":
+	if _is_corner_drag():
 		_update_corner_drag()
 		return
 	var view := plant.views.get(_edit_name) as Node3D
@@ -1583,6 +1583,12 @@ func _update_drag() -> void:
 
 
 var _grab_origin := Vector3.ZERO   # where a selected straight was grabbed, plant-local
+var _grab_leg := -1                # which straight of the selected line the crosshair is on
+
+
+## A drag of one of a line's corners, by any of its handle names.
+func _is_corner_drag() -> bool:
+	return _drag.begins_with("pt") or _drag == "grab"
 
 
 ## The point of the selected straight under the crosshair where a grab
@@ -1595,12 +1601,14 @@ func _grab_point() -> Vector3:
 	var aimed := player.ray.get_collider() as Node
 	if aimed == null or not aimed.has_meta("run") or not aimed.has_meta("leg"):
 		return Vector3.INF
-	if aimed.get_meta("run") != _edit_run or int(aimed.get_meta("leg")) != _edit_leg:
+	if aimed.get_meta("run") != _edit_run:
 		return Vector3.INF
+	# Any straight of the selected line, not only the sleeved one.
 	var path := _leg_gizmo.path
-	var leg := _leg_gizmo.leg
+	var leg := int(aimed.get_meta("leg"))
 	if leg < 1 or leg > path.size() - 3:
 		return Vector3.INF
+	_grab_leg = leg
 	var a: Vector3 = path[leg]
 	var b: Vector3 = path[leg + 1]
 	if absf(a.y - b.y) > 0.001:
@@ -1640,12 +1648,14 @@ func _begin_grab() -> bool:
 	# line laid again through it and looking the same, its cube up. A
 	# pull that follows drags that cube; a release leaves it.
 	plant.begin_gesture()
+	_edit_leg = _grab_leg
+	_leg_gizmo.leg = _grab_leg
 	var index := _leg_gizmo.corner_index("grab")
 	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, at, at)
+	_drag = "grab"
 	_relay_selected(waypoints, at, false)
-	if _leg_gizmo == null:
+	if _leg_gizmo == null or _drag == "":
 		return false
-	_drag = "end1"
 	_drag_offset_v = plant.to_global(at) - corner_hit
 	return true
 
@@ -1662,7 +1672,10 @@ func _update_corner_drag() -> void:
 	if index < 0 or index >= _leg_gizmo.path.size():
 		_drag = ""
 		return
-	var origin := _grab_origin if _drag == "grab" else _leg_gizmo.drag_origin(_drag)
+	var origin := _leg_gizmo.drag_origin(_drag)
+	if origin == Vector3.INF:
+		_drag = ""
+		return
 	var corner := plant.to_global(origin)
 	var hit := _drag_hit(corner)
 	if hit == Vector3.INF:
@@ -1677,9 +1690,7 @@ func _update_corner_drag() -> void:
 	_leg_relay_ms = now
 	var moved := plant.to_local(target)
 	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, moved, origin)
-	if _drag == "mid" or _drag == "grab":
-		_drag = "end1"   # the grabbed point is a corner now: the end of the first half
-	_relay_selected(waypoints, moved, _drag == "end0")
+	_relay_selected(waypoints, moved, index == _edit_leg)
 
 
 ## Lay the selected line again through `waypoints` and keep the
@@ -1704,8 +1715,12 @@ func _relay_selected(waypoints: Array, moved: Vector3, as_start: bool) -> void:
 			best = path[i].distance_to(moved)
 			nearest = i
 	if nearest >= 0:
-		_edit_leg = nearest if as_start else nearest - 1
+		_edit_leg = clampi(nearest if as_start else nearest - 1, 0, path.size() - 2)
 		_leg_gizmo.leg = _edit_leg
+		if _is_corner_drag():
+			_drag = "pt%d" % nearest   # the held cube is this corner now
+	elif _is_corner_drag():
+		_drag = ""
 	_leg_gizmo.refresh(path, plant.wire_corners(relaid))
 
 
@@ -1725,15 +1740,13 @@ func _raise_selected(dy: float) -> void:
 		var index := _leg_gizmo.corner_index(_drag)
 		if index < 0 or index >= path.size():
 			return
-		var origin := _grab_origin if _drag == "grab" else _leg_gizmo.drag_origin(_drag)
+		var origin := _leg_gizmo.drag_origin(_drag)
 		var moved := origin + Vector3(0, dy, 0)
 		moved.y = maxf(moved.y, 0.15)
 		if is_equal_approx(moved.y, origin.y):
 			return
 		var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), path, index, moved, origin, false)
-		if _drag == "mid" or _drag == "grab":
-			_drag = "end1"
-		_relay_selected(waypoints, moved, _drag == "end0")
+		_relay_selected(waypoints, moved, index == _edit_leg)
 		return
 	var leg := _leg_gizmo.leg
 	if leg < 1 or leg > path.size() - 3:
