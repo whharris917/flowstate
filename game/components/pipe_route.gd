@@ -150,7 +150,10 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 	out.append(to)
 	# The net under the rule: a fold the search's own fallback left
 	# (a grid step against a pulled straight) is still split here.
-	return _straighten(square_turns(out, blocked))
+	# A waypoint that lies on a straight stays a corner of the line: it
+	# is the player's, and its handle stands on it (2026-09-19: a click
+	# on a straight plants one to drag later).
+	return _straighten(square_turns(out, blocked), waypoints)
 
 
 ## One leg, laid plain where its plain shape is clear and searched
@@ -439,14 +442,19 @@ static func _rebuild(came: Dictionary, node: Vector3i, origin: Vector3) -> Array
 
 
 ## Drop points that lie on the straight between their neighbours.
-static func _straighten(path: Array[Vector3]) -> Array[Vector3]:
+static func _straighten(path: Array[Vector3], keep: Array = []) -> Array[Vector3]:
 	if path.size() < 3:
 		return path
 	var out: Array[Vector3] = [path[0]]
 	for i in range(1, path.size() - 1):
 		var before := (path[i] - out[out.size() - 1]).normalized()
 		var after := (path[i + 1] - path[i]).normalized()
-		if before.dot(after) < 0.999:
+		var kept := false
+		for k: Vector3 in keep:
+			if k.distance_to(path[i]) < 0.001:
+				kept = true
+				break
+		if kept or before.dot(after) < 0.999:
 			out.append(path[i])
 	out.append(path[path.size() - 1])
 	return out

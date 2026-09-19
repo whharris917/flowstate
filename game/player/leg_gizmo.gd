@@ -87,9 +87,14 @@ func refresh(path_: Array[Vector3], corners_: Array) -> void:
 	# clear a press there makes a corner and drags it (director, 2026-09-19).
 	_hover = MeshInstance3D.new()
 	var hover_mesh := BoxMesh.new()
-	hover_mesh.size = Vector3.ONE * HANDLE * 0.55
+	# Wider than the pipe, and drawn over it: inside the pipe it was
+	# half hidden (director, 2026-09-19).
+	hover_mesh.size = Vector3.ONE * maxf(HANDLE * 0.55, pipe.radius() * 2.0 + 0.05)
 	_hover.mesh = hover_mesh
-	_hover.material_override = ViewUtil.glow(Color(1.0, 0.95, 0.75), 0.9)
+	var hover_mat := ViewUtil.glow(Color(1.0, 0.95, 0.75), 0.9)
+	hover_mat.no_depth_test = true
+	hover_mat.render_priority = 2
+	_hover.material_override = hover_mat
 	_hover.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_hover.visible = false
 	add_child(_hover)

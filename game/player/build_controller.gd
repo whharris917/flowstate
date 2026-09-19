@@ -1417,12 +1417,9 @@ func _edit_mouse(event: InputEvent) -> bool:
 						elif under != "" and plant.movable(under) == "":
 							_select(under)
 				else:
-					var was_grab := _drag == "grab"
 					_drag = ""
 					plant.end_gesture()
-					if was_grab:
-						_set_mode(Mode.NORMAL)   # a click on the selected straight, no pull
-					elif _gizmo != null:
+					if _gizmo != null:
 						_gizmo.set_blocked(false)
 				return true
 			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
@@ -1634,13 +1631,22 @@ func _begin_grab() -> bool:
 	var at := _grab_point()
 	if at == Vector3.INF:
 		return false
-	_grab_origin = at
-	var corner_hit := _drag_hit(plant.to_global(_grab_origin))
+	var corner_hit := _drag_hit(plant.to_global(at))
 	if corner_hit == Vector3.INF:
 		return false
-	_drag = "grab"
-	_drag_offset_v = plant.to_global(_grab_origin) - corner_hit
+	# The click itself plants the corner (director, 2026-09-19: "left
+	# click to place a handle, and then that new handle cube would need
+	# to be left clicked and dragged"): a waypoint on the straight, the
+	# line laid again through it and looking the same, its cube up. A
+	# pull that follows drags that cube; a release leaves it.
 	plant.begin_gesture()
+	var index := _leg_gizmo.corner_index("grab")
+	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, at, at)
+	_relay_selected(waypoints, at, false)
+	if _leg_gizmo == null:
+		return false
+	_drag = "end1"
+	_drag_offset_v = plant.to_global(at) - corner_hit
 	return true
 
 
