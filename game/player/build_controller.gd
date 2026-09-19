@@ -1265,14 +1265,27 @@ var _carry_moved := false
 
 func _begin_carry() -> void:
 	var view := player.look_view()
-	if view == null or not view.has_meta("record_name"):
+	var name_ := ""
+	if view != null and view.has_meta("record_name"):
+		name_ = str(view.get_meta("record_name"))
+	else:
+		# The crosshair on one of its fittings counts as on it (a pump is
+		# small and its fittings stand proud of its body).
+		var aimed := player.aimed_collider()
+		if aimed != null and aimed.has_meta("port_name") and aimed.has_meta("record_name"):
+			name_ = str(aimed.get_meta("record_name"))
+	if name_ == "" or not plant.views.has(name_):
 		return
-	var name_ := str(view.get_meta("record_name"))
-	if plant.movable(name_) != "":
+	# A refusal says why (director, 2026-09-19: a right-hold that did
+	# nothing, with no word about it).
+	var why := plant.movable(name_)
+	if why != "":
+		hud.toast(why)
 		return
 	var base := _base_of(name_)
 	var hit := _ground_hit(base.y)
 	if hit == Vector3.INF:
+		hud.toast("look at the ground beside %s to carry it" % name_)
 		return
 	_carry_name = name_
 	_carry_offset = base - hit
