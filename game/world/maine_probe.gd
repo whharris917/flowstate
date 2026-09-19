@@ -29,6 +29,9 @@ func _run(world: WorldBase) -> void:
 	world.set_time_of_day(10.0)
 	# From the pad's south-east corner, out over the ledges to the sea.
 	await _view(player, Vector3(70.0, 0.35, 55.0), -2.35, -0.12, 0.0, "pad_sea")
+	if world is MaineMap:
+		# The same corner, up at the heighliner hanging over the sea.
+		await _view(player, Vector3(70.0, 0.35, 55.0), -2.35, 0.30, 0.0, "heighliner")
 	if not world is MaineMap:
 		await _view(player, Vector3(16.0, 0.35, 10.0), -2.35, -0.8, 2.3, "aerial")
 		print("[probe] comparison run on %s done" % world.name)

@@ -48,6 +48,16 @@ const RIVER_PERP := Vector2(-0.7829, 0.6222)
 const RIVER_TIDAL := 220.0
 const RIVER_GRADE := 0.03
 const RIVER_END := 560.0
+# The heighliner (director, 2026-09-18: "a large, foreboding heighliner
+# hanging silently over the ocean"): a hollow cylinder a mile long
+# hanging out over the sea to the south-east, its bore open at both
+# ends, angled so the site sees one mouth. Art, silent, still.
+const SHIP_CENTRE := Vector3(1250.0, 560.0, 950.0)
+const SHIP_LENGTH := 1600.0
+const SHIP_RADIUS := 190.0
+const SHIP_BORE := 148.0
+const SHIP_YAW := 0.22
+const SHIP_PITCH := 0.04
 # Islands: centre, radius, stretch along x and z, rotation.
 const ISLANDS: Array = [
 	[Vector2(340.0, 30.0), 60.0, 1.8, 0.8, 0.5],
@@ -65,6 +75,7 @@ var _lamp_mat: StandardMaterial3D
 var _lens: MeshInstance3D
 var _beam_angle := 0.0
 var _night := 0.0
+var _ship_mats: Array[ShaderMaterial] = []
 
 
 func _init() -> void:
@@ -377,6 +388,116 @@ func _build_landmarks() -> void:
 	# A flagpole on the lawn.
 	ViewUtil.cylinder(self, 0.05, 9.0, at + Vector3(4.0, 4.5, -5.0), white)
 	_build_river()
+	_build_heighliner()
+
+
+## A hollow hull a mile long: outer skin, the bore through it, annular
+## ends, longitudinal spines and rib rings breaking the silhouette,
+## and a ring of dim lamps deep in each mouth, the only light on it.
+## Dark and matte in its own shader, outside the fog that would
+## bleach it at that distance; no shadow (the sun's shadow reaches
+## 200 m), no collision (nothing walks there), no sound.
+func _build_heighliner() -> void:
+	var ship := Node3D.new()
+	ship.name = "Heighliner"
+	ship.position = SHIP_CENTRE
+	ship.rotation = Vector3(SHIP_PITCH, SHIP_YAW, 0.0)
+	add_child(ship)
+	var hull := _ship_material(Color(0.085, 0.088, 0.095))
+	var trim := _ship_material(Color(0.115, 0.115, 0.125))
+	var half := SHIP_LENGTH / 2.0
+	var tube := _tube_mesh(SHIP_RADIUS, SHIP_BORE, SHIP_LENGTH, 56)
+	var body := MeshInstance3D.new()
+	body.mesh = tube
+	body.material_override = hull
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ship.add_child(body)
+	# Spines: eight ridges the length of the hull.
+	for k in 8:
+		var a := TAU * k / 8.0 + 0.2
+		var spine := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(14.0, 9.0, SHIP_LENGTH * 0.92)
+		spine.mesh = box
+		spine.material_override = trim
+		spine.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		spine.position = Vector3(cos(a), sin(a), 0.0) * (SHIP_RADIUS + 3.0)
+		spine.rotation.z = a + PI / 2.0
+		ship.add_child(spine)
+	# Ribs: rings standing a little proud, closer together toward the ends.
+	for zf: float in [-0.44, -0.36, -0.18, 0.0, 0.18, 0.36, 0.44]:
+		var rib := MeshInstance3D.new()
+		var ring := CylinderMesh.new()
+		ring.top_radius = SHIP_RADIUS + 7.0
+		ring.bottom_radius = SHIP_RADIUS + 7.0
+		ring.height = 22.0
+		ring.radial_segments = 56
+		rib.mesh = ring
+		rib.material_override = trim
+		rib.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		rib.position = Vector3(0.0, 0.0, zf * SHIP_LENGTH)
+		rib.rotation.x = PI / 2.0
+		ship.add_child(rib)
+	# Lamps: twenty round each mouth, well inside the bore, dim amber.
+	var lamp_mat := ViewUtil.glow(Color(1.0, 0.72, 0.38), 3.0)
+	var lamp := SphereMesh.new()
+	lamp.radius = 5.0
+	lamp.height = 10.0
+	for end: float in [-1.0, 1.0]:
+		for k in 20:
+			var a := TAU * k / 20.0
+			var light := MeshInstance3D.new()
+			light.mesh = lamp
+			light.material_override = lamp_mat
+			light.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			light.position = Vector3(cos(a), sin(a), 0.0) * (SHIP_BORE - 4.0) + Vector3(0.0, 0.0, end * (half - 90.0))
+			ship.add_child(light)
+	stats["heighliner"] = 1
+
+
+func _ship_material(color: Color) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://world/heighliner.gdshader")
+	mat.set_shader_parameter("hull", color)
+	_ship_mats.append(mat)
+	return mat
+
+
+## A tube along local Z: an outer skin, an inner bore facing inward,
+## and the flat annulus at each end.
+func _tube_mesh(r_out: float, r_in: float, length: float, sides: int) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half := length / 2.0
+	var quad := func(a: Vector3, b: Vector3, c: Vector3, d: Vector3, n: Vector3) -> void:
+		st.set_normal(n)
+		st.add_vertex(a)
+		st.add_vertex(b)
+		st.add_vertex(c)
+		st.add_vertex(a)
+		st.add_vertex(c)
+		st.add_vertex(d)
+	for k in sides:
+		var a0 := TAU * k / sides
+		var a1 := TAU * (k + 1) / sides
+		var c0 := Vector2(cos(a0), sin(a0))
+		var c1 := Vector2(cos(a1), sin(a1))
+		var n_out := Vector3((c0 + c1).x, (c0 + c1).y, 0.0).normalized()
+		var o0 := Vector3(c0.x, c0.y, 0.0) * r_out
+		var o1 := Vector3(c1.x, c1.y, 0.0) * r_out
+		var i0 := Vector3(c0.x, c0.y, 0.0) * r_in
+		var i1 := Vector3(c1.x, c1.y, 0.0) * r_in
+		var zb := Vector3(0.0, 0.0, -half)
+		var zf := Vector3(0.0, 0.0, half)
+		# Outer skin, facing out.
+		quad.call(o0 + zb, o0 + zf, o1 + zf, o1 + zb, n_out)
+		# The bore, facing in.
+		quad.call(i1 + zb, i1 + zf, i0 + zf, i0 + zb, -n_out)
+		# The ends.
+		quad.call(i0 + zf, o0 + zf, o1 + zf, i1 + zf, Vector3(0.0, 0.0, 1.0))
+		quad.call(i1 + zb, o1 + zb, o0 + zb, i0 + zb, Vector3(0.0, 0.0, -1.0))
+	st.index()
+	return st.commit()
 
 
 ## The stream above the head of tide: a water ribbon along the
@@ -426,6 +547,11 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 	_night = 1.0 - twilight
 	if _beam != null:
 		_beam.light_energy = 40.0 * _night
+	# The ship's own haze follows the horizon: pale by day, near black
+	# at night, so it hangs unseen but for its lamps.
+	var haze := Color(0.07, 0.09, 0.15).lerp(Color(0.62, 0.72, 0.84), twilight)
+	for mat in _ship_mats:
+		mat.set_shader_parameter("haze_color", haze)
 
 
 func _process(delta: float) -> void:
