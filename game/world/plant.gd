@@ -2694,9 +2694,10 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	var base := PipeRoute.routed(from, from_dir, to, to_dir, corners, squaring)
 	if lane <= 0:
 		return base
-	if corners.is_empty():
-		# A run with no corner of its own has nothing a lane can shift
-		# once the stub ends are fixed: give it one at the middle of its
+	if not _has_level_corner(base):
+		# A run with no corner on its horizontal has nothing a lane can
+		# shift once the stub ends are fixed (a plumb drop under a stub
+		# moves with the stub): give it one at the middle of its
 		# horizontal, so the lane bends it there in two shallow angles.
 		var stub_a := from + from_dir * PipeRoute.STUB
 		var stub_b := to + to_dir * PipeRoute.STUB
@@ -2723,6 +2724,17 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 		_lane_room[room_key] = _leg_room(base, side, step, lift, lane_ctx)
 	var shifted := _offset_polyline(base, side, k * step, lift, _lane_room[room_key], lane_ctx)
 	return PipeRoute.routed(from, from_dir, to, to_dir, shifted, squaring)
+
+
+## A corner between two level legs, strictly between the stubs: where
+## a lane can bend a line. Riser ends are not (2026-09-19: they became
+## corners of the line's own, for the handles, and the lanes must not
+## lose the middle corner over them).
+static func _has_level_corner(path: Array[Vector3]) -> bool:
+	for i in range(2, path.size() - 2):
+		if absf(path[i].y - path[i - 1].y) < 0.001 and absf(path[i + 1].y - path[i].y) < 0.001:
+			return true
+	return false
 
 
 const LANE_TIERS := 4
@@ -2925,20 +2937,37 @@ func _visual_path(visual: Dictionary) -> Array[Vector3]:
 ## same frame as its equipment is re-laid by the deferred pass.
 func _avoided_corners(src_name: String, src_port: String, dst_name: String, dst_port: String,
 		waypoints: Array, order: int = ORDER_ALL) -> Array:
-	var full := PipeRoute.routed_avoiding(_marker_pos(src_name, src_port), _marker_dir(src_name, src_port),
-		_marker_pos(dst_name, dst_port), _marker_dir(dst_name, dst_port), waypoints,
-		clearance.router_blocked.bind(clearance.context([src_name, dst_name], _marker_pos(src_name, src_port),
-			_marker_pos(dst_name, dst_port), _radius_of(src_name, src_port))),
+	var from := _marker_pos(src_name, src_port)
+	var to := _marker_pos(dst_name, dst_port)
+	var from_dir := _marker_dir(src_name, src_port)
+	var to_dir := _marker_dir(dst_name, dst_port)
+	var full := PipeRoute.routed_avoiding(from, from_dir, to, to_dir, waypoints,
+		clearance.router_blocked.bind(clearance.context([src_name, dst_name], from, to,
+			_radius_of(src_name, src_port))),
 		clearance.busy.bind([src_name], order))
+	# The corners are the route without its fittings and stubs, stripped
+	# by position: the router's straightening drops a stub end that lies
+	# on the last straight, so slicing by index lost a line's only corner
+	# (2026-09-19: the director saw no handle on the exercise line).
+	var fixed: Array[Vector3] = [from, from + from_dir * PipeRoute.STUB, to + to_dir * PipeRoute.STUB, to]
+	var corners: Array = []
+	for p: Vector3 in full:
+		var at_end := false
+		for e in fixed:
+			if p.distance_to(e) < 0.001:
+				at_end = true
+				break
+		if not at_end:
+			corners.append(p)
 	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
 		if PipeRoute.last_searched:
 			var b := PipeRoute.last_block
 			print("[route] %s.%s -> %s.%s detours at %s (%s): %s" % [src_name, src_port, dst_name, dst_port,
-				b, clearance.last_block, full.slice(2, full.size() - 2)])
+				b, clearance.last_block, corners])
 		else:
 			print("[route] %s.%s -> %s.%s plain through %s: %s" % [src_name, src_port, dst_name, dst_port,
-				str(waypoints), full.slice(2, full.size() - 2)])
-	return full.slice(2, full.size() - 2)
+				str(waypoints), corners])
+	return corners
 
 
 ## Two runs with an end on the same equipment — a pump's suction and
