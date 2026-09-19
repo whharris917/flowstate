@@ -1441,6 +1441,14 @@ func _edit_mouse(event: InputEvent) -> bool:
 					return true
 				return _mode_mouse(event)
 			MOUSE_BUTTON_RIGHT:
+				# On a cube: delete that corner (director, 2026-09-19); the
+				# leg between its neighbours is routed afresh. Anywhere
+				# else the right button carries, turns, or cancels.
+				if button.pressed and _leg_gizmo != null and is_instance_valid(_edit_run):
+					var handle := _handle_under_crosshair()
+					if handle != null and str(handle.get_meta("handle")).begins_with("pt"):
+						_delete_corner(_leg_gizmo.corner_index(str(handle.get_meta("handle"))))
+						return true
 				return _mode_mouse(event)  # carry, turn, and a click deselects
 	return false
 
@@ -1671,6 +1679,42 @@ func _toggle_lock() -> void:
 		plant.end_gesture()
 	_leg_gizmo.refresh(plant.wire_own_path(_edit_run), plant.wire_corners(_edit_run), plant.wire_locks(_edit_run),
 		plant.wire_waypoints(_edit_run))
+
+
+## A corner of the selected line deleted; the selection stays on the
+## line, the handles refreshed round the routed gap.
+func _delete_corner(index: int) -> void:
+	if index < 0 or index >= _leg_gizmo.path.size():
+		return
+	var point: Vector3 = _leg_gizmo.path[index]
+	_edit_ends = plant.wire_ends(_edit_run)
+	var why := plant.delete_wire_corner(_edit_run, point)
+	if why != "":
+		hud.toast(why)
+		return
+	# The line is a new node: found again by its two fittings.
+	var relaid: PipeView = null
+	for visual in plant._wire_visuals:
+		if visual["node"] != null and _same_ends(visual):
+			relaid = visual["node"] as PipeView
+	if relaid == null:
+		_set_mode(Mode.NORMAL)
+		return
+	_edit_run = relaid
+	_leg_gizmo.pipe = relaid
+	var path := plant.wire_own_path(relaid)
+	_edit_leg = clampi(_edit_leg, 0, path.size() - 2)
+	_leg_gizmo.leg = _edit_leg
+	_refresh_leg_gizmo()
+	hud.toast("corner deleted")
+
+
+var _edit_ends: Array = []   # the selected line's two fittings, to find it again as a new node
+
+
+func _same_ends(visual: Dictionary) -> bool:
+	return _edit_ends.size() == 4 and str(visual["a"]) == str(_edit_ends[0]) and str(visual["a_port"]) == str(_edit_ends[1]) \
+		and str(visual["b"]) == str(_edit_ends[2]) and str(visual["b_port"]) == str(_edit_ends[3])
 
 
 ## The handles again, after a gesture baked what the lay added.

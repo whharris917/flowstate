@@ -2218,6 +2218,67 @@ func set_wire_corners(view: PipeView, corners: Array) -> PipeView:
 	return null
 
 
+## Delete a corner of a fixed line (director, 2026-09-19: a right
+## click on a cube): the waypoint goes, and the leg between its two
+## neighbours — the next corners either side, or the stub ends — is
+## auto-routed afresh, round solids, its corners becoming the line's.
+## "" on success, else why not.
+func delete_wire_corner(view: PipeView, point: Vector3) -> String:
+	for visual in _wire_visuals:
+		if visual["node"] != view:
+			continue
+		var waypoints: Array = (visual["waypoints"] as Array).duplicate()
+		var k := -1
+		for i in waypoints.size():
+			if (waypoints[i] as Vector3).distance_to(point) < 0.01:
+				k = i
+				break
+		if k < 0:
+			return "that corner is the line's stub — it follows the fitting"
+		for lock: Vector3 in visual.get("locks", []):
+			if lock.distance_to(point) < 0.01:
+				return "that corner is locked — middle-click it to unlock"
+		checkpoint()
+		waypoints.remove_at(k)
+		var a := str(visual["a"])
+		var b := str(visual["b"])
+		var a_port := str(visual["a_port"])
+		var b_port := str(visual["b_port"])
+		var from := _marker_pos(a, a_port)
+		var to := _marker_pos(b, b_port)
+		var stub_a := from + _marker_dir(a, a_port) * PipeRoute.STUB
+		var stub_b := to + _marker_dir(b, b_port) * PipeRoute.STUB
+		var prev: Vector3 = waypoints[k - 1] if k > 0 else stub_a
+		var next: Vector3 = waypoints[k] if k < waypoints.size() else stub_b
+		var before_prev: Vector3 = waypoints[k - 2] if k > 1 else (stub_a if k == 1 else from)
+		var d_in := (prev - before_prev).normalized()
+		var radius := view.radius()
+		var ctx := clearance.context([a, b], from, to, radius)
+		var leg := PipeRoute.leg_avoiding(prev, next, d_in, clearance.router_blocked.bind(ctx),
+			clearance.busy.bind([a], int(visual.get("order", ORDER_ALL))), [from, to])
+		# The leg's corners, short of its end, are the line's now.
+		var fresh: Array = []
+		for i in range(leg.size() - 1):
+			fresh.append(leg[i])
+		for i in fresh.size():
+			waypoints.insert(k + i, fresh[i])
+		visual["waypoints"] = waypoints
+		_refresh_visual(visual)
+		_bake(visual)
+		_schedule_revalidate()
+		return ""
+	return "not a line"
+
+
+## The two fittings of a wire, [a, a_port, b, b_port]: how a line is
+## found again once its node has been laid anew.
+func wire_ends(view: PipeView) -> Array:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			return [visual["a"], visual["a_port"], visual["b"], visual["b_port"]]
+	return []
+
+
 ## The locked waypoints of a wire (plant-local positions): corners the
 ## player pinned, which no edit moves (director, 2026-09-19: "lock a
 ## corner at its position so that it doesn't move as I move other

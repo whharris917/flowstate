@@ -160,6 +160,17 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 	return _straighten(square_turns(out, blocked), waypoints)
 
 
+## One leg between two corners of a line the player is editing, for
+## the plant: plain where clear, searched round solids otherwise
+## (director, 2026-09-19: a deleted corner leaves "an auto-routed
+## segment between the two closest corners"). The points after `a`,
+## ending on `b`.
+static func leg_avoiding(a: Vector3, b: Vector3, d_in: Vector3, blocked: Callable,
+		busy: Callable, ends: Array[Vector3]) -> Array[Vector3]:
+	last_searched = false
+	return _route_leg(a, b, d_in, blocked, busy, ends)
+
+
 ## One leg, laid plain where its plain shape is clear and searched
 ## round whatever it passes through otherwise; `d_in` is the way in
 ## at `a`, which the search and the pull-straight never fold against.
