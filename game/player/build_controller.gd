@@ -1425,7 +1425,15 @@ func _edit_mouse(event: InputEvent) -> bool:
 					elif _gizmo != null:
 						_gizmo.set_blocked(false)
 				return true
-			MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
+			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
+				# Over a selected line, the wheel is elevation: the held
+				# corner, or the whole straight. Under the right button it
+				# still turns things, as everywhere.
+				if _leg_gizmo != null and not _right_down and button.pressed:
+					_raise_selected(RAISE_STEP if button.button_index == MOUSE_BUTTON_WHEEL_UP else -RAISE_STEP)
+					return true
+				return _mode_mouse(event)
+			MOUSE_BUTTON_RIGHT:
 				return _mode_mouse(event)  # carry, turn, and a click deselects
 	return false
 
@@ -1662,10 +1670,17 @@ func _update_corner_drag() -> void:
 	_leg_relay_ms = now
 	var moved := plant.to_local(target)
 	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, moved, origin)
+	if _drag == "mid" or _drag == "grab":
+		_drag = "end1"   # the grabbed point is a corner now: the end of the first half
+	_relay_selected(waypoints, moved, _drag == "end0")
+
+
+## Lay the selected line again through `waypoints` and keep the
+## selection on it: the line is a new node, and the corners the router
+## derives can come and go with a lay, so the leg is found again by
+## `moved`, a corner of it — its start when `as_start`, else its end.
+func _relay_selected(waypoints: Array, moved: Vector3, as_start: bool) -> void:
 	var relaid := plant.set_wire_corners(_edit_run, waypoints)
-	# The line is a new node now; the selection follows it, and so does
-	# the leg: the corners the router derives can come and go with a
-	# lay, so the leg is found again by the moved corner.
 	if relaid == null:
 		_set_mode(Mode.NORMAL)
 		return
@@ -1680,11 +1695,51 @@ func _update_corner_drag() -> void:
 			best = d
 			nearest = i
 	if nearest >= 0:
-		if _drag == "mid" or _drag == "grab":
-			_drag = "end1"   # the grabbed point is a corner now: the end of the first half
-		_edit_leg = nearest if _drag == "end0" else nearest - 1
+		_edit_leg = nearest if as_start else nearest - 1
 		_leg_gizmo.leg = _edit_leg
 	_leg_gizmo.refresh(path, plant.wire_corners(relaid))
+
+
+## The wheel over a selected line (director, 2026-09-19: "how would I
+## change the elevation of a pipe"): a held corner goes up or down a
+## quarter metre a notch; with nothing held, the whole selected
+## straight does, its ends becoming corners at the new height. Never
+## below 0.15 m. The support rule then says what it says.
+const RAISE_STEP := 0.25
+
+
+func _raise_selected(dy: float) -> void:
+	if _leg_gizmo == null or not is_instance_valid(_edit_run):
+		return
+	var path := _leg_gizmo.path
+	if _drag != "":
+		var index := _leg_gizmo.corner_index(_drag)
+		if index < 0 or index >= path.size():
+			return
+		var origin := _grab_origin if _drag == "grab" else _leg_gizmo.drag_origin(_drag)
+		var moved := origin + Vector3(0, dy, 0)
+		moved.y = maxf(moved.y, 0.15)
+		if is_equal_approx(moved.y, origin.y):
+			return
+		var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), path, index, moved, origin, false)
+		if _drag == "mid" or _drag == "grab":
+			_drag = "end1"
+		_relay_selected(waypoints, moved, _drag == "end0")
+		return
+	var leg := _leg_gizmo.leg
+	if leg < 1 or leg > path.size() - 3:
+		return
+	var a: Vector3 = path[leg]
+	var b: Vector3 = path[leg + 1]
+	var a2 := a + Vector3(0, dy, 0)
+	var b2 := b + Vector3(0, dy, 0)
+	a2.y = maxf(a2.y, 0.15)
+	b2.y = maxf(b2.y, 0.15)
+	if is_equal_approx(a2.y, a.y) and is_equal_approx(b2.y, b.y):
+		return
+	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), path, leg, a2, Vector3.INF, false)
+	waypoints = dragged_waypoints(waypoints, path, leg + 1, b2, Vector3.INF, false)
+	_relay_selected(waypoints, a2, true)
 
 
 ## What a dragged point of a line makes of its waypoints (2026-09-19:
@@ -1701,30 +1756,41 @@ func _update_corner_drag() -> void:
 ## or under the dragged point moves with it. `index` is into `path`,
 ## the line as laid.
 static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3,
-		origin: Vector3 = Vector3.INF) -> Array:
+		origin: Vector3 = Vector3.INF, keep_height: bool = true) -> Array:
 	# `origin` is where the drag began when that is not a path point:
 	# the middle of a leg, which then becomes a corner before `index`.
+	# With `keep_height` the point stays at its own height and so do
+	# its riser mates, which follow it sideways; without, the point
+	# takes the height of `moved` and its mates stay where they are.
 	var old: Vector3 = path[index] if origin == Vector3.INF else origin
 	var out: Array = []
 	var matched := false
 	var insert_at := 0
 	for w: Vector3 in waypoints:
-		# Where along the laid path this waypoint stands.
+		# Where along the laid path this waypoint stands: by plan
+		# position, since a waypoint just raised stands over its point.
 		var at := -1
 		var best := 0.02
 		for i in path.size():
-			var d := (path[i] as Vector3).distance_to(w)
+			var d := Vector2((path[i] as Vector3).x - w.x, (path[i] as Vector3).z - w.z).length()
 			if d < best:
 				best = d
 				at = i
 		var mate := absf(w.x - old.x) < 0.02 and absf(w.z - old.z) < 0.02
-		out.append(Vector3(moved.x, w.y, moved.z) if mate else w)
-		if mate:
+		var itself := mate and absf(w.y - old.y) < 0.02
+		if itself:
+			out.append(Vector3(moved.x, w.y, moved.z) if keep_height else moved)
 			matched = true
+		elif mate:
+			out.append(Vector3(moved.x, w.y, moved.z))
+			if keep_height:
+				matched = true
+		else:
+			out.append(w)
 		if at >= 0 and at < index:
 			insert_at = out.size()
 	if not matched:
-		out.insert(insert_at, Vector3(moved.x, old.y, moved.z))
+		out.insert(insert_at, Vector3(moved.x, old.y, moved.z) if keep_height else moved)
 	return out
 
 

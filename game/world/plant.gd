@@ -2813,13 +2813,11 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	if not _has_level_corner(base):
 		# A run with no corner on its horizontal has nothing a lane can
 		# shift once the stub ends are fixed (a plumb drop under a stub
-		# moves with the stub): give it one at the middle of its
-		# horizontal, so the lane bends it there in two shallow angles.
-		var stub_a := from + from_dir * PipeRoute.STUB
-		var stub_b := to + to_dir * PipeRoute.STUB
-		var mid := (stub_a + stub_b) / 2.0
-		mid.y = minf(stub_a.y, stub_b.y)
-		base = PipeRoute.routed(from, from_dir, to, to_dir, [mid])
+		# moves with the stub): give it one at the middle of its longest
+		# level leg, so the lane bends it there in two shallow angles.
+		# Added to its corners, never in their place (2026-09-19: a line
+		# raised by its two riser corners was laid back on the ground).
+		base = PipeRoute.routed(from, from_dir, to, to_dir, _with_mid_corner(base, corners), squaring)
 	# Lane slots: either side, then the same two one tier up, then a
 	# step further out. A tier is a run's width, the way cables stack
 	# in a tray; a whole tier would carry a ground run past the
@@ -2851,6 +2849,38 @@ static func _has_level_corner(path: Array[Vector3]) -> bool:
 		if absf(path[i].y - path[i - 1].y) < 0.001 and absf(path[i + 1].y - path[i].y) < 0.001:
 			return true
 	return false
+
+
+## The corners with one more at the middle of the longest level leg
+## of `base` (between the stubs), in its place along the route.
+static func _with_mid_corner(base: Array[Vector3], corners: Array) -> Array:
+	var longest := -1
+	var best := 0.0
+	for i in range(1, base.size() - 2):
+		if absf(base[i + 1].y - base[i].y) < 0.001:
+			var length := base[i].distance_to(base[i + 1])
+			if length > best:
+				best = length
+				longest = i
+	if longest < 0:
+		return corners
+	var mid := (base[longest] + base[longest + 1]) / 2.0
+	var out: Array = []
+	var placed := false
+	for c: Vector3 in corners:
+		# A corner past the leg's start comes after the middle.
+		var at := -1
+		for i in base.size():
+			if base[i].distance_to(c) < 0.01:
+				at = i
+				break
+		if not placed and at > longest:
+			out.append(mid)
+			placed = true
+		out.append(c)
+	if not placed:
+		out.append(mid)
+	return out
 
 
 const LANE_TIERS := 4
