@@ -9,17 +9,17 @@ class_name RoutingExercises
 
 
 static func build(plant: Plant) -> void:
-	_one_source_one_tank(plant)
+	_one_source_one_pump(plant)
 
 
-## Exercise 1: a single supply header leading to a single tank, on the
-## pad, eight metres apart. The header's outlet faces the tank; the
-## tank stands as placed, so its inlet nozzle faces where a fresh
-## tank's does (south-west), not the header.
-static func _one_source_one_tank(plant: Plant) -> void:
+## Exercise 1: a single supply header leading to a single pump, on the
+## pad, eight metres apart on one axis: the header's outlet faces the
+## pump's inlet exactly in plan. The heights differ, a header at 1.55 m
+## and a pump inlet at 0.42 m, so the line must drop once. (A tank was
+## the first version; its inlet nozzle could not be aligned this way.)
+static func _one_source_one_pump(plant: Plant) -> void:
 	plant.place("source", "supply_1", {}, Vector3(-4.0, 0.0, -2.0), 0.0, false)
-	plant.place("tank", "t_1", {"height_m": 2.4, "diameter_m": 1.1},
-		Vector3(4.0, 0.0, -2.0), 0.0, false)
-	var err := plant.connect_equipment("supply_1", "outlet", "t_1", "inlet")
+	plant.place("pump", "p_1", {"rated_lps": 3.0}, Vector3(4.0, 0.0, -2.0), 0.0, false)
+	var err := plant.connect_equipment("supply_1", "outlet", "p_1", "inlet")
 	if err != "":
 		push_error("routing exercise 1: " + err)
