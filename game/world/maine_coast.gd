@@ -15,6 +15,17 @@ extends Landscape
 ## stepped where the sea works them, and the site and the light
 ## station graded flat. The lighthouse is art, like the trees: its
 ## beam turns, and the lens flashes as it sweeps past the viewer.
+##
+## The river (director, 2026-09-18: "add a river … reached by going a
+## bit further around the coast in the direction of the lighthouse")
+## comes down out of the north-west hills and meets the sea west of
+## the light, beyond the point: a tidal reach at sea level for its
+## first two hundred metres — the sea plane fills it, ledge and gravel
+## bars along it — then a rapid stream climbing between wooded banks,
+## with its own water ribbon, boulders in the current, and the sound
+## of it. It is a centreline with a meander, a width, a depth and a
+## water level, all functions of the distance upstream of the mouth;
+## the ground is cut to a valley round it and a channel under it.
 
 const SEA := -7.0
 const SITE := Vector2(15.0, 10.0)
@@ -28,6 +39,15 @@ const HEAD_R := 48.0
 const LIGHTHOUSE := Vector2(-78.0, 178.0)
 const LIGHT_Y := 4.5
 const BEAM_PERIOD := 10.0                    # one turn; the flash is every ten seconds
+# The river: its mouth on the shore west of the light, the way it runs
+# inland (unit), the across direction, the tidal reach, the grade of
+# the stream above it, and where it fades out under the far wood.
+const RIVER_MOUTH := Vector2(-190.0, 112.0)
+const RIVER_DIR := Vector2(-0.6222, -0.7829)
+const RIVER_PERP := Vector2(-0.7829, 0.6222)
+const RIVER_TIDAL := 220.0
+const RIVER_GRADE := 0.03
+const RIVER_END := 560.0
 # Islands: centre, radius, stretch along x and z, rotation.
 const ISLANDS: Array = [
 	[Vector2(340.0, 30.0), 60.0, 1.8, 0.8, 0.5],
@@ -83,7 +103,77 @@ func coast_distance(x: float, z: float) -> float:
 		var q := (p - c).rotated(-float(island[4]))
 		var e := Vector2(q.x / float(island[2]), q.y / float(island[3])).length()
 		d = maxf(d, float(island[1]) - e)
+	# The river's tidal reach is sea: the channel is cut into the field
+	# up to the head of tide, closing over thirty metres there, and a
+	# short way out past the mouth, closing there too — the centreline's
+	# extension out to sea runs under the lighthouse point.
+	var rv := river_at(x, z)
+	if rv.y > -40.0 and rv.y < RIVER_TIDAL + 30.0:
+		d = minf(d, rv.x - river_half(rv.y) + maxf(rv.y - RIVER_TIDAL, 0.0) + maxf(-rv.y - 15.0, 0.0))
 	return d
+
+
+## ---- the river -----------------------------------------------------------
+
+## The meander: how far the channel lies across from its straight
+## line, s metres upstream of the mouth.
+func _meander(s: float) -> float:
+	return 26.0 * sin(s * 0.018 + 0.6) + 14.0 * sin(s * 0.041 + 2.0)
+
+
+func _meander_slope(s: float) -> float:
+	return 26.0 * 0.018 * cos(s * 0.018 + 0.6) + 14.0 * 0.041 * cos(s * 0.041 + 2.0)
+
+
+## Where (x, z) stands to the river: x is the distance from the
+## centreline, y the metres upstream of the mouth (negative out to sea).
+func river_at(x: float, z: float) -> Vector2:
+	var q := Vector2(x, z) - RIVER_MOUTH
+	var s := q.dot(RIVER_DIR)
+	var l := q.dot(RIVER_PERP)
+	var perp := absf(l - _meander(s)) / sqrt(1.0 + pow(_meander_slope(s), 2.0))
+	return Vector2(perp, s)
+
+
+func river_centre(s: float) -> Vector2:
+	return RIVER_MOUTH + RIVER_DIR * s + RIVER_PERP * _meander(s)
+
+
+## The true distance from p to the river's centreline between the
+## mouth and its end (river_at is a local estimate, good near the
+## channel and conservative far from it).
+func river_distance(p: Vector2) -> float:
+	var best := INF
+	var s := 0.0
+	while s <= RIVER_END:
+		best = minf(best, p.distance_to(river_centre(s)))
+		s += 5.0
+	return best
+
+
+## Half the channel's width: an estuary forty metres across at the
+## mouth, a stream of fifteen up in the hills.
+func river_half(s: float) -> float:
+	return 7.0 + 15.0 * exp(-maxf(s, 0.0) / 120.0)
+
+
+## The water's height: the sea's up the tidal reach, then a steady
+## climb.
+func river_level(s: float) -> float:
+	return SEA + RIVER_GRADE * maxf(s - RIVER_TIDAL, 0.0)
+
+
+func river_depth(s: float) -> float:
+	return 2.0 + 1.0 * exp(-maxf(s, 0.0) / 150.0)
+
+
+## 1 in the stream above the head of tide, where boulders stand in
+## the current.
+func stream_at(x: float, z: float) -> float:
+	var rv := river_at(x, z)
+	if rv.y > RIVER_TIDAL and rv.y < RIVER_END and rv.x < river_half(rv.y) + 2.0:
+		return 1.0
+	return 0.0
 
 
 func height_at(x: float, z: float) -> float:
@@ -100,6 +190,20 @@ func height_at(x: float, z: float) -> float:
 		+ 0.35 * _n.get_noise_2d(x * 0.25 + 17.0, z * 0.25)
 	h += inland * hills + rolls * (0.35 + 0.65 * inland)
 	h += 0.9 * _outcrop(x, z, d)
+	# The river: a valley lowered toward the water, never raised, and
+	# the channel cut under it; both fade out where the river leaves
+	# under the far wood.
+	var rv := river_at(x, z)
+	if rv.y > -60.0 and rv.y < RIVER_END + 80.0:
+		var w := river_level(rv.y)
+		var half := river_half(rv.y)
+		var tail := 1.0 - smoothstep(RIVER_END, RIVER_END + 80.0, rv.y)
+		var valley := (1.0 - smoothstep(half + 4.0, half + 55.0, rv.x)) * tail * smoothstep(-30.0, 10.0, rv.y)
+		if valley > 0.0:
+			h = lerpf(h, minf(h, w + 2.6 + 0.06 * rv.x), valley)
+		var channel := (1.0 - smoothstep(half + 1.0, half + 6.0, rv.x)) * tail
+		if channel > 0.0:
+			h = lerpf(h, minf(h, w - river_depth(rv.y)), channel)
 	# Ledges: stepped shelves in the band the sea works, except where
 	# the cove's head is a beach.
 	var band := smoothstep(-4.0, -1.5, h - SEA) * (1.0 - smoothstep(4.0, 7.0, h - SEA)) * (1.0 - beach_at(x, z))
@@ -160,8 +264,13 @@ func outcrop_at(x: float, z: float) -> float:
 	return _outcrop(x, z, coast_distance(x, z))
 
 
+## The cove's head, and gravel bars along the river's tidal reach.
 func beach_at(x: float, z: float) -> float:
-	return 1.0 - smoothstep(30.0, 55.0, Vector2(x, z).distance_to(BEACH))
+	var cove := 1.0 - smoothstep(30.0, 55.0, Vector2(x, z).distance_to(BEACH))
+	var rv := river_at(x, z)
+	var bars := (1.0 - smoothstep(river_half(rv.y) + 1.0, river_half(rv.y) + 12.0, rv.x)) \
+		* smoothstep(-10.0, 30.0, rv.y) * (1.0 - smoothstep(RIVER_TIDAL - 20.0, RIVER_TIDAL + 20.0, rv.y))
+	return maxf(cove, bars)
 
 
 ## Spruce and fir stand to within a few metres of the ledge; the
@@ -174,6 +283,11 @@ func tree_ground(x: float, z: float) -> float:
 	if h < SEA + 2.0 or is_graded(x, z):
 		return -INF
 	if _n.get_noise_2d(x * 0.02 + 33.0, z * 0.02) > 0.42:
+		return -INF
+	# The river's channel and its immediate bank take no tree; the
+	# woods come down to the water's edge beyond that.
+	var rv := river_at(x, z)
+	if rv.y > -20.0 and rv.y < RIVER_END and rv.x < river_half(rv.y) + 3.0:
 		return -INF
 	return h
 
@@ -262,6 +376,50 @@ func _build_landmarks() -> void:
 	add_child(shed_roof_inst)
 	# A flagpole on the lawn.
 	ViewUtil.cylinder(self, 0.05, 9.0, at + Vector3(4.0, 4.5, -5.0), white)
+	_build_river()
+
+
+## The stream above the head of tide: a water ribbon along the
+## centreline at the water's height, wide enough to bury its edges in
+## the banks, its own shader flowing down it, and the sound of it
+## every thirty-five metres. The tidal reach below needs nothing: the
+## sea plane fills it.
+func _build_river() -> void:
+	var samples: Array[Dictionary] = []
+	var s := RIVER_TIDAL + 25.0
+	var s_end := RIVER_END - 20.0
+	while s <= s_end + 0.01:
+		var c := river_centre(s)
+		var tangent := (RIVER_DIR + RIVER_PERP * _meander_slope(s)).normalized()
+		var across := Vector2(-tangent.y, tangent.x)
+		samples.append({"c": Vector3(c.x, river_level(s), c.y), "n": across, "w": river_half(s) + 4.0, "s": s})
+		s += 6.0
+	river_mat = ShaderMaterial.new()
+	river_mat.shader = load("res://world/river.gdshader")
+	var ribbon := _water_ribbon(samples, river_mat)
+	ribbon.name = "River"
+	stats["river_m"] = int(s_end)
+	var spots := 0
+	var stream: AudioStreamWAV = null
+	if DisplayServer.get_name() != "headless":
+		stream = _loop_stream("res://audio/river_loop.wav")
+	s = RIVER_TIDAL + 15.0
+	while s < s_end:
+		spots += 1
+		if stream != null:
+			var c := river_centre(s)
+			var p := AudioStreamPlayer3D.new()
+			p.stream = stream
+			p.position = Vector3(c.x, river_level(s) + 0.5, c.y)
+			p.volume_db = -7.0
+			p.unit_size = 9.0
+			p.max_distance = 90.0
+			p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+			p.bus = "Master"
+			add_child(p)
+			p.play(_rng.randf() * stream.get_length())
+		s += 35.0
+	stats["river_emitters"] = spots
 
 
 func _on_time_of_day(_horizon: float, twilight: float) -> void:

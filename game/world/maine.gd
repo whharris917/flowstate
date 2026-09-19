@@ -72,11 +72,12 @@ func _process(delta: float) -> void:
 
 
 func _after_plant() -> void:
-	hud.toast("The Maine coast. The site is graded; the shore is a walk east or south, the lighthouse is across the cove. B build · C connect · L library · O options · F5/F9 save/load")
+	hud.toast("The Maine coast. The site is graded; the shore is a walk east or south, the lighthouse is across the cove, and a river comes down to the sea beyond it. B build · C connect · L library · O options · F5/F9 save/load")
 	var s := coast.stats
-	print("[flowstate] landscape: %d vertices, %.0f%% sea, %d trees, %d rocks, %d surf emitters — terrain %d ms, rocks %d ms, forest %d ms, %d ms in all"
+	print("[flowstate] landscape: %d vertices, %.0f%% sea, %d trees, %d rocks, %d surf emitters, a river of %d m with %d emitters — terrain %d ms, rocks %d ms, forest %d ms, %d ms in all"
 		% [int(s.get("vertices", 0)), 100.0 * float(s.get("sea_fraction", 0.0)), int(s.get("trees", 0)),
-		int(s.get("rocks", 0)), int(s.get("surf_emitters", 0)), int(s.get("ms_terrain", 0)),
+		int(s.get("rocks", 0)), int(s.get("surf_emitters", 0)), int(s.get("river_m", 0)),
+		int(s.get("river_emitters", 0)), int(s.get("ms_terrain", 0)),
 		int(s.get("ms_rocks", 0)), int(s.get("ms_forest", 0)), int(s.get("ms_total", 0))])
 	if DisplayServer.get_name() == "headless":
 		_self_check()
@@ -119,8 +120,37 @@ func _self_check() -> void:
 	if absf((high - low) - 2.0 * coast.tide_range) > 0.01:
 		problems.append("tide range %.2f m" % (high - low))
 	coast.set_tide(time_of_day)
+	# The river: its mouth under the sea, its bed under its water and its
+	# banks above it the whole way up, its valley clear of the site, and
+	# the light station on dry ground beside it.
+	var mouth := coast.river_centre(0.0)
+	if coast.height_at(mouth.x, mouth.y) > coast.sea_level - 1.0:
+		problems.append("river mouth above the sea")
+	var s := 10.0
+	while s < MaineCoast.RIVER_END - 20.0:
+		var c := coast.river_centre(s)
+		var level := coast.river_level(s)
+		if coast.height_at(c.x, c.y) > level - 0.8:
+			problems.append("river bed above its water %.0f m up" % s)
+			break
+		if s > 40.0:
+			var half := coast.river_half(s)
+			var tangent := (MaineCoast.RIVER_DIR + MaineCoast.RIVER_PERP * coast._meander_slope(s)).normalized()
+			var across := Vector2(-tangent.y, tangent.x) * (half + 7.0)
+			for side: float in [-1.0, 1.0]:
+				var bank := c + across * side
+				if coast.height_at(bank.x, bank.y) < level + 0.3:
+					problems.append("river bank under water %.0f m up" % s)
+					break
+		s += 10.0
+	var corner := coast.river_distance(Vector2(MaineCoast.SITE.x - MaineCoast.SITE_HALF.x, MaineCoast.SITE.y + MaineCoast.SITE_HALF.y))
+	if corner < 120.0:
+		problems.append("river valley %.0f m from the site" % corner)
+	var mouth_from_light := mouth.distance_to(MaineCoast.LIGHTHOUSE)
+	if coast.river_distance(MaineCoast.LIGHTHOUSE) < 80.0:
+		problems.append("river valley under the light station")
 	if problems.is_empty():
-		print("[flowstate] maine self-check OK — site flat to %.3f m, shore %.0f m east of the site, tide %.1f m, spawn %.1f m over high water"
-			% [worst, walk, high - low, coast.height_at(0.0, 3.0) - high])
+		print("[flowstate] maine self-check OK — site flat to %.3f m, shore %.0f m east of the site, tide %.1f m, spawn %.1f m over high water, river %d m long with its mouth %.0f m from the light"
+			% [worst, walk, high - low, coast.height_at(0.0, 3.0) - high, int(coast.stats.get("river_m", 0)), mouth_from_light])
 	else:
 		print("[flowstate] maine self-check FAILED: " + ", ".join(problems))

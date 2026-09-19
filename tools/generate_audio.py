@@ -15,6 +15,8 @@ Writes to game/audio/:
   surf_loop.wav   16 s seamless surf on a ledge, swells breaking as hiss
   wind_loop.wav   12 s seamless wind off the water, gusting
   gull_1..3.wav   herring gull cries: one long, a long call, a pair
+  river_loop.wav  10 s seamless stream over stones: a low rush, a
+                  chatter of eddies, bubbles now and then
 
 Loops are made seamless by quantizing every sustained frequency to an
 integer number of cycles per loop and forcing envelopes to zero at the
@@ -635,6 +637,45 @@ def make_wind() -> None:
     write_wav(OUT_DIR / "wind_loop.wav", [out], normalize_to=0.35)
 
 
+def make_river() -> None:
+    """A stream over stones: a low rush that never stops, a mid-band
+    chatter of eddies breathing on several slow cycles that share the
+    loop, and the odd bubble — a short falling chirp. Its own RNG, so
+    the older files stay byte-identical."""
+    r = random.Random(20260918)
+    dur = 10.0
+    n = int(SR * dur)
+    fade = int(0.5 * SR)
+    total = n + fade
+    white = _noise_r(r, total)
+    low = _lowpass(white, 0.04)
+    mid = _lowpass(white, 0.16)
+    high = _lowpass(white, 0.45)
+    out = [0.0] * total
+    for i in range(total):
+        t = i / SR
+        eddy = 0.55 + 0.25 * math.sin(2.0 * math.pi * t * 3.0 / dur + 0.9) \
+            + 0.2 * math.sin(2.0 * math.pi * t * 7.0 / dur + 2.4)
+        eddy = max(0.0, eddy)
+        out[i] = low[i] * 2.2 + (mid[i] - low[i]) * (0.6 + 0.9 * eddy) * 1.6 \
+            + (high[i] - mid[i]) * eddy * eddy * 0.9
+    bubbles = int(dur * 6)
+    for _b in range(bubbles):
+        start = int(r.random() * n)
+        f0 = r.uniform(900.0, 1600.0)
+        length = int(SR * r.uniform(0.02, 0.05))
+        phase = 0.0
+        for k in range(length):
+            tt = k / length
+            f = f0 * (0.55 ** tt)
+            phase += 2.0 * math.pi * f / SR
+            env = math.sin(math.pi * tt) ** 2
+            idx = (start + k) % total
+            out[idx] += math.sin(phase) * env * 0.16
+    out = loop_crossfade(out, 0.5)
+    write_wav(OUT_DIR / "river_loop.wav", [out], normalize_to=0.40)
+
+
 def make_gull(path: Path, calls: list[tuple[float, float, float, float]],
               r: random.Random) -> None:
     """A herring gull: a reedy descending cry — a stack of harmonics
@@ -690,6 +731,7 @@ def main() -> None:
     make_surf()
     make_wind()
     make_gulls()
+    make_river()
     for idx, (f0, decay, noise_amp) in enumerate(
             [(72.0, 16.0, 0.50), (78.0, 18.0, 0.42), (66.0, 15.0, 0.55), (84.0, 17.0, 0.38)],
             start=1):

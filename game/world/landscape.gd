@@ -30,6 +30,7 @@ var seed := 20260913
 var terrain_mat: ShaderMaterial
 var rock_mat: ShaderMaterial
 var sea_mat: ShaderMaterial
+var river_mat: ShaderMaterial
 var sea: MeshInstance3D
 var stats: Dictionary = {}     # what build() made, for the smoke run's line
 var _rng := RandomNumberGenerator.new()
@@ -75,6 +76,12 @@ func outcrop_at(_x: float, _z: float) -> float:
 
 ## 1 where the low ground is a beach of cobble rather than ledge.
 func beach_at(_x: float, _z: float) -> float:
+	return 0.0
+
+
+## 1 in a stream's channel above the sea, where boulders stand in the
+## current.
+func stream_at(_x: float, _z: float) -> float:
 	return 0.0
 
 
@@ -248,6 +255,46 @@ func _build_sea() -> void:
 	add_child(sea)
 
 
+## A water surface along a stream: one strip of quads through the
+## samples, each {c: the centre at the water's height, n: the across
+## direction, w: the half width, s: metres along}, UV in metres across
+## and along so a shader can flow down it. Transparent, no shadow.
+func _water_ribbon(samples: Array[Dictionary], mat: Material) -> MeshInstance3D:
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	for sample in samples:
+		var c: Vector3 = sample["c"]
+		var n: Vector2 = sample["n"]
+		var w: float = sample["w"]
+		var s: float = sample["s"]
+		var side := Vector3(n.x, 0.0, n.y) * w
+		verts.append(c - side)
+		verts.append(c + side)
+		norms.append(Vector3.UP)
+		norms.append(Vector3.UP)
+		uvs.append(Vector2(-w, s))
+		uvs.append(Vector2(w, s))
+	var indices := PackedInt32Array()
+	for i in samples.size() - 1:
+		var a := i * 2
+		indices.append_array(PackedInt32Array([a, a + 2, a + 1, a + 1, a + 2, a + 3]))
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = norms
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.material_override = mat
+	inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(inst)
+	return inst
+
+
 ## ---- rock ----------------------------------------------------------------
 
 ## A boulder: a sphere pushed about by noise and flat-shaded, with a
@@ -289,7 +336,7 @@ func _build_rocks() -> void:
 	var xforms: Array[Array] = [[], [], []]
 	var colors: Array[Array] = [[], [], []]
 	var placed := 0
-	var reach := 380.0
+	var reach := 480.0
 	var count := int(PI * reach * reach / 81.0)
 	for _i in count:
 		var r := sqrt(_rng.randf_range(0.0, reach * reach))
@@ -301,6 +348,10 @@ func _build_rocks() -> void:
 		if d > -6.0 and d < 14.0:
 			if _rng.randf() < 0.55:
 				size = _rng.randf_range(0.5, 2.3)
+		elif stream_at(x, z) > 0.0:
+			# Boulders in a stream's bed, the big ones breaking the surface.
+			if _rng.randf() < 0.30:
+				size = _rng.randf_range(0.9, 2.6)
 		elif d > 40.0 and _rng.randf() < 0.012:
 			if height_at(x, z) > sea_level + 6.0 and not is_graded(x, z):
 				size = _rng.randf_range(1.6, 3.4)

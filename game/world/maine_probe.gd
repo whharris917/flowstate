@@ -100,6 +100,14 @@ func _run(world: WorldBase) -> void:
 	# Down on the beach at the cove's head, looking out.
 	y = coast.height_at(-30.0, 92.0)
 	await _view(player, Vector3(-30.0, y + 0.4, 92.0), PI, 0.02, 0.0, "beach")
+	# The river: from the east bank of the estuary looking upstream,
+	# then from the bank of the rapids looking down it to the sea.
+	var bank := coast.river_centre(60.0) - MaineCoast.RIVER_PERP * (coast.river_half(60.0) + 9.0)
+	y = coast.height_at(bank.x, bank.y)
+	await _view(player, Vector3(bank.x, y + 0.4, bank.y), 0.67, 0.0, 0.0, "river_mouth")
+	bank = coast.river_centre(300.0) - MaineCoast.RIVER_PERP * (coast.river_half(300.0) + 6.0)
+	y = coast.height_at(bank.x, bank.y)
+	await _view(player, Vector3(bank.x, y + 0.4, bank.y), 0.67 + PI, -0.08, 0.0, "river_rapids")
 	# The aerial.
 	await _view(player, Vector3(16.0, 0.35, 10.0), -2.35, -0.8, 2.3, "aerial")
 	# The clock: dawn fog, dusk, night with the light.
