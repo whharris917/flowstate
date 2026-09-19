@@ -204,7 +204,7 @@ func _exercise_build_api() -> void:
 	if pump2 == null or not remove_equipment(pump2.comp_name):
 		problems.append("place/remove pump failed")
 	# G move: a tank set down elsewhere carries its elevation, its run
-	# follows, and commissioned equipment stays put.
+	# follows, and commissioned equipment moves too (since 2026-09-19).
 	var mv_tank := place_new("tank", _world(Vector3(6.0, 0.0, -3.0)), 0.0) as SimTank
 	var mv_drain := place_new("drain", _world(Vector3(8.0, 0.0, -3.0)), 0.0)
 	if mv_tank == null or mv_drain == null:
@@ -220,8 +220,8 @@ func _exercise_build_api() -> void:
 		var run_after := _visible_run_of(mv_tank.comp_name)
 		if run_before == null or run_after == null or run_after == run_before:
 			problems.append("the moved tank's run was not re-laid")
-		if movable("supply_tank") == "":
-			problems.append("commissioned tank was movable")
+		if movable("supply_tank") != "":
+			problems.append("commissioned tank refused to move")
 		# CONFIGURE: sizing edits land on the record, out-of-schema keys
 		# and commissioned equipment are refused.
 		if configure_equipment(mv_tank.comp_name, {"height_m": 2.0, "diameter_m": 1.2,
@@ -1499,8 +1499,9 @@ func unsupported_report() -> PackedStringArray:
 func movable(name_: String) -> String:
 	if not equip_types.has(name_) or not views.has(name_):
 		return "only placed equipment moves — remove and re-place structure"
-	if protected.has(name_):
-		return "%s is commissioned equipment — can't move" % name_
+	# Commissioned equipment moves like anything else (director,
+	# 2026-09-19: "let's drop that rule"); only its removal and its
+	# sizing stay refused, so the starting loop can never be broken.
 	if mounted.has(name_) or PlantFactory.MOUNTABLE.has(str(equip_types[name_])):
 		return "%s is mounted on a vessel — remove it and mount it again" % name_
 	return ""
