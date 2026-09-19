@@ -15,6 +15,7 @@ var path: Array[Vector3] = []
 var corners: Array = []          # the line's own corners (Plant.wire_corners)
 var _slots: Array[int] = []      # path index -> its corner's slot, or -1
 var _handles: Array[StaticBody3D] = []
+var _hover: MeshInstance3D = null   # where a grab on the straight would put a corner
 var _sleeve: MeshInstance3D = null
 
 
@@ -44,6 +45,7 @@ func refresh(path_: Array[Vector3], corners_: Array) -> void:
 		child.queue_free()
 	_handles.clear()
 	_sleeve = null
+	_hover = null
 	if leg < 0 or leg >= path.size() - 1:
 		return
 	var a := path[leg]
@@ -81,6 +83,27 @@ func refresh(path_: Array[Vector3], corners_: Array) -> void:
 	# has a new handle I can move independent of the others?").
 	if leg >= 1 and leg <= path.size() - 3 and absf(a.y - b.y) < 0.001 and length > 1.0:
 		_make_handle("mid", (a + b) / 2.0, HANDLE * 0.7, Color(1.0, 0.92, 0.62))
+	# The hover cube: shown on the straight under the crosshair, so it is
+	# clear a press there makes a corner and drags it (director, 2026-09-19).
+	_hover = MeshInstance3D.new()
+	var hover_mesh := BoxMesh.new()
+	hover_mesh.size = Vector3.ONE * HANDLE * 0.55
+	_hover.mesh = hover_mesh
+	_hover.material_override = ViewUtil.glow(Color(1.0, 0.95, 0.75), 0.9)
+	_hover.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_hover.visible = false
+	add_child(_hover)
+
+
+## Show the hover cube at a point of the leg, or hide it (Vector3.INF).
+func set_hover(at: Vector3) -> void:
+	if _hover == null:
+		return
+	if at == Vector3.INF:
+		_hover.visible = false
+		return
+	_hover.position = at
+	_hover.visible = true
 
 
 func _make_handle(name_: String, at: Vector3, size: float, color: Color) -> void:

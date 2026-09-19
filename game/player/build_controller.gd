@@ -282,6 +282,8 @@ func _update_hud() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if _leg_gizmo != null:
+		_leg_gizmo.set_hover(_grab_point() if _drag == "" else Vector3.INF)
 	if not _nozzle_grab.is_empty():
 		plant._finish_scans()  # a grab moves a nozzle's elevation in the sim
 		_update_nozzle_grab()
@@ -1577,23 +1579,53 @@ func _update_drag() -> void:
 var _grab_origin := Vector3.ZERO   # where a selected straight was grabbed, plant-local
 
 
+## The point of the selected straight under the crosshair where a grab
+## would put a corner (plant-local), or Vector3.INF: the crosshair is
+## not on that leg, or the leg is not one a corner can be put in (a
+## stub, a riser), or a handle is under the crosshair instead.
+func _grab_point() -> Vector3:
+	if _leg_gizmo == null or not player.ray.is_colliding():
+		return Vector3.INF
+	var aimed := player.ray.get_collider() as Node
+	if aimed == null or not aimed.has_meta("run") or not aimed.has_meta("leg"):
+		return Vector3.INF
+	if aimed.get_meta("run") != _edit_run or int(aimed.get_meta("leg")) != _edit_leg:
+		return Vector3.INF
+	var path := _leg_gizmo.path
+	var leg := _leg_gizmo.leg
+	if leg < 1 or leg > path.size() - 3:
+		return Vector3.INF
+	var a: Vector3 = path[leg]
+	var b: Vector3 = path[leg + 1]
+	if absf(a.y - b.y) > 0.001:
+		return Vector3.INF
+	if _handle_under_crosshair() != null:
+		return Vector3.INF
+	var hit := plant.to_local(player.ray.get_collision_point())
+	var t := clampf((hit - a).dot(b - a) / maxf((b - a).length_squared(), 1e-6), 0.05, 0.95)
+	return a.lerp(b, t)
+
+
+## The gizmo handle under the crosshair, or null.
+func _handle_under_crosshair() -> Node:
+	var ray := _edit_ray()
+	var query := PhysicsRayQueryParameters3D.create(ray[0], ray[0] + ray[1] * 200.0,
+		EditGizmo.LAYER)
+	var pick := player.camera.get_world_3d().direct_space_state.intersect_ray(query)
+	if pick.is_empty():
+		return null
+	var collider := pick["collider"] as Node
+	return collider if collider != null and collider.has_meta("handle") else null
+
+
 ## The selected straight held under the crosshair: the point on it
 ## becomes a corner once the pull moves it. False when the leg is not
 ## one a corner can be put in (a stub, a riser).
 func _begin_grab() -> bool:
-	if _leg_gizmo == null or not player.ray.is_colliding():
+	var at := _grab_point()
+	if at == Vector3.INF:
 		return false
-	var path := _leg_gizmo.path
-	var leg := _leg_gizmo.leg
-	if leg < 1 or leg > path.size() - 3:
-		return false
-	var a: Vector3 = path[leg]
-	var b: Vector3 = path[leg + 1]
-	if absf(a.y - b.y) > 0.001:
-		return false
-	var hit := plant.to_local(player.ray.get_collision_point())
-	var t := clampf((hit - a).dot(b - a) / maxf((b - a).length_squared(), 1e-6), 0.05, 0.95)
-	_grab_origin = a.lerp(b, t)
+	_grab_origin = at
 	var corner_hit := _drag_hit(plant.to_global(_grab_origin))
 	if corner_hit == Vector3.INF:
 		return false
