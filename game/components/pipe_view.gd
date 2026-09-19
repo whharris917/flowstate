@@ -513,10 +513,13 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 		var length := from.distance_to(to)
 		if length < 0.02:
 			continue
+		# A stand is a post from the floor with a base plate and a
+		# saddle under the run; a bracket is a clamp strut.
+		var stand := bool(bracket.get("stand", false))
 		var strut := MeshInstance3D.new()
 		var mesh := CylinderMesh.new()
-		mesh.top_radius = 0.03
-		mesh.bottom_radius = 0.03
+		mesh.top_radius = 0.045 if stand else 0.03
+		mesh.bottom_radius = 0.045 if stand else 0.03
 		mesh.height = length
 		strut.mesh = mesh
 		strut.material_override = mat
@@ -527,11 +530,20 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 		_brackets.append(strut)
 		var foot := MeshInstance3D.new()
 		var pad := BoxMesh.new()
-		pad.size = Vector3(0.12, 0.03, 0.12)
+		pad.size = Vector3(0.26, 0.02, 0.26) if stand else Vector3(0.12, 0.03, 0.12)
 		foot.mesh = pad
 		foot.material_override = mat
 		add_child(foot)
 		foot.position = to
+		if stand:
+			var saddle := MeshInstance3D.new()
+			var saddle_mesh := BoxMesh.new()
+			saddle_mesh.size = Vector3(0.16, 0.05, 0.12)
+			saddle.mesh = saddle_mesh
+			saddle.material_override = mat
+			add_child(saddle)
+			saddle.position = from - Vector3(0, radius() + 0.02, 0)
+			_brackets.append(saddle)
 		if absf(direction.y) < 0.5:  # side-anchored: stand the pad up
 			foot.rotation = Vector3(0, 0, PI / 2.0) if absf(direction.x) > 0.5 \
 				else Vector3(PI / 2.0, 0, 0)

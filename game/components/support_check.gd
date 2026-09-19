@@ -10,6 +10,14 @@ class_name SupportCheck
 ## evaluate() also proposes bracket points — where clamp hardware is
 ## drawn — every BRACKET_SPACING meters of supported run, anchored to
 ## the nearest surface (down, sideways, then overhead hanger).
+##
+## Stands (director, 2026-09-19: "shouldn't the supports
+## auto-generate?"): a level stretch that would fail the rule is stood
+## on pipe stands every BRACKET_SPACING wherever a floor, a slab or a
+## deck (layer 1, never equipment) lies within STAND_REACH below it,
+## and those samples count as supported. A run higher than a stand
+## reaches still needs a rack. Stands come back in the brackets with
+## "stand": true, and "stands" counts them.
 
 const SAMPLE_STEP := 0.5
 const REACH := 0.65
@@ -17,6 +25,8 @@ const MAX_SPAN := 3.0
 const END_GRACE := 1.0
 const BRACKET_SPACING := 2.2
 const SUPPORT_MASK := 1 | 4
+const STAND_REACH := 4.0
+const STAND_MASK := 1
 
 const _RAY_DIRS: Array[Vector3] = [
 	Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT,
@@ -32,6 +42,7 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 		exclude: Array[RID] = []) -> Dictionary:
 	var samples: Array[Vector3] = []
 	var arcs: Array[float] = []
+	var level: Array[bool] = []   # the sample lies on a level leg: a stand can go under it
 	var total := 0.0
 	for i in range(path.size() - 1):
 		var from := path[i]
@@ -39,14 +50,17 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 		var seg_len := from.distance_to(to)
 		if seg_len < 0.001:
 			continue
+		var is_level := absf(to.y - from.y) < 0.01
 		var steps := maxi(1, int(ceil(seg_len / SAMPLE_STEP)))
 		for s in range(steps):
 			samples.append(from.lerp(to, float(s) / steps))
 			arcs.append(total + seg_len * s / steps)
+			level.append(is_level)
 		total += seg_len
 	if not path.is_empty():
 		samples.append(path[path.size() - 1])
 		arcs.append(total)
+		level.append(false)
 
 	var shape := SphereShape3D.new()
 	shape.radius = REACH
@@ -62,6 +76,32 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 			continue
 		query.transform = Transform3D(Basis.IDENTITY, samples[i])
 		supported.append(not space.intersect_shape(query, 1).is_empty())
+
+	# Stands: a stretch that would fail is stood on the floor below it,
+	# a stand every BRACKET_SPACING from where the stretch begins.
+	var stands: Array[Dictionary] = []
+	var i0 := 0
+	while i0 < samples.size():
+		if supported[i0]:
+			i0 += 1
+			continue
+		var i1 := i0
+		while i1 + 1 < samples.size() and not supported[i1 + 1]:
+			i1 += 1
+		var stretch_start: float = arcs[maxi(0, i0 - 1)]
+		var stretch_end: float = arcs[mini(samples.size() - 1, i1 + 1)]
+		if stretch_end - stretch_start > MAX_SPAN + 0.01:
+			var last_stand := stretch_start
+			for i in range(i0, i1 + 1):
+				if not level[i] or arcs[i] - last_stand < BRACKET_SPACING:
+					continue
+				var floor_hit := _floor_below(samples[i], space, exclude)
+				if floor_hit == Vector3.INF:
+					continue
+				stands.append({"from": samples[i], "to": floor_hit, "stand": true})
+				supported[i] = true
+				last_stand = arcs[i]
+		i0 = i1 + 1
 
 	var max_span := 0.0
 	var span_start := -1.0
@@ -92,9 +132,23 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 		if anchor != Vector3.INF:
 			brackets.append({"from": samples[i], "to": anchor})
 			last_bracket = arcs[i]
+	brackets.append_array(stands)
 
 	return {"ok": max_span <= MAX_SPAN + 0.01, "max_span": max_span, "brackets": brackets,
-		"worst_at": worst_at}
+		"worst_at": worst_at, "stands": stands.size()}
+
+
+## The floor a stand would rest on: the first surface straight below
+## within STAND_REACH, world geometry or structure only.
+static func _floor_below(point: Vector3, space: PhysicsDirectSpaceState3D,
+		exclude: Array[RID]) -> Vector3:
+	var query := PhysicsRayQueryParameters3D.create(point, point + Vector3.DOWN * STAND_REACH,
+		STAND_MASK)
+	query.exclude = exclude
+	var hit := space.intersect_ray(query)
+	if hit.is_empty():
+		return Vector3.INF
+	return hit["position"]
 
 
 static func _nearest_surface(point: Vector3, space: PhysicsDirectSpaceState3D,

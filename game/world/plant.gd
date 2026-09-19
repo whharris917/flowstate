@@ -3663,10 +3663,19 @@ func _exercise_supports() -> void:
 	var origin := to_global(Vector3(0.0, -0.08, 4.0))
 	var run: Array[Vector3] = [origin + Vector3(-4, 2, 0), origin + Vector3(4, 2, 0)]
 	if _support_exercise_phase == 1:
+		# An 8 m span 2 m over the pad stands on pipe stands; the same
+		# span 6 m up is beyond a stand and fails (2026-09-19).
 		var open_check := SupportCheck.evaluate(run, space)
-		if bool(open_check["ok"]):
-			push_warning("[flowstate] support exercise FAILED: 8 m air span passed (max span %.2f)"
-				% float(open_check["max_span"]))
+		if not bool(open_check["ok"]) or int(open_check["stands"]) < 2:
+			push_warning("[flowstate] support exercise FAILED: 8 m span 2 m up was not stood on stands (ok %s, %d stands)"
+				% [str(open_check["ok"]), int(open_check["stands"])])
+			_support_exercise_phase = 0
+			return
+		var high: Array[Vector3] = [origin + Vector3(-4, 6, 0), origin + Vector3(4, 6, 0)]
+		var high_check := SupportCheck.evaluate(high, space)
+		if bool(high_check["ok"]):
+			push_warning("[flowstate] support exercise FAILED: 8 m air span 6 m up passed (max span %.2f)"
+				% float(high_check["max_span"]))
 			_support_exercise_phase = 0
 			return
 		place_structure("s_column", "chk_col_1", origin + Vector3(-1.4, 0, 0), 0.0)
@@ -3680,6 +3689,8 @@ func _exercise_supports() -> void:
 	var braced_check := SupportCheck.evaluate(run, space)
 	if not bool(braced_check["ok"]):
 		problems.append("braced span still failed (max span %.2f)" % float(braced_check["max_span"]))
+	elif int(braced_check["stands"]) > 0:
+		problems.append("braced span still stood on %d stands" % int(braced_check["stands"]))
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space) != "":
 		problems.append("beam across two columns was refused")
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space, 5.8) != "":
@@ -3706,11 +3717,11 @@ func _exercise_supports() -> void:
 	var tray_view := (runs["chk_tray"] as Dictionary)["node"] as PipeView
 	var conduit: Array[Vector3] = [origin + Vector3(-3.5, 0.95, 2), origin + Vector3(3.5, 0.95, 2)]
 	var over_tray := SupportCheck.evaluate(conduit, space)
-	if not bool(over_tray["ok"]):
-		problems.append("conduit over the tray was not supported by it")
+	if not bool(over_tray["ok"]) or int(over_tray["stands"]) > 0:
+		problems.append("conduit over the tray was not supported by it (%d stands)" % int(over_tray["stands"]))
 	var without_tray := SupportCheck.evaluate(conduit, space, tray_view.collider_rids())
-	if bool(without_tray["ok"]):
-		problems.append("conduit counted something other than the tray as support")
+	if not bool(without_tray["ok"]) or int(without_tray["stands"]) == 0:
+		problems.append("conduit without the tray was not stood on stands")
 	if not remove_placed_run(tray_view):
 		problems.append("tray cleanup failed")
 	for chk in ["chk_col_1", "chk_col_2", "chk_col_3", "chk_col_4"]:
