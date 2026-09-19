@@ -72,6 +72,9 @@ func begin_gesture() -> void:
 
 func end_gesture() -> void:
 	_gesture = false
+	for visual in _wire_visuals:
+		if visual["node"] != null and bool(visual.get("fixed", false)):
+			_bake(visual)   # a corner the lay added during the gesture is the line's now
 	if undo_enabled and not _undo.is_empty() and _undo[_undo.size() - 1] == JSON.stringify(snapshot()):
 		_undo.pop_back()
 
@@ -1181,7 +1184,7 @@ func _refresh_visual(visual: Dictionary) -> void:
 	visual["base_path"] = []
 	var pipe := _build_pipe(str(visual["a"]), str(visual["a_port"]),
 		str(visual["b"]), str(visual["b_port"]), visual["waypoints"], -1, int(visual.get("lane", 0)),
-		int(visual.get("order", ORDER_ALL)))
+		int(visual.get("order", ORDER_ALL)), bool(visual.get("fixed", false)))
 	visual["node"] = pipe
 	visual["lane"] = int(pipe.get_meta("lane", 0))
 	visual["path"] = pipe.get_meta("path", [])
@@ -2175,9 +2178,12 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 		var spot := best_point + seg_dir * (side * 0.45)
 		place("cap", cap_name, {"line_y": spot.y}, to_global(Vector3(spot.x, 0.0, spot.z)), rot, false)
 		names.append(cap_name)
+	_next_wire_fixed = true   # the pieces keep the corners they were cut with
 	var why := connect_equipment(a_name, a_port, names[0], "a", before)
 	if why == "":
+		_next_wire_fixed = true
 		why = connect_equipment(names[1], "b", b_name, b_port, after)
+	_next_wire_fixed = false
 	if why != "":
 		return why
 	for pair: Array in [[a_name, a_port, names[0], "a"], [names[1], "b", b_name, b_port]]:
@@ -2349,6 +2355,8 @@ func _revalidate_supports() -> void:
 	for visual in _wire_visuals:
 		if visual["node"] == null:
 			continue
+		if bool(visual.get("fixed", false)):
+			continue   # a fixed line never routes again: only a new line moves
 		var order := int(visual.get("order", ORDER_ALL))
 		var t_dec := Time.get_ticks_usec()
 		var fresh := _avoided_corners(str(visual["a"]), str(visual["a_port"]),
@@ -2395,6 +2403,11 @@ func _revalidate_supports() -> void:
 	if relaid > 0:
 		_relay_round += 1
 		_revalidate_in = 3  # once more, to confirm it settled
+	else:
+		# Settled: what the router decided is now what each new line is.
+		for visual in _wire_visuals:
+			if visual["node"] != null and not bool(visual.get("fixed", false)):
+				_bake(visual)
 	var t2 := Time.get_ticks_msec()
 	var relay := []
 	relay.resize(relaid)
@@ -2555,19 +2568,73 @@ func _apply_support_path(view: PipeView, path: Array[Vector3],
 		view.set_meta("unsupported_span", float(result["max_span"]))
 
 
+## Set before a connect whose waypoints are already the line's corners
+## (a save's fixed line, a cut's pieces): the line is laid fixed.
+var _next_wire_fixed := false
+
+
 func _wire_visual(src_name: String, src_port: String,
 		dst_name: String, dst_port: String, waypoints: Array) -> void:
 	var order := _wire_serial
 	_wire_serial += 1
-	var pipe := _build_pipe(src_name, src_port, dst_name, dst_port, waypoints, -1, 0, order)
+	var fixed := _next_wire_fixed
+	_next_wire_fixed = false
+	var pipe := _build_pipe(src_name, src_port, dst_name, dst_port, waypoints, -1, 0, order, fixed)
 	_wire_visuals.append({
 		"node": pipe, "a": src_name, "a_port": src_port,
 		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
-		"color": "", "label": "", "order": order,
+		"color": "", "label": "", "order": order, "fixed": fixed,
 		"lane": int(pipe.get_meta("lane", 0)), "path": pipe.get_meta("path", []),
 		"corners": pipe.get_meta("corners", []), "base_path": pipe.get_meta("base_path", []),
 	})
 	_schedule_revalidate()
+
+
+## Bake a line: its waypoints become the corners it is drawn with —
+## every sidestep, bridge, detour and square leg the router decided —
+## and from then on it is laid plainly through them and never routed
+## again (director, 2026-09-19: "if a shift is necessary to avoid
+## intersecting something, then the shifted position is the new
+## waypoint", and "existing pipes should not be recalculated"). The
+## fittings and their stubs are not corners: they follow the equipment.
+func _bake(visual: Dictionary) -> void:
+	var node := visual["node"] as PipeView
+	if node == null:
+		return
+	var path: Array = visual.get("path", [])
+	if path.size() < 4:
+		return
+	var a := str(visual["a"])
+	var b := str(visual["b"])
+	var from := _marker_pos(a, str(visual["a_port"]))
+	var to := _marker_pos(b, str(visual["b_port"]))
+	var ends: Array[Vector3] = [from, from + _marker_dir(a, str(visual["a_port"])) * PipeRoute.STUB,
+		to + _marker_dir(b, str(visual["b_port"])) * PipeRoute.STUB, to]
+	var waypoints: Array = []
+	for p: Vector3 in path:
+		var at_end := false
+		for e in ends:
+			if p.distance_to(e) < 0.001:
+				at_end = true
+				break
+		if not at_end:
+			waypoints.append(p)
+	visual["waypoints"] = waypoints
+	visual["corners"] = waypoints.duplicate()
+	visual["fixed"] = true
+	visual["lane"] = 0
+	node.set_meta("corners", waypoints.duplicate())
+	node.set_meta("own_path", path.duplicate())
+	node.set_meta("base_path", path.duplicate())
+	node.set_meta("lane", 0)
+	# A lock stays while its waypoint does.
+	var kept: Array = []
+	for lock: Vector3 in visual.get("locks", []):
+		for w: Vector3 in waypoints:
+			if w.distance_to(lock) < 0.01:
+				kept.append(lock)
+				break
+	visual["locks"] = kept
 
 
 ## `order`: the run's place in the laying order. It is laid round the
@@ -2582,7 +2649,16 @@ func _wire_visual(src_name: String, src_port: String,
 ## routing (director, 2026-09-18: the preview rose to the crosshair's
 ## point on the tank, not to the nozzle's stub where the line lands).
 func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: String,
-		waypoints: Array, lane: int, preferred: int, order: int, radius: float) -> Dictionary:
+		waypoints: Array, lane: int, preferred: int, order: int, radius: float,
+		fixed: bool = false) -> Dictionary:
+	if fixed:
+		# A fixed line (director, 2026-09-19: "waypoints should never
+		# differ from actual points on the pipe"): its waypoints are its
+		# corners, laid plainly, stub to stub, no search, no lane, no
+		# bridge — those were decided once and baked into the waypoints.
+		var plain := _route_points(src_name, src_port, dst_name, dst_port, waypoints, 0, radius)
+		return {"lane": 0, "path": plain, "corners": waypoints.duplicate(), "searched": false,
+			"base_path": plain, "own_path": plain}
 	var chosen := lane
 	var path: Array[Vector3] = []
 	var t_start := Time.get_ticks_usec()
@@ -2781,7 +2857,8 @@ func connect_equipment_checked(src_name: String, src_port: String,
 
 
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
-		waypoints: Array, lane: int = -1, preferred: int = 0, order: int = ORDER_ALL) -> PipeView:
+		waypoints: Array, lane: int = -1, preferred: int = 0, order: int = ORDER_ALL,
+		fixed: bool = false) -> PipeView:
 	var src := sim.get_component(src_name)
 	var port: SimOutputPort = src.outputs[src_port]
 	var kind := port.kind
@@ -2806,7 +2883,7 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	# The lane: the first one whose route does not lie inside a run
 	# already laid (director's walkdown, 2026-09-12). A run without
 	# waypoints has nothing to shift and takes the route as it comes.
-	var laid := _lay_route(src_name, src_port, dst_name, dst_port, waypoints, lane, preferred, order, radius)
+	var laid := _lay_route(src_name, src_port, dst_name, dst_port, waypoints, lane, preferred, order, radius, fixed)
 	var chosen: int = laid["lane"]
 	var path: Array[Vector3] = laid["path"]
 	var corners: Array = laid["corners"]
@@ -3821,7 +3898,7 @@ func snapshot() -> Dictionary:
 		var wire_entry := {
 			"src": visual["a"], "src_port": visual["a_port"],
 			"dst": visual["b"], "dst_port": visual["b_port"],
-			"waypoints": path_out, "locks": locks_out,
+			"waypoints": path_out, "locks": locks_out, "fixed": bool(visual.get("fixed", false)),
 			"color": visual.get("color", ""), "label": visual.get("label", ""),
 			"fitting": visual.get("fitting", ""),
 			"hidden": visual.get("hidden", false),
@@ -4127,9 +4204,11 @@ func restore(payload: Dictionary) -> bool:
 		var waypoints: Array = []
 		for point: Array in wire_entry.get("waypoints", []):
 			waypoints.append(Vector3(point[0], point[1], point[2]))
+		_next_wire_fixed = bool(wire_entry.get("fixed", false))
 		var error := connect_equipment(wire_entry["src"], wire_entry["src_port"],
 			wire_entry["dst"], wire_entry["dst_port"], waypoints,
 			not bool(wire_entry.get("hidden", false)))
+		_next_wire_fixed = false
 		if error == "" and not (wire_entry.get("locks", []) as Array).is_empty():
 			var locks: Array = []
 			for point: Array in wire_entry["locks"]:

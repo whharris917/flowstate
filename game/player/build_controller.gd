@@ -1219,6 +1219,7 @@ func _mode_mouse(event: InputEvent) -> bool:
 						_commit_nozzle_grab()
 				_end_carry()
 				plant.end_gesture()   # a carry, a nozzle grab or a cut: one step
+				_refresh_leg_gizmo()
 				if was_click:
 					# A right click cancels: whatever mode or selection is
 					# on, back to plain play (director, 2026-09-13).
@@ -1422,6 +1423,7 @@ func _edit_mouse(event: InputEvent) -> bool:
 				else:
 					_drag = ""
 					plant.end_gesture()
+					_refresh_leg_gizmo()
 					if _gizmo != null:
 						_gizmo.set_blocked(false)
 				return true
@@ -1667,6 +1669,14 @@ func _toggle_lock() -> void:
 			plant.set_wire_locks(_edit_run, locks)
 			hud.toast("corner locked")
 		plant.end_gesture()
+	_leg_gizmo.refresh(plant.wire_own_path(_edit_run), plant.wire_corners(_edit_run), plant.wire_locks(_edit_run),
+		plant.wire_waypoints(_edit_run))
+
+
+## The handles again, after a gesture baked what the lay added.
+func _refresh_leg_gizmo() -> void:
+	if _leg_gizmo == null or not is_instance_valid(_edit_run):
+		return
 	_leg_gizmo.refresh(plant.wire_own_path(_edit_run), plant.wire_corners(_edit_run), plant.wire_locks(_edit_run),
 		plant.wire_waypoints(_edit_run))
 
