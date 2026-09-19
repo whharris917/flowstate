@@ -1400,7 +1400,12 @@ func _edit_mouse(event: InputEvent) -> bool:
 							var pipe := aimed.get_meta("run") as PipeView
 							var leg := int(aimed.get_meta("leg"))
 							if pipe == _edit_run and leg == _edit_leg:
-								_set_mode(Mode.NORMAL)
+								# The selected straight itself: held and pulled,
+								# a corner appears under the crosshair (director,
+								# 2026-09-19: "somewhere other than the midpoint");
+								# released without a pull, it deselects.
+								if not _begin_grab():
+									_set_mode(Mode.NORMAL)
 							elif leg >= 0:
 								_select_leg(pipe, leg)
 							return true
@@ -1410,9 +1415,12 @@ func _edit_mouse(event: InputEvent) -> bool:
 						elif under != "" and plant.movable(under) == "":
 							_select(under)
 				else:
+					var was_grab := _drag == "grab"
 					_drag = ""
 					plant.end_gesture()
-					if _gizmo != null:
+					if was_grab:
+						_set_mode(Mode.NORMAL)   # a click on the selected straight, no pull
+					elif _gizmo != null:
 						_gizmo.set_blocked(false)
 				return true
 			MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
@@ -1501,7 +1509,7 @@ func _begin_drag() -> void:
 		return
 	_drag = str(collider.get_meta("handle"))
 	plant.begin_gesture()   # one undo step for the whole drag
-	if _drag.begins_with("end") or _drag == "mid":
+	if _drag.begins_with("end") or _drag == "mid" or _drag == "grab":
 		# A corner of a selected leg, or its middle: it moves in its own
 		# level plane.
 		var index := _leg_gizmo.corner_index(_drag)
@@ -1531,7 +1539,7 @@ func _begin_drag() -> void:
 
 
 func _update_drag() -> void:
-	if _drag.begins_with("end") or _drag == "mid":
+	if _drag.begins_with("end") or _drag == "mid" or _drag == "grab":
 		_update_corner_drag()
 		return
 	var view := plant.views.get(_edit_name) as Node3D
@@ -1566,6 +1574,35 @@ func _update_drag() -> void:
 				_gizmo.set_blocked(true)
 
 
+var _grab_origin := Vector3.ZERO   # where a selected straight was grabbed, plant-local
+
+
+## The selected straight held under the crosshair: the point on it
+## becomes a corner once the pull moves it. False when the leg is not
+## one a corner can be put in (a stub, a riser).
+func _begin_grab() -> bool:
+	if _leg_gizmo == null or not player.ray.is_colliding():
+		return false
+	var path := _leg_gizmo.path
+	var leg := _leg_gizmo.leg
+	if leg < 1 or leg > path.size() - 3:
+		return false
+	var a: Vector3 = path[leg]
+	var b: Vector3 = path[leg + 1]
+	if absf(a.y - b.y) > 0.001:
+		return false
+	var hit := plant.to_local(player.ray.get_collision_point())
+	var t := clampf((hit - a).dot(b - a) / maxf((b - a).length_squared(), 1e-6), 0.05, 0.95)
+	_grab_origin = a.lerp(b, t)
+	var corner_hit := _drag_hit(plant.to_global(_grab_origin))
+	if corner_hit == Vector3.INF:
+		return false
+	_drag = "grab"
+	_drag_offset_v = plant.to_global(_grab_origin) - corner_hit
+	plant.begin_gesture()
+	return true
+
+
 ## A selected leg's corner follows the crosshair in its own level
 ## plane, snapped to a quarter metre; the line is laid again through
 ## its corners a few times a second while the handle is held, and
@@ -1578,7 +1615,8 @@ func _update_corner_drag() -> void:
 	if index < 0 or index >= _leg_gizmo.path.size():
 		_drag = ""
 		return
-	var corner := plant.to_global(_leg_gizmo.drag_origin(_drag))
+	var origin := _grab_origin if _drag == "grab" else _leg_gizmo.drag_origin(_drag)
+	var corner := plant.to_global(origin)
 	var hit := _drag_hit(corner)
 	if hit == Vector3.INF:
 		return
@@ -1591,8 +1629,7 @@ func _update_corner_drag() -> void:
 		return
 	_leg_relay_ms = now
 	var moved := plant.to_local(target)
-	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, moved,
-		_leg_gizmo.drag_origin(_drag))
+	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, moved, origin)
 	var relaid := plant.set_wire_corners(_edit_run, waypoints)
 	# The line is a new node now; the selection follows it, and so does
 	# the leg: the corners the router derives can come and go with a
@@ -1611,8 +1648,8 @@ func _update_corner_drag() -> void:
 			best = d
 			nearest = i
 	if nearest >= 0:
-		if _drag == "mid":
-			_drag = "end1"   # the middle is a corner now: the end of the first half
+		if _drag == "mid" or _drag == "grab":
+			_drag = "end1"   # the grabbed point is a corner now: the end of the first half
 		_edit_leg = nearest if _drag == "end0" else nearest - 1
 		_leg_gizmo.leg = _edit_leg
 	_leg_gizmo.refresh(path, plant.wire_corners(relaid))
