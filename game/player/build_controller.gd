@@ -313,6 +313,7 @@ func _toggle_nozzle_grab(by_button: bool = false) -> void:
 		view.set_nozzle(str(_nozzle_grab["port"]), float(was["frac"]), float(was["angle"]))
 		_nozzle_grab = {}
 		plant.refresh_wires_of(view.tank.comp_name)  # the lines followed the preview
+		plant.end_gesture()
 		hud.toast("nozzle move cancelled")
 		return
 	var collider := player.aimed_collider()
@@ -321,6 +322,7 @@ func _toggle_nozzle_grab(by_button: bool = false) -> void:
 		return
 	var view := collider.get_meta("owner_view") as TankView
 	var port := str(collider.get_meta("port_name"))
+	plant.begin_gesture()
 	_nozzle_grab = {"view": view, "port": port,
 		"was": (view.nozzles[port] as Dictionary).duplicate()}
 	hud.toast(("moving %s — aim on the shell, release to weld" if by_button
@@ -1138,6 +1140,18 @@ func is_editing() -> bool:
 	return mode == Mode.EDIT
 
 
+## Back to plain play with nothing held: what an undo or redo needs
+## before the plant is rebuilt under a selection or a carry.
+func reset_mode() -> void:
+	if not _nozzle_grab.is_empty():
+		_toggle_nozzle_grab()
+	_carry_name = ""
+	_cut = {}
+	_cut_done = false
+	_drag = ""
+	_set_mode(Mode.NORMAL)
+
+
 func _end_edit() -> void:
 	_edit_name = ""
 	_drag = ""
@@ -1199,6 +1213,7 @@ func _mode_mouse(event: InputEvent) -> bool:
 					if not _nozzle_grab.is_empty():
 						_commit_nozzle_grab()
 				_end_carry()
+				plant.end_gesture()   # a carry, a nozzle grab or a cut: one step
 				if was_click:
 					# A right click cancels: whatever mode or selection is
 					# on, back to plain play (director, 2026-09-13).
@@ -1233,6 +1248,7 @@ func _begin_cut(collider: Node) -> void:
 	var pipe := collider.get_meta("run") as PipeView
 	if pipe == null or not player.ray.is_colliding():
 		return
+	plant.begin_gesture()
 	_cut = {"pipe": pipe, "point": player.ray.get_collision_point(),
 		"forward": -player.camera.global_basis.z}
 	_cut_done = false
@@ -1287,6 +1303,7 @@ func _begin_carry() -> void:
 	if hit == Vector3.INF:
 		hud.toast("look at the ground beside %s to carry it" % name_)
 		return
+	plant.begin_gesture()   # one undo step for the whole carry
 	_carry_name = name_
 	_carry_offset = base - hit
 	_carry_moved = false
@@ -1394,6 +1411,7 @@ func _edit_mouse(event: InputEvent) -> bool:
 							_select(under)
 				else:
 					_drag = ""
+					plant.end_gesture()
 					if _gizmo != null:
 						_gizmo.set_blocked(false)
 				return true
@@ -1482,6 +1500,7 @@ func _begin_drag() -> void:
 	if collider == null or not collider.has_meta("handle"):
 		return
 	_drag = str(collider.get_meta("handle"))
+	plant.begin_gesture()   # one undo step for the whole drag
 	if _drag.begins_with("end"):
 		# A corner of a selected leg: it moves in its own level plane.
 		var index := _leg_gizmo.corner_index(_drag)

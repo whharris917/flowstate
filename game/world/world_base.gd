@@ -110,6 +110,7 @@ func _ready() -> void:
 	print("[flowstate] router: %d searches (%d failed), %d cells expanded, %d ms"
 		% [PipeRoute.searches, PipeRoute.failures, PipeRoute.expansions, PipeRoute.search_usec / 1000])
 	_load_settings()
+	plant.undo_enabled = true   # from here on every edit is a step back
 	hud.toast("WASD move · E use · wheel zoom (ctrl: optic) · B build · C connect · X remove · L library · O options · F5/F9 save/load")
 	if DisplayServer.get_name() == "headless" and with_home:
 		builder.exercise_device_menu()
@@ -336,6 +337,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		settings.toggle()
 		player.input_locked = settings.visible
 		MouseMode.set_captured(not settings.visible)
+	elif event.is_action_pressed("undo", false, true):
+		# Ctrl+Z (director, 2026-09-19). Exact match, or Ctrl+Shift+Z
+		# would undo as well as redo.
+		builder.reset_mode()
+		var why := plant.undo()
+		hud.toast("undo" if why == "" else why)
+	elif event.is_action_pressed("redo", false, true):
+		builder.reset_mode()
+		var why := plant.redo()
+		hud.toast("redo" if why == "" else why)
 	elif event.is_action_pressed("quicksave"):
 		hud.toast("saved" if plant.save_game() else "save FAILED")
 	elif event.is_action_pressed("quickload"):

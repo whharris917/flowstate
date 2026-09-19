@@ -28,6 +28,85 @@ var pump: SimPump
 var views: Dictionary = {}         # record name -> Node3D view
 var equip_types: Dictionary = {}   # record name -> type_id
 var protected: Dictionary = {}     # record name -> true (not deletable)
+
+## ---- undo / redo (director, 2026-09-19: "we need a ctrl+z to undo and
+## also a redo") -------------------------------------------------------------
+## Every edit begins with checkpoint(): the plant as it stands goes on
+## the undo stack as a snapshot, once per frame at most, and a gesture
+## (a carry, a handle drag, a nozzle grab, a cut) is one step however
+## many frames it lasts. Undo restores the last snapshot and keeps the
+## present for redo. Off until the world has finished building, and
+## while a snapshot is being restored.
+const UNDO_DEPTH := 50
+var undo_enabled := false
+var _restoring := false
+var _gesture := false
+var _undo: Array[String] = []
+var _redo: Array[String] = []
+var _checkpoint_frame: int = -1
+
+
+func checkpoint() -> void:
+	if not undo_enabled or _restoring or _gesture:
+		return
+	var frame := Engine.get_process_frames()
+	if frame == _checkpoint_frame:
+		return
+	_checkpoint_frame = frame
+	var state := JSON.stringify(snapshot())
+	if not _undo.is_empty() and _undo[_undo.size() - 1] == state:
+		return
+	_undo.append(state)
+	while _undo.size() > UNDO_DEPTH:
+		_undo.pop_front()
+	_redo.clear()
+
+
+## A gesture is one undo step: the checkpoint is taken as it begins,
+## and nothing inside it takes another. A gesture that changed nothing
+## leaves no step.
+func begin_gesture() -> void:
+	checkpoint()
+	_gesture = true
+
+
+func end_gesture() -> void:
+	_gesture = false
+	if undo_enabled and not _undo.is_empty() and _undo[_undo.size() - 1] == JSON.stringify(snapshot()):
+		_undo.pop_back()
+
+
+func can_undo() -> bool:
+	return not _undo.is_empty()
+
+
+func can_redo() -> bool:
+	return not _redo.is_empty()
+
+
+## Back one step; "" on success, else why not.
+func undo() -> String:
+	if _undo.is_empty():
+		return "nothing to undo"
+	_gesture = false
+	var present := JSON.stringify(snapshot())
+	var state: String = _undo.pop_back()
+	if not restore(JSON.parse_string(state) as Dictionary):
+		return "undo failed"
+	_redo.append(present)
+	return ""
+
+
+func redo() -> String:
+	if _redo.is_empty():
+		return "nothing to redo"
+	_gesture = false
+	var present := JSON.stringify(snapshot())
+	var state: String = _redo.pop_back()
+	if not restore(JSON.parse_string(state) as Dictionary):
+		return "redo failed"
+	_undo.append(present)
+	return ""
 var cabinets: Dictionary = {}      # name -> {node, plc, terminals}
 var junction_boxes: Dictionary = {}  # name -> {node, records, channels, on_post}
 var control_stations: Dictionary = {}  # name -> {node, records, devices, on_post}
@@ -523,6 +602,7 @@ const ELEVATED_TYPES: Array[String] = ["tank", "reactor", "crystallizer", "sourc
 
 func place(type_id: String, name_: String, params: Dictionary,
 		world_pos: Vector3, rot_y: float, is_protected: bool) -> SimComponent:
+	checkpoint()
 	# Nozzle pressures are piezometric, so a vessel on a deck really
 	# does stand above one at grade: the placement height is its
 	# elevation, and it is re-derived from the saved position on load.
@@ -622,6 +702,7 @@ func place_new(type_id: String, world_pos: Vector3, rot_y: float) -> SimComponen
 
 func mount_instrument(type_id: String, name_: String, params: Dictionary,
 		host_name: String, frac: float, angle: float, is_protected: bool) -> SimComponent:
+	checkpoint()
 	var host_view := views.get(host_name) as TankView
 	var host := sim.get_component(host_name) as SimTank
 	if host_view == null or host == null or not PlantFactory.MOUNTABLE.has(type_id):
@@ -683,6 +764,7 @@ func unique_cabinet_name() -> String:
 
 
 func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> bool:
+	checkpoint()
 	if cabinets.has(name_):
 		return false
 	var view := CabinetView.new()
@@ -700,6 +782,7 @@ func place_cabinet(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 ## forced_id / forced_bank replay a saved layout exactly.
 func cabinet_add_module(cab: String, type_id: String, rail: int, slot: int,
 		forced_id: String = "", forced_bank: int = -1) -> String:
+	checkpoint()
 	if not cabinets.has(cab):
 		return "no such cabinet"
 	if not CabinetSpec.MODULES.has(type_id):
@@ -772,6 +855,7 @@ func _free_bank(cab: String, type_id: String) -> int:
 
 
 func cabinet_remove_module(cab: String, module_id: String) -> bool:
+	checkpoint()
 	if not cabinets.has(cab):
 		return false
 	var entry: Dictionary = cabinets[cab]
@@ -824,6 +908,7 @@ func _prune_wires_of(member: String) -> void:
 
 
 func remove_cabinet(name_: String) -> bool:
+	checkpoint()
 	if not cabinets.has(name_):
 		return false
 	var entry: Dictionary = cabinets[name_]
@@ -846,6 +931,7 @@ func remove_cabinet(name_: String) -> bool:
 ## gap): its records go, every wire on them, and any multicore that
 ## carried its circuits — the cable has nothing left to carry.
 func remove_junction_box(name_: String) -> bool:
+	checkpoint()
 	if not junction_boxes.has(name_):
 		return false
 	_remove_enclosure_records((junction_boxes[name_] as Dictionary)["records"] as Array, name_)
@@ -856,6 +942,7 @@ func remove_junction_box(name_: String) -> bool:
 
 
 func remove_control_station(name_: String) -> bool:
+	checkpoint()
 	if not control_stations.has(name_):
 		return false
 	_remove_enclosure_records((control_stations[name_] as Dictionary)["records"] as Array, name_)
@@ -1039,6 +1126,7 @@ func _configure_cabinet(view: CabinetView) -> void:
 
 ## Drop one internal (hidden) wire — the schematic panel's remove.
 func remove_internal_wire(visual: Dictionary) -> void:
+	checkpoint()
 	_disconnect_visual(visual)
 	_wire_visuals.erase(visual)
 
@@ -1046,6 +1134,7 @@ func remove_internal_wire(visual: Dictionary) -> void:
 ## ---- tank configuration ---------------------------------------------------
 
 func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
+	checkpoint()
 	var record := sim.get_component(name_) as SimTank
 	var view := views.get(name_) as TankView
 	if record == null or view == null:
@@ -1064,6 +1153,7 @@ func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
 ## Rebuild the pipe visuals touching one record — after its nozzles
 ## moved or its vessel was resized.
 func refresh_wires_of(name_: String) -> void:
+	checkpoint()
 	preview_wires_of(name_)
 	_schedule_revalidate()
 
@@ -1512,6 +1602,7 @@ func movable(name_: String) -> String:
 ## shell ride with it, and a vessel takes its elevation from the new
 ## height exactly as it did at placement.
 func move_equipment(name_: String, world_pos: Vector3, rot_y: float) -> bool:
+	checkpoint()
 	if movable(name_) != "":
 		return false
 	var view := views[name_] as Node3D
@@ -1537,6 +1628,7 @@ func move_equipment(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 ## switch redraws its trip rings on the host, and anything hydraulic
 ## rebuilds the network. Returns "" or why not.
 func configure_equipment(name_: String, values: Dictionary) -> String:
+	checkpoint()
 	var record := sim.get_component(name_)
 	if record == null or not views.has(name_):
 		return "no such equipment"
@@ -1597,6 +1689,7 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 
 
 func remove_equipment(name_: String) -> bool:
+	checkpoint()
 	if protected.has(name_) or not views.has(name_):
 		return false
 	# Instruments mounted on a vessel go with it.
@@ -1631,6 +1724,7 @@ func remove_equipment(name_: String) -> bool:
 func connect_equipment(src_name: String, src_port: String,
 		dst_name: String, dst_port: String, waypoints: Array = [],
 		visible: bool = true) -> String:
+	checkpoint()
 	var src := sim.get_component(src_name)
 	var dst := sim.get_component(dst_name)
 	if src == null or dst == null:
@@ -1705,6 +1799,7 @@ func free_way(mains_name: String) -> String:
 ## 5000, a long thin one tens of thousands. Saved with the wire.
 func set_pipe_resistance(src_name: String, src_port: String, dst_name: String,
 		dst_port: String, k_pa_per_lps2: float) -> bool:
+	checkpoint()
 	var wire := sim.find_wire(sim.get_component(src_name), src_port,
 		sim.get_component(dst_name), dst_port)
 	if wire == null or not wire.is_material():
@@ -1727,6 +1822,7 @@ func unique_struct_name(prefix: String) -> String:
 ## the loader and headless exercises place directly.
 func place_structure(type_id: String, name_: String, base_pos: Vector3, rot_y: float,
 		length: float = -1.0) -> bool:
+	checkpoint()
 	if structures.has(name_):
 		return false
 	var node := StructureFactory.make_view(type_id, name_, length)
@@ -1746,6 +1842,7 @@ func place_structure(type_id: String, name_: String, base_pos: Vector3, rot_y: f
 ## Removing structure re-checks every run: whatever it was carrying
 ## turns alarm-red rather than quietly staying up.
 func remove_structure(name_: String) -> bool:
+	checkpoint()
 	if not structures.has(name_):
 		return false
 	((structures[name_] as Dictionary)["node"] as Node).queue_free()
@@ -1771,6 +1868,7 @@ func unique_jb_name() -> String:
 
 func place_junction_box(name_: String, world_pos: Vector3, rot_y: float, channels: int = 12,
 		on_post: bool = true) -> bool:
+	checkpoint()
 	if junction_boxes.has(name_) or channels < 1:
 		return false
 	var view := JunctionBoxView.new()
@@ -1809,6 +1907,7 @@ func place_junction_box(name_: String, world_pos: Vector3, rot_y: float, channel
 ## through the plant-local waypoints. It lights while any circuit in
 ## it is live. Returns "" or the refusal.
 func connect_multicore(label: String, pairs: Array, waypoints: Array) -> String:
+	checkpoint()
 	if pairs.is_empty():
 		return "nothing to carry"
 	if runs.has(label):
@@ -1857,6 +1956,7 @@ static func default_station_devices() -> Array:
 
 func place_control_station(name_: String, world_pos: Vector3, rot_y: float, devices: Array,
 		on_post: bool = true) -> bool:
+	checkpoint()
 	if control_stations.has(name_) or devices.is_empty():
 		return false
 	var view := ControlStationView.new()
@@ -1911,6 +2011,7 @@ func unique_run_name(prefix: String) -> String:
 ## points are plant-local; colliders go on layer 1, so the run is real
 ## support for whatever gets routed along it later.
 func place_run(kind: String, name_: String, sparse_local: Array, getter: Callable = Callable()) -> bool:
+	checkpoint()
 	if runs.has(name_) or not StructureFactory.RUNS.has(kind):
 		return false
 	var spec: Dictionary = StructureFactory.RUNS[kind]
@@ -1937,6 +2038,7 @@ func _configure_run(view: PipeView) -> void:
 
 
 func set_run_service(view: PipeView, color: Color, label_: String, fitting: String = "") -> void:
+	checkpoint()
 	for visual in _wire_visuals:
 		if visual["node"] == view:
 			visual["color"] = color.to_html(false)
@@ -1968,6 +2070,7 @@ func _configure_sign(view: StructureView) -> void:
 
 
 func set_sign_text(name_: String, text: String) -> void:
+	checkpoint()
 	if not structures.has(name_):
 		return
 	var entry: Dictionary = structures[name_]
@@ -1976,6 +2079,7 @@ func set_sign_text(name_: String, text: String) -> void:
 
 
 func remove_placed_run(view: PipeView) -> bool:
+	checkpoint()
 	for name_: String in runs:
 		if (runs[name_] as Dictionary)["node"] == view:
 			view.queue_free()
@@ -1988,6 +2092,7 @@ func remove_placed_run(view: PipeView) -> bool:
 ## Remove one routed run by its view (X while aiming at it): the wire
 ## leaves the kernel, the input reverts next scan, the visual goes.
 func remove_run(view: PipeView) -> bool:
+	checkpoint()
 	for visual in _wire_visuals:
 		if visual["node"] == view:
 			_disconnect_visual(visual)
@@ -2005,6 +2110,7 @@ func remove_run(view: PipeView) -> bool:
 ## line had, so they keep their shape; each cap's outer nozzle is a
 ## blind end a later line can land on. Returns "" or why not.
 func cut_wire(view: PipeView, at_global: Vector3) -> String:
+	checkpoint()
 	var visual: Dictionary = {}
 	for candidate in _wire_visuals:
 		if candidate["node"] == view:
@@ -2088,6 +2194,7 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 ## the line's own waypoints, so from here on it is laid the player's
 ## way and the router only fills between them.
 func set_wire_corners(view: PipeView, corners: Array) -> PipeView:
+	checkpoint()
 	for visual in _wire_visuals:
 		if visual["node"] == view:
 			visual["waypoints"] = corners
@@ -3588,7 +3695,9 @@ func _exercise_supports() -> void:
 
 ## ---- save / load ---------------------------------------------------------
 
-func save_game() -> bool:
+## The whole plant as a dictionary: what a save writes and what undo
+## keeps (2026-09-19).
+func snapshot() -> Dictionary:
 	var comps: Array[Dictionary] = []
 	for name_: String in views:
 		if member_of.has(name_):
@@ -3709,10 +3818,14 @@ func save_game() -> bool:
 		"components": comps, "wires": wire_list, "structures": struct_list,
 		"runs": run_list, "cabinets": cab_list,
 	}
+	return payload
+
+
+func save_game() -> bool:
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
 		return false
-	file.store_string(JSON.stringify(payload, "  "))
+	file.store_string(JSON.stringify(snapshot(), "  "))
 	return true
 
 
@@ -3791,7 +3904,14 @@ func load_game() -> bool:
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	if not parsed is Dictionary or int((parsed as Dictionary).get("version", 0)) < 3:
 		return false
-	var payload := parsed as Dictionary
+	return restore(parsed as Dictionary)
+
+
+## Rebuild the plant from a snapshot: everything placed is freed and
+## laid again from the payload. Undo and redo restore through here,
+## and no checkpoint is taken while it runs.
+func restore(payload: Dictionary) -> bool:
+	_restoring = true
 	if campaign != null and payload.has("campaign"):
 		campaign.apply_state(payload["campaign"])
 
@@ -3931,4 +4051,5 @@ func load_game() -> bool:
 	pump = sim.get_component("fill_pump") as SimPump
 	if hmi_view != null and tank != null:
 		hmi_view.panel.setup(historian, tank, switch, relay, pump)
+	_restoring = false
 	return true
