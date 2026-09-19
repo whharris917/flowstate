@@ -1401,13 +1401,13 @@ func _edit_mouse(event: InputEvent) -> bool:
 						if aimed != null and aimed.has_meta("run") and aimed.has_meta("leg"):
 							var pipe := aimed.get_meta("run") as PipeView
 							var leg := int(aimed.get_meta("leg"))
-							if pipe == _edit_run and leg == _edit_leg:
-								# The selected straight itself: held and pulled,
-								# a corner appears under the crosshair (director,
-								# 2026-09-19: "somewhere other than the midpoint");
-								# released without a pull, it deselects.
-								if not _begin_grab():
-									_set_mode(Mode.NORMAL)
+							if pipe == _edit_run:
+								# Any straight of the selected line: the click
+								# plants a corner there (director, 2026-09-19); a
+								# stub or a riser, where none can go, just moves
+								# the sleeve.
+								if not _begin_grab() and leg >= 0:
+									_select_leg(pipe, leg)
 							elif leg >= 0:
 								_select_leg(pipe, leg)
 							return true
@@ -1651,7 +1651,10 @@ func _begin_grab() -> bool:
 	_edit_leg = _grab_leg
 	_leg_gizmo.leg = _grab_leg
 	var index := _leg_gizmo.corner_index("grab")
-	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, at, at)
+	# An exact match only: a click beside a planted corner is a new
+	# corner, not that one moved (2026-09-19: "the previous handle I'd
+	# placed disappears").
+	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, at, at, true, 0.02)
 	_drag = "grab"
 	_relay_selected(waypoints, at, false)
 	if _leg_gizmo == null or _drag == "":
@@ -1781,7 +1784,7 @@ const LANE_MATCH := 0.75   # a lane steps a corner at most this far from its way
 
 
 static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3,
-		origin: Vector3 = Vector3.INF, keep_height: bool = true) -> Array:
+		origin: Vector3 = Vector3.INF, keep_height: bool = true, tolerance: float = LANE_MATCH) -> Array:
 	# `origin` is where the drag began when that is not a path point:
 	# the middle of a leg, which then becomes a corner before `index`.
 	# With `keep_height` the point stays at its own height and so do
@@ -1798,14 +1801,24 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	# own). The point itself is the nearest waypoint within a lane's
 	# reach at about its height; a mate is any other at its plan
 	# position, a riser's other end.
+	# An exact match first; only failing that, the nearest within
+	# `tolerance` (a lane's reach for a drag, nothing for a plant).
 	var self_index := -1
 	var self_d := INF
 	for k in waypoints.size():
-		var w: Vector3 = waypoints[k]
-		var d_plan := Vector2(w.x - old.x, w.z - old.z).length()
-		if d_plan < LANE_MATCH and absf(w.y - old.y) < 0.3 and w.distance_to(old) < self_d:
-			self_d = w.distance_to(old)
+		if (waypoints[k] as Vector3).distance_to(old) < 0.02:
 			self_index = k
+			break
+	if self_index < 0:
+		for k in waypoints.size():
+			var w: Vector3 = waypoints[k]
+			var d_plan := Vector2(w.x - old.x, w.z - old.z).length()
+			if d_plan < tolerance and absf(w.y - old.y) < 0.3 and w.distance_to(old) < self_d:
+				self_d = w.distance_to(old)
+				self_index = k
+	# A mate stands at the matched corner's own plan position (a riser's
+	# other end), never merely near the dragged point.
+	var anchor: Vector3 = waypoints[self_index] if self_index >= 0 else old
 	for k in waypoints.size():
 		var w: Vector3 = waypoints[k]
 		# Where along the laid path this waypoint stands: by plan
@@ -1817,8 +1830,8 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 			if d < best:
 				best = d
 				at = i
-		var mate := Vector2(w.x - old.x, w.z - old.z).length() < LANE_MATCH
 		var itself := k == self_index
+		var mate := not itself and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02
 		if itself:
 			out.append(Vector3(moved.x, w.y, moved.z) if keep_height else moved)
 			matched = true
