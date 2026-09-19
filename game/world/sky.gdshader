@@ -50,9 +50,13 @@ void sky() {
 	// wider below it than above, since the glow outlasts the disc.
 	float dusk = exp(-pow(s / (s < 0.0 ? 0.13 : 0.16), 2.0));
 	// Where the sun stands along the horizon: 1 looking straight at it.
+	// Clamped: looking exactly away from the sun the dot rounds a hair
+	// under -1, and pow() of a negative base is NaN, which the glow
+	// bloomed into a trail of white blobs down the sky opposite the sun
+	// and the tone mapper painted black at the centre (2026-09-18).
 	vec2 sun_flat = normalize(sun.xz + vec2(1e-5, 0.0));
 	vec2 eye_flat = normalize(eye.xz + vec2(1e-5, 0.0));
-	float toward = dot(sun_flat, eye_flat) * 0.5 + 0.5;
+	float toward = sat(dot(sun_flat, eye_flat) * 0.5 + 0.5);
 
 	// ---- the day dome: a pale horizon rising to a blue zenith, whiter
 	// with haze, and the sun's own glow.
