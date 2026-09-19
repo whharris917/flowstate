@@ -1484,11 +1484,11 @@ func _begin_drag() -> void:
 	_drag = str(collider.get_meta("handle"))
 	if _drag.begins_with("end"):
 		# A corner of a selected leg: it moves in its own level plane.
-		var slot := _leg_gizmo.corner_slot(_leg_gizmo.corner_index(_drag))
-		if slot < 0:
+		var index := _leg_gizmo.corner_index(_drag)
+		if index < 0 or index >= _leg_gizmo.path.size():
 			_drag = ""
 			return
-		var corner := plant.to_global(_leg_gizmo.corners[slot])
+		var corner := plant.to_global(_leg_gizmo.path[index])
 		var corner_hit := _drag_hit(corner)
 		if corner_hit == Vector3.INF:
 			_drag = ""
@@ -1555,11 +1555,10 @@ func _update_corner_drag() -> void:
 		_drag = ""
 		return
 	var index := _leg_gizmo.corner_index(_drag)
-	var slot := _leg_gizmo.corner_slot(index)
-	if slot < 0 or slot >= _leg_gizmo.corners.size():
+	if index < 0 or index >= _leg_gizmo.path.size():
 		_drag = ""
 		return
-	var corner := plant.to_global(_leg_gizmo.corners[slot])
+	var corner := plant.to_global(_leg_gizmo.path[index])
 	var hit := _drag_hit(corner)
 	if hit == Vector3.INF:
 		return
@@ -1572,7 +1571,7 @@ func _update_corner_drag() -> void:
 		return
 	_leg_relay_ms = now
 	var moved := plant.to_local(target)
-	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.corners, slot, moved)
+	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, moved)
 	var relaid := plant.set_wire_corners(_edit_run, waypoints)
 	# The line is a new node now; the selection follows it, and so does
 	# the leg: the corners the router derives can come and go with a
@@ -1596,35 +1595,38 @@ func _update_corner_drag() -> void:
 	_leg_gizmo.refresh(path, plant.wire_corners(relaid))
 
 
-## What a dragged corner makes of a line's waypoints (2026-09-19: the
-## director dragged a handle and "a spaghetti pile rapidly emerged" —
-## every corner the router had derived, riser ends and square-turn
-## legs, was sent back as a waypoint, derived new corners of its own on
-## the next lay, and so on each tick). Only the player's waypoints are
-## kept: the dragged corner moves if it is one of them, or is inserted
-## at its place along the route if the router derived it, so a line
-## gains one waypoint per corner the player has actually touched. A
-## riser's corners stand on one spot at different heights, so a
-## waypoint over or under the dragged corner moves with it.
-static func dragged_waypoints(waypoints: Array, corners: Array, slot: int, moved: Vector3) -> Array:
-	var old: Vector3 = corners[slot]
+## What a dragged point of a line makes of its waypoints (2026-09-19:
+## the director dragged a handle and "a spaghetti pile rapidly
+## emerged" — every corner the router had derived, riser ends and
+## square-turn legs, was sent back as a waypoint, derived new corners
+## of its own on the next lay, and so on each tick). Only the player's
+## waypoints are kept: the dragged point moves if it is one of them,
+## or is inserted at its place along the path if the router laid it —
+## a stub end included, so pulling the end of a straight at a fitting
+## puts a corner there (director, the same day) — and a line gains one
+## waypoint per point the player has actually touched. A riser's
+## corners stand on one spot at different heights, so a waypoint over
+## or under the dragged point moves with it. `index` is into `path`,
+## the line as laid.
+static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3) -> Array:
+	var old: Vector3 = path[index]
 	var out: Array = []
 	var matched := false
 	var insert_at := 0
-	for k in corners.size():
-		var c: Vector3 = corners[k]
-		var mate := absf(c.x - old.x) < 0.02 and absf(c.z - old.z) < 0.02
-		var is_waypoint := false
-		for w: Vector3 in waypoints:
-			if w.distance_to(c) < 0.02:
-				is_waypoint = true
-				break
-		if not is_waypoint:
-			continue
-		out.append(Vector3(moved.x, c.y, moved.z) if mate else c)
+	for w: Vector3 in waypoints:
+		# Where along the laid path this waypoint stands.
+		var at := -1
+		var best := 0.02
+		for i in path.size():
+			var d := (path[i] as Vector3).distance_to(w)
+			if d < best:
+				best = d
+				at = i
+		var mate := absf(w.x - old.x) < 0.02 and absf(w.z - old.z) < 0.02
+		out.append(Vector3(moved.x, w.y, moved.z) if mate else w)
 		if mate:
 			matched = true
-		if k < slot:
+		if at >= 0 and at < index:
 			insert_at = out.size()
 	if not matched:
 		out.insert(insert_at, Vector3(moved.x, old.y, moved.z))

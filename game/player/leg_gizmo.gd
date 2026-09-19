@@ -95,10 +95,13 @@ func refresh(path_: Array[Vector3], corners_: Array) -> void:
 		_handles.append(body)
 
 
-## A corner the player may move: one of the line's own, strictly
-## between the two stubs.
+## A point the player may move: every corner of the line as laid but
+## the two fittings — a stub end too, since pulling the end of a
+## straight at a fitting puts a corner there (director, 2026-09-19:
+## "the end of the straight segment closer to the pump doesn't have a
+## gold cube"). A stub itself stays: its far end is the fitting.
 func movable_corner(index: int) -> bool:
-	return index >= 2 and index <= path.size() - 3 and index < _slots.size() and _slots[index] >= 0
+	return index >= 1 and index <= path.size() - 2
 
 
 ## The corner a handle stands on: the path index for "end0"/"end1".
