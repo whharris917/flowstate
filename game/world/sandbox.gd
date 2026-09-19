@@ -171,9 +171,12 @@ func _build_environment() -> void:
 	# Stars on a dome that follows the player; visibility follows the clock.
 	_stars_mat = ShaderMaterial.new()
 	_stars_mat.shader = load("res://world/stars.gdshader")
+	# The dome sits just inside the camera's far plane (4 km): at 1.5 km
+	# its stars drew in front of the far end of the heighliner (director,
+	# 2026-09-19), which hangs out past two.
 	var dome := SphereMesh.new()
-	dome.radius = 1500.0
-	dome.height = 3000.0
+	dome.radius = 3800.0
+	dome.height = 7600.0
 	dome.radial_segments = 32
 	dome.rings = 16
 	_stars = MeshInstance3D.new()
