@@ -1426,10 +1426,11 @@ func _edit_mouse(event: InputEvent) -> bool:
 						_gizmo.set_blocked(false)
 				return true
 			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
-				# Over a selected line, the wheel is elevation: the held
-				# corner, or the whole straight. Under the right button it
-				# still turns things, as everywhere.
-				if _leg_gizmo != null and not _right_down and button.pressed:
+				# Over a selected line, Ctrl and the wheel is elevation: the
+				# held corner, or the whole straight (director, 2026-09-19:
+				# the plain wheel zooms as usual, even with a line selected).
+				# Under the right button it still turns things, as everywhere.
+				if _leg_gizmo != null and not _right_down and button.pressed and button.ctrl_pressed:
 					_raise_selected(RAISE_STEP if button.button_index == MOUSE_BUTTON_WHEEL_UP else -RAISE_STEP)
 					return true
 				return _mode_mouse(event)
@@ -1687,12 +1688,14 @@ func _relay_selected(waypoints: Array, moved: Vector3, as_start: bool) -> void:
 	_edit_run = relaid
 	_leg_gizmo.pipe = relaid
 	var path := plant.wire_path(relaid)
+	# The corner as laid may stand a lane's step from `moved`: the
+	# nearest point of the path in plan, at about its height.
 	var nearest := -1
-	var best := 0.3
+	var best := INF
 	for i in path.size():
-		var d := path[i].distance_to(moved)
-		if d < best:
-			best = d
+		var d_plan := Vector2(path[i].x - moved.x, path[i].z - moved.z).length()
+		if d_plan < LANE_MATCH and absf(path[i].y - moved.y) < 0.3 and path[i].distance_to(moved) < best:
+			best = path[i].distance_to(moved)
 			nearest = i
 	if nearest >= 0:
 		_edit_leg = nearest if as_start else nearest - 1
@@ -1755,6 +1758,9 @@ func _raise_selected(dy: float) -> void:
 ## corners stand on one spot at different heights, so a waypoint over
 ## or under the dragged point moves with it. `index` is into `path`,
 ## the line as laid.
+const LANE_MATCH := 0.75   # a lane steps a corner at most this far from its waypoint
+
+
 static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3,
 		origin: Vector3 = Vector3.INF, keep_height: bool = true) -> Array:
 	# `origin` is where the drag began when that is not a path point:
@@ -1766,18 +1772,34 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	var out: Array = []
 	var matched := false
 	var insert_at := 0
-	for w: Vector3 in waypoints:
+	# The laid path is the route in its lane, shifted sideways and up
+	# by as much as a lane steps, so a point of it matches a waypoint
+	# by nearness, not exactly (2026-09-19: a line in lane 9 gained a
+	# waypoint every notch, the shifted corner never matching its
+	# own). The point itself is the nearest waypoint within a lane's
+	# reach at about its height; a mate is any other at its plan
+	# position, a riser's other end.
+	var self_index := -1
+	var self_d := INF
+	for k in waypoints.size():
+		var w: Vector3 = waypoints[k]
+		var d_plan := Vector2(w.x - old.x, w.z - old.z).length()
+		if d_plan < LANE_MATCH and absf(w.y - old.y) < 0.3 and w.distance_to(old) < self_d:
+			self_d = w.distance_to(old)
+			self_index = k
+	for k in waypoints.size():
+		var w: Vector3 = waypoints[k]
 		# Where along the laid path this waypoint stands: by plan
-		# position, since a waypoint just raised stands over its point.
+		# position, within a lane's shift.
 		var at := -1
-		var best := 0.02
+		var best := LANE_MATCH
 		for i in path.size():
 			var d := Vector2((path[i] as Vector3).x - w.x, (path[i] as Vector3).z - w.z).length()
 			if d < best:
 				best = d
 				at = i
-		var mate := absf(w.x - old.x) < 0.02 and absf(w.z - old.z) < 0.02
-		var itself := mate and absf(w.y - old.y) < 0.02
+		var mate := Vector2(w.x - old.x, w.z - old.z).length() < LANE_MATCH
+		var itself := k == self_index
 		if itself:
 			out.append(Vector3(moved.x, w.y, moved.z) if keep_height else moved)
 			matched = true

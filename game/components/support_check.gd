@@ -93,7 +93,21 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 		if stretch_end - stretch_start > MAX_SPAN + 0.01:
 			var last_stand := stretch_start
 			for i in range(i0, i1 + 1):
-				if not level[i] or arcs[i] - last_stand < BRACKET_SPACING:
+				if not level[i]:
+					continue
+				# One every BRACKET_SPACING along the level, and one at
+				# the foot of a riser the stretch runs on into whenever
+				# the riser beyond, with the level since the last stand,
+				# would overrun the span (a run raised 3.8 m switched
+				# lanes over a riser left hanging, 2026-09-19).
+				var due := arcs[i] - last_stand >= BRACKET_SPACING
+				if not due and i + 1 <= i1 and not level[i + 1]:
+					var j := i + 1
+					while j + 1 <= i1 and not level[j + 1]:
+						j += 1
+					var tail: float = arcs[mini(j + 1, samples.size() - 1)] - arcs[i]
+					due = arcs[i] - last_stand + tail > MAX_SPAN and arcs[i] - last_stand > 0.3
+				if not due:
 					continue
 				var floor_hit := _floor_below(samples[i], space, exclude)
 				if floor_hit == Vector3.INF:
