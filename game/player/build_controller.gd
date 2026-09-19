@@ -1501,13 +1501,14 @@ func _begin_drag() -> void:
 		return
 	_drag = str(collider.get_meta("handle"))
 	plant.begin_gesture()   # one undo step for the whole drag
-	if _drag.begins_with("end"):
-		# A corner of a selected leg: it moves in its own level plane.
+	if _drag.begins_with("end") or _drag == "mid":
+		# A corner of a selected leg, or its middle: it moves in its own
+		# level plane.
 		var index := _leg_gizmo.corner_index(_drag)
 		if index < 0 or index >= _leg_gizmo.path.size():
 			_drag = ""
 			return
-		var corner := plant.to_global(_leg_gizmo.path[index])
+		var corner := plant.to_global(_leg_gizmo.drag_origin(_drag))
 		var corner_hit := _drag_hit(corner)
 		if corner_hit == Vector3.INF:
 			_drag = ""
@@ -1530,7 +1531,7 @@ func _begin_drag() -> void:
 
 
 func _update_drag() -> void:
-	if _drag.begins_with("end"):
+	if _drag.begins_with("end") or _drag == "mid":
 		_update_corner_drag()
 		return
 	var view := plant.views.get(_edit_name) as Node3D
@@ -1577,7 +1578,7 @@ func _update_corner_drag() -> void:
 	if index < 0 or index >= _leg_gizmo.path.size():
 		_drag = ""
 		return
-	var corner := plant.to_global(_leg_gizmo.path[index])
+	var corner := plant.to_global(_leg_gizmo.drag_origin(_drag))
 	var hit := _drag_hit(corner)
 	if hit == Vector3.INF:
 		return
@@ -1590,7 +1591,8 @@ func _update_corner_drag() -> void:
 		return
 	_leg_relay_ms = now
 	var moved := plant.to_local(target)
-	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, moved)
+	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, moved,
+		_leg_gizmo.drag_origin(_drag))
 	var relaid := plant.set_wire_corners(_edit_run, waypoints)
 	# The line is a new node now; the selection follows it, and so does
 	# the leg: the corners the router derives can come and go with a
@@ -1609,6 +1611,8 @@ func _update_corner_drag() -> void:
 			best = d
 			nearest = i
 	if nearest >= 0:
+		if _drag == "mid":
+			_drag = "end1"   # the middle is a corner now: the end of the first half
 		_edit_leg = nearest if _drag == "end0" else nearest - 1
 		_leg_gizmo.leg = _edit_leg
 	_leg_gizmo.refresh(path, plant.wire_corners(relaid))
@@ -1627,8 +1631,11 @@ func _update_corner_drag() -> void:
 ## corners stand on one spot at different heights, so a waypoint over
 ## or under the dragged point moves with it. `index` is into `path`,
 ## the line as laid.
-static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3) -> Array:
-	var old: Vector3 = path[index]
+static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3,
+		origin: Vector3 = Vector3.INF) -> Array:
+	# `origin` is where the drag began when that is not a path point:
+	# the middle of a leg, which then becomes a corner before `index`.
+	var old: Vector3 = path[index] if origin == Vector3.INF else origin
 	var out: Array = []
 	var matched := false
 	var insert_at := 0

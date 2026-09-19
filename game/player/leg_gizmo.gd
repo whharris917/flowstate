@@ -73,26 +73,35 @@ func refresh(path_: Array[Vector3], corners_: Array) -> void:
 	_sleeve.basis = Basis.looking_at(dir, up) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
 	for k in 2:
 		var index := leg + k
-		if not movable_corner(index):
-			continue
-		var body := StaticBody3D.new()
-		body.collision_layer = EditGizmo.LAYER
-		body.collision_mask = 0
-		body.set_meta("handle", "end%d" % k)
-		var shape := CollisionShape3D.new()
-		var box := BoxShape3D.new()
-		box.size = Vector3.ONE * HANDLE
-		shape.shape = box
-		body.add_child(shape)
-		var cube := MeshInstance3D.new()
-		var cube_mesh := BoxMesh.new()
-		cube_mesh.size = Vector3.ONE * HANDLE
-		cube.mesh = cube_mesh
-		cube.material_override = ViewUtil.glow(Color(0.95, 0.80, 0.30), 0.9)
-		body.add_child(cube)
-		body.position = path[index]
-		add_child(body)
-		_handles.append(body)
+		if movable_corner(index):
+			_make_handle("end%d" % k, path[index], HANDLE, Color(0.95, 0.80, 0.30))
+	# The middle of a level straight between the stubs: a smaller, paler
+	# cube that becomes a corner of the line when dragged (director,
+	# 2026-09-19: "how do I split a single straight segment such that it
+	# has a new handle I can move independent of the others?").
+	if leg >= 1 and leg <= path.size() - 3 and absf(a.y - b.y) < 0.001 and length > 1.0:
+		_make_handle("mid", (a + b) / 2.0, HANDLE * 0.7, Color(1.0, 0.92, 0.62))
+
+
+func _make_handle(name_: String, at: Vector3, size: float, color: Color) -> void:
+	var body := StaticBody3D.new()
+	body.collision_layer = EditGizmo.LAYER
+	body.collision_mask = 0
+	body.set_meta("handle", name_)
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3.ONE * size
+	shape.shape = box
+	body.add_child(shape)
+	var cube := MeshInstance3D.new()
+	var cube_mesh := BoxMesh.new()
+	cube_mesh.size = Vector3.ONE * size
+	cube.mesh = cube_mesh
+	cube.material_override = ViewUtil.glow(color, 0.9)
+	body.add_child(cube)
+	body.position = at
+	add_child(body)
+	_handles.append(body)
 
 
 ## A point the player may move: every corner of the line as laid but
@@ -105,8 +114,16 @@ func movable_corner(index: int) -> bool:
 
 
 ## The corner a handle stands on: the path index for "end0"/"end1".
+## The middle handle stands before the leg's end, for ordering.
 func corner_index(handle: String) -> int:
-	return leg + (1 if handle == "end1" else 0)
+	return leg + (0 if handle == "end0" else 1)
+
+
+## Where a handle's drag starts from: the corner, or the middle of the leg.
+func drag_origin(handle: String) -> Vector3:
+	if handle == "mid":
+		return (path[leg] + path[leg + 1]) / 2.0
+	return path[corner_index(handle)]
 
 
 ## The slot in `corners` behind a path index, or -1.
