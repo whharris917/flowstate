@@ -1118,7 +1118,7 @@ func _select_leg(pipe: PipeView, leg: int) -> bool:
 	_edit_leg = leg
 	_leg_gizmo = LegGizmo.new()
 	plant.add_child(_leg_gizmo)
-	_leg_gizmo.setup(pipe, leg, path, plant.wire_corners(pipe), plant.wire_locks(pipe))
+	_leg_gizmo.setup(pipe, leg, path, plant.wire_corners(pipe), plant.wire_locks(pipe), plant.wire_waypoints(pipe))
 	_update_hud()
 	return true
 
@@ -1662,7 +1662,8 @@ func _toggle_lock() -> void:
 			plant.set_wire_locks(_edit_run, locks)
 			hud.toast("corner locked")
 		plant.end_gesture()
-	_leg_gizmo.refresh(plant.wire_path(_edit_run), plant.wire_corners(_edit_run), plant.wire_locks(_edit_run))
+	_leg_gizmo.refresh(plant.wire_path(_edit_run), plant.wire_corners(_edit_run), plant.wire_locks(_edit_run),
+		plant.wire_waypoints(_edit_run))
 
 
 ## The gizmo handle under the crosshair, or null.
@@ -1775,7 +1776,7 @@ func _relay_selected(waypoints: Array, moved: Vector3, as_start: bool) -> void:
 			_drag = "pt%d" % nearest   # the held cube is this corner now
 	elif _is_corner_drag():
 		_drag = ""
-	_leg_gizmo.refresh(path, plant.wire_corners(relaid), plant.wire_locks(relaid))
+	_leg_gizmo.refresh(path, plant.wire_corners(relaid), plant.wire_locks(relaid), plant.wire_waypoints(relaid))
 
 
 ## The wheel over a selected line (director, 2026-09-19: "how would I

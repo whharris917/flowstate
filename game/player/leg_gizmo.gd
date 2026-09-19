@@ -19,22 +19,25 @@ var _hover: MeshInstance3D = null   # where a grab on the straight would put a c
 var _sleeve: MeshInstance3D = null
 
 
-var locks: Array = []   # the line's locked waypoints, plant-local
+var locks: Array = []       # the line's locked waypoints, plant-local
+var waypoints: Array = []   # the line's own waypoints, for telling which cube is which
 
 
-func setup(pipe_: PipeView, leg_: int, path_: Array[Vector3], corners_: Array, locks_: Array = []) -> void:
+func setup(pipe_: PipeView, leg_: int, path_: Array[Vector3], corners_: Array, locks_: Array = [],
+		waypoints_: Array = []) -> void:
 	pipe = pipe_
 	leg = leg_
-	refresh(path_, corners_, locks_)
+	refresh(path_, corners_, locks_, waypoints_)
 
 
 ## Rebuild round the leg as it is now laid. A rendered corner is the
 ## player's to move when one of the line's own corners lies within a
 ## lane's width of it; a lane sidestep or a bridge ramp has none.
-func refresh(path_: Array[Vector3], corners_: Array, locks_: Array = []) -> void:
+func refresh(path_: Array[Vector3], corners_: Array, locks_: Array = [], waypoints_: Array = []) -> void:
 	path = path_
 	corners = corners_
 	locks = locks_
+	waypoints = waypoints_
 	_slots.clear()
 	for i in path.size():
 		var slot := -1
@@ -145,13 +148,12 @@ func movable_corner(index: int) -> bool:
 	return index >= 1 and index <= path.size() - 2
 
 
-## Is the path point a locked waypoint (through a lane's shift)?
+## Is the path point a locked waypoint? The same exact-first match a
+## drag uses (2026-09-19: a loose match alone painted every cube near a
+## lock grey, and the director took them for locked).
 func is_locked(index: int) -> bool:
-	var p: Vector3 = path[index]
-	for lock: Vector3 in locks:
-		if Vector2(lock.x - p.x, lock.z - p.z).length() < 0.75 and absf(lock.y - p.y) < 0.3:
-			return true
-	return false
+	var k := BuildController.match_waypoint(waypoints, path[index])
+	return k >= 0 and BuildController.is_lock(locks, waypoints[k])
 
 
 ## The corner a handle stands on: the path index in its name ("pt5");
