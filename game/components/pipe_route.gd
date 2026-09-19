@@ -30,14 +30,18 @@ static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector
 	return square_turns(path, blocked)
 
 
-## No turn sharper than a right angle (director, 2026-09-13: "we
-## should avoid acute angles"; 2026-09-18: a line arriving from behind
-## a nozzle folded back through it). A corner that turns further is
-## split in two: a short leg square to the way in, then the rest of
-## the turn — so a line leaving a stub for a point behind it goes out,
-## turns square, and turns again, and the elbows' sweeps stay clear of
-## the fitting.
+## No angle between two straights sharper than 45 degrees (director,
+## 2026-09-13: "we should avoid acute angles"; 2026-09-18: a line
+## arriving from behind a nozzle folded back through it; 2026-09-19:
+## "allow acute angles down to 45 degrees but no lower", since a corner
+## the player sets is theirs). A corner that turns further — more than
+## FOLD_DEG of change of direction — is split in two: a short leg
+## square to the way in, then the rest of the turn — so a line leaving
+## a stub for a point behind it goes out, turns square, and turns
+## again, and the elbows' sweeps stay clear of the fitting.
 const SQUARE_LEG := 0.45
+const FOLD_DEG := 135.0
+const FOLD_DOT := -0.7071   # cos(FOLD_DEG): a change of direction past this is a fold
 
 
 static func square_turns(path: Array[Vector3], blocked: Callable = Callable()) -> Array[Vector3]:
@@ -53,9 +57,9 @@ static func square_turns(path: Array[Vector3], blocked: Callable = Callable()) -
 			continue
 		var len_in := corner.distance_to(out[out.size() - 1])
 		var len_out := corner.distance_to(path[i + 1])
-		# 93 degrees or less is fine; so is a turn off a lane's short
+		# Up to FOLD_DEG of turn is fine; so is a turn off a lane's short
 		# sidestep, which is a jog, not a fold (a stub, 0.35 m, counts).
-		if d_in.dot(d_out) >= -0.05 or minf(len_in, len_out) < 0.3:
+		if d_in.dot(d_out) >= FOLD_DOT or minf(len_in, len_out) < 0.3:
 			out.append(corner)
 			continue
 		# The split goes on the longer of the two legs, so a stub — the
@@ -173,11 +177,11 @@ static func _route_leg(a: Vector3, b: Vector3, d_in: Vector3, blocked: Callable,
 	return _pull_straight(cells, b, blocked, busy, ends, d_in)
 
 
-## A turn past 93 degrees: the fold the square-turn rule splits.
+## A turn past FOLD_DEG: the fold the square-turn rule splits.
 static func _folds(d_in: Vector3, d_out: Vector3) -> bool:
 	if d_in.length() < 0.5 or d_out.length() < 0.5:
 		return false
-	return d_in.normalized().dot(d_out.normalized()) < -0.05
+	return d_in.normalized().dot(d_out.normalized()) < FOLD_DOT
 
 
 ## The side a square leg takes at `corner`: the way out, square to the
