@@ -2241,6 +2241,19 @@ func wire_waypoints(view: PipeView) -> Array:
 	return []
 
 
+## The route a wire's player owns (plant-local): lane 0 through their
+## waypoints, before any lane's sidestep or bridge, each waypoint a
+## point of it exactly. What the handles stand on.
+func wire_own_path(view: PipeView) -> Array[Vector3]:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			var out: Array[Vector3] = []
+			for p: Vector3 in (visual["node"] as Node).get_meta("own_path", []):
+				out.append(p)
+			return out
+	return []
+
+
 ## The path a wire's line is laid on (plant-local), or [] for a run
 ## that is not a wire.
 func wire_path(view: PipeView) -> Array[Vector3]:
@@ -2662,11 +2675,18 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 	_lay_us["lanes"] = int(_lay_us.get("lanes", 0)) + Time.get_ticks_usec() - t_start
 	t_start = Time.get_ticks_usec()
 	var base_path := path
+	# The route the player owns: lane 0 through their waypoints, every
+	# one of which is a point of it exactly. The handles stand on it
+	# (2026-09-19: matching drawn corners back to waypoints by distance
+	# was wrong, and the lane pass moves the drawn corners).
+	var own_path := base_path if chosen == 0 else _route_points(src_name, src_port, dst_name, dst_port,
+		corners, 0, radius)
 	path = _with_jumpers(path, radius, {}, [src_name, dst_name], order)
 	_lay_us["bridges"] = int(_lay_us.get("bridges", 0)) + Time.get_ticks_usec() - t_start
 	if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
 		print("[laid] %s.%s -> %s.%s lane %d: %s" % [src_name, src_port, dst_name, dst_port, chosen, str(path)])
-	return {"lane": chosen, "path": path, "corners": corners, "searched": searched, "base_path": base_path}
+	return {"lane": chosen, "path": path, "corners": corners, "searched": searched, "base_path": base_path,
+		"own_path": own_path}
 
 
 # Where a lay's time goes, summed over a sweep: corners (the search),
@@ -2792,6 +2812,7 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	var corners: Array = laid["corners"]
 	var searched: bool = laid["searched"]
 	var base_path: Array[Vector3] = laid["base_path"]
+	var own_path: Array[Vector3] = laid["own_path"]
 	var pipe := PipeView.new()
 	add_child(pipe)
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
@@ -2802,6 +2823,7 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	pipe.set_meta("src", src_name)
 	pipe.set_meta("searched", searched)
 	pipe.set_meta("base_path", base_path)
+	pipe.set_meta("own_path", own_path)
 	pipe.set_meta("order", order)
 	pipe.config_cb = _configure_run
 	if wire != null:

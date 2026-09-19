@@ -13,7 +13,6 @@ var pipe: PipeView = null
 var leg := -1
 var path: Array[Vector3] = []
 var corners: Array = []          # the line's own corners (Plant.wire_corners)
-var _slots: Array[int] = []      # path index -> its corner's slot, or -1
 var _handles: Array[StaticBody3D] = []
 var _hover: MeshInstance3D = null   # where a grab on the straight would put a corner
 var _sleeve: MeshInstance3D = null
@@ -38,16 +37,6 @@ func refresh(path_: Array[Vector3], corners_: Array, locks_: Array = [], waypoin
 	corners = corners_
 	locks = locks_
 	waypoints = waypoints_
-	_slots.clear()
-	for i in path.size():
-		var slot := -1
-		var nearest := 0.6
-		for k in corners.size():
-			var d := (corners[k] as Vector3).distance_to(path[i])
-			if d < nearest:
-				nearest = d
-				slot = k
-		_slots.append(slot)
 	for child in get_children():
 		child.queue_free()
 	_handles.clear()
@@ -148,9 +137,8 @@ func movable_corner(index: int) -> bool:
 	return index >= 1 and index <= path.size() - 2
 
 
-## Is the path point a locked waypoint? The same exact-first match a
-## drag uses (2026-09-19: a loose match alone painted every cube near a
-## lock grey, and the director took them for locked).
+## Is the path point a locked waypoint? `path` is the route the player
+## owns, so a waypoint is a point of it exactly.
 func is_locked(index: int) -> bool:
 	var k := BuildController.match_waypoint(waypoints, path[index])
 	return k >= 0 and BuildController.is_lock(locks, waypoints[k])
@@ -170,6 +158,3 @@ func drag_origin(handle: String) -> Vector3:
 	return path[index] if index >= 0 and index < path.size() else Vector3.INF
 
 
-## The slot in `corners` behind a path index, or -1.
-func corner_slot(index: int) -> int:
-	return _slots[index] if index >= 0 and index < _slots.size() else -1

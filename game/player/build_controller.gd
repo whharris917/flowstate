@@ -1110,15 +1110,18 @@ func _click_select() -> bool:
 ## that is a corner of the player's to move. Only a line between two
 ## fittings (a wire) is selectable; standalone runs are laid by hand.
 func _select_leg(pipe: PipeView, leg: int) -> bool:
-	var path := plant.wire_path(pipe)
-	if path.size() < 2:
+	var drawn := plant.wire_path(pipe)
+	var path := plant.wire_own_path(pipe)
+	if drawn.size() < 2 or path.size() < 2 or leg < 0 or leg >= drawn.size() - 1:
 		return false
 	_set_mode(Mode.EDIT)
 	_edit_run = pipe
-	_edit_leg = leg
+	# The clicked straight of the drawn line, as the straight of the
+	# player's own route nearest it: a lane may have moved the drawing.
+	_edit_leg = _own_leg_near(path, (drawn[leg] + drawn[leg + 1]) / 2.0)
 	_leg_gizmo = LegGizmo.new()
 	plant.add_child(_leg_gizmo)
-	_leg_gizmo.setup(pipe, leg, path, plant.wire_corners(pipe), plant.wire_locks(pipe), plant.wire_waypoints(pipe))
+	_leg_gizmo.setup(pipe, _edit_leg, path, plant.wire_corners(pipe), plant.wire_locks(pipe), plant.wire_waypoints(pipe))
 	_update_hud()
 	return true
 
@@ -1607,9 +1610,12 @@ func _grab_point() -> Vector3:
 		return Vector3.INF
 	if aimed.get_meta("run") != _edit_run:
 		return Vector3.INF
-	# Any straight of the selected line, not only the sleeved one.
+	# Any straight of the selected line, not only the sleeved one: the
+	# hit on the drawn pipe, taken to the nearest straight of the
+	# player's own route (a lane may have moved the drawing).
 	var path := _leg_gizmo.path
-	var leg := int(aimed.get_meta("leg"))
+	var hit_point := plant.to_local(player.ray.get_collision_point())
+	var leg := _own_leg_near(path, hit_point)
 	if leg < 1 or leg > path.size() - 3:
 		return Vector3.INF
 	_grab_leg = leg
@@ -1619,8 +1625,7 @@ func _grab_point() -> Vector3:
 		return Vector3.INF
 	if _handle_under_crosshair() != null:
 		return Vector3.INF
-	var hit := plant.to_local(player.ray.get_collision_point())
-	var t := clampf((hit - a).dot(b - a) / maxf((b - a).length_squared(), 1e-6), 0.05, 0.95)
+	var t := clampf((hit_point - a).dot(b - a) / maxf((b - a).length_squared(), 1e-6), 0.05, 0.95)
 	return a.lerp(b, t)
 
 
@@ -1647,7 +1652,7 @@ func _toggle_lock() -> void:
 		plant.begin_gesture()
 		if k < 0:
 			# Not yet the line's own: plant it where it stands.
-			waypoints = dragged_waypoints(waypoints, _leg_gizmo.path, index, at, at, true, 0.02)
+			waypoints = dragged_waypoints(waypoints, _leg_gizmo.path, index, at, at)
 			_drag = "grab"
 			_relay_selected(waypoints, at, index == _edit_leg)
 			_drag = ""
@@ -1655,15 +1660,27 @@ func _toggle_lock() -> void:
 				plant.end_gesture()
 				return
 			waypoints = plant.wire_waypoints(_edit_run)
-			k = match_waypoint(waypoints, at, 0.02)
+			k = match_waypoint(waypoints, at)
 		if k >= 0:
 			locks = plant.wire_locks(_edit_run)
 			locks.append(waypoints[k])
 			plant.set_wire_locks(_edit_run, locks)
 			hud.toast("corner locked")
 		plant.end_gesture()
-	_leg_gizmo.refresh(plant.wire_path(_edit_run), plant.wire_corners(_edit_run), plant.wire_locks(_edit_run),
+	_leg_gizmo.refresh(plant.wire_own_path(_edit_run), plant.wire_corners(_edit_run), plant.wire_locks(_edit_run),
 		plant.wire_waypoints(_edit_run))
+
+
+## The straight of a route nearest a point, by distance to the segment.
+static func _own_leg_near(path: Array[Vector3], point: Vector3) -> int:
+	var best_leg := 0
+	var best := INF
+	for i in range(path.size() - 1):
+		var d := Geometry3D.get_closest_point_to_segment(point, path[i], path[i + 1]).distance_to(point)
+		if d < best:
+			best = d
+			best_leg = i
+	return best_leg
 
 
 ## The gizmo handle under the crosshair, or null.
@@ -1700,7 +1717,7 @@ func _begin_grab() -> bool:
 	# An exact match only: a click beside a planted corner is a new
 	# corner, not that one moved (2026-09-19: "the previous handle I'd
 	# placed disappears").
-	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, at, at, true, 0.02)
+	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, at, at)
 	_drag = "grab"
 	_relay_selected(waypoints, at, false)
 	if _leg_gizmo == null or _drag == "":
@@ -1739,7 +1756,7 @@ func _update_corner_drag() -> void:
 	_leg_relay_ms = now
 	var moved := plant.to_local(target)
 	var before := plant.wire_waypoints(_edit_run)
-	var waypoints := dragged_waypoints(before, _leg_gizmo.path, index, moved, origin, true, LANE_MATCH,
+	var waypoints := dragged_waypoints(before, _leg_gizmo.path, index, moved, origin, true,
 		plant.wire_locks(_edit_run))
 	if waypoints == before:
 		hud.toast("that corner is locked — middle-click it to unlock")
@@ -1759,16 +1776,13 @@ func _relay_selected(waypoints: Array, moved: Vector3, as_start: bool) -> void:
 		return
 	_edit_run = relaid
 	_leg_gizmo.pipe = relaid
-	var path := plant.wire_path(relaid)
-	# The corner as laid may stand a lane's step from `moved`: the
-	# nearest point of the path in plan, at about its height.
+	var path := plant.wire_own_path(relaid)
+	# The moved corner is a point of the player's own route exactly.
 	var nearest := -1
-	var best := INF
 	for i in path.size():
-		var d_plan := Vector2(path[i].x - moved.x, path[i].z - moved.z).length()
-		if d_plan < LANE_MATCH and absf(path[i].y - moved.y) < 0.3 and path[i].distance_to(moved) < best:
-			best = path[i].distance_to(moved)
+		if path[i].distance_to(moved) < 0.01:
 			nearest = i
+			break
 	if nearest >= 0:
 		_edit_leg = clampi(nearest if as_start else nearest - 1, 0, path.size() - 2)
 		_leg_gizmo.leg = _edit_leg
@@ -1801,7 +1815,7 @@ func _raise_selected(dy: float) -> void:
 		if is_equal_approx(moved.y, origin.y):
 			return
 		var before := plant.wire_waypoints(_edit_run)
-		var waypoints := dragged_waypoints(before, path, index, moved, origin, false, LANE_MATCH,
+		var waypoints := dragged_waypoints(before, path, index, moved, origin, false,
 			plant.wire_locks(_edit_run))
 		if waypoints == before:
 			hud.toast("that corner is locked — middle-click it to unlock")
@@ -1826,8 +1840,8 @@ func _raise_selected(dy: float) -> void:
 		if k >= 0 and is_lock(locks, before[k]):
 			hud.toast("a corner of that straight is locked — middle-click it to unlock")
 			return
-	var waypoints := dragged_waypoints(before, path, leg, a2, Vector3.INF, false, LANE_MATCH, locks)
-	waypoints = dragged_waypoints(waypoints, path, leg + 1, b2, Vector3.INF, false, LANE_MATCH, locks)
+	var waypoints := dragged_waypoints(before, path, leg, a2, Vector3.INF, false, locks)
+	waypoints = dragged_waypoints(waypoints, path, leg + 1, b2, Vector3.INF, false, locks)
 	_relay_selected(waypoints, a2, true)
 
 
@@ -1844,25 +1858,14 @@ func _raise_selected(dy: float) -> void:
 ## corners stand on one spot at different heights, so a waypoint over
 ## or under the dragged point moves with it. `index` is into `path`,
 ## the line as laid.
-const LANE_MATCH := 0.75   # a lane steps a corner at most this far from its waypoint
-
-
-## Which waypoint a point of the laid path stands for: an exact match
-## first, else the nearest within `tolerance` at about its height; -1
-## for none.
-static func match_waypoint(waypoints: Array, old: Vector3, tolerance: float = LANE_MATCH) -> int:
+## Which waypoint a point of the player's own route is: the one it
+## equals, or -1. Never by nearness (director, 2026-09-19: "we cannot
+## have such proximity based rules").
+static func match_waypoint(waypoints: Array, point: Vector3) -> int:
 	for k in waypoints.size():
-		if (waypoints[k] as Vector3).distance_to(old) < 0.02:
+		if (waypoints[k] as Vector3).distance_to(point) < 0.01:
 			return k
-	var found := -1
-	var best := INF
-	for k in waypoints.size():
-		var w: Vector3 = waypoints[k]
-		var d_plan := Vector2(w.x - old.x, w.z - old.z).length()
-		if d_plan < tolerance and absf(w.y - old.y) < 0.3 and w.distance_to(old) < best:
-			best = w.distance_to(old)
-			found = k
-	return found
+	return -1
 
 
 static func is_lock(locks: Array, w: Vector3) -> bool:
@@ -1874,9 +1877,10 @@ static func is_lock(locks: Array, w: Vector3) -> bool:
 
 ## `locks` are waypoints no edit moves: the dragged point itself locked
 ## returns the list unchanged, and a locked mate stays where it is.
+## `path` is the player's own route, so a waypoint is a point of it
+## exactly and the ordering of a new one is read off it.
 static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3,
-		origin: Vector3 = Vector3.INF, keep_height: bool = true, tolerance: float = LANE_MATCH,
-		locks: Array = []) -> Array:
+		origin: Vector3 = Vector3.INF, keep_height: bool = true, locks: Array = []) -> Array:
 	# `origin` is where the drag began when that is not a path point:
 	# the middle of a leg, which then becomes a corner before `index`.
 	# With `keep_height` the point stays at its own height and so do
@@ -1886,16 +1890,7 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	var out: Array = []
 	var matched := false
 	var insert_at := 0
-	# The laid path is the route in its lane, shifted sideways and up
-	# by as much as a lane steps, so a point of it matches a waypoint
-	# by nearness, not exactly (2026-09-19: a line in lane 9 gained a
-	# waypoint every notch, the shifted corner never matching its
-	# own). The point itself is the nearest waypoint within a lane's
-	# reach at about its height; a mate is any other at its plan
-	# position, a riser's other end.
-	# An exact match first; only failing that, the nearest within
-	# `tolerance` (a lane's reach for a drag, nothing for a plant).
-	var self_index := match_waypoint(waypoints, old, tolerance)
+	var self_index := match_waypoint(waypoints, old)
 	if self_index >= 0 and is_lock(locks, waypoints[self_index]):
 		return waypoints.duplicate()
 	# A mate stands at the matched corner's own plan position (a riser's
@@ -1903,15 +1898,12 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	var anchor: Vector3 = waypoints[self_index] if self_index >= 0 else old
 	for k in waypoints.size():
 		var w: Vector3 = waypoints[k]
-		# Where along the laid path this waypoint stands: by plan
-		# position, within a lane's shift.
+		# Where along the route this waypoint stands.
 		var at := -1
-		var best := LANE_MATCH
 		for i in path.size():
-			var d := Vector2((path[i] as Vector3).x - w.x, (path[i] as Vector3).z - w.z).length()
-			if d < best:
-				best = d
+			if (path[i] as Vector3).distance_to(w) < 0.01:
 				at = i
+				break
 		var itself := k == self_index
 		var mate := not itself and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02 \
 			and not is_lock(locks, w)
