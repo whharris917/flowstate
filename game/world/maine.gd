@@ -72,6 +72,9 @@ func _process(delta: float) -> void:
 
 
 func _after_plant() -> void:
+	# The routing exercises (director, 2026-09-19): simple configurations
+	# laid by the router alone, for the director to examine one by one.
+	RoutingExercises.build(plant)
 	hud.toast("The Maine coast. The site is graded; the shore is a walk east or south, the lighthouse is across the cove, and a river comes down to the sea beyond it. B build · C connect · L library · O options · F5/F9 save/load")
 	var s := coast.stats
 	print("[flowstate] landscape: %d vertices, %.0f%% sea, %d trees, %d rocks, %d surf emitters, a river of %d m with %d emitters — terrain %d ms, rocks %d ms, forest %d ms, %d ms in all"
@@ -81,6 +84,7 @@ func _after_plant() -> void:
 		int(s.get("ms_rocks", 0)), int(s.get("ms_forest", 0)), int(s.get("ms_total", 0))])
 	if DisplayServer.get_name() == "headless":
 		_self_check()
+		_report_in = 20  # the routing reports, after the deferred pass has run
 
 
 ## Headless: the site is flat at grade, the spawn stands on dry land,
