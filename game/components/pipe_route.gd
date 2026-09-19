@@ -62,28 +62,14 @@ static func square_turns(path: Array[Vector3], blocked: Callable = Callable()) -
 		# short fixed leg at a fitting — stays straight: after the corner
 		# when the way out is longer, before it when the way in is.
 		if len_out >= len_in:
-			var side := d_out - d_in * d_out.dot(d_in)   # the way out, square to the way in
-			if side.length() < 1e-3:
-				side = Vector3.UP.cross(d_in)              # straight back: any level side
-				if side.length() < 1e-3:
-					side = Vector3.RIGHT
-			side = side.normalized()
-			# The square leg goes the other way if this side is solid.
-			if _leg_blocked(corner, corner + side * SQUARE_LEG, blocked) \
-					and not _leg_blocked(corner, corner - side * SQUARE_LEG, blocked):
-				side = -side
+			# The way out, square to the way in; the other way if that
+			# side is solid.
+			var side := _square_side(d_in, d_out, corner, blocked, 1.0)
 			out.append(corner)
 			out.append(corner + side * SQUARE_LEG)
 		else:
-			var approach := d_in - d_out * d_in.dot(d_out)   # the way in, square to the way out
-			if approach.length() < 1e-3:
-				approach = Vector3.UP.cross(d_out)
-				if approach.length() < 1e-3:
-					approach = Vector3.RIGHT
-			approach = approach.normalized()
-			if _leg_blocked(corner, corner - approach * SQUARE_LEG, blocked) \
-					and not _leg_blocked(corner, corner + approach * SQUARE_LEG, blocked):
-				approach = -approach
+			# The way in, square to the way out, laid before the corner.
+			var approach := _square_side(d_out, d_in, corner, blocked, -1.0)
 			out.append(corner - approach * SQUARE_LEG)
 			out.append(corner)
 	out.append(path[path.size() - 1])
@@ -134,23 +120,80 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 	for k in range(1, sparse.size()):
 		var a: Vector3 = out[out.size() - 1]
 		var b: Vector3 = sparse[k]
-		# The plain leg first: a run laid where it was laid is the point,
-		# and the search only runs where that leg passes through something.
-		var plain := _leg(a, b)
-		if _clear(a, plain, blocked, ends):
-			for corner in plain:
-				_append(out, corner)
-			continue
-		last_searched = true
-		var cells := _astar(a, b, blocked, busy, ends)
-		if cells.is_empty():
-			for corner in plain:
-				_append(out, corner)
-			continue
-		for corner in _pull_straight(cells, b, blocked, busy, ends):
+		# The way in at the leg's start: the stub's, or the last leg's.
+		var d_in := (a - out[out.size() - 2]).normalized()
+		# A leg that folds back against the way in takes its square leg
+		# FIRST, and is searched from its end with the way in known
+		# (2026-09-19: square_turns after the search put the corner in
+		# and moved the leg after it 0.45 m, back through the pump the
+		# search had gone round; nothing checked the moved leg).
+		var plain_dir := (_leg(a, b)[0] - a).normalized()
+		if _folds(d_in, plain_dir) and a.distance_to(b) >= 0.3:
+			var side := _square_side(d_in, plain_dir, a, blocked, 1.0)
+			a += side * SQUARE_LEG
+			_append(out, a)
+			d_in = side
+		var leg := _route_leg(a, b, d_in, blocked, busy, ends)
+		# The arrival at the destination stub: a leg folding against it
+		# gets its square leg before the stub, and is routed to that
+		# corner instead, so what arrives there was checked too.
+		if k == sparse.size() - 1 and to_dir.length() > 0.5 and leg.size() >= 1:
+			var before_b: Vector3 = a if leg.size() < 2 else leg[leg.size() - 2]
+			var arrive := (b - before_b).normalized()
+			var stub_dir := (to - b).normalized()
+			if _folds(arrive, stub_dir) and before_b.distance_to(b) >= 0.3:
+				var approach := _square_side(stub_dir, arrive, b, blocked, -1.0)
+				leg = _route_leg(a, b - approach * SQUARE_LEG, d_in, blocked, busy, ends)
+				leg.append(b)
+		for corner in leg:
 			_append(out, corner)
 	out.append(to)
+	# The net under the rule: a fold the search's own fallback left
+	# (a grid step against a pulled straight) is still split here.
 	return _straighten(square_turns(out, blocked))
+
+
+## One leg, laid plain where its plain shape is clear and searched
+## round whatever it passes through otherwise; `d_in` is the way in
+## at `a`, which the search and the pull-straight never fold against.
+static func _route_leg(a: Vector3, b: Vector3, d_in: Vector3, blocked: Callable,
+		busy: Callable, ends: Array[Vector3]) -> Array[Vector3]:
+	# The plain leg first: a run laid where it was laid is the point,
+	# and the search only runs where that leg passes through something.
+	var plain := _leg(a, b)
+	if _clear(a, plain, blocked, ends):
+		return plain
+	last_searched = true
+	var cells := _astar(a, b, d_in, blocked, busy, ends)
+	if cells.is_empty():
+		return plain
+	return _pull_straight(cells, b, blocked, busy, ends, d_in)
+
+
+## A turn past 93 degrees: the fold the square-turn rule splits.
+static func _folds(d_in: Vector3, d_out: Vector3) -> bool:
+	if d_in.length() < 0.5 or d_out.length() < 0.5:
+		return false
+	return d_in.normalized().dot(d_out.normalized()) < -0.05
+
+
+## The side a square leg takes at `corner`: the way out, square to the
+## way in (any level side when the way out is straight back), turned
+## round when the leg that way is solid and the other way is not.
+## `sign` is which way the leg lies from the corner: +1 after it
+## (corner + side), -1 before it (corner - side).
+static func _square_side(d_in: Vector3, d_out: Vector3, corner: Vector3, blocked: Callable,
+		sign: float) -> Vector3:
+	var side := d_out - d_in * d_out.dot(d_in)
+	if side.length() < 1e-3:
+		side = Vector3.UP.cross(d_in)
+		if side.length() < 1e-3:
+			side = Vector3.RIGHT
+	side = side.normalized()
+	if _leg_blocked(corner, corner + side * sign * SQUARE_LEG, blocked) \
+			and not _leg_blocked(corner, corner - side * sign * SQUARE_LEG, blocked):
+		side = -side
+	return side
 
 
 ## Does a polyline from `start` through `points` pass through
@@ -197,22 +240,29 @@ static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable,
 ## grid's own steps are taken as passable; the search checked them.
 ## Returns the corners after the first cell, which is the start.
 static func _pull_straight(cells: Array[Vector3], target: Vector3, blocked: Callable,
-		busy: Callable, ends: Array[Vector3]) -> Array[Vector3]:
+		busy: Callable, ends: Array[Vector3], d_in: Vector3 = Vector3.ZERO) -> Array[Vector3]:
 	var pts: Array[Vector3] = cells.duplicate()
 	if pts[pts.size() - 1].distance_to(target) > 0.001:
 		pts.append(target)
 	var out: Array[Vector3] = [pts[0]]
 	var i := 0
+	var prev_dir := d_in
 	while i < pts.size() - 1:
 		var j := pts.size() - 1
 		while j > i + 1:
 			var straight := _leg(pts[i], pts[j])
-			if _clear(pts[i], straight, blocked, ends) \
+			# A straight that folds against the way in is no straight:
+			# the corner it would need is what the square-turn rule
+			# refuses, and splitting it afterwards moves the leg.
+			if not _folds(prev_dir, straight[0] - pts[i]) and _clear(pts[i], straight, blocked, ends) \
 					and _busy_along(pts[i], straight, busy) <= _busy_along(pts[i], pts.slice(i + 1, j + 1), busy) + 1:
 				break
 			j -= 1
-		for corner in _leg(pts[i], pts[j]):
+		var leg := _leg(pts[i], pts[j])
+		for corner in leg:
 			_append(out, corner)
+		var before_end: Vector3 = pts[i] if leg.size() < 2 else leg[leg.size() - 2]
+		prev_dir = (leg[leg.size() - 1] - before_end).normalized()
 		i = j
 	out.remove_at(0)
 	return out
@@ -271,17 +321,19 @@ static func clear_cache() -> void:
 	_leg_cache.clear()
 
 
-static func _astar(a: Vector3, b: Vector3, blocked: Callable, busy: Callable,
+static func _astar(a: Vector3, b: Vector3, d_in: Vector3, blocked: Callable, busy: Callable,
 		ends: Array[Vector3]) -> Array[Vector3]:
-	var cache_key := "%.2f,%.2f,%.2f>%.2f,%.2f,%.2f|%s" % [a.x, a.y, a.z, b.x, b.y, b.z, str(ends)]
+	var cache_key := "%.2f,%.2f,%.2f>%.2f,%.2f,%.2f|%s|%s" % [a.x, a.y, a.z, b.x, b.y, b.z, str(ends), str(d_in)]
 	if _leg_cache.has(cache_key):
 		return (_leg_cache[cache_key] as Array[Vector3]).duplicate()
 	var t0 := Time.get_ticks_usec()
-	var found := _search(a, b, blocked, busy, ends)
+	var found := _search(a, b, d_in, blocked, busy, ends)
 	search_usec += Time.get_ticks_usec() - t0
 	searches += 1
 	if found.is_empty():
 		failures += 1
+		if OS.has_environment("FLOWSTATE_ROUTE_DEBUG"):
+			print("[route] search failed: %s" % cache_key)
 	_leg_cache[cache_key] = found
 	return found.duplicate()
 
@@ -290,7 +342,7 @@ static func _astar(a: Vector3, b: Vector3, blocked: Callable, busy: Callable,
 ## the found path leaves `a` with no jog, and the goal is the cell that
 ## holds `b`, a quarter metre off at most, which _pull_straight takes
 ## up by ending its last straight on `b` itself.
-static func _search(a: Vector3, b: Vector3, blocked: Callable, busy: Callable,
+static func _search(a: Vector3, b: Vector3, d_in: Vector3, blocked: Callable, busy: Callable,
 		ends: Array[Vector3]) -> Array[Vector3]:
 	var start := Vector3i.ZERO
 	var goal := Vector3i(roundi((b.x - a.x) / CELL), roundi((b.y - a.y) / CELL), roundi((b.z - a.z) / CELL))
@@ -328,6 +380,9 @@ static func _search(a: Vector3, b: Vector3, blocked: Callable, busy: Callable,
 		for d in DIRS.size():
 			var step := DIRS[d]
 			var next := node + step
+			# The first step never folds against the way in.
+			if node == start and _folds(d_in, Vector3(step)):
+				continue
 			if next.x < lo.x or next.y < lo.y or next.z < lo.z or next.x > hi.x or next.y > hi.y or next.z > hi.z:
 				continue
 			if closed.has(next):

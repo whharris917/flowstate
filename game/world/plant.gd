@@ -392,7 +392,11 @@ func _exercise_build_api() -> void:
 		# The PSU has no 480 V feed yet: the whole rack must be dead.
 		if (sim.get_component(t + "2") as SimTerminal).t_out.value > 0.5:
 			problems.append("unpowered PLC drove an output")
-		if connect_equipment("plant_mains", free_way("plant_mains"), psu_name, "ac_in") != "":
+		# Through a waypoint: the save/load round trip below checks that
+		# a routed line keeps its corners (the home loop has none of its
+		# own since 2026-09-19).
+		if connect_equipment("plant_mains", free_way("plant_mains"), psu_name, "ac_in",
+				[Vector3(0.0, 0.3, 3.0)]) != "":
 			problems.append("mains to cabinet PSU refused")
 		for _i in 10:
 			sim.tick()
@@ -3112,20 +3116,18 @@ func _build_initial_plant() -> void:
 	place("source", "raw_water", {}, _world(Vector3(-6.4, 0, -2.9)), 0.0, true)
 	place("drain", "du_100", {"rate_lps": 1.5}, _world(Vector3(4.7, 0, -1.4)), 0.0, true)
 	# Power first — nothing runs without a cable back to the feeder.
-	connect_equipment("plant_mains", free_way("plant_mains"), "fill_pump", "power",
-		[Vector3(-3.6, 0.3, -1.6), Vector3(-1.0, 0.3, -2.9)])
+	# No waypoints on any of these (director, 2026-09-19): the hand-laid
+	# ones from before the direct-line rule forced the water line to the
+	# floor and off its axis, ten corners where the router's own answer
+	# has four. What the router lays here is what a player gets.
+	connect_equipment("plant_mains", free_way("plant_mains"), "fill_pump", "power")
 	# The flow path is honest end to end: the pump pulls from the
 	# supply header, and the tank's consumption is a real drain. One
 	# pipe per connection — the facade meters the draw underneath.
-	connect_equipment("raw_water", "outlet", "fill_pump", "inlet",
-		[Vector3(-5.6, 0.3, -3.1), Vector3(-1.2, 0.3, -3.1)])
+	connect_equipment("raw_water", "outlet", "fill_pump", "inlet")
 	connect_equipment("supply_tank", "outlet", "du_100", "inlet")
-	# Signal runs drop to the floor and run along it — the support rule
-	# applies to the commissioned loop too.
-	connect_equipment("level_switch", "contact", "pump_relay", "coil",
-		[Vector3(1.7, 0.3, -3.4), Vector3(-2.7, 0.3, -4.3)])
-	connect_equipment("pump_relay", "contact", "fill_pump", "run",
-		[Vector3(-2.3, 0.3, -3.6), Vector3(-0.8, 0.3, -2.7)])
+	connect_equipment("level_switch", "contact", "pump_relay", "coil")
+	connect_equipment("pump_relay", "contact", "fill_pump", "run")
 	connect_equipment("fill_pump", "outlet", "supply_tank", "inlet")
 	if build_suite:
 		_build_aseptic_suite()
