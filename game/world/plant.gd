@@ -2390,6 +2390,7 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 	var color := str(visual.get("color", ""))
 	var label_ := str(visual.get("label", ""))
 	var fitting := str(visual.get("fitting", ""))
+	var dn := int(visual.get("dn", 50))
 	remove_run(view)
 	# The device on the pipe axis, its inlet toward the upstream piece.
 	var rot: float = spot["rot"]
@@ -2411,11 +2412,14 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 	if why != "":
 		return why
 	for pair: Array in [[a_name, a_port, record.comp_name, in_port], [record.comp_name, out_port, b_name, b_port]]:
-		if color != "":
-			for candidate in _wire_visuals:
-				if str(candidate["a"]) == str(pair[0]) and str(candidate["b"]) == str(pair[2]) \
-						and candidate["node"] != null:
-					set_run_service(candidate["node"] as PipeView, Color.html(color), label_, fitting)
+		for candidate in _wire_visuals:
+			if str(candidate["a"]) == str(pair[0]) and str(candidate["b"]) == str(pair[2]) \
+					and candidate["node"] != null:
+				var piece := candidate["node"] as PipeView
+				if dn != 50:
+					piece = set_run_size(piece, dn)   # the pieces keep the size of the line
+				if color != "":
+					set_run_service(piece, Color.html(color), label_, fitting)
 	return ""
 
 
@@ -2459,6 +2463,7 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 	var color := str(visual.get("color", ""))
 	var label_ := str(visual.get("label", ""))
 	var fitting := str(visual.get("fitting", ""))
+	var dn := int(visual.get("dn", 50))
 	remove_run(view)
 	# Two caps, a hand apart either side of the cut, their spools along
 	# the line: the first takes the upstream piece on its a-nozzle, the
@@ -2479,11 +2484,14 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 	if why != "":
 		return why
 	for pair: Array in [[a_name, a_port, names[0], "a"], [names[1], "b", b_name, b_port]]:
-		if color != "":
-			for candidate in _wire_visuals:
-				if str(candidate["a"]) == str(pair[0]) and str(candidate["b"]) == str(pair[2]) \
-						and candidate["node"] != null:
-					set_run_service(candidate["node"] as PipeView, Color.html(color), label_, fitting)
+		for candidate in _wire_visuals:
+			if str(candidate["a"]) == str(pair[0]) and str(candidate["b"]) == str(pair[2]) \
+					and candidate["node"] != null:
+				var piece := candidate["node"] as PipeView
+				if dn != 50:
+					piece = set_run_size(piece, dn)   # the pieces keep the size of the line
+				if color != "":
+					set_run_service(piece, Color.html(color), label_, fitting)
 	return ""
 
 
