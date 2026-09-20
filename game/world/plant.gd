@@ -2196,27 +2196,42 @@ func _set_pedestal(view: Node3D, height: float) -> void:
 ## existing pipe ... The pump should simply delete the segment of pipe
 ## needed for it to fit inline, and automatically connect") -------------
 
-## Half the length between an inline type's two nozzle faces along its
-## axis, or -1 for a type that is not inline: one whose inlet and
-## outlet face each other along x at one height.
-static func inline_half(type_id: String) -> float:
+## How a type goes inline, or {} for one that cannot (director,
+## 2026-09-20: tanks and tees "just like pumps, valves, flow meters"):
+## `in` and `out`, the ports the two pieces take; `in_angle`, the
+## bearing the inlet leaves the device at, so it can be turned to face
+## upstream; `half`, the room the device needs either side along the
+## line; `axis`, true when both nozzles sit on one axis at one height
+## (the device then stands with its nozzles at the line's height) and
+## false for a vessel, which stands on the floor and takes the line
+## through risers to its nozzles; `port_y`, the nozzle height over the
+## base for an axis type.
+static func inline_spec(type_id: String) -> Dictionary:
 	var anchors: Dictionary = PlantFactory.PORT_ANCHORS.get(type_id, {})
+	match type_id:
+		"tank":
+			var probe := TankView.new()
+			var angle := float(probe.nozzles["inlet"]["angle"])
+			probe.free()
+			return {"in": "inlet", "out": "outlet", "in_angle": angle, "axis": false,
+				"half": PlantFactory.FOOTPRINTS[type_id].x / 2.0, "port_y": 0.0}
+		"tee_split":
+			return {"in": "in", "out": "a", "in_angle": PI, "axis": true,
+				"half": 0.27, "port_y": (anchors["in"]["pos"] as Vector3).y}
+		"tee_mix":
+			return {"in": "a", "out": "out", "in_angle": PI, "axis": true,
+				"half": 0.27, "port_y": (anchors["a"]["pos"] as Vector3).y}
 	if not anchors.has("inlet") or not anchors.has("outlet"):
-		return -1.0
+		return {}
 	var i: Dictionary = anchors["inlet"]
 	var o: Dictionary = anchors["outlet"]
 	if i["dir"] != Vector3.LEFT or o["dir"] != Vector3.RIGHT:
-		return -1.0
+		return {}
 	var ip: Vector3 = i["pos"]
 	var op: Vector3 = o["pos"]
 	if absf(ip.y - op.y) > 0.001 or absf(ip.z) > 0.001 or absf(op.z) > 0.001 or absf(ip.x + op.x) > 0.001:
-		return -1.0
-	return op.x
-
-
-## The height of an inline type's nozzles over its base.
-static func inline_height(type_id: String) -> float:
-	return (PlantFactory.PORT_ANCHORS[type_id]["inlet"]["pos"] as Vector3).y
+		return {}
+	return {"in": "inlet", "out": "outlet", "in_angle": PI, "axis": true, "half": op.x, "port_y": ip.y}
 
 
 ## Where an inline device would sit on a line aimed at, or why not:
@@ -2224,9 +2239,10 @@ static func inline_height(type_id: String) -> float:
 ## device and the stubs of the two pieces must fit on one level
 ## straight, clear of the fittings.
 func inline_spot(view: PipeView, at_global: Vector3, type_id: String) -> Dictionary:
-	var half := inline_half(type_id)
-	if half < 0.0:
+	var spec := inline_spec(type_id)
+	if spec.is_empty():
 		return {"why": "%s does not go inline" % type_id}
+	var half: float = spec["half"]
 	var visual: Dictionary = {}
 	for candidate in _wire_visuals:
 		if candidate["node"] == view:
@@ -2250,7 +2266,27 @@ func inline_spot(view: PipeView, at_global: Vector3, type_id: String) -> Diction
 		return {"why": "no room on that straight — it needs %.1f m either side" % need}
 	if float(near["arc"]) - need < 0.6 or float(near["total"]) - float(near["arc"]) - need < 0.6:
 		return {"why": "too close to the fitting"}
-	return {"why": "", "point": near["point"], "dir": dir, "arc": near["arc"]}
+	# Where the device stands and which way it faces: its inlet toward
+	# the upstream piece; an axis type with its nozzles at the line's
+	# height, a vessel on the floor below the line.
+	var point: Vector3 = near["point"]
+	var rot: float = float(spec["in_angle"]) - atan2(-dir.z, -dir.x)
+	var base := Vector3(point.x, point.y - float(spec["port_y"]), point.z)
+	var query := PhysicsRayQueryParameters3D.create(to_global(point), to_global(point) + Vector3.DOWN * 6.0, 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not bool(spec["axis"]):
+		if hit.is_empty():
+			return {"why": "nothing below the line to stand it on"}
+		base = to_local(hit["position"] as Vector3)
+		base.x = point.x
+		base.z = point.z
+	elif not hit.is_empty() and base.y < to_local(hit["position"] as Vector3).y - 0.02:
+		# A fitting on a stand would be buried: the line is lower than
+		# its nozzles stand.
+		return {"why": "the line is too low here for a %s (its nozzles stand %.2f m up) — raise it first"
+			% [type_id, float(spec["port_y"])]}
+	return {"why": "", "point": point, "dir": dir, "arc": near["arc"], "base": base, "rot": rot,
+		"in": spec["in"], "out": spec["out"]}
 
 
 ## Cut a line and stand an inline device in the gap, connected: the
@@ -2288,20 +2324,22 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 	var fitting := str(visual.get("fitting", ""))
 	remove_run(view)
 	# The device on the pipe axis, its inlet toward the upstream piece.
-	var rot := atan2(-dir.z, dir.x)
-	var base := Vector3(point.x, point.y - inline_height(type_id), point.z)
+	var rot: float = spot["rot"]
+	var base: Vector3 = spot["base"]
+	var in_port := str(spot["in"])
+	var out_port := str(spot["out"])
 	var record := place_new(type_id, to_global(base), rot)
 	if record == null:
 		return "could not place %s" % type_id
 	_next_wire_fixed = true
-	var why := connect_equipment(a_name, a_port, record.comp_name, "inlet", before)
+	var why := connect_equipment(a_name, a_port, record.comp_name, in_port, before)
 	if why == "":
 		_next_wire_fixed = true
-		why = connect_equipment(record.comp_name, "outlet", b_name, b_port, after)
+		why = connect_equipment(record.comp_name, out_port, b_name, b_port, after)
 	_next_wire_fixed = false
 	if why != "":
 		return why
-	for pair: Array in [[a_name, a_port, record.comp_name, "inlet"], [record.comp_name, "outlet", b_name, b_port]]:
+	for pair: Array in [[a_name, a_port, record.comp_name, in_port], [record.comp_name, out_port, b_name, b_port]]:
 		if color != "":
 			for candidate in _wire_visuals:
 				if str(candidate["a"]) == str(pair[0]) and str(candidate["b"]) == str(pair[2]) \

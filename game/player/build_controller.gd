@@ -783,7 +783,7 @@ func _update_inline_ghost() -> bool:
 	_inline = {}
 	_inline_why = ""
 	var type_id := _current_type()
-	if Plant.inline_half(type_id) < 0.0 or not player.ray.is_colliding():
+	if Plant.inline_spec(type_id).is_empty() or not player.ray.is_colliding():
 		return false
 	var collider := player.ray.get_collider() as Node
 	if collider == null or not collider.has_meta("run"):
@@ -797,7 +797,7 @@ func _update_inline_ghost() -> bool:
 	if spot["why"] != "":
 		# On a line, but no room there: the ghost shows red where aimed.
 		var near := Plant._nearest_on_path(plant.wire_path(view), plant.to_local(at))
-		_ghost_pos = plant.to_global(near["point"] as Vector3) - Vector3(0, Plant.inline_height(type_id), 0)
+		_ghost_pos = plant.to_global(near["point"] as Vector3)
 		_ghost.global_position = _ghost_pos + Vector3(0, AssetPreview.base_offset(type_id), 0)
 		_ghost.rotation.y = rot_y
 		_ghost.visible = true
@@ -805,11 +805,9 @@ func _update_inline_ghost() -> bool:
 		_inline_why = str(spot["why"])
 		_ghost_mat.albedo_color = Color(0.9, 0.25, 0.2, 0.45)
 		return true
-	var point: Vector3 = spot["point"]
-	var dir: Vector3 = spot["dir"]
-	_ghost_pos = plant.to_global(Vector3(point.x, point.y - Plant.inline_height(type_id), point.z))
+	_ghost_pos = plant.to_global(spot["base"] as Vector3)
 	_ghost.global_position = _ghost_pos + Vector3(0, AssetPreview.base_offset(type_id), 0)
-	_ghost.rotation.y = atan2(-dir.z, dir.x)
+	_ghost.rotation.y = float(spot["rot"])
 	_ghost.visible = true
 	_ghost_valid = true
 	_inline = {"view": view, "at": at}
