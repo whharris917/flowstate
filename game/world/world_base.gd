@@ -97,6 +97,7 @@ func _ready() -> void:
 	builder = BuildController.new()
 	add_child(builder)
 	builder.setup(player, plant, hud)
+	builder.on_hotbar_changed = func() -> void: _save_settings()
 	var ms_ui := Time.get_ticks_msec() - t0
 	t0 = Time.get_ticks_msec()
 	if DisplayServer.get_name() == "headless" and campaign != null:
@@ -476,7 +477,7 @@ func _save_settings() -> void:
 	if file == null:
 		return
 	file.store_string(JSON.stringify({"time_of_day": time_of_day, "music": music_on,
-		"graphics": graphics.to_dict()}))
+		"graphics": graphics.to_dict(), "hotbar": builder.hotbar if builder != null else []}))
 
 
 func _load_settings() -> void:
@@ -492,6 +493,8 @@ func _load_settings() -> void:
 				on = bool(saved.get("music", on))
 				if saved.get("graphics") is Dictionary:
 					graphics.from_dict(saved["graphics"])
+				if saved.get("hotbar") is Array and builder != null:
+					builder.set_hotbar(saved["hotbar"])
 				elif bool(saved.get("high_lighting", false)):
 					graphics.set_preset("Ultra")  # the toggle this replaced
 	set_time_of_day(hours)

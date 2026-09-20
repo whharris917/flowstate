@@ -7,6 +7,8 @@ extends VBoxContainer
 
 var _title: Label
 var _cards: HBoxContainer
+var pick_cb: Callable = Callable()   # (index) — a card clicked
+var hovered: int = -1                # the card under the mouse, for a number key to assign
 
 
 func _ready() -> void:
@@ -32,18 +34,33 @@ func _ready() -> void:
 	add_child(_cards)
 
 
-func show_page(page_name: String, entries: Array, icons: AssetIcons, selected: int) -> void:
+## `slots` maps a type to its hotbar slot, shown on the card instead
+## of the old page number (2026-09-19: the number keys are the hotbar).
+func show_page(page_name: String, entries: Array, icons: AssetIcons, selected: int,
+		slots: Dictionary = {}) -> void:
 	visible = true
 	_title.text = page_name
+	hovered = -1
 	for old in _cards.get_children():
 		old.queue_free()
 	for i in range(entries.size()):
-		_cards.add_child(_card(i, entries[i], icons, i == selected))
+		_cards.add_child(_card(i, entries[i], icons, i == selected, slots))
 
 
-func _card(index: int, entry: Dictionary, icons: AssetIcons, selected: bool) -> Control:
+func _card(index: int, entry: Dictionary, icons: AssetIcons, selected: bool,
+		slots: Dictionary = {}) -> Control:
 	var panel := PanelContainer.new()
-	panel.mouse_filter = MOUSE_FILTER_IGNORE
+	panel.mouse_filter = MOUSE_FILTER_STOP
+	panel.mouse_default_cursor_shape = CURSOR_POINTING_HAND
+	panel.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
+				and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
+				and pick_cb.is_valid():
+			pick_cb.call(index))
+	panel.mouse_entered.connect(func() -> void: hovered = index)
+	panel.mouse_exited.connect(func() -> void:
+		if hovered == index:
+			hovered = -1)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.09, 0.10, 0.12, 0.94) if not selected \
 		else Color(0.13, 0.22, 0.15, 0.96)
@@ -67,7 +84,9 @@ func _card(index: int, entry: Dictionary, icons: AssetIcons, selected: bool) -> 
 	column.add_child(thumb)
 
 	var name_label := Label.new()
-	name_label.text = "%d · %s" % [index + 1, entry["label"]]
+	var type_id := str(entry["type"])
+	name_label.text = ("%d · %s" % [int(slots[type_id]) + 1, entry["label"]]) if slots.has(type_id) \
+		else str(entry["label"])
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.custom_minimum_size = Vector2(96, 0)
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD

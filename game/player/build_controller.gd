@@ -28,6 +28,13 @@ var plant: Plant
 var hud: Hud
 var menu: BuildMenu
 var icons: AssetIcons
+var palette: BuildPalette
+## The hotbar (director, 2026-09-19): nine types the number keys pick,
+## the player's own, saved in the settings. Assigned by hovering a card
+## in the palette and pressing the number.
+var hotbar: Array = ["tank", "pump", "valve", "source", "drain", "block_valve", "gauge_flow", "cabinet", "mains"]
+var on_hotbar_changed: Callable = Callable()
+var _palette_open := false
 var port_menu: DeviceMenu
 
 var _ghost: Node3D = null
@@ -113,6 +120,27 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	menu = BuildMenu.new()
 	menu.visible = false
 	hud.add_child(menu)
+	menu.position.y -= 130.0   # above the hotbar
+	menu.pick_cb = func(index: int) -> void: _pick_index(index)
+	palette = BuildPalette.new()
+	hud.add_child(palette)
+	palette.on_page = func(index: int) -> void:
+		page = index
+		catalog_index = 0
+		_beam_anchor = Vector3.INF
+		_run_points.clear()
+		_clear_route()
+		_update_hud()
+	palette.on_slot = func(slot: int) -> void: _pick_slot(slot)
+	var page_icons: Array = []
+	for i in 7:
+		var saved_page := page
+		page = i
+		var entries := _page_catalog()
+		page = saved_page
+		page_icons.append(icons.icon(str(entries[0]["type"])) if not entries.is_empty() else null)
+	palette.set_page_icons(page_icons)
+	_refresh_palette()
 	port_menu = DeviceMenu.new()
 	hud.add_child(port_menu)
 	_update_hud()
@@ -122,19 +150,31 @@ func _unhandled_input(event: InputEvent) -> void:
 	if OS.has_environment("FLOWSTATE_INPUT_DEBUG") and event is InputEventMouseButton:
 		print("[input] mode %d button %d pressed %s aimed %s" % [mode, (event as InputEventMouseButton).button_index,
 			str((event as InputEventMouseButton).pressed), str(player.aimed_collider())])
+	if _palette_open and event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		# A click that reached nobody: outside the panels. Left keeps the
+		# choice and goes back to the crosshair; right leaves build mode.
+		if (event as InputEventMouseButton).button_index == MOUSE_BUTTON_RIGHT:
+			_set_mode(Mode.NORMAL)
+		else:
+			close_palette()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("build_mode"):
-		_set_mode(Mode.NORMAL if mode == Mode.PLACE else Mode.PLACE)
+		if mode == Mode.PLACE:
+			_set_mode(Mode.NORMAL)
+		else:
+			open_palette()
 	elif event.is_action_pressed("connect_mode"):
 		_set_mode(Mode.NORMAL if mode == Mode.CONNECT else Mode.CONNECT)
 	elif event.is_action_pressed("ui_cancel"):
 		_set_mode(Mode.NORMAL)
-	elif event.is_action_pressed("catalog_page") and mode == Mode.PLACE:
-		page = (page + 1) % 7
-		catalog_index = 0
-		_beam_anchor = Vector3.INF
-		_run_points.clear()
-		_clear_route()
-		_update_hud()
+	elif event.is_action_pressed("catalog_page"):
+		# Tab: the palette, mouse free, to click a page icon or a card;
+		# again, or a click outside it, back to the crosshair.
+		if _palette_open:
+			close_palette()
+		else:
+			open_palette()
 	elif event.is_action_pressed("interact") and mode == Mode.PLACE and _is_run():
 		_finish_run()
 		get_viewport().set_input_as_handled()
@@ -189,21 +229,148 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_click_select()
 	else:
-		for i in range(_catalog().size()):
+		for i in 9:
 			if event.is_action_pressed("catalog_%d" % (i + 1)):
-				catalog_index = i
-				_beam_anchor = Vector3.INF
-				_run_points.clear()
-				_clear_route()
-				if mode != Mode.PLACE:
-					_set_mode(Mode.PLACE)
-				_update_hud()
+				if _palette_open and menu.hovered >= 0 and menu.hovered < _catalog().size():
+					_assign_slot(i, str(_catalog()[menu.hovered]["type"]))
+				else:
+					_pick_slot(i)
 				return
+
+
+## The palette open: the mouse free over the page rail, the cards and
+## the hotbar; the player stands still meanwhile.
+func open_palette() -> void:
+	if mode != Mode.PLACE:
+		_set_mode(Mode.PLACE)
+	_palette_open = true
+	MouseMode.release()
+	player.input_locked = true
+	_update_hud()
+
+
+func close_palette() -> void:
+	if not _palette_open:
+		return
+	_palette_open = false
+	MouseMode.capture()
+	player.input_locked = false
+	_update_hud()
+
+
+## A card clicked in the palette: that type, back to the crosshair.
+func _pick_index(index: int) -> void:
+	if index < 0 or index >= _catalog().size():
+		return
+	catalog_index = index
+	_beam_anchor = Vector3.INF
+	_run_points.clear()
+	_clear_route()
+	close_palette()
+	_update_hud()
+
+
+## A hotbar slot: its type, wherever it lives in the pages.
+func _pick_slot(slot: int) -> void:
+	var type_id := str(hotbar[slot]) if slot < hotbar.size() else ""
+	if type_id == "":
+		hud.toast("slot %d is empty — Tab opens the palette; hover an item and press %d" % [slot + 1, slot + 1])
+		return
+	var where := _locate(type_id)
+	if where.is_empty():
+		hud.toast("%s is not unlocked yet — J for the journal" % _label_of(type_id))
+		return
+	page = int(where["page"])
+	catalog_index = int(where["index"])
+	_beam_anchor = Vector3.INF
+	_run_points.clear()
+	_clear_route()
+	if mode != Mode.PLACE:
+		_set_mode(Mode.PLACE)
+	close_palette()
+	_update_hud()
+
+
+func _assign_slot(slot: int, type_id: String) -> void:
+	while hotbar.size() < 9:
+		hotbar.append("")
+	hotbar[slot] = type_id
+	if on_hotbar_changed.is_valid():
+		on_hotbar_changed.call()
+	hud.toast("%d · %s" % [slot + 1, _label_of(type_id)])
+	_update_hud()
+
+
+func set_hotbar(types: Array) -> void:
+	if types.is_empty():
+		return
+	hotbar = []
+	for i in 9:
+		hotbar.append(str(types[i]) if i < types.size() else "")
+	_refresh_palette()
+
+
+## The page and index of a type among what is unlocked, or {}.
+func _locate(type_id: String) -> Dictionary:
+	var saved_page := page
+	for i in 7:
+		page = i
+		var entries := _catalog()
+		for k in entries.size():
+			if str(entries[k]["type"]) == type_id:
+				page = saved_page
+				return {"page": i, "index": k}
+	page = saved_page
+	return {}
+
+
+func _label_of(type_id: String) -> String:
+	var saved_page := page
+	for i in 7:
+		page = i
+		for entry: Dictionary in _page_catalog():
+			if str(entry["type"]) == type_id:
+				page = saved_page
+				return str(entry["label"])
+	page = saved_page
+	return type_id
+
+
+func _slot_map() -> Dictionary:
+	var out := {}
+	for i in hotbar.size():
+		if str(hotbar[i]) != "":
+			out[str(hotbar[i])] = i
+	return out
+
+
+func _refresh_palette() -> void:
+	if palette == null:
+		return
+	var labels := {}
+	for type_id in hotbar:
+		if str(type_id) != "":
+			labels[str(type_id)] = _label_of(str(type_id))
+	palette.set_slots(hotbar, icons, labels, _current_type() if mode == Mode.PLACE else "")
+	palette.set_state(page if mode == Mode.PLACE else -1, _palette_open)
+	# The page icons again: thumbnails land after setup.
+	var page_icons: Array = []
+	var saved_page := page
+	for i in 7:
+		page = i
+		var entries := _page_catalog()
+		page_icons.append(icons.icon(str(entries[0]["type"])) if not entries.is_empty() else null)
+	page = saved_page
+	palette.set_page_icons(page_icons)
 
 
 func _set_mode(new_mode: Mode) -> void:
 	if not _nozzle_grab.is_empty():
 		_toggle_nozzle_grab()  # cancel and restore
+	if new_mode != Mode.PLACE and _palette_open:
+		_palette_open = false
+		MouseMode.capture()
+		player.input_locked = false
 	mode = new_mode
 	_end_edit()
 	_clear_ghost()
@@ -229,10 +396,11 @@ func _set_mode(new_mode: Mode) -> void:
 
 
 func _update_hud() -> void:
+	_refresh_palette()
 	match mode:
 		Mode.NORMAL:
 			menu.visible = false
-			hud.set_mode_text("B build · C connect · X remove · click: select (a fitting starts a line) · double-click: properties · right-hold: move (a line: pull to cut) · right-click: cancel")
+			hud.set_mode_text("1–9 hotbar · Tab palette · B build · C connect · X remove · click: select (a fitting starts a line) · double-click: properties · right-hold: move (a line: pull to cut) · right-click: cancel")
 		Mode.EDIT when _edit_run != null:
 			menu.visible = false
 			hud.set_mode_text("SELECTED %s, leg %d — aim at a gold corner and hold click to move it · right-hold and pull across it cuts · double-click: colour/label · click again or right-click done"
@@ -249,10 +417,14 @@ func _update_hud() -> void:
 				"ROUTING · FLOOR · SIGNS", "CONTROL", "UTILITIES"]
 			var entries := _catalog()
 			catalog_index = mini(catalog_index, maxi(entries.size() - 1, 0))
-			var heading := "%s — Tab for %s" % [page_names[page], page_names[(page + 1) % 7]]
+			var heading := page_names[page]
+			if _palette_open:
+				heading += " — click an item · hover one and press 1–9 to put it on the hotbar · click a page icon on the left"
+			else:
+				heading += " — Tab for the palette · 1–9 hotbar"
 			if entries.is_empty():
 				heading += "  ·  nothing unlocked here yet — J for the journal"
-			menu.show_page(heading, entries, icons, catalog_index)
+			menu.show_page(heading, entries, icons, catalog_index, _slot_map())
 			if _is_stretch():
 				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
 				var step := "click a supported START point" if _beam_anchor == Vector3.INF \
