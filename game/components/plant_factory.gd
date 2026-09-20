@@ -627,6 +627,28 @@ static func _anchor_dir(raw: Variant) -> Vector3:
 ## meets that face.
 const INLINE_FLUSH: Array[String] = ["valve", "block_valve", "gauge_flow", "tee_split", "tee_mix", "cap",
 	"orifice", "needle_valve", "ball_valve", "solenoid_valve", "metering_pump", "regulator", "rotameter"]
+## The small-bore family: on tubing their bodies shorten, and their
+## inlet and outlet faces come in with them (SmallBoreUtil.half_scale).
+const SMALL_BORE_TYPES: Array[String] = ["orifice", "needle_valve", "ball_valve", "solenoid_valve",
+	"metering_pump", "regulator", "rotameter"]
+
+
+## The port anchors of a type built at a bore: the small-bore family's
+## inlet and outlet faces move in on tubing; everything else is the
+## table as written.
+static func anchors_for(type_id: String, bore_r: float) -> Dictionary:
+	var anchors: Dictionary = PORT_ANCHORS.get(type_id, {})
+	if not SMALL_BORE_TYPES.has(type_id):
+		return anchors
+	var scale := SmallBoreUtil.half_scale(bore_r)
+	if scale == 1.0:
+		return anchors
+	var out := anchors.duplicate(true)
+	for port: String in ["inlet", "outlet"]:
+		if out.has(port):
+			var pos: Vector3 = out[port]["pos"]
+			out[port]["pos"] = Vector3(pos.x * scale, pos.y, pos.z)
+	return out
 
 
 static func make_marker(view: Node3D, record_name: String, port_name: String,

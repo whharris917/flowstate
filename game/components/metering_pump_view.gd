@@ -33,6 +33,7 @@ func set_bore(r: float) -> void:
 func setup(pump_: SimMeteringPump, bore_r: float = 0.07) -> void:
 	pump = pump_
 	bore = bore_r
+	var half := SmallBoreUtil.half_for(HALF, bore_r)
 	var steel := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 	var dark := ViewUtil.flat(Color(0.22, 0.23, 0.25))
 	var housing := ViewUtil.flat(Color(0.16, 0.36, 0.62))
@@ -61,10 +62,10 @@ func setup(pump_: SimMeteringPump, bore_r: float = 0.07) -> void:
 			Vector3(-0.10 + side * 0.07, LINE_Y, 0), steel)
 		(cv.mesh as CylinderMesh).radial_segments = 6
 		cv.rotation_degrees = Vector3(0, 0, 90)
-	SmallBoreUtil.spool(self, -HALF, -0.195, LINE_Y, bore_r, steel)
-	SmallBoreUtil.spool(self, -0.005, HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, -HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, HALF, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, -half, -0.195, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, -0.005, half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, -half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, half, LINE_Y, bore_r, steel)
 	# The stroke dial on the housing front, its pointer held.
 	var dial := ViewUtil.cylinder(self, 0.035, 0.008, Vector3(0.10, 0.20, 0.104), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	dial.rotation_degrees = Vector3(90, 0, 0)

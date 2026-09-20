@@ -25,16 +25,17 @@ func set_bore(r: float) -> void:
 func setup(valve_: SimSolenoidValve, bore_r: float = 0.07) -> void:
 	valve = valve_
 	bore = bore_r
+	var half := SmallBoreUtil.half_for(HALF, bore_r)
 	var s := SmallBoreUtil.body_scale(bore_r)
 	var steel := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 	var brass := ViewUtil.flat(Color(0.72, 0.60, 0.34))
 	var black := ViewUtil.flat(Color(0.12, 0.12, 0.13))
 	var body_w := 0.10 * s + 0.04
 	ViewUtil.box(self, Vector3(body_w, 0.07 * s + 0.03, 0.07 * s + 0.03), Vector3(0, LINE_Y, 0), brass)
-	SmallBoreUtil.spool(self, -HALF, -body_w / 2.0, LINE_Y, bore_r, steel)
-	SmallBoreUtil.spool(self, body_w / 2.0, HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, -HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, HALF, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, -half, -body_w / 2.0, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, body_w / 2.0, half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, -half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, half, LINE_Y, bore_r, steel)
 	# The coil can on its tube, and the connector on the can.
 	var can_r := 0.026 * s + 0.014
 	var can_h := 0.07 * s + 0.03
@@ -49,7 +50,7 @@ func setup(valve_: SimSolenoidValve, bore_r: float = 0.07) -> void:
 	lamp.rotation_degrees = Vector3(90, 0, 0)
 	var tag := ViewUtil.label(self, valve.comp_name, Vector3(0, can_top + 0.20, 0))
 	tag.font_size = 24
-	ViewUtil.interact_body(self, Vector3(HALF * 2.0, can_top + 0.03 - LINE_Y + 0.12, 0.16),
+	ViewUtil.interact_body(self, Vector3(half * 2.0, can_top + 0.03 - LINE_Y + 0.12, 0.16),
 		Vector3(0, (LINE_Y + can_top) / 2.0, 0))
 	_was_energized = valve.energized
 

@@ -27,6 +27,7 @@ func set_bore(r: float) -> void:
 func setup(valve_: SimNeedleValve, bore_r: float = 0.07) -> void:
 	valve = valve_
 	bore = bore_r
+	var half := SmallBoreUtil.half_for(HALF, bore_r)
 	var s := SmallBoreUtil.body_scale(bore_r)
 	var steel := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 	var dark := ViewUtil.flat(Color(0.28, 0.29, 0.32))
@@ -34,10 +35,10 @@ func setup(valve_: SimNeedleValve, bore_r: float = 0.07) -> void:
 	# Body: a forged block on the axis, the spools out to the faces.
 	var body_w := 0.12 * s + 0.04
 	ViewUtil.box(self, Vector3(body_w, 0.10 * s + 0.03, 0.09 * s + 0.03), Vector3(0, LINE_Y, 0), steel)
-	SmallBoreUtil.spool(self, -HALF, -body_w / 2.0, LINE_Y, bore_r, steel)
-	SmallBoreUtil.spool(self, body_w / 2.0, HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, -HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, HALF, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, -half, -body_w / 2.0, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, body_w / 2.0, half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, -half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, half, LINE_Y, bore_r, steel)
 	# Bonnet, with its packing nut, standing off the body.
 	var bonnet_h := 0.07 * s + 0.03
 	var bonnet_top := LINE_Y + 0.05 * s + 0.015 + bonnet_h
@@ -61,7 +62,7 @@ func setup(valve_: SimNeedleValve, bore_r: float = 0.07) -> void:
 		ViewUtil.flat(Color(0.92, 0.85, 0.20)))
 	var tag := ViewUtil.label(self, valve.comp_name, Vector3(0, bonnet_top + 0.22, 0))
 	tag.font_size = 24
-	ViewUtil.interact_body(self, Vector3(HALF * 2.0, bonnet_top + 0.10 - LINE_Y + 0.12, 0.18),
+	ViewUtil.interact_body(self, Vector3(half * 2.0, bonnet_top + 0.10 - LINE_Y + 0.12, 0.18),
 		Vector3(0, (LINE_Y + bonnet_top + 0.10) / 2.0, 0))
 	_place_handle()
 

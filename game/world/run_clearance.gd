@@ -105,6 +105,8 @@ func blocked_by(p: Vector3, ctx: Dictionary, vertical: bool) -> Variant:
 			var index := own.find(owner)
 			if index >= 0 and (vertical or p.distance_to((ctx["ends"] as Array)[index]) < float((ctx["reach"] as Array)[index])):
 				continue
+		if not is_instance_valid(entry[1]):
+			continue   # freed since the cell was probed: a fitting rebuilt at a new bore
 		if _rests_on(p, entry[1], radius):
 			continue
 		last_block = str(owner)

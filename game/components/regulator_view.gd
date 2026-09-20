@@ -25,16 +25,17 @@ func set_bore(r: float) -> void:
 func setup(regulator_: SimRegulator, bore_r: float = 0.07) -> void:
 	regulator = regulator_
 	bore = bore_r
+	var half := SmallBoreUtil.half_for(HALF, bore_r)
 	var s := SmallBoreUtil.body_scale(bore_r)
 	var steel := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 	var dark := ViewUtil.flat(Color(0.28, 0.29, 0.32))
 	var brass := ViewUtil.flat(Color(0.72, 0.60, 0.34))
 	var body_w := 0.10 * s + 0.04
 	ViewUtil.box(self, Vector3(body_w, 0.08 * s + 0.03, 0.08 * s + 0.03), Vector3(0, LINE_Y, 0), brass)
-	SmallBoreUtil.spool(self, -HALF, -body_w / 2.0, LINE_Y, bore_r, steel)
-	SmallBoreUtil.spool(self, body_w / 2.0, HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, -HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, HALF, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, -half, -body_w / 2.0, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, body_w / 2.0, half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, -half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, half, LINE_Y, bore_r, steel)
 	# The bonnet: a can with a domed top, the spring inside it.
 	var bonnet_r := 0.040 * s + 0.018
 	var bonnet_h := 0.05 * s + 0.03
@@ -76,7 +77,7 @@ func setup(regulator_: SimRegulator, bore_r: float = 0.07) -> void:
 	ViewUtil.box(_needle, Vector3(0.003, 0.022, 0.002), Vector3(0, 0.011, 0), ViewUtil.flat(Color(0.80, 0.16, 0.12)))
 	var tag := ViewUtil.label(self, regulator.comp_name, Vector3(0, dome_top + 0.22, 0))
 	tag.font_size = 24
-	ViewUtil.interact_body(self, Vector3(HALF * 2.0, dome_top + 0.05 - LINE_Y + 0.12, 0.2),
+	ViewUtil.interact_body(self, Vector3(half * 2.0, dome_top + 0.05 - LINE_Y + 0.12, 0.2),
 		Vector3(0, (LINE_Y + dome_top) / 2.0, 0))
 
 

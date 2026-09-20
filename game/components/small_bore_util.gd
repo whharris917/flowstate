@@ -15,6 +15,18 @@ static func is_tube(bore_r: float) -> bool:
 	return bore_r <= TUBE_BORE
 
 
+## How much shorter a small-bore body is on tubing than on pipe: its
+## faces come in to under half the pipe-size half-length, so a train
+## of them sits nipple to nipple the way a fitter leaves it (director,
+## 2026-09-20: "so unnecessarily spaced apart").
+static func half_scale(bore_r: float) -> float:
+	return 0.45 if is_tube(bore_r) else 1.0
+
+
+static func half_for(base_half: float, bore_r: float) -> float:
+	return base_half * half_scale(bore_r)
+
+
 ## The fitting at one port face of an inline device, its face at
 ## `face_x` along the device's own x axis (the line meets it there),
 ## built into `parent` at the line's height. The compression nut is a

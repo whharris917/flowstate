@@ -27,15 +27,16 @@ func set_bore(r: float) -> void:
 func setup(meter_: SimRotameter, bore_r: float = 0.07) -> void:
 	meter = meter_
 	bore = bore_r
+	var half := SmallBoreUtil.half_for(HALF, bore_r)
 	var s := SmallBoreUtil.body_scale(bore_r)
 	var steel := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 	var dark := ViewUtil.flat(Color(0.28, 0.29, 0.32))
 	var body_w := 0.10 * s + 0.05
 	ViewUtil.box(self, Vector3(body_w, 0.07 * s + 0.03, 0.08 * s + 0.03), Vector3(0, LINE_Y, 0), steel)
-	SmallBoreUtil.spool(self, -HALF, -body_w / 2.0, LINE_Y, bore_r, steel)
-	SmallBoreUtil.spool(self, body_w / 2.0, HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, -HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, HALF, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, -half, -body_w / 2.0, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, body_w / 2.0, half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, -half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, half, LINE_Y, bore_r, steel)
 	# The tube: tapered glass, the bottom end fitting on the body, the
 	# top end fitting closing it.
 	_tube_base = LINE_Y + 0.035 * s + 0.015 + 0.02
@@ -75,7 +76,7 @@ func setup(meter_: SimRotameter, bore_r: float = 0.07) -> void:
 	_float.add_child(cone)
 	var tag := ViewUtil.label(self, meter.comp_name, Vector3(0, _tube_base + TUBE_H + 0.22, 0))
 	tag.font_size = 24
-	ViewUtil.interact_body(self, Vector3(HALF * 2.0, TUBE_H + 0.16 + (_tube_base - LINE_Y), 0.16),
+	ViewUtil.interact_body(self, Vector3(half * 2.0, TUBE_H + 0.16 + (_tube_base - LINE_Y), 0.16),
 		Vector3(0, (LINE_Y + _tube_base + TUBE_H + 0.02) / 2.0, 0))
 	_place_float()
 

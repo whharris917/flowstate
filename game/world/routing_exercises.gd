@@ -48,15 +48,19 @@ const TUBE_COLOR := Color(0.13, 0.55, 0.28)   # water, ASME
 
 static func _drip_demo(plant: Plant) -> void:
 	# The drip line, west to east along z = 10.
-	plant.place("source", "supply_2", {"pressure_kpa": 400.0}, Vector3(-4.5, 0.0, LINE_Z), 0.0, false)
-	plant.place("regulator", "pr_2", {"set_kpa": 150.0, "cv_lps": 0.5}, Vector3(-2.5, 0.0, LINE_Z), 0.0, false)
-	var bv := plant.place("ball_valve", "bv_2", {"cv_lps": 0.5}, Vector3(-1.0, 0.0, LINE_Z), 0.0, false) as SimBallValve
+	# The train sits nipple to nipple, the way a fitter leaves it
+	# (director, 2026-09-20: the first version stood them 1.5 m apart,
+	# "so unnecessarily spaced apart"): a device every 0.3 m, the
+	# metering pump's longer body 0.4 m from its neighbour.
+	plant.place("source", "supply_2", {"pressure_kpa": 400.0}, Vector3(-4.0, 0.0, LINE_Z), 0.0, false)
+	plant.place("regulator", "pr_2", {"set_kpa": 150.0, "cv_lps": 0.5}, Vector3(-2.4, 0.0, LINE_Z), 0.0, false)
+	var bv := plant.place("ball_valve", "bv_2", {"cv_lps": 0.5}, Vector3(-2.1, 0.0, LINE_Z), 0.0, false) as SimBallValve
 	var nv := plant.place("needle_valve", "nv_2", {"cv_lps": 0.0005, "turns": 10.0},
-		Vector3(0.5, 0.0, LINE_Z), 0.0, false) as SimNeedleValve
-	plant.place("rotameter", "fi_2", {"range_lps": 0.001}, Vector3(2.0, 0.0, LINE_Z), 0.0, false)
-	plant.place("orifice", "ro_2", {"cv_lps": 0.0005}, Vector3(3.5, 0.0, LINE_Z), 0.0, false)
+		Vector3(-1.8, 0.0, LINE_Z), 0.0, false) as SimNeedleValve
+	plant.place("rotameter", "fi_2", {"range_lps": 0.001}, Vector3(-1.5, 0.0, LINE_Z), 0.0, false)
+	plant.place("orifice", "ro_2", {"cv_lps": 0.0005}, Vector3(-1.2, 0.0, LINE_Z), 0.0, false)
 	var t2 := plant.place("tank", "t_2", {"height_m": 0.6, "diameter_m": 0.4, "open_top": true},
-		Vector3(6.5, 0.0, LINE_Z), 0.0, false) as SimTank
+		Vector3(0.6, 0.0, LINE_Z), 0.0, false) as SimTank
 	if bv != null:
 		bv.open = true
 		bv.position = 100.0
@@ -71,8 +75,9 @@ static func _drip_demo(plant: Plant) -> void:
 	_line(plant, "fi_2", "outlet", "ro_2", "inlet")
 	# The open end: up past the tank's rim and over its middle. The
 	# rise stands short of the tank so the riser is clear of it.
+	plant.next_line_size(TUBE_DN)
 	var why := plant.connect_open("ro_2", "outlet",
-		[Vector3(5.7, 0.32, LINE_Z), Vector3(5.7, 1.3, LINE_Z), Vector3(6.5, 1.3, LINE_Z)])
+		[Vector3(-0.2, 0.32, LINE_Z), Vector3(-0.2, 1.3, LINE_Z), Vector3(0.6, 1.3, LINE_Z)])
 	if why != "":
 		push_error("drip demo, open end: " + why)
 	else:
@@ -81,17 +86,17 @@ static func _drip_demo(plant: Plant) -> void:
 	# The dosing line: the open tank's bottom nozzle to a metering
 	# pump, a solenoid valve, and a closed tank.
 	plant.place("metering_pump", "mp_2", {"rated_lps": 0.01, "max_head_m": 50.0},
-		Vector3(9.0, 0.0, DOSE_Z), 0.0, false)
-	plant.place("solenoid_valve", "sv_2", {"cv_lps": 0.3}, Vector3(10.5, 0.0, DOSE_Z), 0.0, false)
-	plant.place("tank", "t_3", {"height_m": 0.6, "diameter_m": 0.4}, Vector3(13.0, 0.0, DOSE_Z), 0.0, false)
+		Vector3(2.4, 0.0, DOSE_Z), 0.0, false)
+	plant.place("solenoid_valve", "sv_2", {"cv_lps": 0.3}, Vector3(2.8, 0.0, DOSE_Z), 0.0, false)
+	plant.place("tank", "t_3", {"height_m": 0.6, "diameter_m": 0.4}, Vector3(4.6, 0.0, DOSE_Z), 0.0, false)
 	_line(plant, "t_2", "outlet", "mp_2", "inlet")
 	_line(plant, "mp_2", "outlet", "sv_2", "inlet")
 	_line(plant, "sv_2", "outlet", "t_3", "inlet")
 	# Power and control: 480 V from a feeder into a 24 V supply for the
 	# pump; the solenoid's coil from a maintained DOSE button.
-	plant.place("mains", "mains_2", {"ways": 2}, Vector3(9.0, 0.0, 6.0), 0.0, false)
-	plant.place("psu", "psu_2", {}, Vector3(10.6, 0.0, 6.0), 0.0, false)
-	plant.place_control_station("lcs_2", Vector3(12.2, 0.0, 6.0), 0.0, [
+	plant.place("mains", "mains_2", {"ways": 2}, Vector3(2.4, 0.0, 6.0), 0.0, false)
+	plant.place("psu", "psu_2", {}, Vector3(4.0, 0.0, 6.0), 0.0, false)
+	plant.place_control_station("lcs_2", Vector3(5.6, 0.0, 6.0), 0.0, [
 		{"kind": "button", "id": "dose", "legend": "DOSE", "color": "green", "momentary": false, "nc": false},
 		{"kind": "light", "id": "dosing", "legend": "DOSING", "color": "green"},
 	])
@@ -110,6 +115,7 @@ static func _drip_demo(plant: Plant) -> void:
 ## A line of the demo: laid by the router, then sized to tubing with
 ## compression fittings and painted for water.
 static func _line(plant: Plant, a: String, a_port: String, b: String, b_port: String) -> void:
+	plant.next_line_size(TUBE_DN)
 	var why := plant.connect_equipment(a, a_port, b, b_port)
 	if why != "":
 		push_error("drip demo, %s -> %s: %s" % [a, b, why])
@@ -124,8 +130,7 @@ static func _style_last(plant: Plant, a: String) -> void:
 	var visual: Dictionary = visuals[visuals.size() - 1]
 	if str(visual["a"]) != a or visual["node"] == null:
 		return
-	var view := plant.set_run_size(visual["node"] as PipeView, TUBE_DN)
-	plant.set_run_service(view, TUBE_COLOR, "", "tube")
+	plant.set_run_service(visual["node"] as PipeView, TUBE_COLOR, "", "tube")
 
 
 ## What the demo is doing, for the headless smoke: the drip's rate in

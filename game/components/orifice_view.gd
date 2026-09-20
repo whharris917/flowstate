@@ -23,14 +23,15 @@ func set_bore(r: float) -> void:
 func setup(orifice_: SimOrifice, bore_r: float = 0.07) -> void:
 	orifice = orifice_
 	bore = bore_r
+	var half := SmallBoreUtil.half_for(HALF, bore_r)
 	var steel := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 	var bright := ViewUtil.flat(Color(0.78, 0.80, 0.83))
 	# The spool either side of the joint, and the line's fitting at each face.
 	var joint := maxf(bore_r * 0.5, 0.025)
-	SmallBoreUtil.spool(self, -HALF, -joint, LINE_Y, bore_r, steel)
-	SmallBoreUtil.spool(self, joint, HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, -HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, HALF, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, -half, -joint, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, joint, half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, -half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, half, LINE_Y, bore_r, steel)
 	# The joint the plate sits in: a flange pair on a pipe, a union nut
 	# on tubing.
 	var plate_r := maxf(bore_r * 2.0, 0.035)
@@ -54,7 +55,7 @@ func setup(orifice_: SimOrifice, bore_r: float = 0.07) -> void:
 	hole.rotation_degrees = Vector3(0, 0, 90)
 	var tag := ViewUtil.label(self, orifice.comp_name, Vector3(0, LINE_Y + tab_h + 0.10, 0))
 	tag.font_size = 24
-	ViewUtil.interact_body(self, Vector3(HALF * 2.0, tab_h + 0.1, maxf(plate_r * 2.0, 0.12)),
+	ViewUtil.interact_body(self, Vector3(half * 2.0, tab_h + 0.1, maxf(plate_r * 2.0, 0.12)),
 		Vector3(0, LINE_Y + tab_h / 2.0 - 0.02, 0))
 
 

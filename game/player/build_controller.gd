@@ -1621,6 +1621,7 @@ func _inline_slide(name_: String) -> Dictionary:
 		if path.size() < 4:
 			continue
 		if str(visual["b"]) == name_ and str(visual["b_port"]) == str(spec["in"]):
+			need = Plant.inline_need(type_id, plant.wire_size(visual["node"] as PipeView))
 			var a := plant.to_global(path[path.size() - 3] as Vector3)
 			var b := plant.to_global(path[path.size() - 2] as Vector3)
 			if (b - a).normalized().cross(axis).length() > 0.02:
@@ -1628,6 +1629,7 @@ func _inline_slide(name_: String) -> Dictionary:
 			t_min = maxf(t_min, (a - origin).dot(axis) + need)
 			found = true
 		elif str(visual["a"]) == name_ and str(visual["a_port"]) == str(spec["out"]):
+			need = Plant.inline_need(type_id, plant.wire_size(visual["node"] as PipeView))
 			var a := plant.to_global(path[1] as Vector3)
 			var b := plant.to_global(path[2] as Vector3)
 			if (b - a).normalized().cross(axis).length() > 0.02:

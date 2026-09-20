@@ -26,6 +26,7 @@ func set_bore(r: float) -> void:
 func setup(valve_: SimBallValve, bore_r: float = 0.07) -> void:
 	valve = valve_
 	bore = bore_r
+	var half := SmallBoreUtil.half_for(HALF, bore_r)
 	var s := SmallBoreUtil.body_scale(bore_r)
 	var steel := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 	var dark := ViewUtil.flat(Color(0.28, 0.29, 0.32))
@@ -39,10 +40,10 @@ func setup(valve_: SimBallValve, bore_r: float = 0.07) -> void:
 		var hex := ViewUtil.cylinder(self, body_r * 0.95, 0.02, Vector3(side * (body_l / 2.0 + 0.01), LINE_Y, 0), steel)
 		(hex.mesh as CylinderMesh).radial_segments = 6
 		hex.rotation_degrees = Vector3(0, 0, 90)
-	SmallBoreUtil.spool(self, -HALF, -body_l / 2.0 - 0.02, LINE_Y, bore_r, steel)
-	SmallBoreUtil.spool(self, body_l / 2.0 + 0.02, HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, -HALF, LINE_Y, bore_r, steel)
-	SmallBoreUtil.port_end(self, HALF, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, -half, -body_l / 2.0 - 0.02, LINE_Y, bore_r, steel)
+	SmallBoreUtil.spool(self, body_l / 2.0 + 0.02, half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, -half, LINE_Y, bore_r, steel)
+	SmallBoreUtil.port_end(self, half, LINE_Y, bore_r, steel)
 	# Stem boss and the lever on it: held, since it turns.
 	var stem_top := LINE_Y + body_r + 0.03
 	ViewUtil.cylinder(self, 0.014 * s + 0.008, 0.03, Vector3(0, LINE_Y + body_r + 0.015, 0), dark)
@@ -55,7 +56,7 @@ func setup(valve_: SimBallValve, bore_r: float = 0.07) -> void:
 	ViewUtil.box(_lever, Vector3(0.03, 0.014, 0.022), Vector3(lever_l - 0.02, 0.012, 0), lever_mat)
 	var tag := ViewUtil.label(self, valve.comp_name, Vector3(0, stem_top + 0.20, 0))
 	tag.font_size = 24
-	ViewUtil.interact_body(self, Vector3(HALF * 2.0, stem_top + 0.04 - LINE_Y + 0.14, 0.2),
+	ViewUtil.interact_body(self, Vector3(half * 2.0, stem_top + 0.04 - LINE_Y + 0.14, 0.2),
 		Vector3(0, (LINE_Y + stem_top) / 2.0, 0))
 	_last_pos = valve.position
 	_place_lever()

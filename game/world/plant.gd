@@ -2297,8 +2297,8 @@ func _set_pedestal(view: Node3D, height: float) -> void:
 ## false for a vessel, which stands on the floor and takes the line
 ## through risers to its nozzles; `port_y`, the nozzle height over the
 ## base for an axis type.
-static func inline_spec(type_id: String) -> Dictionary:
-	var anchors: Dictionary = PlantFactory.PORT_ANCHORS.get(type_id, {})
+static func inline_spec(type_id: String, dn: int = 50) -> Dictionary:
+	var anchors: Dictionary = PlantFactory.anchors_for(type_id, line_radius(dn))
 	match type_id:
 		"tank":
 			var probe := TankView.new()
@@ -2329,9 +2329,14 @@ static func inline_spec(type_id: String) -> Dictionary:
 ## the line: its half, its flange, and the straight spool every
 ## fitting keeps after the flange — nothing more (director, 2026-09-20:
 ## "1 meter on both sides is excessive"; a pump asks 0.78 m now).
-static func inline_need(type_id: String) -> float:
-	var spec := inline_spec(type_id)
-	return -1.0 if spec.is_empty() else float(spec["half"]) + 0.175 + PipeRoute.STUB
+static func inline_need(type_id: String, dn: int = 50) -> float:
+	var spec := inline_spec(type_id, dn)
+	if spec.is_empty():
+		return -1.0
+	var r := line_radius(dn)
+	# The fitting at the face: a flange on pipe, a nut on tubing.
+	var fitting := 0.03 if SmallBoreUtil.is_tube(r) else 0.175
+	return float(spec["half"]) + fitting + PipeRoute.stub_for(r)
 
 
 ## The line nearest a point (world), within `max_d` of its drawn path,
@@ -2363,7 +2368,8 @@ func nearest_wire(world_point: Vector3, max_d: float) -> Dictionary:
 ## device and the stubs of the two pieces must fit on one level
 ## straight, clear of the fittings.
 func inline_spot(view: PipeView, at_global: Vector3, type_id: String) -> Dictionary:
-	var spec := inline_spec(type_id)
+	var dn := wire_size(view)
+	var spec := inline_spec(type_id, dn)
 	if spec.is_empty():
 		return {"why": "%s does not go inline" % type_id}
 	var half: float = spec["half"]
@@ -2383,12 +2389,13 @@ func inline_spot(view: PipeView, at_global: Vector3, type_id: String) -> Diction
 		return {"why": "put it on a level stretch, not a riser"}
 	# Room along this straight for the device, the two stub ends and a
 	# little more, and clear of the fittings either way.
-	var need := inline_need(type_id)
+	var need := inline_need(type_id, dn)
 	var length := path[seg].distance_to(path[seg + 1])
 	var t: float = near["t"]
 	if t * length < need or (1.0 - t) * length < need:
-		return {"why": "no room on that straight — it needs %.1f m either side" % need}
-	if float(near["arc"]) - need < 0.55 or float(near["total"]) - float(near["arc"]) - need < 0.55:
+		return {"why": "no room on that straight — it needs %.2f m either side" % need}
+	var fitting_zone := PipeRoute.stub_for(line_radius(dn)) + 0.2
+	if float(near["arc"]) - need < fitting_zone or float(near["total"]) - float(near["arc"]) - need < fitting_zone:
 		return {"why": "too close to the fitting"}
 	# Where the device stands and which way it faces: its inlet toward
 	# the upstream piece; an axis type with its nozzles at the line's
@@ -2588,7 +2595,8 @@ func connect_open(src_name: String, src_port: String, waypoints: Array) -> Strin
 	checkpoint()
 	var end: Vector3 = waypoints[waypoints.size() - 1]
 	var before: Vector3 = waypoints[waypoints.size() - 2] if waypoints.size() >= 2 \
-		else _marker_pos(src_name, src_port) + _marker_dir(src_name, src_port) * PipeRoute.STUB
+		else _marker_pos(src_name, src_port) + _marker_dir(src_name, src_port) \
+			* _stub_of(src_name, src_port, line_radius(_next_wire_dn))
 	var dir := end - before
 	dir.y = 0.0
 	if dir.length() < 0.05:
@@ -2639,8 +2647,8 @@ func delete_wire_corner(view: PipeView, point: Vector3) -> String:
 		var b_port := str(visual["b_port"])
 		var from := _marker_pos(a, a_port)
 		var to := _marker_pos(b, b_port)
-		var stub_a := from + _marker_dir(a, a_port) * PipeRoute.STUB
-		var stub_b := to + _marker_dir(b, b_port) * PipeRoute.STUB
+		var stub_a := from + _marker_dir(a, a_port) * _stub_of(a, a_port, view.radius())
+		var stub_b := to + _marker_dir(b, b_port) * _stub_of(b, b_port, view.radius())
 		var prev: Vector3 = waypoints[k - 1] if k > 0 else stub_a
 		var next: Vector3 = waypoints[k] if k < waypoints.size() else stub_b
 		var before_prev: Vector3 = waypoints[k - 2] if k > 1 else (stub_a if k == 1 else from)
@@ -2858,7 +2866,8 @@ func _revalidate_supports() -> void:
 		var order := int(visual.get("order", ORDER_ALL))
 		var t_dec := Time.get_ticks_usec()
 		var fresh := _avoided_corners(str(visual["a"]), str(visual["a_port"]),
-			str(visual["b"]), str(visual["b_port"]), visual["waypoints"], order)
+			str(visual["b"]), str(visual["b_port"]), visual["waypoints"], order,
+			(visual["node"] as PipeView).radius())
 		_lay_us["dec_corners"] = int(_lay_us.get("dec_corners", 0)) + Time.get_ticks_usec() - t_dec
 		var moved := fresh != (visual.get("corners", []) as Array)
 		if not moved:
@@ -3071,6 +3080,17 @@ func _apply_support_path(view: PipeView, path: Array[Vector3],
 ## Set before a connect whose waypoints are already the line's corners
 ## (a save's fixed line, a cut's pieces): the line is laid fixed.
 var _next_wire_fixed := false
+## The size the next line is laid at (default DN50): a code-laid line
+## on tubing takes its size before its first lay, so the stubs and
+## the fittings are right from the start rather than after a re-lay.
+var _next_wire_dn := 50
+
+
+func next_line_size(dn: int) -> void:
+	_next_wire_dn = dn if LINE_SIZES.has(dn) else 50
+
+
+var _pending_dn: Dictionary = {}   # name -> the size of a line about to land on it
 
 
 func _wire_visual(src_name: String, src_port: String,
@@ -3079,11 +3099,25 @@ func _wire_visual(src_name: String, src_port: String,
 	_wire_serial += 1
 	var fixed := _next_wire_fixed
 	_next_wire_fixed = false
-	var pipe := _build_pipe(src_name, src_port, dst_name, dst_port, waypoints, -1, 0, order, fixed)
+	var dn := _next_wire_dn
+	_next_wire_dn = 50
+	if dn != 50:
+		# The fittings at both ends take the line's size before its first
+		# lay: laid against DN50 bodies that a 0.3 m train of tube
+		# devices overlap, every leg detoured and kept its lane for good
+		# (2026-09-20, the loops between the demo's devices).
+		_pending_dn = {src_name: dn, dst_name: dn}
+		_sync_bores([src_name, dst_name])
+		_pending_dn = {}
+	var pipe := _build_pipe(src_name, src_port, dst_name, dst_port, waypoints, -1, 0, order, fixed, dn)
+	if dn != 50:
+		var wire := sim.find_wire(sim.get_component(src_name), src_port, sim.get_component(dst_name), dst_port)
+		if wire != null and wire.is_material():
+			sim.set_wire_resistance(wire, SimWire.DEFAULT_K * line_k_scale(dn))
 	_wire_visuals.append({
 		"node": pipe, "a": src_name, "a_port": src_port,
 		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
-		"color": "", "label": "", "order": order, "fixed": fixed,
+		"color": "", "label": "", "order": order, "fixed": fixed, "dn": dn,
 		"lane": int(pipe.get_meta("lane", 0)), "path": pipe.get_meta("path", []),
 		"corners": pipe.get_meta("corners", []), "base_path": pipe.get_meta("base_path", []),
 	})
@@ -3108,8 +3142,8 @@ func _bake(visual: Dictionary) -> void:
 	var b := str(visual["b"])
 	var from := _marker_pos(a, str(visual["a_port"]))
 	var to := _marker_pos(b, str(visual["b_port"]))
-	var ends: Array[Vector3] = [from, from + _marker_dir(a, str(visual["a_port"])) * PipeRoute.STUB,
-		to + _marker_dir(b, str(visual["b_port"])) * PipeRoute.STUB, to]
+	var ends: Array[Vector3] = [from, from + _marker_dir(a, str(visual["a_port"])) * _stub_of(a, str(visual["a_port"]), node.radius()),
+		to + _marker_dir(b, str(visual["b_port"])) * _stub_of(b, str(visual["b_port"]), node.radius()), to]
 	var waypoints: Array = []
 	for p: Vector3 in path:
 		var at_end := false
@@ -3162,7 +3196,7 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 	var chosen := lane
 	var path: Array[Vector3] = []
 	var t_start := Time.get_ticks_usec()
-	var corners := _avoided_corners(src_name, src_port, dst_name, dst_port, waypoints, order)
+	var corners := _avoided_corners(src_name, src_port, dst_name, dst_port, waypoints, order, radius)
 	_lay_us["corners"] = int(_lay_us.get("corners", 0)) + Time.get_ticks_usec() - t_start
 	var lay_ctx := clearance.context([src_name, dst_name], _marker_pos(src_name, src_port),
 		_marker_pos(dst_name, dst_port), radius)
@@ -3396,6 +3430,7 @@ func _sync_bores(names: Array) -> void:
 				continue
 			dn = maxi(dn, int(visual.get("dn", 50)))
 			lines.append(visual)
+		dn = maxi(dn, int(_pending_dn.get(str(name_), 0)))
 		if dn == 0:
 			dn = 50
 		if record.get("dn") != null:
@@ -3415,9 +3450,11 @@ func _sync_bores(names: Array) -> void:
 			PlantFactory.attach_port_markers(view, record, type_id,
 				PlantFactory.cap_anchors((view as CapView).line_y), [], r)
 		else:
-			PlantFactory.attach_port_markers(view, record, type_id, {}, [], r)
+			PlantFactory.attach_port_markers(view, record, type_id,
+				PlantFactory.anchors_for(type_id, r), [], r)
 		if type_id == "cap":
 			_sync_caps([str(name_)])
+		clearance.clear()   # the fittings just freed may sit in its cells
 		for visual in lines:
 			_refresh_visual(visual)
 		touched = true
@@ -3525,7 +3562,9 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	var to_dir := _marker_dir(dst_name, dst_port)
 	var lane_ctx := clearance.context([src_name, dst_name], from, to, radius)
 	var squaring := clearance.router_blocked.bind(lane_ctx)   # a square-turn leg goes the clear way
-	var base := PipeRoute.routed(from, from_dir, to, to_dir, corners, squaring)
+	var sa := _stub_of(src_name, src_port, radius)
+	var sb := _stub_of(dst_name, dst_port, radius)
+	var base := PipeRoute.routed(from, from_dir, to, to_dir, corners, squaring, sa, sb)
 	if lane <= 0:
 		return base
 	if not _has_level_corner(base):
@@ -3535,7 +3574,7 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 		# level leg, so the lane bends it there in two shallow angles.
 		# Added to its corners, never in their place (2026-09-19: a line
 		# raised by its two riser corners was laid back on the ground).
-		base = PipeRoute.routed(from, from_dir, to, to_dir, _with_mid_corner(base, corners), squaring)
+		base = PipeRoute.routed(from, from_dir, to, to_dir, _with_mid_corner(base, corners), squaring, sa, sb)
 	# Lane slots: either side, then the same two one tier up, then a
 	# step further out. A tier is a run's width, the way cables stack
 	# in a tray; a whole tier would carry a ground run past the
@@ -3555,7 +3594,7 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	if not _lane_room.has(room_key):
 		_lane_room[room_key] = _leg_room(base, side, step, lift, lane_ctx)
 	var shifted := _offset_polyline(base, side, k * step, lift, _lane_room[room_key], lane_ctx)
-	return PipeRoute.routed(from, from_dir, to, to_dir, shifted, squaring)
+	return PipeRoute.routed(from, from_dir, to, to_dir, shifted, squaring, sa, sb)
 
 
 ## A corner between two level legs, strictly between the stubs: where
@@ -3800,20 +3839,23 @@ func _visual_path(visual: Dictionary) -> Array[Vector3]:
 ## only knows a body the frame after it is added, so a run laid in the
 ## same frame as its equipment is re-laid by the deferred pass.
 func _avoided_corners(src_name: String, src_port: String, dst_name: String, dst_port: String,
-		waypoints: Array, order: int = ORDER_ALL) -> Array:
+		waypoints: Array, order: int = ORDER_ALL, radius: float = -1.0) -> Array:
 	var from := _marker_pos(src_name, src_port)
 	var to := _marker_pos(dst_name, dst_port)
 	var from_dir := _marker_dir(src_name, src_port)
 	var to_dir := _marker_dir(dst_name, dst_port)
+	if radius <= 0.0:
+		radius = _radius_of(src_name, src_port)
+	var sa := _stub_of(src_name, src_port, radius)
+	var sb := _stub_of(dst_name, dst_port, radius)
 	var full := PipeRoute.routed_avoiding(from, from_dir, to, to_dir, waypoints,
-		clearance.router_blocked.bind(clearance.context([src_name, dst_name], from, to,
-			_radius_of(src_name, src_port))),
-		clearance.busy.bind([src_name], order))
+		clearance.router_blocked.bind(clearance.context([src_name, dst_name], from, to, radius)),
+		clearance.busy.bind([src_name], order), sa, sb)
 	# The corners are the route without its fittings and stubs, stripped
 	# by position: the router's straightening drops a stub end that lies
 	# on the last straight, so slicing by index lost a line's only corner
 	# (2026-09-19: the director saw no handle on the exercise line).
-	var fixed: Array[Vector3] = [from, from + from_dir * PipeRoute.STUB, to + to_dir * PipeRoute.STUB, to]
+	var fixed: Array[Vector3] = [from, from + from_dir * sa, to + to_dir * sb, to]
 	var corners: Array = []
 	for p: Vector3 in full:
 		var at_end := false
@@ -3956,6 +3998,16 @@ static func _path_box(path: Array) -> AABB:
 
 ## The radius a line from this port is drawn at: process lines are
 ## fatter than signal and power runs.
+## The straight a line keeps at this fitting: five of its own bores,
+## or five of the fitting's where the fitting is the bigger (a DN6
+## tube meets a DN50 nozzle through a reducer that needs the room).
+func _stub_of(record_name: String, port_name: String, radius: float) -> float:
+	var record := sim.get_component(record_name)
+	if record == null or not record.material_ports().has(port_name):
+		return PipeRoute.STUB   # a cable keeps the gland stub it always had
+	return PipeRoute.stub_for(maxf(radius, _end_bore(record_name)))
+
+
 func _radius_of(record_name: String, port_name: String) -> float:
 	var record := sim.get_component(record_name)
 	if record == null or not record.outputs.has(port_name):
