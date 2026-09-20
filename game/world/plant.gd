@@ -4036,17 +4036,17 @@ func _exercise_supports() -> void:
 	var run: Array[Vector3] = [origin + Vector3(-4, 2, 0), origin + Vector3(4, 2, 0)]
 	if _support_exercise_phase == 1:
 		# An 8 m span 2 m over the pad stands on pipe stands; the same
-		# span 6 m up is beyond a stand and fails (2026-09-19).
+		# span 8 m up is beyond a stand (6 m) and fails (2026-09-19).
 		var open_check := SupportCheck.evaluate(run, space)
 		if not bool(open_check["ok"]) or int(open_check["stands"]) < 2:
 			push_warning("[flowstate] support exercise FAILED: 8 m span 2 m up was not stood on stands (ok %s, %d stands)"
 				% [str(open_check["ok"]), int(open_check["stands"])])
 			_support_exercise_phase = 0
 			return
-		var high: Array[Vector3] = [origin + Vector3(-4, 6, 0), origin + Vector3(4, 6, 0)]
+		var high: Array[Vector3] = [origin + Vector3(-4, 8, 0), origin + Vector3(4, 8, 0)]
 		var high_check := SupportCheck.evaluate(high, space)
 		if bool(high_check["ok"]):
-			push_warning("[flowstate] support exercise FAILED: 8 m air span 6 m up passed (max span %.2f)"
+			push_warning("[flowstate] support exercise FAILED: 8 m air span 8 m up passed (max span %.2f)"
 				% float(high_check["max_span"]))
 			_support_exercise_phase = 0
 			return

@@ -25,7 +25,7 @@ const MAX_SPAN := 3.0
 const END_GRACE := 1.0
 const BRACKET_SPACING := 2.2
 const SUPPORT_MASK := 1 | 4
-const STAND_REACH := 4.0
+const STAND_REACH := 6.0
 const STAND_MASK := 1
 
 const _RAY_DIRS: Array[Vector3] = [
@@ -43,6 +43,7 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 	var samples: Array[Vector3] = []
 	var arcs: Array[float] = []
 	var level: Array[bool] = []   # the sample lies on a level leg: a stand can go under it
+	var seg_of: Array[int] = []   # which leg of the path the sample is on
 	var total := 0.0
 	for i in range(path.size() - 1):
 		var from := path[i]
@@ -56,11 +57,13 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 			samples.append(from.lerp(to, float(s) / steps))
 			arcs.append(total + seg_len * s / steps)
 			level.append(is_level)
+			seg_of.append(i)
 		total += seg_len
 	if not path.is_empty():
 		samples.append(path[path.size() - 1])
 		arcs.append(total)
 		level.append(false)
+		seg_of.append(path.size() - 2)
 
 	var shape := SphereShape3D.new()
 	shape.radius = REACH
@@ -91,30 +94,56 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 		var stretch_start: float = arcs[maxi(0, i0 - 1)]
 		var stretch_end: float = arcs[mini(samples.size() - 1, i1 + 1)]
 		if stretch_end - stretch_start > MAX_SPAN + 0.01:
-			var last_stand := stretch_start
-			for i in range(i0, i1 + 1):
-				if not level[i]:
+			# Stands stand at fixed fractions of each level straight —
+			# evenly spaced, at most BRACKET_SPACING apart — so they keep
+			# their place along the pipe as it rises (2026-09-19: spaced
+			# from the start of the stretch, whose risers grow with the
+			# height, they wandered, and the director saw one appear and
+			# vanish between notches). A riser before the straight or
+			# after it that would overrun the span with the level beside
+			# it puts one more stand at that end.
+			var g0 := i0
+			while g0 <= i1:
+				if not level[g0]:
+					g0 += 1
 					continue
-				# One every BRACKET_SPACING along the level, and one at
-				# the foot of a riser the stretch runs on into whenever
-				# the riser beyond, with the level since the last stand,
-				# would overrun the span (a run raised 3.8 m switched
-				# lanes over a riser left hanging, 2026-09-19).
-				var due := arcs[i] - last_stand >= BRACKET_SPACING
-				if not due and i + 1 <= i1 and not level[i + 1]:
-					var j := i + 1
-					while j + 1 <= i1 and not level[j + 1]:
-						j += 1
-					var tail: float = arcs[mini(j + 1, samples.size() - 1)] - arcs[i]
-					due = arcs[i] - last_stand + tail > MAX_SPAN and arcs[i] - last_stand > 0.3
-				if not due:
-					continue
-				var floor_hit := _floor_below(samples[i], space, exclude)
-				if floor_hit == Vector3.INF:
-					continue
-				stands.append({"from": samples[i], "to": floor_hit, "stand": true})
-				supported[i] = true
-				last_stand = arcs[i]
+				var g1 := g0
+				while g1 + 1 <= i1 and level[g1 + 1]:
+					g1 += 1
+				var seg: int = seg_of[g0]
+				var seg_a: Vector3 = path[seg]
+				var seg_b: Vector3 = path[seg + 1]
+				var seg_len := seg_a.distance_to(seg_b)
+				var count := maxi(1, ceili(seg_len / BRACKET_SPACING) - 1)
+				var wanted: Array[int] = []
+				for k in range(1, count + 1):
+					var at := seg_a.lerp(seg_b, float(k) / (count + 1))
+					# The nearest sample of this stretch to the spot.
+					var best := -1
+					var best_d := 0.3
+					for i in range(g0, g1 + 1):
+						var d := samples[i].distance_to(at)
+						if d < best_d:
+							best_d = d
+							best = i
+					if best >= 0 and not wanted.has(best):
+						wanted.append(best)
+				wanted.sort()
+				var head: float = arcs[g0] - stretch_start
+				var tail: float = stretch_end - arcs[g1]
+				var first_arc: float = arcs[wanted[0]] if not wanted.is_empty() else arcs[g1]
+				var last_arc: float = arcs[wanted[wanted.size() - 1]] if not wanted.is_empty() else arcs[g0]
+				if head + (first_arc - arcs[g0]) > MAX_SPAN and not wanted.has(g0):
+					wanted.insert(0, g0)
+				if (arcs[g1] - last_arc) + tail > MAX_SPAN and not wanted.has(g1):
+					wanted.append(g1)
+				for i in wanted:
+					var floor_hit := _floor_below(samples[i], space, exclude)
+					if floor_hit == Vector3.INF:
+						continue
+					stands.append({"from": samples[i], "to": floor_hit, "stand": true})
+					supported[i] = true
+				g0 = g1 + 1
 		i0 = i1 + 1
 
 	var max_span := 0.0
