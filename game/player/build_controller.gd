@@ -1881,6 +1881,13 @@ func _raise_selected(dy: float) -> void:
 		return
 	var a: Vector3 = path[leg]
 	var b: Vector3 = path[leg + 1]
+	if absf(a.y - b.y) > 0.001:
+		# A riser has no height of its own: raising its two ends put a
+		# corner above the stub and one below it, a fold, and every
+		# notch squared it with more legs (director, 2026-09-19:
+		# "instant spaghetti pipes spring forth").
+		hud.toast("select a level straight to raise it — a riser follows its ends")
+		return
 	var a2 := a + Vector3(0, dy, 0)
 	var b2 := b + Vector3(0, dy, 0)
 	a2.y = maxf(a2.y, 0.15)
