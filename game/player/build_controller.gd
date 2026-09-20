@@ -2142,12 +2142,19 @@ func _relay_selected(waypoints: Array, moved: Vector3, as_start: bool) -> void:
 	_edit_run = relaid
 	_leg_gizmo.pipe = relaid
 	var path := plant.wire_own_path(relaid)
-	# The moved corner is a point of the player's own route exactly.
+	# The moved corner is a point of the player's own route exactly —
+	# or, for a copy that took a riser partner's height, the point at
+	# its plan position.
 	var nearest := -1
 	for i in path.size():
 		if path[i].distance_to(moved) < 0.01:
 			nearest = i
 			break
+	if nearest < 0:
+		for i in range(1, path.size() - 1):
+			if Vector2(path[i].x - moved.x, path[i].z - moved.z).length() < 0.01:
+				nearest = i
+				break
 	if nearest >= 0:
 		_edit_leg = clampi(nearest if as_start else nearest - 1, 0, path.size() - 2)
 		_leg_gizmo.leg = _edit_leg
@@ -2270,6 +2277,40 @@ static func raised_waypoints(waypoints: Array, path: Array, leg: int, a2: Vector
 	return out
 
 
+## Which side of its original a pulled copy belongs on, in plan: -1
+## before, +1 after; the height it takes there; and, when the neighbour
+## on that side is the original's riser partner (the same plan
+## position at another height), the path index of that partner, which
+## the copy then goes beyond at the partner's height.
+static func _copy_side(path: Array, index: int, moved: Vector3) -> Dictionary:
+	var old: Vector3 = path[index]
+	var pull := Vector2(moved.x - old.x, moved.z - old.z)
+	var prev_i := index - 1
+	var next_i := index + 1
+	var prev_riser := prev_i >= 1 and _stacked(path[prev_i] as Vector3, old)
+	var next_riser := next_i <= path.size() - 2 and _stacked(path[next_i] as Vector3, old)
+	var back_i := prev_i - 1 if prev_riser and prev_i - 1 >= 0 else prev_i
+	var on_i := next_i + 1 if next_riser and next_i + 1 < path.size() else next_i
+	var back_v := Vector2.ZERO
+	var on_v := Vector2.ZERO
+	if back_i >= 0:
+		var b: Vector3 = path[back_i]
+		back_v = Vector2(b.x - old.x, b.z - old.z).normalized()
+	if on_i < path.size():
+		var o: Vector3 = path[on_i]
+		on_v = Vector2(o.x - old.x, o.z - old.z).normalized()
+	var before := pull.dot(back_v) > pull.dot(on_v)
+	if before:
+		return {"side": -1, "y": (path[prev_i] as Vector3).y if prev_riser else old.y,
+			"after": prev_i if prev_riser else -1}
+	return {"side": 1, "y": (path[next_i] as Vector3).y if next_riser else old.y,
+		"after": next_i if next_riser else -1}
+
+
+static func _stacked(a: Vector3, b: Vector3) -> bool:
+	return Vector2(a.x - b.x, a.z - b.z).length() < 0.02 and absf(a.y - b.y) > 0.02
+
+
 ## Which waypoint a point of the player's own route is: the one it
 ## equals, or -1. Never by nearness (director, 2026-09-19: "we cannot
 ## have such proximity based rules").
@@ -2315,6 +2356,18 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	# A mate stands at the matched corner's own plan position (a riser's
 	# other end), never merely near the dragged point.
 	var anchor: Vector3 = waypoints[self_index] if self_index >= 0 else old
+	# A fresh copy goes to the side it is pulled toward, beyond a riser
+	# partner on that side, at that side's height (2026-09-20: a copy
+	# always placed after its original ran the line out to it and back,
+	# "a mysterious loop" at the foot of a rise).
+	var copy_side := 0          # -1 before the original, +1 after
+	var copy_point := Vector3.ZERO
+	var copy_after_index := -1  # the waypoint the copy follows when +1 (a riser partner)
+	if overridden:
+		var side := _copy_side(path, index, moved)
+		copy_side = int(side["side"])
+		copy_point = Vector3(moved.x, float(side["y"]), moved.z)
+		copy_after_index = int(side["after"])
 	for k in waypoints.size():
 		var w: Vector3 = waypoints[k]
 		# Where along the route this waypoint stands.
@@ -2331,6 +2384,20 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 		# foot along, "as if they're tethered").
 		var mate := not itself and not overridden and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02 \
 			and absf(w.y - anchor.y) > 0.02 and not is_lock(locks, w)
+		if itself and overridden:
+			matched = true
+			if copy_side < 0:
+				# Before the original, and before its riser partner above
+				# or below when the pull goes past that too.
+				var at_out := out.size() - 1
+				if copy_after_index >= 0 and at_out - 1 >= 0 \
+						and (out[at_out - 1] as Vector3).distance_to(path[copy_after_index] as Vector3) < 0.01:
+					at_out -= 1
+				out.insert(maxi(at_out, 0), copy_point)
+			elif copy_after_index < 0:
+				out.append(copy_point)
+			# else: appended once the partner it follows has been.
+			continue
 		if itself:
 			out.append(Vector3(moved.x, w.y, moved.z) if keep_height else moved)
 			matched = true
@@ -2340,8 +2407,14 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 				matched = true
 		else:
 			out.append(w)
+		if overridden and copy_side > 0 and copy_after_index >= 0 \
+				and w.distance_to(path[copy_after_index] as Vector3) < 0.01:
+			out.append(copy_point)   # after the riser partner it was pulled past
+			copy_after_index = -1
 		if at >= 0 and at < index:
 			insert_at = out.size()
+	if overridden and copy_side > 0 and copy_after_index >= 0:
+		out.append(copy_point)   # the partner was not a waypoint after all
 	if not matched:
 		out.insert(insert_at, Vector3(moved.x, old.y, moved.z) if keep_height else moved)
 	if keep_height and not overridden:
