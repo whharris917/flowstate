@@ -2139,6 +2139,59 @@ static func _nearest_on_path(path: Array[Vector3], at: Vector3) -> Dictionary:
 		"distance": best_d}
 
 
+## Equipment that stands on the floor: above it, it gets a pedestal
+## (director, 2026-09-19: "the pump to automatically have supports
+## placed under it rather than float in the air if the pipe is high
+## up"). Measured from the floor, slab or deck actually below, in the
+## deferred pass where physics is known, so a placement, a move and a
+## load all get one; nothing within reach below, and it stays as it is.
+const PEDESTAL_TYPES: Array[String] = ["pump"]
+const PEDESTAL_REACH := 6.0
+
+
+func _pedestal_pass(space: PhysicsDirectSpaceState3D) -> void:
+	for name_: String in views:
+		if not PEDESTAL_TYPES.has(str(equip_types.get(name_, ""))):
+			continue
+		var view := views[name_] as Node3D
+		if view == null:
+			continue
+		var base := view.global_position - Vector3(0, PlantFactory.Y_OFFSETS.get(equip_types[name_], 0.0), 0)
+		var query := PhysicsRayQueryParameters3D.create(base + Vector3(0, 0.05, 0),
+			base + Vector3(0, -PEDESTAL_REACH, 0), 1)
+		var exclude: Array[RID] = []
+		for body in view.find_children("*", "CollisionObject3D", true, false):
+			exclude.append((body as CollisionObject3D).get_rid())
+		query.exclude = exclude
+		var hit := space.intersect_ray(query)
+		var height := 0.0
+		if not hit.is_empty():
+			height = base.y - (hit["position"] as Vector3).y
+		_set_pedestal(view, height if height > 0.03 else 0.0)
+
+
+## A painted-steel plinth under a view, from its base down `height`,
+## with a base plate on the floor. Held by name so it is rebuilt, not
+## merged away, and removed when the height is nothing.
+func _set_pedestal(view: Node3D, height: float) -> void:
+	var old := view.get_node_or_null("pedestal")
+	if old != null:
+		if height > 0.0 and absf(float(old.get_meta("height", 0.0)) - height) < 0.01:
+			return
+		old.queue_free()
+	if height <= 0.0:
+		return
+	var pedestal := Node3D.new()
+	pedestal.name = "pedestal"
+	pedestal.set_meta("height", height)
+	pedestal.set_meta("no_merge", true)
+	view.add_child(pedestal)
+	var steel := ViewUtil.flat(Color(0.30, 0.32, 0.35))
+	ViewUtil.box(pedestal, Vector3(0.5, height, 0.42), Vector3(0, -height / 2.0, 0), steel)
+	ViewUtil.box(pedestal, Vector3(0.7, 0.03, 0.6), Vector3(0, -height + 0.015, 0), steel)
+	ViewUtil.box(pedestal, Vector3(0.6, 0.03, 0.5), Vector3(0, -0.015, 0), steel)
+
+
 ## ---- inline equipment (director, 2026-09-19: "place a pump on an
 ## existing pipe ... The pump should simply delete the segment of pipe
 ## needed for it to fit inline, and automatically connect") -------------
@@ -2607,6 +2660,7 @@ func _revalidate_supports() -> void:
 		if visual["node"] == null:
 			continue  # internal cabinet wire, nothing physical to carry
 		_apply_support_path(visual["node"] as PipeView, _visual_path(visual), space)
+	_pedestal_pass(space)
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
 		_apply_support(entry["node"] as PipeView, entry["points"], space)
