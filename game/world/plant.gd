@@ -2235,10 +2235,12 @@ static func inline_spec(type_id: String) -> Dictionary:
 
 
 ## The room an inline device needs either side of its centre along
-## the line: its half, the stub end of each piece, a little more.
+## the line: its half, its flange, and the straight spool every
+## fitting keeps after the flange — nothing more (director, 2026-09-20:
+## "1 meter on both sides is excessive"; a pump asks 0.78 m now).
 static func inline_need(type_id: String) -> float:
 	var spec := inline_spec(type_id)
-	return -1.0 if spec.is_empty() else float(spec["half"]) + 0.175 + PipeRoute.STUB + 0.15
+	return -1.0 if spec.is_empty() else float(spec["half"]) + 0.175 + PipeRoute.STUB
 
 
 ## Where an inline device would sit on a line aimed at, or why not:
@@ -2271,7 +2273,7 @@ func inline_spot(view: PipeView, at_global: Vector3, type_id: String) -> Diction
 	var t: float = near["t"]
 	if t * length < need or (1.0 - t) * length < need:
 		return {"why": "no room on that straight — it needs %.1f m either side" % need}
-	if float(near["arc"]) - need < 0.6 or float(near["total"]) - float(near["arc"]) - need < 0.6:
+	if float(near["arc"]) - need < 0.55 or float(near["total"]) - float(near["arc"]) - need < 0.55:
 		return {"why": "too close to the fitting"}
 	# Where the device stands and which way it faces: its inlet toward
 	# the upstream piece; an axis type with its nozzles at the line's
