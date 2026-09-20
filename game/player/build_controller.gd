@@ -572,6 +572,8 @@ func _update_ghost() -> void:
 	if _is_mountable():
 		_update_mount_ghost()
 		return
+	if _update_inline_ghost():
+		return
 	var space := player.camera.get_world_3d().direct_space_state
 	var hit := _place_hit()
 	if hit.is_empty() or (hit["normal"] as Vector3).y < 0.6:
@@ -593,6 +595,53 @@ func _update_ghost() -> void:
 		_ghost_valid = StructureFactory.placement_ok(type_id, _ghost_pos, rot_y, space) == ""
 	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
 		else Color(0.9, 0.25, 0.2, 0.45)
+
+
+## An inline type (a pump, a valve, a flow element) aimed at a line:
+## the ghost sits on the pipe axis, turned along it, and the click cuts
+## it in (director, 2026-09-19). True when the crosshair is on a line.
+var _inline: Dictionary = {}   # {"view", "at"} while the ghost is on a line
+
+
+func _update_inline_ghost() -> bool:
+	_inline = {}
+	_inline_why = ""
+	var type_id := _current_type()
+	if Plant.inline_half(type_id) < 0.0 or not player.ray.is_colliding():
+		return false
+	var collider := player.ray.get_collider() as Node
+	if collider == null or not collider.has_meta("run"):
+		return false
+	var view := collider.get_meta("run") as PipeView
+	if view == null or plant.wire_ends(view).is_empty():
+		return false
+	var at := player.ray.get_collision_point()
+	var spot := plant.inline_spot(view, at, type_id)
+	(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
+	if spot["why"] != "":
+		# On a line, but no room there: the ghost shows red where aimed.
+		var near := Plant._nearest_on_path(plant.wire_path(view), plant.to_local(at))
+		_ghost_pos = plant.to_global(near["point"] as Vector3) - Vector3(0, Plant.inline_height(type_id), 0)
+		_ghost.global_position = _ghost_pos + Vector3(0, AssetPreview.base_offset(type_id), 0)
+		_ghost.rotation.y = rot_y
+		_ghost.visible = true
+		_ghost_valid = false
+		_inline_why = str(spot["why"])
+		_ghost_mat.albedo_color = Color(0.9, 0.25, 0.2, 0.45)
+		return true
+	var point: Vector3 = spot["point"]
+	var dir: Vector3 = spot["dir"]
+	_ghost_pos = plant.to_global(Vector3(point.x, point.y - Plant.inline_height(type_id), point.z))
+	_ghost.global_position = _ghost_pos + Vector3(0, AssetPreview.base_offset(type_id), 0)
+	_ghost.rotation.y = atan2(-dir.z, dir.x)
+	_ghost.visible = true
+	_ghost_valid = true
+	_inline = {"view": view, "at": at}
+	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45)
+	return true
+
+
+var _inline_why := ""
 
 
 ## A level instrument goes on a vessel: the ghost sticks to the shell
@@ -791,8 +840,15 @@ func _try_place() -> void:
 		if inst != null:
 			hud.toast("mounted %s on %s" % [inst.comp_name, _mount_host])
 		return
+	if not _inline.is_empty() and _ghost_valid:
+		var why := plant.place_inline(_current_type(), _inline["view"] as PipeView, _inline["at"] as Vector3)
+		hud.toast("cut in and connected" if why == "" else why)
+		_inline = {}
+		return
 	if _ghost == null or not _ghost.visible or not _ghost_valid:
 		var reason := "can't place here"
+		if _inline_why != "" and _ghost != null and _ghost.visible:
+			reason = _inline_why
 		if not _is_equipment_page() and _ghost != null and _ghost.visible:
 			var bearing := StructureFactory.placement_ok(_current_type(), _ghost_pos, rot_y,
 				player.camera.get_world_3d().direct_space_state)

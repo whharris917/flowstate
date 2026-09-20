@@ -2112,24 +2112,15 @@ func remove_run(view: PipeView) -> bool:
 ## the cut, and the two pieces are laid again from the corners the
 ## line had, so they keep their shape; each cap's outer nozzle is a
 ## blind end a later line can land on. Returns "" or why not.
-func cut_wire(view: PipeView, at_global: Vector3) -> String:
-	checkpoint()
-	var visual: Dictionary = {}
-	for candidate in _wire_visuals:
-		if candidate["node"] == view:
-			visual = candidate
-	if visual.is_empty():
-		return "only a line between two fittings can be cut"
-	var path: Array[Vector3] = _visual_path(visual)
-	if path.size() < 2:
-		return "nothing to cut"
-	var at := to_local(at_global)
-	# The nearest point on the laid path, and how far along it lies.
+## The nearest point of a laid path to `at` (plant-local): the segment,
+## the point, how far along the path it lies, and the path's length.
+static func _nearest_on_path(path: Array[Vector3], at: Vector3) -> Dictionary:
 	var best_d := INF
 	var best_seg := 0
 	var best_point := path[0]
 	var arc := 0.0
 	var best_arc := 0.0
+	var best_t := 0.0
 	for i in range(path.size() - 1):
 		var a := path[i]
 		var b := path[i + 1]
@@ -2142,7 +2133,146 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 			best_seg = i
 			best_point = p
 			best_arc = arc + t * length
+			best_t = t
 		arc += length
+	return {"seg": best_seg, "point": best_point, "arc": best_arc, "total": arc, "t": best_t,
+		"distance": best_d}
+
+
+## ---- inline equipment (director, 2026-09-19: "place a pump on an
+## existing pipe ... The pump should simply delete the segment of pipe
+## needed for it to fit inline, and automatically connect") -------------
+
+## Half the length between an inline type's two nozzle faces along its
+## axis, or -1 for a type that is not inline: one whose inlet and
+## outlet face each other along x at one height.
+static func inline_half(type_id: String) -> float:
+	var anchors: Dictionary = PlantFactory.PORT_ANCHORS.get(type_id, {})
+	if not anchors.has("inlet") or not anchors.has("outlet"):
+		return -1.0
+	var i: Dictionary = anchors["inlet"]
+	var o: Dictionary = anchors["outlet"]
+	if i["dir"] != Vector3.LEFT or o["dir"] != Vector3.RIGHT:
+		return -1.0
+	var ip: Vector3 = i["pos"]
+	var op: Vector3 = o["pos"]
+	if absf(ip.y - op.y) > 0.001 or absf(ip.z) > 0.001 or absf(op.z) > 0.001 or absf(ip.x + op.x) > 0.001:
+		return -1.0
+	return op.x
+
+
+## The height of an inline type's nozzles over its base.
+static func inline_height(type_id: String) -> float:
+	return (PlantFactory.PORT_ANCHORS[type_id]["inlet"]["pos"] as Vector3).y
+
+
+## Where an inline device would sit on a line aimed at, or why not:
+## {"why", "point" (plant-local, on the pipe axis), "dir", "arc"}. The
+## device and the stubs of the two pieces must fit on one level
+## straight, clear of the fittings.
+func inline_spot(view: PipeView, at_global: Vector3, type_id: String) -> Dictionary:
+	var half := inline_half(type_id)
+	if half < 0.0:
+		return {"why": "%s does not go inline" % type_id}
+	var visual: Dictionary = {}
+	for candidate in _wire_visuals:
+		if candidate["node"] == view:
+			visual = candidate
+	if visual.is_empty():
+		return {"why": "only a line between two fittings takes equipment inline"}
+	var path: Array[Vector3] = _visual_path(visual)
+	if path.size() < 2:
+		return {"why": "nothing to cut into"}
+	var near := _nearest_on_path(path, to_local(at_global))
+	var seg: int = near["seg"]
+	var dir := (path[seg + 1] - path[seg]).normalized()
+	if absf(dir.y) > 0.01:
+		return {"why": "put it on a level stretch, not a riser"}
+	# Room along this straight for the device, the two stub ends and a
+	# little more, and clear of the fittings either way.
+	var need := half + 0.175 + PipeRoute.STUB + 0.15
+	var length := path[seg].distance_to(path[seg + 1])
+	var t: float = near["t"]
+	if t * length < need or (1.0 - t) * length < need:
+		return {"why": "no room on that straight — it needs %.1f m either side" % need}
+	if float(near["arc"]) - need < 0.6 or float(near["total"]) - float(near["arc"]) - need < 0.6:
+		return {"why": "too close to the fitting"}
+	return {"why": "", "point": near["point"], "dir": dir, "arc": near["arc"]}
+
+
+## Cut a line and stand an inline device in the gap, connected: the
+## upstream piece to its inlet, its outlet to the downstream piece, the
+## corners of the line kept, both pieces fixed. "" on success.
+func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String:
+	var spot := inline_spot(view, at_global, type_id)
+	if spot["why"] != "":
+		return spot["why"]
+	checkpoint()
+	var visual: Dictionary = {}
+	for candidate in _wire_visuals:
+		if candidate["node"] == view:
+			visual = candidate
+	var path: Array[Vector3] = _visual_path(visual)
+	var point: Vector3 = spot["point"]
+	var dir: Vector3 = spot["dir"]
+	var arc: float = spot["arc"]
+	var before: Array = []
+	var after: Array = []
+	var walked := 0.0
+	for i in range(1, path.size() - 1):
+		walked += path[i].distance_to(path[i - 1])
+		if i >= 2 and i <= path.size() - 3:
+			if walked < arc:
+				before.append(path[i])
+			else:
+				after.append(path[i])
+	var a_name := str(visual["a"])
+	var a_port := str(visual["a_port"])
+	var b_name := str(visual["b"])
+	var b_port := str(visual["b_port"])
+	var color := str(visual.get("color", ""))
+	var label_ := str(visual.get("label", ""))
+	var fitting := str(visual.get("fitting", ""))
+	remove_run(view)
+	# The device on the pipe axis, its inlet toward the upstream piece.
+	var rot := atan2(-dir.z, dir.x)
+	var base := Vector3(point.x, point.y - inline_height(type_id), point.z)
+	var record := place_new(type_id, to_global(base), rot)
+	if record == null:
+		return "could not place %s" % type_id
+	_next_wire_fixed = true
+	var why := connect_equipment(a_name, a_port, record.comp_name, "inlet", before)
+	if why == "":
+		_next_wire_fixed = true
+		why = connect_equipment(record.comp_name, "outlet", b_name, b_port, after)
+	_next_wire_fixed = false
+	if why != "":
+		return why
+	for pair: Array in [[a_name, a_port, record.comp_name, "inlet"], [record.comp_name, "outlet", b_name, b_port]]:
+		if color != "":
+			for candidate in _wire_visuals:
+				if str(candidate["a"]) == str(pair[0]) and str(candidate["b"]) == str(pair[2]) \
+						and candidate["node"] != null:
+					set_run_service(candidate["node"] as PipeView, Color.html(color), label_, fitting)
+	return ""
+
+
+func cut_wire(view: PipeView, at_global: Vector3) -> String:
+	checkpoint()
+	var visual: Dictionary = {}
+	for candidate in _wire_visuals:
+		if candidate["node"] == view:
+			visual = candidate
+	if visual.is_empty():
+		return "only a line between two fittings can be cut"
+	var path: Array[Vector3] = _visual_path(visual)
+	if path.size() < 2:
+		return "nothing to cut"
+	var near := _nearest_on_path(path, to_local(at_global))
+	var best_seg: int = near["seg"]
+	var best_point: Vector3 = near["point"]
+	var best_arc: float = near["arc"]
+	var arc: float = near["total"]
 	var seg_dir := (path[best_seg + 1] - path[best_seg]).normalized()
 	if absf(seg_dir.y) > 0.7:
 		return "cut a horizontal stretch, not a riser"
