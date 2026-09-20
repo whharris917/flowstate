@@ -180,13 +180,23 @@ func _end_fitting(at: Vector3, toward: Vector3, end_r: float = -1.0) -> void:
 	_end_now = end_r
 	var direction := (toward - at).normalized()
 	var basis := _segment_basis(direction) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
+	if fitting == "tube" and not SmallBoreUtil.is_tube(_end_r()):
+		# A tube landing on a flanged nozzle ends in a flange behind its
+		# reducer, never in a nut the size of the nozzle (director,
+		# 2026-09-20: a 30 cm hex nut at the header).
+		var disc := _fitting_disc(_end_r() * 1.8, 0.045, _cold)
+		disc.position = at + direction * 0.03
+		disc.basis = basis
+		_fitting_nodes.erase(disc)
+		_meshes.append(disc)
+		return
 	if fitting == "tube":
 		# A compression fitting: the hex nut over the tube end, a short
 		# ferrule showing behind it (director, 2026-09-20: tubing "uses a
-		# whole set of different-looking equipment").
+		# whole set of different-looking equipment"). Sized to the tube.
 		var nut_mat := ViewUtil.flat(Color(0.62, 0.66, 0.70))
-		var nut_r := maxf(_end_r() * 2.2, 0.014)
-		var nut_h := maxf(_end_r() * 2.4, 0.016)
+		var nut_r := maxf(_radius * 2.2, 0.014)
+		var nut_h := maxf(_radius * 2.4, 0.016)
 		var nut := _fitting_disc(nut_r, nut_h, nut_mat)
 		(nut.mesh as CylinderMesh).radial_segments = 6
 		nut.position = at + direction * (nut_h / 2.0)
