@@ -10,6 +10,10 @@ const SIZE := 168
 
 var _icons: Dictionary = {}   # type_id -> Texture2D
 
+## A render landed: whatever shows icons can fill in (the hotbar sits
+## on screen from the first frame, before any has, 2026-09-19).
+signal landed(type_id: String)
+
 
 func icon(type_id: String) -> Texture2D:
 	return _icons.get(type_id)
@@ -21,6 +25,7 @@ func generate(type_ids: Array) -> void:
 	for type_id: String in type_ids:
 		if not _icons.has(type_id):
 			_icons[type_id] = await _render(type_id)
+			landed.emit(type_id)
 
 
 func _render(type_id: String) -> Texture2D:

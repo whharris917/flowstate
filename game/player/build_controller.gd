@@ -116,11 +116,12 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 			+ StructureFactory.CATALOG + StructureFactory.CATALOG_ROUTING \
 			+ PlantFactory.CATALOG_CONTROL + PlantFactory.CATALOG_UTILITIES:
 		all_types.append(entry["type"])
+	icons.landed.connect(func(_type_id: String) -> void: _refresh_palette())
 	icons.generate(all_types)  # fire and forget; cards fill in as renders land
 	menu = BuildMenu.new()
 	menu.visible = false
 	hud.add_child(menu)
-	menu.position.y -= 130.0   # above the hotbar
+	menu.position.y -= 100.0   # above the hotbar
 	menu.pick_cb = func(index: int) -> void: _pick_index(index)
 	palette = BuildPalette.new()
 	hud.add_child(palette)
@@ -424,7 +425,10 @@ func _update_hud() -> void:
 				heading += " — Tab for the palette · 1–9 hotbar"
 			if entries.is_empty():
 				heading += "  ·  nothing unlocked here yet — J for the journal"
-			menu.show_page(heading, entries, icons, catalog_index, _slot_map())
+			if _palette_open:
+				menu.show_page(heading, entries, icons, catalog_index, _slot_map())
+			else:
+				menu.visible = false   # nothing but the hotbar until Tab (director, 2026-09-19)
 			if _is_stretch():
 				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
 				var step := "click a supported START point" if _beam_anchor == Vector3.INF \

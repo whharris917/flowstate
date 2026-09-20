@@ -83,28 +83,22 @@ func _ready() -> void:
 		column.mouse_filter = MOUSE_FILTER_IGNORE
 		column.add_theme_constant_override("separation", 1)
 		panel.add_child(column)
+		# Small: the number and the icon, no name (director, 2026-09-19).
 		var badge := Label.new()
 		badge.text = str(i + 1)
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		badge.add_theme_font_size_override("font_size", 11)
+		badge.add_theme_font_size_override("font_size", 10)
 		badge.add_theme_color_override("font_color", Color(0.95, 0.80, 0.30))
 		badge.mouse_filter = MOUSE_FILTER_IGNORE
 		column.add_child(badge)
 		var icon := TextureRect.new()
-		icon.custom_minimum_size = Vector2(40, 40)
+		icon.custom_minimum_size = Vector2(34, 34)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.mouse_filter = MOUSE_FILTER_IGNORE
 		column.add_child(icon)
 		var label := Label.new()
-		label.text = ""
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.custom_minimum_size = Vector2(78, 26)
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.max_lines_visible = 2
-		label.add_theme_font_size_override("font_size", 10)
-		label.add_theme_color_override("font_color", Color(0.85, 0.86, 0.84))
-		label.mouse_filter = MOUSE_FILTER_IGNORE
+		label.visible = false   # the name lives on the card in the palette
 		column.add_child(label)
 		var slot := i
 		panel.gui_input.connect(func(event: InputEvent) -> void:
@@ -124,6 +118,7 @@ func _ready() -> void:
 func set_state(page: int, open: bool) -> void:
 	_page_active = page
 	_open = open
+	_rail.visible = open   # the rail shows only with the palette (director, 2026-09-19)
 	_restyle()
 
 
@@ -140,13 +135,14 @@ func set_slots(types: Array, icons: AssetIcons, labels: Dictionary, active_type:
 		var type_id := str(types[i]) if i < types.size() else ""
 		_slot_icons[i].texture = icons.icon(type_id) if type_id != "" else null
 		_slot_labels[i].text = str(labels.get(type_id, type_id)) if type_id != "" else "empty"
+		_slot_panels[i].tooltip_text = _slot_labels[i].text
 		var style := StyleBoxFlat.new()
 		var active := type_id != "" and type_id == active_type
 		style.bg_color = Color(0.13, 0.22, 0.15, 0.96) if active else Color(0.09, 0.10, 0.12, 0.90)
 		style.border_color = Color(0.35, 0.90, 0.50) if active else Color(0.40, 0.42, 0.45)
 		style.set_border_width_all(3 if active else 1)
 		style.set_corner_radius_all(6)
-		style.set_content_margin_all(5)
+		style.set_content_margin_all(4)
 		_slot_panels[i].add_theme_stylebox_override("panel", style)
 
 
