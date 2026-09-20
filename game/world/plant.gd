@@ -3281,6 +3281,9 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	var own_path: Array[Vector3] = laid["own_path"]
 	var pipe := PipeView.new()
 	add_child(pipe)
+	# Every material nozzle in the game is a DN50 bore: a line of another
+	# size meets it through a reducer at each end.
+	pipe.end_radius = LINE_RADIUS_DN50 if is_process else 0.025
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	pipe.set_meta("lane", chosen)

@@ -15,6 +15,10 @@ const ALARM := Color(0.9, 0.2, 0.15)
 var config_cb: Callable = Callable()
 var service_label := ""
 var fitting := "flange"   # "flange" or "clamp" (sanitary tri-clamp)
+## The bore of the fittings the line meets, set by the plant before
+## setup; where it differs from the line's own, each end spool is a
+## concentric reducer tapering between the two (director, 2026-09-20).
+var end_radius := -1.0
 var _fitting_nodes: Array[Node3D] = []
 
 var _getter: Callable
@@ -95,9 +99,28 @@ func _build_body() -> void:
 		if t_to > 0.0:
 			seg_to = to - direction * t_to
 		if seg_from.distance_to(seg_to) > 0.005:
-			var seg := segment_node(seg_from, seg_to, _radius, _style, _cold)
-			add_child(seg)
-			_collect_meshes(seg)
+			var seg_len := seg_from.distance_to(seg_to)
+			var taper := _style == "pipe" and end_radius > 0.0 and absf(end_radius - _radius) > 0.001 \
+				and (i == 0 or i == path.size() - 2)
+			if taper:
+				# The reducer: about a diameter and a half of the larger
+				# bore, within this spool, the rest of the spool at the
+				# line's own bore.
+				var length := clampf(3.0 * maxf(_radius, end_radius), 0.2, seg_len * 0.8)
+				if i == 0:
+					var mid := seg_from + direction * length
+					add_child(_collected(reducer_node(seg_from, mid, end_radius, _radius, _cold)))
+					if mid.distance_to(seg_to) > 0.005:
+						add_child(_collected(segment_node(mid, seg_to, _radius, _style, _cold)))
+				else:
+					var mid := seg_to - direction * length
+					if seg_from.distance_to(mid) > 0.005:
+						add_child(_collected(segment_node(seg_from, mid, _radius, _style, _cold)))
+					add_child(_collected(reducer_node(mid, seg_to, _radius, end_radius, _cold)))
+			else:
+				var seg := segment_node(seg_from, seg_to, _radius, _style, _cold)
+				add_child(seg)
+				_collect_meshes(seg)
 		if i > 0:
 			var joint: Node3D = null
 			if t_from > 0.0:
@@ -157,23 +180,23 @@ func _end_fitting(at: Vector3, toward: Vector3) -> void:
 		var bright := ViewUtil.flat(Color(0.80, 0.82, 0.85))
 		var band := ViewUtil.flat(Color(0.30, 0.31, 0.34))
 		for offset: float in [0.02, 0.075]:
-			var ferrule := _fitting_disc(_radius * 1.45, 0.02, bright)
+			var ferrule := _fitting_disc(_end_r() * 1.45, 0.02, bright)
 			ferrule.position = at + direction * offset
 			ferrule.basis = basis
-		var clamp := _fitting_disc(_radius * 1.75, 0.05, band)
+		var clamp := _fitting_disc(_end_r() * 1.75, 0.05, band)
 		clamp.position = at + direction * 0.0475
 		clamp.basis = basis
 		# The wing nut that closes the band, on top.
 		var nut := MeshInstance3D.new()
 		var nut_mesh := BoxMesh.new()
-		nut_mesh.size = Vector3(0.02, _radius * 0.9, 0.05)
+		nut_mesh.size = Vector3(0.02, _end_r() * 0.9, 0.05)
 		nut.mesh = nut_mesh
 		nut.material_override = band
-		nut.position = at + direction * 0.0475 + Vector3(0, _radius * 1.75 + _radius * 0.4, 0)
+		nut.position = at + direction * 0.0475 + Vector3(0, _end_r() * 1.75 + _end_r() * 0.4, 0)
 		add_child(nut)
 		_fitting_nodes.append(nut)
 		return
-	var disc := _fitting_disc(_radius * 1.8, 0.045, _cold)
+	var disc := _fitting_disc(_end_r() * 1.8, 0.045, _cold)
 	disc.position = at + direction * 0.03
 	disc.basis = basis
 	_fitting_nodes.erase(disc)  # a flange is body: repainted with it, baked with it
@@ -312,6 +335,37 @@ static func segment_node(from: Vector3, to: Vector3, radius: float,
 		inst.basis = Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
 		root.add_child(inst)
 	return root
+
+
+func _collected(node: Node3D) -> Node3D:
+	_collect_meshes(node)
+	return node
+
+
+## A concentric reducer: a frustum from `r_from` at `from` to `r_to`
+## at `to`, oriented like a straight.
+static func reducer_node(from: Vector3, to: Vector3, r_from: float, r_to: float,
+		mat: StandardMaterial3D) -> Node3D:
+	var root := Node3D.new()
+	root.position = (from + to) / 2.0
+	root.basis = _segment_basis((to - from).normalized())
+	var inst := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = r_to        # the cylinder's top lies at `to` once turned onto the segment
+	mesh.bottom_radius = r_from
+	mesh.height = from.distance_to(to)
+	mesh.radial_segments = 16
+	mesh.rings = 1
+	inst.mesh = mesh
+	inst.material_override = mat
+	inst.basis = Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
+	root.add_child(inst)
+	return root
+
+
+## The bore at the fittings: the nozzle's, or the line's own.
+func _end_r() -> float:
+	return end_radius if end_radius > 0.0 else _radius
 
 
 ## Does the path change direction at point k at all? A corner that
