@@ -2326,7 +2326,10 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 		var itself := k == self_index
 		# A mate is a riser's other end: the same plan position at
 		# another height — never a copy standing on the same spot.
-		var mate := not itself and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02 \
+		# A fresh copy has no mates of its own until it is parted from
+		# its original (2026-09-20: a Ctrl-drag of a riser head took the
+		# foot along, "as if they're tethered").
+		var mate := not itself and not overridden and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02 \
 			and absf(w.y - anchor.y) > 0.02 and not is_lock(locks, w)
 		if itself:
 			out.append(Vector3(moved.x, w.y, moved.z) if keep_height else moved)
@@ -2341,7 +2344,7 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 			insert_at = out.size()
 	if not matched:
 		out.insert(insert_at, Vector3(moved.x, old.y, moved.z) if keep_height else moved)
-	if keep_height:
+	if keep_height and not overridden:
 		# A riser moved by one end (2026-09-20: dragging the foot of the
 		# drop at the header left a drop where it was, since a falling
 		# leg drops first, and moved only the foot): the other end of
