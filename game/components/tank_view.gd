@@ -26,6 +26,9 @@ var _strips: Array[MeshInstance3D] = []
 var _nozzle_nodes: Dictionary = {}   # port -> Node3D
 var _built: Node3D = null
 var _alarm_t: float = 0.0
+## An open-topped vessel shows its liquid: a disc at the real level,
+## held here since it rides the level (the merge rule).
+var _surface: MeshInstance3D = null
 
 
 func setup(tank_: SimTank, switch_: SimFloatSwitch = null) -> void:
@@ -47,7 +50,9 @@ func rebuild() -> void:
 	var shell_mat := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 	shell_mat.metallic = 0.55
 	shell_mat.roughness = 0.35
-	ViewUtil.cylinder(_built, r, h, Vector3(0, h / 2.0, 0), shell_mat)
+	var shell := ViewUtil.cylinder(_built, r, h, Vector3(0, h / 2.0, 0), shell_mat)
+	if tank.open_top:
+		(shell.mesh as CylinderMesh).cap_top = false   # open to the sky
 	ViewUtil.cylinder(_built, r + 0.04, 0.06, Vector3(0, h - 0.02, 0), shell_mat)
 	ViewUtil.cylinder(_built, r + 0.04, 0.08, Vector3(0, 0.04, 0),
 		ViewUtil.flat(Color(0.34, 0.35, 0.37)))
@@ -56,28 +61,43 @@ func rebuild() -> void:
 	# manway with its davit, a vent stub, a nameplate, anchor lugs.
 	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
 	var dark := ViewUtil.flat(Color(0.22, 0.23, 0.25))
-	var roof := MeshInstance3D.new()
-	var roof_mesh := CylinderMesh.new()
-	roof_mesh.bottom_radius = r
-	roof_mesh.top_radius = maxf(r * 0.15, 0.03)
-	roof_mesh.height = clampf(r * 0.22, 0.04, 0.16)
-	roof.mesh = roof_mesh
-	roof.material_override = shell_mat
-	roof.position = Vector3(0, h + roof_mesh.height / 2.0, 0)
-	_built.add_child(roof)
-	var mr := clampf(r * 0.35, 0.08, 0.25)
-	var mw := Vector3(r * 0.45, h + roof_mesh.height * 0.8, 0)
-	ViewUtil.cylinder(_built, mr, 0.05, mw + Vector3(0, 0.025, 0), shell_mat)
-	ViewUtil.cylinder(_built, mr * 1.2, 0.03, mw + Vector3(0, 0.06, 0), steel)
-	for i in 12:
-		var a := TAU / 12.0 * i
-		ViewUtil.cylinder(_built, mr * 0.07, 0.03, mw + Vector3(cos(a) * mr * 1.1, 0.085, sin(a) * mr * 1.1), dark)
-	if r > 0.35:
-		ViewUtil.box(_built, Vector3(0.05, 0.6, 0.05), mw + Vector3(mr * 1.5, 0.25, 0), dark)
-		ViewUtil.box(_built, Vector3(mr * 1.6, 0.04, 0.04), mw + Vector3(mr * 0.7, 0.55, 0), dark)
-	var vent := ViewUtil.cylinder(_built, 0.035, 0.28, Vector3(-r * 0.45, h + roof_mesh.height * 0.6 + 0.14, 0), steel)
-	vent.name = "vent"
-	ViewUtil.cylinder(_built, 0.07, 0.02, Vector3(-r * 0.45, h + roof_mesh.height * 0.6 + 0.29, 0), dark)
+	_surface = null
+	if tank.open_top:
+		# An open-topped vessel (director, 2026-09-20): no roof, a rolled
+		# rim, and the liquid seen from above at its real level.
+		ViewUtil.cylinder(_built, r + 0.05, 0.05, Vector3(0, h + 0.005, 0), shell_mat)
+		var inner := ViewUtil.flat(Color(0.50, 0.53, 0.56))
+		inner.cull_mode = BaseMaterial3D.CULL_FRONT   # the inside of the shell, seen from above
+		var lining := ViewUtil.cylinder(_built, r - 0.01, h - 0.02, Vector3(0, h / 2.0, 0), inner)
+		(lining.mesh as CylinderMesh).cap_top = false
+		var liquid := ViewUtil.flat(Color(0.30, 0.52, 0.72, 0.85))
+		liquid.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		liquid.roughness = 0.05
+		liquid.metallic = 0.1
+		_surface = ViewUtil.cylinder(_built, r - 0.015, 0.01, Vector3(0, 0.02, 0), liquid)
+	else:
+		var roof := MeshInstance3D.new()
+		var roof_mesh := CylinderMesh.new()
+		roof_mesh.bottom_radius = r
+		roof_mesh.top_radius = maxf(r * 0.15, 0.03)
+		roof_mesh.height = clampf(r * 0.22, 0.04, 0.16)
+		roof.mesh = roof_mesh
+		roof.material_override = shell_mat
+		roof.position = Vector3(0, h + roof_mesh.height / 2.0, 0)
+		_built.add_child(roof)
+		var mr := clampf(r * 0.35, 0.08, 0.25)
+		var mw := Vector3(r * 0.45, h + roof_mesh.height * 0.8, 0)
+		ViewUtil.cylinder(_built, mr, 0.05, mw + Vector3(0, 0.025, 0), shell_mat)
+		ViewUtil.cylinder(_built, mr * 1.2, 0.03, mw + Vector3(0, 0.06, 0), steel)
+		for i in 12:
+			var a := TAU / 12.0 * i
+			ViewUtil.cylinder(_built, mr * 0.07, 0.03, mw + Vector3(cos(a) * mr * 1.1, 0.085, sin(a) * mr * 1.1), dark)
+		if r > 0.35:
+			ViewUtil.box(_built, Vector3(0.05, 0.6, 0.05), mw + Vector3(mr * 1.5, 0.25, 0), dark)
+			ViewUtil.box(_built, Vector3(mr * 1.6, 0.04, 0.04), mw + Vector3(mr * 0.7, 0.55, 0), dark)
+		var vent := ViewUtil.cylinder(_built, 0.035, 0.28, Vector3(-r * 0.45, h + roof_mesh.height * 0.6 + 0.14, 0), steel)
+		vent.name = "vent"
+		ViewUtil.cylinder(_built, 0.07, 0.02, Vector3(-r * 0.45, h + roof_mesh.height * 0.6 + 0.29, 0), dark)
 	var plate_dir := Vector3(0, 0, 1)
 	var plate := ViewUtil.box(_built, Vector3(0.20, 0.13, 0.006), Vector3.ZERO, ViewUtil.flat(Color(0.93, 0.93, 0.90)))
 	plate.position = plate_dir * (r + 0.004) + Vector3(0, h * 0.78, 0)
@@ -274,6 +294,8 @@ func _process(delta: float) -> void:
 		var column := maxf(strip_h * frac, 0.005)
 		liquid.scale = Vector3(1, column, 1)
 		liquid.position = dir * (r + 0.025) + Vector3(0, 0.15 + column / 2.0, 0)
+	if _surface != null:
+		_surface.position.y = clampf(tank.depth_m, 0.02, h - 0.01)
 	# Local high-level annunciator: repeats while the real level sits
 	# above 92% of capacity.
 	if frac > 0.92:
@@ -289,8 +311,8 @@ func _process(delta: float) -> void:
 ## What a person at the vessel can see: its size, the sight glass, and
 ## the face of every instrument mounted on it. Nothing else.
 func describe() -> String:
-	var lines: Array[String] = ["%s — %.0f L vessel, %.1f m × ⌀%.1f m (E resizes)" % [
-		tank.comp_name, tank.capacity_l, tank.height_m, tank.diameter_m]]
+	var lines: Array[String] = ["%s — %.0f L %svessel, %.1f m × ⌀%.1f m (E resizes)" % [
+		tank.comp_name, tank.capacity_l, "open-topped " if tank.open_top else "", tank.height_m, tank.diameter_m]]
 	lines.append("sight glass reads %.0f L" % tank.level_l)
 	var faces: Array[String] = []
 	for inst in mounted:

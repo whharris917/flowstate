@@ -17,14 +17,21 @@ const VENT_CV_LPS := 60.0   # an open bore: the line's own resistance limits the
 var open: bool = false
 var elevation_m: float = 0.0   # the height of the open end, for the air it vents to
 var spilled_l: float = 0.0
+## What lands in an open vessel below (director, 2026-09-20: fill an
+## open tank from a line ending in the air above it). The plant names
+## the vessel under the end; the kernel hands it the stream.
+var catch: SimTank = null
+var delivered_l: float = 0.0
 var _vent: SimControlResistance = null
+var inlet: SimInputPort
 
 
 func _init(name_: String) -> void:
 	super(name_)
-	add_input("a", SimTypes.PortKind.PROCESS_MATERIAL)
+	inlet = add_input("a", SimTypes.PortKind.PROCESS_MATERIAL)
 	add_output("b", SimTypes.PortKind.PROCESS_MATERIAL)
 	add_observable("spilled_l", &"spilled_l")
+	add_observable("delivered_l", &"delivered_l")
 
 
 func shared_node_ports() -> Array:
@@ -33,7 +40,7 @@ func shared_node_ports() -> Array:
 
 ## The spill this scan, L/s: the flow out of the vent while open.
 func spill_lps() -> float:
-	return maxf(_vent.q, 0.0) if open and _vent != null else 0.0
+	return maxf(_vent.flow_lps, 0.0) if open and _vent != null else 0.0
 
 
 func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
@@ -48,15 +55,29 @@ func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
 		_vent.opening = 1.0 if open else 0.0
 
 
+## Whether the spill has somewhere to go: an open-topped vessel under
+## the end. Otherwise it is lost to the ground and counted.
+func lands() -> bool:
+	return catch != null and catch.open_top
+
+
 func tick(dt: float) -> void:
-	spilled_l += spill_lps() * dt
+	var q := spill_lps()
+	if q <= 0.0:
+		return
+	if lands():
+		catch.receive((inlet.stream if inlet.stream != null else SimStream.pure(SimSpecies.WATER, q)).with_flow(q))
+		delivered_l += q * dt
+	else:
+		spilled_l += q * dt
 
 
 func state_dict() -> Dictionary:
-	return {"open": open, "spilled_l": spilled_l, "elevation_m": elevation_m}
+	return {"open": open, "spilled_l": spilled_l, "delivered_l": delivered_l, "elevation_m": elevation_m}
 
 
 func apply_state(state: Dictionary) -> void:
 	open = bool(state.get("open", open))
 	spilled_l = float(state.get("spilled_l", spilled_l))
+	delivered_l = float(state.get("delivered_l", delivered_l))
 	elevation_m = float(state.get("elevation_m", elevation_m))

@@ -88,6 +88,14 @@ class Branch:
     positive flow runs from a to b.
     """
 
+    #: Whether the flow depends on the two end pressures differently.
+    #: A pipe or a valve answers to the difference alone, so one slope
+    #: serves both ends of it. A regulator, whose opening follows its
+    #: downstream pressure, is far stiffer on the b side than the a
+    #: side, and the Jacobian must know or Newton steps the inlet as if
+    #: it were the outlet and never lands (2026-09-20).
+    two_sided = False
+
     def __init__(self, node_a: int, node_b: int, name: str = "") -> None:
         self.node_a = node_a
         self.node_b = node_b
@@ -124,6 +132,11 @@ class Branch:
 
     def conductance_at(self, pa: float, pb: float) -> float:
         return self.conductance(pa - pb)
+
+    def conductance_b_at(self, pa: float, pb: float) -> float:
+        """-dQ/dP_b: the slope on the b side, for a two-sided branch.
+        Positive, like the a side: flow falls as the outlet rises."""
+        return self.conductance_at(pa, pb)
 
     def is_conducting_at(self, pa: float, pb: float) -> bool:
         return self.is_conducting(pa - pb)
@@ -250,12 +263,20 @@ class RegulatorResistance(ControlResistance):
         self.opening = self.opening_at(pb)
         return self.flow(pa - pb)
 
+    two_sided = True
+
     def conductance_at(self, pa: float, pb: float) -> float:
+        # The a side: the seat as it stands, the square law through it.
+        self.opening = self.opening_at(pb)
+        return self.conductance(pa - pb)
+
+    def conductance_b_at(self, pa: float, pb: float) -> float:
+        # The b side: the square law, and the seat closing as the
+        # outlet rises (dQ/dx * dx/dP_b), which is the stiff part.
         x = self.opening_at(pb)
         self.opening = x
         g = self.conductance(pa - pb)
         if 0.0 < x < 1.0:
-            # dQ/dx * dx/dP_b: the seat closing as the outlet rises.
             g += abs(self.flow(pa - pb)) / (x * self.band_pa)
         return g
 
@@ -388,7 +409,14 @@ class Network:
     """Nodes, branches, and the solve that reconciles them."""
 
     MAX_ITERATIONS = 20
+    #: A node is converged when its imbalance is below this, or below a
+    #: thousandth of what passes through it, whichever is smaller: a
+    #: drip line moving a tenth of a millilitre a second cannot be
+    #: judged by an absolute tenth of a millilitre. Never looser than
+    #: the absolute figure, never tighter than the floor.
     TOLERANCE_LPS = 1e-4
+    TOLERANCE_REL = 1e-3
+    TOLERANCE_FLOOR_LPS = 1e-8
     # Newton on a square-law branch is badly behaved far from the
     # answer: the slope of sqrt goes flat, so an undamped step can
     # overshoot by a factor of ten and sit there oscillating. Capping
@@ -464,10 +492,9 @@ class Network:
             # the run, however correct the answer already is.
             reachable, conducting = self._reachable_from_fixed(index_of)
             residual = self._residuals(index_of, n)
-            worst = max(
-                (abs(r) for i, r in enumerate(residual) if reachable[i]),
-                default=0.0)
-            if worst < self.TOLERANCE_LPS:
+            throughput = self._throughput(index_of, n)
+            if all(abs(r) < self._tolerance_at(throughput[i])
+                   for i, r in enumerate(residual) if reachable[i]):
                 break
 
             jacobian = [[0.0] * n for _ in range(n)]
@@ -475,15 +502,17 @@ class Network:
             for branch in self.branches:
                 a, b = branch.node_a, branch.node_b
                 g = branch.conductance_at(self.pressures[a], self.pressures[b])
+                gb = (branch.conductance_b_at(self.pressures[a], self.pressures[b])
+                      if branch.two_sided else g)
                 if a in index_of:
                     ia = index_of[a]
                     jacobian[ia][ia] -= g
                     neighbours[ia].append(b)
                     if b in index_of:
-                        jacobian[ia][index_of[b]] += g
+                        jacobian[ia][index_of[b]] += gb
                 if b in index_of:
                     ib = index_of[b]
-                    jacobian[ib][ib] -= g
+                    jacobian[ib][ib] -= gb
                     neighbours[ib].append(a)
                     if a in index_of:
                         jacobian[ib][index_of[a]] += g
@@ -628,6 +657,23 @@ class Network:
         for node, slot in index_of.items():
             reachable[slot] = node in seen
         return reachable, adjacency
+
+    def _tolerance_at(self, throughput: float) -> float:
+        """The imbalance a free node may keep: relative to what it passes."""
+        return min(self.TOLERANCE_LPS,
+                   max(self.TOLERANCE_FLOOR_LPS, self.TOLERANCE_REL * throughput))
+
+    def _throughput(self, index_of: dict[int, int], n: int) -> list[float]:
+        """What passes through each free node: the sum of |Q| on it."""
+        through = [0.0] * n
+        for branch in self.branches:
+            a, b = branch.node_a, branch.node_b
+            q = abs(branch.flow_at(self.pressures[a], self.pressures[b]))
+            if a in index_of:
+                through[index_of[a]] += q
+            if b in index_of:
+                through[index_of[b]] += q
+        return through
 
     def _residuals(self, index_of: dict[int, int], n: int) -> list[float]:
         """Net flow into each free node. Zero everywhere is the answer."""

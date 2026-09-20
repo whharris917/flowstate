@@ -29,13 +29,19 @@ const CAVITATION_BAND_PA := 20000.0
 var head_pa: float
 var max_lps: float
 var running: bool = false
+## The curve's steepness: H = H0 * (1 - (Q/Qmax)^n). Two is a
+## centrifugal pump. A positive-displacement machine (a metering pump)
+## is nearly vertical -- its flow barely moves with the head until the
+## head runs out -- and a high exponent is that curve without a cliff.
+var exponent: float = 2.0
 
 
 func _init(node_a_: int, node_b_: int, head_pa_: float, max_lps_: float,
-		name_: String = "") -> void:
+		name_: String = "", exponent_: float = 2.0) -> void:
 	super(node_a_, node_b_, name_)
 	head_pa = maxf(head_pa_, SimHydraulics.EPS)
 	max_lps = maxf(max_lps_, SimHydraulics.EPS)
+	exponent = maxf(exponent_, 1.0)
 
 
 ## How much of its curve it is making, 0 to 1. One whenever there is
@@ -77,7 +83,7 @@ func flow(dp: float) -> float:
 	# Past the end of the curve a centrifugal pump stops being a pump
 	# and is only a fitting, so cap the runout rather than letting a
 	# high-pressure header drive it to silly flows.
-	return minf(max_lps * sqrt(1.0 - rise / head_pa), max_lps * RUNOUT_FACTOR)
+	return minf(max_lps * pow(1.0 - rise / head_pa, 1.0 / exponent), max_lps * RUNOUT_FACTOR)
 
 
 func conductance(dp: float) -> float:
@@ -86,7 +92,7 @@ func conductance(dp: float) -> float:
 	var rise := -dp
 	if rise >= head_pa:
 		return 0.0
-	return max_lps / (2.0 * head_pa * sqrt(maxf(1.0 - rise / head_pa, 1e-6)))
+	return max_lps / (exponent * head_pa) * pow(maxf(1.0 - rise / head_pa, 1e-6), 1.0 / exponent - 1.0)
 
 
 func evaluate(pa: float, pb: float) -> void:
@@ -103,9 +109,9 @@ func evaluate(pa: float, pb: float) -> void:
 		return
 	var p := clampf((pa - SimHydraulics.MIN_PRESSURE_PA) / CAVITATION_BAND_PA, 0.0, 1.0)
 	var fraction := 1.0 - rise / head_pa
-	var on_curve := minf(max_lps * sqrt(fraction), max_lps * RUNOUT_FACTOR)
+	var on_curve := minf(max_lps * pow(fraction, 1.0 / exponent), max_lps * RUNOUT_FACTOR)
 	q = on_curve * p
-	g = max_lps / (2.0 * head_pa * sqrt(maxf(fraction, 1e-6))) * p
+	g = max_lps / (exponent * head_pa) * pow(maxf(fraction, 1e-6), 1.0 / exponent - 1.0) * p
 	if p > 0.0 and p < 1.0:
 		g += on_curve / CAVITATION_BAND_PA
 	conducting = p > 0.0

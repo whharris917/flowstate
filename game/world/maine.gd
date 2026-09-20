@@ -158,3 +158,14 @@ func _self_check() -> void:
 			% [worst, walk, high - low, coast.height_at(0.0, 3.0) - high, int(coast.stats.get("river_m", 0)), mouth_from_light])
 	else:
 		print("[flowstate] maine self-check FAILED: " + ", ".join(problems))
+
+
+## The routing reports, then what the drip demo is doing.
+func _headless_reports() -> void:
+	super._headless_reports()
+	for line in RoutingExercises.report(plant):
+		print(line)
+	var trip := RoutingExercises.round_trip(plant)
+	print("[flowstate] drip demo save round trip: %s" % ("OK" if trip == "" else trip))
+	for line in RoutingExercises.report(plant):
+		print(line.replace("drip demo:", "drip demo after load:"))

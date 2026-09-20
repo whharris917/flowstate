@@ -114,7 +114,8 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 	for entry: Dictionary in PlantFactory.CATALOG + PlantFactory.CATALOG_SEPARATION \
 			+ PlantFactory.CATALOG_INSTRUMENTS \
 			+ StructureFactory.CATALOG + StructureFactory.CATALOG_ROUTING \
-			+ PlantFactory.CATALOG_CONTROL + PlantFactory.CATALOG_UTILITIES:
+			+ PlantFactory.CATALOG_CONTROL + PlantFactory.CATALOG_UTILITIES \
+			+ PlantFactory.CATALOG_SMALL_BORE:
 		all_types.append(entry["type"])
 	icons.landed.connect(func(_type_id: String) -> void: _refresh_palette())
 	icons.generate(all_types)  # fire and forget; cards fill in as renders land
@@ -134,7 +135,7 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 		_update_hud()
 	palette.on_slot = func(slot: int) -> void: _pick_slot(slot)
 	var page_icons: Array = []
-	for i in 7:
+	for i in PAGES:
 		var saved_page := page
 		page = i
 		var entries := _page_catalog()
@@ -273,6 +274,12 @@ func _pick_index(index: int) -> void:
 	_update_hud()
 
 
+## How many build pages there are: the palette rail has one icon each,
+## and adding a page means touching _page_catalog, _is_equipment_page,
+## page_names and this.
+const PAGES := 8
+
+
 ## A hotbar slot: its type, wherever it lives in the pages.
 func _pick_slot(slot: int) -> void:
 	var type_id := str(hotbar[slot]) if slot < hotbar.size() else ""
@@ -316,7 +323,7 @@ func set_hotbar(types: Array) -> void:
 ## The page and index of a type among what is unlocked, or {}.
 func _locate(type_id: String) -> Dictionary:
 	var saved_page := page
-	for i in 7:
+	for i in PAGES:
 		page = i
 		var entries := _catalog()
 		for k in entries.size():
@@ -329,7 +336,7 @@ func _locate(type_id: String) -> Dictionary:
 
 func _label_of(type_id: String) -> String:
 	var saved_page := page
-	for i in 7:
+	for i in PAGES:
 		page = i
 		for entry: Dictionary in _page_catalog():
 			if str(entry["type"]) == type_id:
@@ -359,7 +366,7 @@ func _refresh_palette() -> void:
 	# The page icons again: thumbnails land after setup.
 	var page_icons: Array = []
 	var saved_page := page
-	for i in 7:
+	for i in PAGES:
 		page = i
 		var entries := _page_catalog()
 		page_icons.append(icons.icon(str(entries[0]["type"])) if not entries.is_empty() else null)
@@ -417,7 +424,7 @@ func _update_hud() -> void:
 				% [_edit_name, handles])
 		Mode.PLACE:
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
-				"ROUTING · FLOOR · SIGNS", "CONTROL", "UTILITIES"]
+				"ROUTING · FLOOR · SIGNS", "CONTROL", "UTILITIES", "SMALL BORE"]
 			var entries := _catalog()
 			catalog_index = mini(catalog_index, maxi(entries.size() - 1, 0))
 			var heading := page_names[page]
@@ -983,12 +990,13 @@ func _page_catalog() -> Array[Dictionary]:
 		3: return StructureFactory.CATALOG
 		4: return StructureFactory.CATALOG_ROUTING
 		6: return PlantFactory.CATALOG_UTILITIES
+		7: return PlantFactory.CATALOG_SMALL_BORE
 	return PlantFactory.CATALOG_CONTROL
 
 
-## Pages 0, 1, 2, 5, and 6 place sim equipment; 3 and 4 place structure.
+## Pages 0, 1, 2, 5, 6 and 7 place sim equipment; 3 and 4 place structure.
 func _is_equipment_page() -> bool:
-	return page in [0, 1, 2, 5, 6]
+	return page in [0, 1, 2, 5, 6, 7]
 
 
 func _current_type() -> String:
@@ -1288,7 +1296,7 @@ func exercise_device_menu() -> void:
 	(port_menu._fields["height_m"] as SpinBox).value = 2.5
 	port_menu._apply()
 	var ok := absf(record.height_m - 2.5) < 1e-6 and not port_menu.visible \
-		and fields == 3 and io_rows == 2
+		and fields == 4 and io_rows == 2
 	print("[flowstate] device menu exercise %s — %d I/O rows, %d fields, height %.2f m after apply"
 		% ["OK" if ok else "FAILED", io_rows, fields, record.height_m])
 	# Edit mode: a tank grows five handles, and the drag maths snap to

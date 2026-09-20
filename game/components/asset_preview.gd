@@ -88,6 +88,20 @@ static func build(type_id: String) -> Node3D:
 				(node as VacLockView).setup(record as SimVacuumLock)
 			"vialfill":
 				(node as VialFillerView).setup(record as SimVialFiller)
+			"orifice":
+				(node as OrificeView).setup(record as SimOrifice)
+			"needle_valve":
+				(node as NeedleValveView).setup(record as SimNeedleValve)
+			"ball_valve":
+				(node as BallValveView).setup(record as SimBallValve)
+			"solenoid_valve":
+				(node as SolenoidValveView).setup(record as SimSolenoidValve)
+			"metering_pump":
+				(node as MeteringPumpView).setup(record as SimMeteringPump)
+			"regulator":
+				(node as RegulatorView).setup(record as SimRegulator)
+			"rotameter":
+				(node as RotameterView).setup(record as SimRotameter)
 		node.set_meta("scratch_sim", scratch)
 	if node == null:
 		return null

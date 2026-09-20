@@ -14,7 +14,7 @@ const ALARM := Color(0.9, 0.2, 0.15)
 
 var config_cb: Callable = Callable()
 var service_label := ""
-var fitting := "flange"   # "flange" or "clamp" (sanitary tri-clamp)
+var fitting := "flange"   # "flange", "clamp" (sanitary tri-clamp) or "tube" (compression)
 ## The bore of the fittings the line meets, set by the plant before
 ## setup; where it differs from the line's own, each end spool is a
 ## concentric reducer tapering between the two (director, 2026-09-20).
@@ -76,7 +76,8 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 ## clamp parts (2026-09-13: a run was three draws; two now).
 func _build_body() -> void:
 	var path := _path
-	var bend := _radius * 1.5
+	# Tubing bends round a wide radius, since it is bent, not fitted.
+	var bend := _radius * (4.0 if fitting == "tube" else 1.5)
 	# A bend of any angle: each straight gives up the bend's tangent
 	# length at its end, and the elbow sweeps the angle between them.
 	# The tangents are fitted to the legs first, so a short leg gets a
@@ -179,6 +180,21 @@ func _end_fitting(at: Vector3, toward: Vector3, end_r: float = -1.0) -> void:
 	_end_now = end_r
 	var direction := (toward - at).normalized()
 	var basis := _segment_basis(direction) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
+	if fitting == "tube":
+		# A compression fitting: the hex nut over the tube end, a short
+		# ferrule showing behind it (director, 2026-09-20: tubing "uses a
+		# whole set of different-looking equipment").
+		var nut_mat := ViewUtil.flat(Color(0.62, 0.66, 0.70))
+		var nut_r := maxf(_end_r() * 2.2, 0.014)
+		var nut_h := maxf(_end_r() * 2.4, 0.016)
+		var nut := _fitting_disc(nut_r, nut_h, nut_mat)
+		(nut.mesh as CylinderMesh).radial_segments = 6
+		nut.position = at + direction * (nut_h / 2.0)
+		nut.basis = basis
+		var ferrule := _fitting_disc(nut_r * 0.6, 0.008, nut_mat)
+		ferrule.position = at + direction * (nut_h + 0.004)
+		ferrule.basis = basis
+		return
 	if fitting == "clamp":
 		var bright := ViewUtil.flat(Color(0.80, 0.82, 0.85))
 		var band := ViewUtil.flat(Color(0.30, 0.31, 0.34))
@@ -219,12 +235,14 @@ func _fitting_disc(radius: float, height: float, mat: StandardMaterial3D) -> Mes
 	return disc
 
 
-## Swap the end fittings: "flange" or "clamp". The run itself is the
-## same; only what it terminates in changes.
+## Swap the end fittings: "flange", "clamp" or "tube". The run itself
+## is the same; only what it terminates in changes — except tubing,
+## which is plastic and bends wide, so the body is drawn again too.
 func set_fitting(style: String) -> void:
 	if style == fitting:
 		return
 	fitting = style
+	_set_service_color(service_color())
 	# The flanges are baked into the body, so the body is built again.
 	for node in _fitting_nodes:
 		if node.get_parent() != null:
@@ -247,8 +265,14 @@ func service_color() -> Color:
 func _set_service_color(color: Color) -> void:
 	_hot = ViewUtil.glow(color, 1.1)
 	_charged = ViewUtil.glow(color, 0.35)
-	_cold = ViewUtil.flat(color.lerp(Color(0.35, 0.35, 0.37), 0.55)) if _style == "pipe" \
-		else ViewUtil.flat(color)
+	if fitting == "tube" and _style == "pipe":
+		# Nylon tubing: it keeps its colour, satin rather than steel.
+		_cold = ViewUtil.flat(color.lerp(Color(0.55, 0.55, 0.55), 0.25))
+		_cold.roughness = 0.45
+		_cold.metallic = 0.0
+	else:
+		_cold = ViewUtil.flat(color.lerp(Color(0.35, 0.35, 0.37), 0.55)) if _style == "pipe" \
+			else ViewUtil.flat(color)
 	# Two-sided: the swept elbows are built by hand and a closed tube
 	# shows no back faces anyway.
 	for mat: StandardMaterial3D in [_hot, _charged, _cold]:

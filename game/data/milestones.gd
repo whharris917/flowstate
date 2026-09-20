@@ -35,7 +35,7 @@ const LADDER: Array[Dictionary] = [
 			{"kind": "pumped", "target": 300.0, "label": "moved by a pump", "unit": "L"},
 			{"kind": "raised_tank", "elev": 2.5, "target": 200.0, "label": "held in a tank 2.5 m up", "unit": "L"},
 		],
-		"unlocks": ["float_switch", "relay"],
+		"unlocks": ["float_switch", "relay", "orifice", "needle_valve", "ball_valve", "rotameter", "regulator"],
 	},
 	{
 		"id": "hands_off", "tier": "TIER 1 — HARDWIRED RELAY", "title": "Hands off",
@@ -43,7 +43,8 @@ const LADDER: Array[Dictionary] = [
 		"requires": [
 			{"kind": "relay_cycles", "target": 5.0, "label": "relay cycles", "unit": ""},
 		],
-		"unlocks": ["cabinet", "junction_box", "control_station", "gauge_flow", "gauge_level"],
+		"unlocks": ["cabinet", "junction_box", "control_station", "gauge_flow", "gauge_level",
+			"solenoid_valve", "metering_pump"],
 	},
 	{
 		"id": "sequence", "tier": "TIER 3 — PLC", "title": "Sequence",

@@ -45,7 +45,7 @@ static func unit_label(unit: int) -> String:
 static func counts(comp: SimComponent) -> bool:
 	return comp is SimSource or comp is SimDrain or comp is SimTank or comp is SimReactor \
 		or comp is SimCrystallizer or comp is SimVacuumLock or comp is SimSteamGen \
-		or comp is SimDryer or comp is SimVialFiller
+		or comp is SimDryer or comp is SimVialFiller or comp is SimCap
 
 
 ## Distinct units with at least one counted record, ascending.
@@ -102,6 +102,10 @@ static func accounts(sim: Simulation, names: Array) -> Dictionary:
 			out += (comp as SimDryer).dried_l
 		elif comp is SimVialFiller:
 			out += (comp as SimVialFiller).filled_l
+		elif comp is SimCap:
+			# An open end spilling to the ground leaves the plant; what it
+			# lands in an open vessel is that vessel's, held.
+			out += (comp as SimCap).spilled_l
 	return {"fed": fed, "out": out, "held": held}
 
 
@@ -138,6 +142,8 @@ static func tags(sim: Simulation, names: Array) -> Dictionary:
 			out.append([n + ".dried_l", 1.0])
 		elif comp is SimVialFiller:
 			out.append([n + ".filled_l", 1.0])
+		elif comp is SimCap:
+			out.append([n + ".spilled_l", 1.0])
 	return {"fed": fed, "out": out, "held": held}
 
 

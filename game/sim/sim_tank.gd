@@ -43,6 +43,11 @@ var temp_c: float = SimStream.AMBIENT_C
 var contents: SimStream
 var overflowed_l: float = 0.0
 var ran_dry_ticks: int = 0
+## An open-topped vessel (director, 2026-09-20: "fill an open tank ...
+## drop by drop"): a line ending in the air above it lands what it
+## spills here. The headspace is atmospheric either way.
+var open_top: bool = false
+var _falling: SimStream = SimStream.empty()
 
 var inlet: SimInputPort
 var outlet: SimOutputPort
@@ -172,6 +177,14 @@ func supplied_stream(_port_name: String) -> SimStream:
 	return contents  # the caller sets the rate
 
 
+## Material falling in through the open top this scan, L/s at a
+## composition: an open pipe end above the vessel hands its spill
+## here, and the next tick blends it in like any other arrival.
+func receive(stream: SimStream) -> void:
+	if stream.flow_lps > 0.0:
+		_falling = SimStream.mix(_falling, stream)
+
+
 func tick(dt: float) -> void:
 	# Both nozzles are signed into the vessel, so one balance covers
 	# filling, draining, and a line that reversed on us.
@@ -181,6 +194,10 @@ func tick(dt: float) -> void:
 		arriving = SimStream.mix(arriving, inlet.stream.with_flow(inlet.flow_lps))
 	if outlet.flow_lps > 0.0:
 		arriving = SimStream.mix(arriving, outlet.stream.with_flow(outlet.flow_lps))
+	if _falling.flow_lps > 0.0:
+		arriving = SimStream.mix(arriving, _falling)
+		net_lps += _falling.flow_lps
+		_falling = SimStream.empty()
 	var added_l := arriving.flow_lps * dt
 	var leaving_l := maxf(-net_lps + arriving.flow_lps, 0.0) * dt
 	var demand_l := drain_lps * dt + leaving_l
@@ -214,6 +231,7 @@ func state_dict() -> Dictionary:
 		"height_m": height_m,
 		"diameter_m": diameter_m,
 		"contents": contents.to_dict(),
+		"open_top": open_top,
 	}
 
 
@@ -224,6 +242,7 @@ func apply_state(state: Dictionary) -> void:
 	drain_lps = state.get("drain_lps", drain_lps)
 	overflowed_l = state.get("overflowed_l", overflowed_l)
 	ran_dry_ticks = int(state.get("ran_dry_ticks", ran_dry_ticks))
+	open_top = bool(state.get("open_top", open_top))
 	if state.has("contents"):
 		contents = SimStream.from_dict(state["contents"]).with_flow(level_l)
 		temp_c = contents.temp_c

@@ -14,7 +14,7 @@ const PAGES := {
 	"tank": {
 		"title": "Storage Tank",
 		"tier": "process",
-		"summary": "Holds liquid, and knows what the liquid is. Anything arriving blends into the contents, so a hot stream genuinely warms the vessel and a reagent charge genuinely changes what is in it. What leaves does so at whatever the contents currently are. Overfill it and it spills, and the spill is counted.\n\nIts two nozzles differ only in where they are, and that is the whole of its hydraulic behaviour: the outlet is at the bottom and carries the head of everything standing above it, the inlet is at the top at headspace pressure. Which is why a full tank will drain into an empty one through nothing but a pipe, and why filling one never has to fight its own level.",
+		"summary": "Holds liquid, and knows what the liquid is. Anything arriving blends into the contents, so a hot stream genuinely warms the vessel and a reagent charge genuinely changes what is in it. What leaves does so at whatever the contents currently are. Overfill it and it spills, and the spill is counted.\n\nIts two nozzles differ only in where they are, and that is the whole of its hydraulic behaviour: the outlet is at the bottom and carries the head of everything standing above it, the inlet is at the top at headspace pressure. Which is why a full tank will drain into an empty one through nothing but a pipe, and why filling one never has to fight its own level.\n\nA tank can be OPEN-TOPPED (the CONFIGURE tab): no roof, its liquid seen from above, and a line ending in the air over it lands what it delivers in it.",
 		"ports": {
 			"inlet": "Top nozzle. Several runs may land here; they meet at a tee and blend. It sits above the liquid, so it cannot flow backwards.",
 			"outlet": "Bottom nozzle, at headspace pressure plus the static head of the liquid. Material goes whichever way the network solves -- charging a vessel up through it is normal.",
@@ -475,7 +475,7 @@ const PAGES := {
 	"cap": {
 		"title": "Pipe cap",
 		"tier": "utility",
-		"summary": "A short spool with a nozzle at each end and a blind flange on whichever end carries no line. The two nozzles are one point in the network. A line cut in play leaves a cap on each side of the cut; the pipe behind it stands at pressure and moves nothing, since a dead end has nowhere for material to go. Run a line from a capped end and the blind comes off: the cap is then a plain coupling. A line laid to nowhere ends in an OPEN cap: the blind is off, the end vents to the air at its own height, and whatever the line delivers spills there and is totalled. Press E on it to put the blind on, and again to take it off.",
+		"summary": "A short spool with a nozzle at each end and a blind flange on whichever end carries no line. The two nozzles are one point in the network. A line cut in play leaves a cap on each side of the cut; the pipe behind it stands at pressure and moves nothing, since a dead end has nowhere for material to go. Run a line from a capped end and the blind comes off: the cap is then a plain coupling. A line laid to nowhere ends in an OPEN cap: the blind is off, the end vents to the air at its own height, and whatever the line delivers falls out of it. Over an open-topped vessel it lands in the vessel and fills it, drop by drop or as a stream, and the delivery is totalled; anywhere else it spills to the ground and the spill is totalled. Press E on it to put the blind on, and again to take it off.",
 		"ports": {
 			"a": "The upstream nozzle: the line arriving at the cap.",
 			"b": "The downstream nozzle: the line leaving it, if any.",
@@ -490,7 +490,8 @@ const PAGES := {
 			"No pressure drop through the fitting: the lines carry the resistance.",
 			"A blind end holds pressure without leaking; nothing is vented or drained by a cut.",
 			"The cap has no volume: material in the cut line is not stored in it.",
-			"An open end spills to nowhere: what leaves is counted and gone, never pooled.",
+			"An open end over an open-topped vessel lands its spill in the vessel, blended in like any other arrival; over anything else it spills to the ground, counted and gone.",
+			"What falls is drawn and heard off the real rate: below three millilitres a second it is drops, about twenty to the millilitre, above that a stream.",
 		],
 	},
 	"tee_split": {
@@ -974,6 +975,158 @@ const PAGES := {
 		"assumptions": [
 			"Discrete terminals only for now: 4-20 mA circuits still run their own conduit.",
 			"No gland count limit, no ingress rating, no segregation of power from signal.",
+		],
+	},
+
+	# ---- the small-bore family (director, 2026-09-20): new machines for
+	# little lines, sized in L/s at 1 bar like every valve ---------------
+	"orifice": {
+		"title": "Restriction Orifice",
+		"tier": "utility",
+		"summary": "A plate with a hole in it, held between two faces in the line: the flow limiter. It has one number, the flow it passes at a 1 bar drop, and the square law does the rest. It limits by resistance alone, so what gets through still rises with the pressure behind it -- a limiter, not a regulator. Nothing to turn and nothing to wire; a tag on its handle is the only way to tell one from another.",
+		"ports": {
+			"inlet": "Upstream nozzle.",
+			"outlet": "Downstream nozzle, the same material at a lower pressure.",
+		},
+		"equations": [
+			["Q = Cv * sqrt(dP / 1 bar)", "The square law through a fixed hole: four times the pressure buys twice the flow."],
+		],
+		"params": [
+			["cv_lps", "L/s at 1 bar", "0.001", "The flow through the hole at the reference drop. A drip is a fraction of a millilitre a second."],
+		],
+		"assumptions": [
+			"No vena contracta and no pressure recovery: the drop is the drop.",
+			"It never clogs, erodes or cavitates.",
+		],
+	},
+	"needle_valve": {
+		"title": "Needle Valve",
+		"tier": "control",
+		"summary": "A hand valve with a fine tapered stem: many turns from shut to full open, so a fraction of a turn is a real adjustment. This is the valve a small line is trimmed with. No actuator and no command; the operator is the control system. E opens it a turn at a time, and from full open the next press shuts it; the CONFIGURE tab sets the stem exactly.",
+		"ports": {
+			"inlet": "Upstream nozzle.",
+			"outlet": "Downstream nozzle.",
+		},
+		"equations": [
+			["x = turns_open / turns", "The stem's travel as a fraction of full open."],
+			["Q = Cv * x * sqrt(dP / 1 bar)", "The valve equation: the drop across it decides what flows, the stem decides how much of the seat is open."],
+		],
+		"params": [
+			["cv_lps", "L/s at 1 bar", "0.005", "Flow at full open across the reference drop."],
+			["turns", "turns", "10", "How many turns of the handle from shut to full open."],
+		],
+		"assumptions": [
+			"A linear characteristic in the turns: a real needle valve is closer to equal percentage, most of its authority in the last turns.",
+			"No packing leak and no seat wear.",
+		],
+	},
+	"ball_valve": {
+		"title": "Ball Valve",
+		"tier": "control",
+		"summary": "A quarter-turn hand valve: a lever, open or shut, and half a second of travel between. The lever lies along the line when open and across it when shut, which is the only indication there is -- no actuator, no limit switch. The valve equation while it travels, as for the block valve, so it is not a wall until it lands. E throws the lever.",
+		"ports": {
+			"inlet": "Upstream nozzle.",
+			"outlet": "Downstream nozzle.",
+		},
+		"equations": [
+			["dx/dt = +-100 / stroke_s", "The lever's own quarter turn, at the hand's speed."],
+			["Q = Cv * (x/100) * sqrt(dP / 1 bar)", "The valve equation with the travel as the opening."],
+		],
+		"params": [
+			["cv_lps", "L/s at 1 bar", "0.5", "Flow at full open across the reference drop. A full-bore ball valve barely restricts its line."],
+			["stroke_s", "s", "0.5", "How long the quarter turn takes."],
+		],
+		"assumptions": [
+			"A linear characteristic through the travel; a ball's is not.",
+			"Bubble-tight when shut.",
+		],
+	},
+	"solenoid_valve": {
+		"title": "Solenoid Valve",
+		"tier": "control",
+		"summary": "A coil-operated valve: shut until its coil is energized, open while it is, and the plunger snaps in a few hundredths of a second. Normally closed, so a lost signal is a shut valve. There is no hand override: nothing wired to the coil means it never opens. The lamp on the connector is lit while the coil is energized, and every operation is counted.",
+		"ports": {
+			"coil": "The coil: a 24 V discrete signal. Land a PLC output, a relay contact or a switch here. Energized opens.",
+			"inlet": "Upstream nozzle.",
+			"outlet": "Downstream nozzle.",
+		},
+		"equations": [
+			["x -> 100 in 0.05 s energized, -> 0 de-energized", "The plunger snaps: within a scan or two it is at one end or the other."],
+			["Q = Cv * (x/100) * sqrt(dP / 1 bar)", "The valve equation."],
+		],
+		"params": [
+			["cv_lps", "L/s at 1 bar", "0.3", "Flow at full open across the reference drop."],
+		],
+		"assumptions": [
+			"The coil draws nothing from the signal: no current, no heating, no burn-out.",
+			"No minimum operating differential: it opens against any drop, which a pilot-operated valve would not.",
+		],
+	},
+	"metering_pump": {
+		"title": "Metering Pump",
+		"tier": "process",
+		"summary": "A positive-displacement dosing pump: a diaphragm and two check valves, driven by a small motor. It delivers its stroke volume every stroke whatever the discharge pressure, until the pressure reaches what its drive can push against -- so its curve is nearly vertical, the opposite of the centrifugal pump, and two in parallel really do double the flow. The stroke length is the dose adjustment, a knob on the pump or a 4-20 mA signal. It runs on 24 V DC. With nothing wired to run it is a hand pump: E starts and stops it.",
+		"ports": {
+			"run": "Discrete run command. Unwired, the pump is hand-operated at its own switch.",
+			"stroke": "Analog stroke length, 0-100 %. Unwired, the knob on the pump sets it (the CONFIGURE tab).",
+			"power": "24 V DC supply. No supply, no pump.",
+			"inlet": "Suction nozzle.",
+			"outlet": "Discharge nozzle, the same material as the suction.",
+		},
+		"equations": [
+			["Q_stroke = rated_lps * stroke / 100", "The dose set at the knob or by the signal."],
+			["Q = Q_stroke * (1 - (H / H_max)^8)^(1/8)", "Nearly the full stroke until the head approaches the maximum, then nothing: the drive stalls."],
+		],
+		"params": [
+			["rated_lps", "L/s", "0.01", "Delivery at full stroke against no head."],
+			["max_head_m", "m", "50", "The head the drive can push against; past it the pump stalls."],
+		],
+		"assumptions": [
+			"No pulsation: the flow is the average over the strokes, and nothing downstream sees the pulses.",
+			"No check-valve leakage and no loss of prime beyond the suction taper every pump has.",
+			"It does not care what it pumps: no viscosity, no gas locking.",
+		],
+	},
+	"regulator": {
+		"title": "Pressure Regulator",
+		"tier": "control",
+		"summary": "A self-acting pressure-reducing valve: a spring against a diaphragm that feels the downstream pressure and throttles the seat as it rises. No signal in or out. It holds its outlet near the setting while the inlet is higher and the flow within its Cv; above the setting it shuts. The little gauge on its outlet reads the real downstream pressure, and it never reads the setting exactly, because a regulator droops as the flow through it rises.",
+		"ports": {
+			"inlet": "Upstream nozzle, the higher pressure.",
+			"outlet": "Downstream nozzle, held near the setting.",
+		},
+		"equations": [
+			["x = clamp((P_set - P_out) / P_band, 0, 1)", "The diaphragm against its spring, solved with the network: the seat opens as the outlet falls below the setting."],
+			["Q = Cv * x * sqrt(dP / 1 bar)", "The valve equation."],
+			["P_band = max(0.1 * P_set, 5 kPa)", "The droop: the outlet sags a tenth of the setting from no flow to full open."],
+		],
+		"params": [
+			["set_kpa", "kPa", "200", "The downstream pressure it holds."],
+			["cv_lps", "L/s at 1 bar", "0.5", "Flow at full open across the reference drop: the most it can pass."],
+		],
+		"assumptions": [
+			"Proportional only, a straight-line droop: a real regulator's curve is not straight.",
+			"No relief: an outlet pushed above the setting from downstream is not vented, only shut against.",
+		],
+	},
+	"rotameter": {
+		"title": "Rotameter",
+		"tier": "control",
+		"summary": "A variable-area flow indicator: a float in a tapered glass tube, riding at the height where the drag of the flow balances its weight. A local indication and nothing else, no signal out -- the flow gauge is the transmitting instrument. The tube is a small resistance the line pays for the reading.",
+		"ports": {
+			"inlet": "Upstream nozzle, the bottom of the tube.",
+			"outlet": "Downstream nozzle.",
+		},
+		"equations": [
+			["float_frac = Q / Q_range", "The float's height up the tube, clamped to it."],
+			["dP = k * Q^2, k = 5 kPa / Q_range^2", "What the tube costs the line: 5 kPa at full scale."],
+		],
+		"params": [
+			["range_lps", "L/s", "0.01", "Full-scale flow: the top of the tube."],
+		],
+		"assumptions": [
+			"A linear scale: a real tube is calibrated for one fluid and reads wrong for another.",
+			"No float bounce, and nothing readable below a tenth of scale.",
 		],
 	},
 }

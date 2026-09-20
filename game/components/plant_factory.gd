@@ -30,6 +30,19 @@ const CATALOG_UTILITIES: Array[Dictionary] = [
 	{"type": "cap", "label": "Pipe cap"},
 ]
 
+# The small-line family (director, 2026-09-20: "what would exist in a
+# real processing plant on small-diameter lines"): new machines, never
+# the big ones drawn small. Each is built at the bore of the line on it.
+const CATALOG_SMALL_BORE: Array[Dictionary] = [
+	{"type": "orifice", "label": "Restriction orifice"},
+	{"type": "needle_valve", "label": "Needle valve"},
+	{"type": "ball_valve", "label": "Ball valve (lever)"},
+	{"type": "solenoid_valve", "label": "Solenoid valve"},
+	{"type": "metering_pump", "label": "Metering pump"},
+	{"type": "regulator", "label": "Pressure regulator"},
+	{"type": "rotameter", "label": "Rotameter"},
+]
+
 const CATALOG_INSTRUMENTS: Array[Dictionary] = [
 	{"type": "float_switch", "label": "Level switch"},
 	{"type": "gauge_level", "label": "Level gauge"},
@@ -90,6 +103,13 @@ const FOOTPRINTS := {
 	"crystallizer": Vector3(1.7, 2.7, 1.7),
 	"dryer": Vector3(1.7, 1.7, 1.3),
 	"still": Vector3(1.5, 7.0, 1.5),
+	"orifice": Vector3(0.45, 0.7, 0.3),
+	"needle_valve": Vector3(0.45, 0.85, 0.3),
+	"ball_valve": Vector3(0.45, 0.75, 0.3),
+	"solenoid_valve": Vector3(0.45, 0.85, 0.3),
+	"metering_pump": Vector3(0.65, 0.6, 0.4),
+	"regulator": Vector3(0.45, 0.85, 0.3),
+	"rotameter": Vector3(0.5, 1.0, 0.3),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5, "hmi_trend": 1.6,
@@ -103,6 +123,8 @@ const Y_OFFSETS := {
 	"vaclock": 0.0, "vialfill": 0.0,
 	"gauge_temp": 0.0, "gauge_conc": 0.0,
 	"crystallizer": 0.0, "dryer": 0.0, "still": 0.0,
+	"orifice": 0.0, "needle_valve": 0.0, "ball_valve": 0.0, "solenoid_valve": 0.0,
+	"metering_pump": 0.0, "regulator": 0.0, "rotameter": 0.0,
 }
 
 # Where each port's fitting sits in the view's local space, flush with
@@ -232,6 +254,33 @@ const PORT_ANCHORS := {
 	"column": {
 		"p_top": {"pos": Vector3(0, 11.3, 1.08), "dir": Vector3.BACK},
 		"power": {"pos": Vector3(0.63, 1.15, 0), "dir": Vector3.RIGHT}},
+	# The small-bore family: every one an axis type with its nozzles at
+	# the valves' line height, so it swaps inline with them.
+	"orifice": {
+		"inlet": {"pos": Vector3(-0.20, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.20, 0.32, 0), "dir": Vector3.RIGHT}},
+	"needle_valve": {
+		"inlet": {"pos": Vector3(-0.20, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.20, 0.32, 0), "dir": Vector3.RIGHT}},
+	"ball_valve": {
+		"inlet": {"pos": Vector3(-0.20, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.20, 0.32, 0), "dir": Vector3.RIGHT}},
+	"solenoid_valve": {
+		"inlet": {"pos": Vector3(-0.20, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.20, 0.32, 0), "dir": Vector3.RIGHT},
+		"coil": {"pos": Vector3(0, 0.50, 0.075), "dir": Vector3.BACK}},
+	"metering_pump": {
+		"inlet": {"pos": Vector3(-0.30, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.30, 0.32, 0), "dir": Vector3.RIGHT},
+		"run": {"pos": Vector3(0.18, 0.11, -0.05), "dir": Vector3.RIGHT},
+		"stroke": {"pos": Vector3(0.18, 0.11, 0.05), "dir": Vector3.RIGHT},
+		"power": {"pos": Vector3(-0.06, 0.11, 0), "dir": Vector3.LEFT}},
+	"regulator": {
+		"inlet": {"pos": Vector3(-0.20, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.20, 0.32, 0), "dir": Vector3.RIGHT}},
+	"rotameter": {
+		"inlet": {"pos": Vector3(-0.22, 0.32, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.22, 0.32, 0), "dir": Vector3.RIGHT}},
 	# Pressure taps sit on the suite's walls, near the ceiling.
 	"air_cascade": {
 		"p_al1": Vector3(-23.5, 2.5, -4.35),
@@ -389,6 +438,24 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 		"still":
 			return sim.add(SimStill.new(name_, params.get("rate_lps", 3.0),
 				params.get("cut_c", 150.0), params.get("sharpness", 0.95)))
+		"orifice":
+			return sim.add(SimOrifice.new(name_, params.get("cv_lps", 0.001)))
+		"needle_valve":
+			return sim.add(SimNeedleValve.new(name_, params.get("cv_lps", 0.005),
+				params.get("turns", 10.0)))
+		"ball_valve":
+			return sim.add(SimBallValve.new(name_, params.get("cv_lps", 0.5),
+				params.get("stroke_s", 0.5)))
+		"solenoid_valve":
+			return sim.add(SimSolenoidValve.new(name_, params.get("cv_lps", 0.3)))
+		"metering_pump":
+			return sim.add(SimMeteringPump.new(name_, params.get("rated_lps", 0.01),
+				params.get("max_head_m", 50.0)))
+		"regulator":
+			return sim.add(SimRegulator.new(name_, params.get("set_kpa", 200.0),
+				params.get("cv_lps", 0.5)))
+		"rotameter":
+			return sim.add(SimRotameter.new(name_, params.get("range_lps", 0.01)))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -450,6 +517,20 @@ static func make_view(type_id: String, record: SimComponent,
 			view = StillView.new()
 		"air_cascade":
 			view = AsepticSuite.new()
+		"orifice":
+			view = OrificeView.new()
+		"needle_valve":
+			view = NeedleValveView.new()
+		"ball_valve":
+			view = BallValveView.new()
+		"solenoid_valve":
+			view = SolenoidValveView.new()
+		"metering_pump":
+			view = MeteringPumpView.new()
+		"regulator":
+			view = RegulatorView.new()
+		"rotameter":
+			view = RotameterView.new()
 	if view == null:
 		push_error("unknown equipment type '%s'" % type_id)
 		return null
@@ -482,7 +563,7 @@ static func mains_anchors(ways: int) -> Dictionary:
 ## The build-menu label of a type, for the journal and toasts.
 static func label_for(type_id: String) -> String:
 	for catalog: Array in [CATALOG, CATALOG_SEPARATION, CATALOG_INSTRUMENTS,
-			CATALOG_CONTROL, CATALOG_UTILITIES]:
+			CATALOG_CONTROL, CATALOG_UTILITIES, CATALOG_SMALL_BORE]:
 		for entry: Dictionary in catalog:
 			if str(entry["type"]) == type_id:
 				return str(entry["label"])
@@ -544,7 +625,8 @@ static func _anchor_dir(raw: Variant) -> Vector3:
 ## port fittings are flush — the pick volume and the colour ring on
 ## the fitting's own face, no neck, no second flange — and a line
 ## meets that face.
-const INLINE_FLUSH: Array[String] = ["valve", "block_valve", "gauge_flow", "tee_split", "tee_mix", "cap"]
+const INLINE_FLUSH: Array[String] = ["valve", "block_valve", "gauge_flow", "tee_split", "tee_mix", "cap",
+	"orifice", "needle_valve", "ball_valve", "solenoid_valve", "metering_pump", "regulator", "rotameter"]
 
 
 static func make_marker(view: Node3D, record_name: String, port_name: String,
@@ -651,6 +733,36 @@ const CONFIG := {
 		{"key": "height_m", "label": "Height", "unit": "m", "min": 0.5, "max": 12.0, "step": 0.1},
 		{"key": "diameter_m", "label": "Diameter", "unit": "m", "min": 0.4, "max": 6.0, "step": 0.1},
 		{"key": "nozzle_cv_lps", "label": "Nozzle Cv", "unit": "L/s at 1 bar", "min": 1.0, "max": 500.0, "step": 1.0},
+		{"key": "open_top", "label": "Open top", "kind": "toggle"},
+	],
+	# The small-bore family: sized in L/s at 1 bar like every valve, and
+	# a hand setting or two that the CONFIGURE tab can set exactly.
+	"orifice": [
+		{"key": "cv_lps", "label": "Flow at 1 bar", "unit": "L/s", "min": 0.000001, "max": 100.0, "step": 0.0001},
+	],
+	"needle_valve": [
+		{"key": "cv_lps", "label": "Cv (full open)", "unit": "L/s at 1 bar", "min": 0.000001, "max": 100.0, "step": 0.0001},
+		{"key": "turns", "label": "Turns to open", "unit": "turns", "min": 1.0, "max": 40.0, "step": 1.0},
+		{"key": "turns_open", "label": "Stem position", "unit": "turns open", "min": 0.0, "max": 40.0, "step": 0.1},
+	],
+	"ball_valve": [
+		{"key": "cv_lps", "label": "Cv", "unit": "L/s at 1 bar", "min": 0.000001, "max": 500.0, "step": 0.001},
+		{"key": "stroke_s", "label": "Quarter turn takes", "unit": "s", "min": 0.1, "max": 10.0, "step": 0.1},
+	],
+	"solenoid_valve": [
+		{"key": "cv_lps", "label": "Cv", "unit": "L/s at 1 bar", "min": 0.000001, "max": 100.0, "step": 0.001},
+	],
+	"metering_pump": [
+		{"key": "rated_lps", "label": "Full stroke", "unit": "L/s", "min": 0.000001, "max": 10.0, "step": 0.0001},
+		{"key": "max_head_m", "label": "Maximum head", "unit": "m", "min": 1.0, "max": 1000.0, "step": 1.0},
+		{"key": "stroke_pct", "label": "Stroke knob", "unit": "%", "min": 0.0, "max": 100.0, "step": 1.0},
+	],
+	"regulator": [
+		{"key": "set_kpa", "label": "Setting", "unit": "kPa", "min": 1.0, "max": 2000.0, "step": 1.0},
+		{"key": "cv_lps", "label": "Cv (full open)", "unit": "L/s at 1 bar", "min": 0.000001, "max": 100.0, "step": 0.001},
+	],
+	"rotameter": [
+		{"key": "range_lps", "label": "Full scale", "unit": "L/s", "min": 0.000001, "max": 100.0, "step": 0.0001},
 	],
 	"pump": [
 		{"key": "rated_lps", "label": "Rated flow", "unit": "L/s", "min": 0.1, "max": 200.0, "step": 0.1},

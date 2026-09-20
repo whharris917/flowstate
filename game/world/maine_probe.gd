@@ -30,6 +30,11 @@ func _run(world: WorldBase) -> void:
 	# From the pad's south-east corner, out over the ledges to the sea.
 	await _view(player, Vector3(70.0, 0.35, 55.0), -2.35, -0.12, 0.0, "pad_sea")
 	if world is MaineMap:
+		# The drip demo (2026-09-20): the small-bore line from its west
+		# end, the open end over the tank close up, and the dosing line.
+		await _view(player, Vector3(-7.0, 0.35, 11.5), -1.35, -0.12, 0.0, "drip_line")
+		await _view(player, Vector3(6.5, 0.35, 12.3), 0.0, -0.3, 0.0, "drip_end")
+		await _view(player, Vector3(11.0, 0.35, 11.5), 0.0, -0.2, 0.0, "dosing_line")
 		# The same corner, up at the heighliner hanging over the sea.
 		await _view(player, Vector3(70.0, 0.35, 55.0), -2.35, 0.30, 0.0, "heighliner")
 	if not world is MaineMap:

@@ -22,7 +22,7 @@ var _title: Label
 var _grid: GridContainer
 var _swatches: Array[Button] = []
 var _line: LineEdit
-var _clamp: CheckBox
+var _fitting: OptionButton
 var _size: OptionButton
 var _size_row: HBoxContainer
 
@@ -80,9 +80,19 @@ func _ready() -> void:
 	_line.custom_minimum_size = Vector2(340, 0)
 	_line.text_submitted.connect(func(_t: String) -> void: _ok())
 	column.add_child(_line)
-	_clamp = CheckBox.new()
-	_clamp.text = "sanitary tri-clamp fittings"
-	column.add_child(_clamp)
+	# What the line ends in: flanges, sanitary clamps, or on a small
+	# line compression fittings on tubing (director, 2026-09-20).
+	var fitting_row := HBoxContainer.new()
+	fitting_row.add_theme_constant_override("separation", 8)
+	column.add_child(fitting_row)
+	var fitting_label := Label.new()
+	fitting_label.text = "fittings"
+	fitting_row.add_child(fitting_label)
+	_fitting = OptionButton.new()
+	_fitting.add_item("flanged pipe", 0)
+	_fitting.add_item("sanitary tri-clamp", 1)
+	_fitting.add_item("tubing, compression fittings", 2)
+	fitting_row.add_child(_fitting)
 	# The line size (director, 2026-09-20): a nominal bore.
 	_size_row = HBoxContainer.new()
 	_size_row.add_theme_constant_override("separation", 8)
@@ -129,8 +139,8 @@ func open_for_run(current: Color, label_text: String, apply: Callable, fitting: 
 	_picked = current
 	_title.text = "Run service — pick a color, name the line"
 	_grid.visible = true
-	_clamp.visible = true
-	_clamp.button_pressed = fitting == "clamp"
+	_fitting.get_parent().set("visible", true)
+	_fitting.select({"clamp": 1, "tube": 2}.get(fitting, 0))
 	_size_row.visible = dn > 0
 	if dn > 0:
 		_size.select(_size.get_item_index(dn))
@@ -143,7 +153,7 @@ func open_for_sign(text: String, apply: Callable) -> void:
 	_apply = apply
 	_title.text = "Sign text"
 	_grid.visible = false
-	_clamp.visible = false
+	_fitting.get_parent().set("visible", false)
 	_size_row.visible = false
 	_line.text = text
 	_open()
@@ -159,7 +169,7 @@ func _ok() -> void:
 	if _apply.is_valid():
 		if _grid.visible:
 			var dn := _size.get_item_id(_size.selected) if _size_row.visible else 0
-			_apply.call(_picked, _line.text, "clamp" if _clamp.button_pressed else "flange", dn)
+			_apply.call(_picked, _line.text, ["flange", "clamp", "tube"][_fitting.selected], dn)
 		else:
 			_apply.call(_line.text)
 	close()

@@ -17,6 +17,12 @@ Writes to game/audio/:
   gull_1..3.wav   herring gull cries: one long, a long call, a pair
   river_loop.wav  10 s seamless stream over stones: a low rush, a
                   chatter of eddies, bubbles now and then
+  drip_1..3.wav   a water drop landing: the bubble plink, a rising
+                  chirp that dies in a few hundredths of a second
+  pour_loop.wav   3 s seamless trickle into a vessel: a thin splash
+                  with bubbles under it
+  dosing_loop.wav 2 s seamless metering-pump drive: a small motor with
+                  the diaphragm's tick every half second
 
 Loops are made seamless by quantizing every sustained frequency to an
 integer number of cycles per loop and forcing envelopes to zero at the
@@ -711,6 +717,90 @@ def make_gulls() -> None:
               [(1380.0, 900.0, 0.45, 0.12), (1300.0, 880.0, 0.45, 0.05)], r)
 
 
+def make_drip(path: Path, f0: float, rise: float, r: random.Random) -> None:
+    """One water drop landing: a bubble resonance, a sine that chirps
+    upward as the bubble shrinks and dies in a few hundredths of a
+    second, with a whisper of splash at the instant it lands."""
+    dur = 0.16
+    n = int(SR * dur)
+    buf = [0.0] * n
+    phase = 0.0
+    for i in range(n):
+        t = i / SR
+        freq = f0 * (1.0 + rise * (1.0 - math.exp(-t / 0.018)))
+        phase += 2.0 * math.pi * freq / SR
+        env = math.exp(-t / 0.040) * min(1.0, t / 0.002)
+        splash = (r.random() * 2.0 - 1.0) * 0.35 * math.exp(-t / 0.004)
+        buf[i] = math.sin(phase) * env + splash
+    write_wav(path, [buf], normalize_to=0.40)
+
+
+def make_drips() -> None:
+    r = random.Random(20260920)
+    make_drip(OUT_DIR / "drip_1.wav", 760.0, 1.1, r)
+    make_drip(OUT_DIR / "drip_2.wav", 940.0, 0.9, r)
+    make_drip(OUT_DIR / "drip_3.wav", 1120.0, 1.3, r)
+
+
+def make_pour() -> None:
+    """A trickle into a vessel: a thin band of splash noise, bubbles
+    under it now and then, seamless over three seconds."""
+    r = random.Random(20260921)
+    dur = 3.0
+    n = int(SR * dur)
+    fade = int(0.25 * SR)
+    total = n + fade
+    white = _noise_r(r, total)
+    low = _lowpass(white, 0.08)
+    high = _lowpass(white, 0.35)
+    band = [h - l for h, l in zip(high, low)]
+    out = [0.0] * total
+    for i in range(total):
+        t = i / SR
+        swell = 0.75 + 0.25 * math.sin(2.0 * math.pi * t * 2.0 / dur + 0.7)
+        out[i] = band[i] * swell * 1.6
+    # Bubbles: short rising chirps, a few a second.
+    for _ in range(int(dur * 4)):
+        start = int(r.random() * n)
+        f0 = 250.0 + r.random() * 500.0
+        length = int(SR * 0.05)
+        phase = 0.0
+        for k in range(length):
+            t = k / SR
+            freq = f0 * (1.0 + 0.8 * (1.0 - math.exp(-t / 0.015)))
+            phase += 2.0 * math.pi * freq / SR
+            env = math.exp(-t / 0.014)
+            idx = (start + k) % total
+            out[idx] += math.sin(phase) * env * 0.5
+    out = loop_crossfade(out, 0.25)
+    write_wav(OUT_DIR / "pour_loop.wav", [out], normalize_to=0.38)
+
+
+def make_dosing() -> None:
+    """A metering pump running: a small motor, quiet, and the diaphragm
+    tick every half second, four to the two-second loop."""
+    r = random.Random(20260922)
+    dur = 2.0
+    n = int(SR * dur)
+    out = [0.0] * n
+    f_motor = quantize(95.0, dur)
+    f_whine = quantize(1420.0, dur)
+    for i in range(n):
+        t = i / SR
+        out[i] = 0.35 * math.sin(2.0 * math.pi * f_motor * t) \
+            + 0.12 * math.sin(2.0 * math.pi * f_motor * 2.0 * t) \
+            + 0.03 * math.sin(2.0 * math.pi * f_whine * t)
+    for k in range(4):
+        start = int(k * SR * 0.5)
+        length = int(SR * 0.04)
+        for j in range(length):
+            t = j / SR
+            click = (r.random() * 2.0 - 1.0) * math.exp(-t / 0.004) * 0.9 \
+                + math.sin(2.0 * math.pi * 320.0 * t) * math.exp(-t / 0.012) * 0.6
+            out[(start + j) % n] += click
+    write_wav(OUT_DIR / "dosing_loop.wav", [out], normalize_to=0.34)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -737,6 +827,9 @@ def main() -> None:
             start=1):
         make_step(OUT_DIR / f"step_{idx}.wav", f0, decay, noise_amp)
     make_step(OUT_DIR / "land.wav", 46.0, 7.0, 0.50, duration=0.55, level=0.42)
+    make_drips()
+    make_pour()
+    make_dosing()
     print("done")
 
 

@@ -166,6 +166,12 @@ func _fill_config(type_id: String) -> void:
 			var picker := TagPicker.new(all_tags, current)
 			grid.add_child(picker)
 			_fields[key] = picker
+		elif str(field.get("kind", "")) == "toggle":
+			var check := CheckBox.new()
+			check.button_pressed = bool(record.get(key))
+			check.text = "yes"
+			grid.add_child(check)
+			_fields[key] = check
 		elif field.has("options"):
 			var choice := OptionButton.new()
 			var current := str(record.call("species_key"))
@@ -208,6 +214,8 @@ func _apply() -> void:
 			values[key] = SimSpecies.key_of((control as OptionButton).get_selected_id())
 		elif control is TagPicker:
 			values[key] = (control as TagPicker).text
+		elif control is CheckBox:
+			values[key] = (control as CheckBox).button_pressed
 		else:
 			values[key] = (control as SpinBox).value
 	var why := ""

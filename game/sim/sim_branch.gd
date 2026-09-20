@@ -22,6 +22,13 @@ var flow_lps: float = 0.0  # filled in by the solve
 var q: float = 0.0
 var g: float = 0.0
 var conducting: bool = false
+## A branch whose flow depends on its two end pressures differently
+## (a regulator: its opening follows the downstream pressure alone)
+## sets two_sided and fills gb, the slope on the b side (-dQ/dP_b,
+## positive like g), and the Jacobian takes both. Every other branch
+## answers to the difference alone, and g serves both ends.
+var two_sided: bool = false
+var gb: float = 0.0
 
 
 func _init(node_a_: int, node_b_: int, name_: String = "") -> void:

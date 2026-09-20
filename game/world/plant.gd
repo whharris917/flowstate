@@ -622,9 +622,24 @@ func place(type_id: String, name_: String, params: Dictionary,
 	add_child(view)
 	match type_id:
 		"tank":
+			(record as SimTank).open_top = bool(params.get("open_top", false))
 			(view as TankView).setup(record as SimTank)
 		"pump":
 			(view as PumpView).setup(record as SimPump)
+		"orifice":
+			(view as OrificeView).setup(record as SimOrifice)
+		"needle_valve":
+			(view as NeedleValveView).setup(record as SimNeedleValve)
+		"ball_valve":
+			(view as BallValveView).setup(record as SimBallValve)
+		"solenoid_valve":
+			(view as SolenoidValveView).setup(record as SimSolenoidValve)
+		"metering_pump":
+			(view as MeteringPumpView).setup(record as SimMeteringPump)
+		"regulator":
+			(view as RegulatorView).setup(record as SimRegulator)
+		"rotameter":
+			(view as RotameterView).setup(record as SimRotameter)
 		"relay":
 			(view as RelayView).setup(record as SimRelay)
 		"hmi_trend":
@@ -1649,6 +1664,8 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 		if field.has("options"):
 			if SimSpecies.index_of(str(values[key])) < 0:
 				return "unknown species"
+		elif str(field.get("kind", "")) == "toggle":
+			pass
 		elif str(field.get("kind", "")) == "tag":
 			if str(values[key]) != "" and not historian.data.has(str(values[key])):
 				return "no historian tag named %s" % str(values[key])
@@ -1681,6 +1698,15 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 		var tank_rec := record as SimTank
 		if values.has("nozzle_cv_lps"):
 			tank_rec.nozzle_cv_lps = float(values["nozzle_cv_lps"])
+		if values.has("open_top") and bool(values["open_top"]) != tank_rec.open_top:
+			# The roof comes off or goes on: the view is built again, and
+			# an open end above it finds it (or loses it) at the sweep.
+			tank_rec.open_top = bool(values["open_top"])
+			var tank_view := views.get(name_) as TankView
+			if tank_view != null:
+				tank_view.rebuild()
+				MeshMerge.merge_view(tank_view)
+			_schedule_revalidate()
 		if values.has("height_m") or values.has("diameter_m"):
 			resize_tank(name_, float(values.get("height_m", tank_rec.height_m)),
 				float(values.get("diameter_m", tank_rec.diameter_m)))
@@ -1698,7 +1724,9 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 				MeshMerge.merge_view(host_view)
 	else:
 		for key: String in values:
-			if key != "species":
+			if str(allowed[key].get("kind", "")) == "toggle":
+				record.set(key, bool(values[key]))
+			elif key != "species":
 				record.set(key, float(values[key]))
 			elif record is SimSource:
 				(record as SimSource).set_species(str(values[key]))
@@ -2208,7 +2236,7 @@ static func _nearest_on_path(path: Array[Vector3], at: Vector3) -> Dictionary:
 ## up"). Measured from the floor, slab or deck actually below, in the
 ## deferred pass where physics is known, so a placement, a move and a
 ## load all get one; nothing within reach below, and it stays as it is.
-const PEDESTAL_TYPES: Array[String] = ["pump"]
+const PEDESTAL_TYPES: Array[String] = ["pump", "metering_pump"]
 const PEDESTAL_REACH := 6.0
 
 
@@ -2719,6 +2747,50 @@ func unique_name(prefix: String) -> String:
 
 
 ## A cap shows a blind flange on each nozzle without a line.
+## An open end over an open-topped vessel lands what it spills in it
+## (director, 2026-09-20: fill an open tank from a line ending in the
+## air above it). Geometry the plant knows and the kernel does not: the
+## open nozzle's face, in plan inside the vessel's rim and above its
+## top, names the vessel to the cap. Every open cap is asked again
+## whenever the plant changes.
+func _sync_catches() -> void:
+	for name_: String in views:
+		var cap := sim.get_component(name_) as SimCap
+		if cap == null:
+			continue
+		var cap_view := views[name_] as CapView
+		if cap_view == null:
+			continue
+		cap.catch = _vessel_under(cap_view.open_end_local(), name_)
+		cap_view.set_landing(cap.catch, to_local(cap_view.to_global(cap_view.open_end_local())).y)
+
+
+## The open-topped vessel whose rim, in plan, holds the point, with
+## its top below it. Plant-local point.
+func _vessel_under(cap_local: Vector3, cap_name: String) -> SimTank:
+	var cap_view: Node3D = views.get(cap_name)
+	if cap_view == null:
+		return null
+	var p := to_local(cap_view.to_global(cap_local))
+	var best: SimTank = null
+	var best_top := -INF
+	for name_: String in views:
+		var tank_rec := sim.get_component(name_) as SimTank
+		if tank_rec == null or not tank_rec.open_top:
+			continue
+		var tank_view := views[name_] as Node3D
+		var base := tank_view.position
+		var top := base.y + tank_rec.height_m
+		if top > p.y:
+			continue
+		if Vector2(p.x - base.x, p.z - base.z).length() > tank_rec.diameter_m / 2.0:
+			continue
+		if top > best_top:
+			best_top = top
+			best = tank_rec
+	return best
+
+
 func _sync_caps(names: Array) -> void:
 	for name_ in names:
 		var view := views.get(str(name_)) as CapView
@@ -2843,6 +2915,7 @@ func _revalidate_supports() -> void:
 			continue  # internal cabinet wire, nothing physical to carry
 		_apply_support_path(visual["node"] as PipeView, _visual_path(visual), space)
 	_pedestal_pass(space)
+	_sync_catches()
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
 		_apply_support(entry["node"] as PipeView, entry["points"], space)
@@ -4516,7 +4589,25 @@ func _params_for(record: SimComponent) -> Dictionary:
 	if record is SimTank:
 		var tank_rec := record as SimTank
 		return {"height_m": tank_rec.height_m, "diameter_m": tank_rec.diameter_m,
-			"nozzle_cv_lps": tank_rec.nozzle_cv_lps}
+			"nozzle_cv_lps": tank_rec.nozzle_cv_lps, "open_top": tank_rec.open_top}
+	if record is SimOrifice:
+		return {"cv_lps": (record as SimOrifice).cv_lps}
+	if record is SimNeedleValve:
+		var nv := record as SimNeedleValve
+		return {"cv_lps": nv.cv_lps, "turns": nv.turns}
+	if record is SimBallValve:
+		var bv := record as SimBallValve
+		return {"cv_lps": bv.cv_lps, "stroke_s": bv.stroke_s}
+	if record is SimSolenoidValve:
+		return {"cv_lps": (record as SimSolenoidValve).cv_lps}
+	if record is SimMeteringPump:
+		var mp := record as SimMeteringPump
+		return {"rated_lps": mp.rated_lps, "max_head_m": mp.max_head_m}
+	if record is SimRegulator:
+		var pr := record as SimRegulator
+		return {"set_kpa": pr.set_kpa, "cv_lps": pr.cv_lps}
+	if record is SimRotameter:
+		return {"range_lps": (record as SimRotameter).range_lps}
 	if record is SimPump:
 		var pump_rec := record as SimPump
 		return {"rated_lps": pump_rec.rated_lps, "head_m": pump_rec.head_m}
@@ -4738,6 +4829,7 @@ func restore(payload: Dictionary) -> bool:
 				int(wire_entry["dn"]))
 	sim.time = float(payload.get("time", 0.0))
 	_sync_bores(views.keys())
+	_sync_catches()   # an open end finds its vessel again at once, not at the sweep
 
 	tank = sim.get_component("supply_tank") as SimTank
 	switch = sim.get_component("level_switch") as SimFloatSwitch

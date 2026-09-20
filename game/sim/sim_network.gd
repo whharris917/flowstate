@@ -21,7 +21,16 @@ extends RefCounted
 ## equations, same answer, a tenth of the arithmetic.
 
 const MAX_ITERATIONS := 20
+## A node is converged when its imbalance is below this, or below a
+## thousandth of what passes through it, whichever is smaller: a drip
+## line moving a tenth of a millilitre a second cannot be judged by an
+## absolute tenth of a millilitre (2026-09-20: the open end reported
+## three times the rotameter upstream of it, both "converged"). Never
+## looser than the absolute figure, never tighter than the floor.
 const TOLERANCE_LPS := 1e-4
+const TOLERANCE_REL := 1e-3
+const TOLERANCE_FLOOR_LPS := 1e-8
+var _throughput: PackedFloat64Array = PackedFloat64Array()   # per free node, from _residuals
 ## Newton on a square-law branch is badly behaved far from the answer:
 ## the slope of sqrt goes flat, so an undamped step can overshoot by a
 ## factor of ten and sit there oscillating. Capping how far a node may
@@ -138,11 +147,12 @@ func solve() -> void:
 		# cap every scan for the rest of the run.
 		var reachable := _reachable_from_fixed(index_of, n)
 		var residual := _residuals(index_of, n)
-		var worst := 0.0
+		var converged := true
 		for i in n:
-			if reachable[i] == 1:
-				worst = maxf(worst, absf(residual[i]))
-		if worst < TOLERANCE_LPS:
+			if reachable[i] == 1 and absf(residual[i]) >= _tolerance_at(i):
+				converged = false
+				break
+		if converged:
 			break
 
 		# The Jacobian, assembled straight into the band in permuted
@@ -150,16 +160,17 @@ func solve() -> void:
 		matrix.fill(0.0)
 		for branch in branches:
 			var g := branch.g
+			var gb := branch.gb if branch.two_sided else g
 			var ia := index_of[branch.node_a]
 			var ib := index_of[branch.node_b]
 			if ia >= 0:
 				var pa := _perm[ia]
 				matrix[pa * w + band] -= g
 				if ib >= 0:
-					matrix[pa * w + (_perm[ib] - pa + band)] += g
+					matrix[pa * w + (_perm[ib] - pa + band)] += gb
 			if ib >= 0:
 				var pb := _perm[ib]
-				matrix[pb * w + band] -= g
+				matrix[pb * w + band] -= gb
 				if ia >= 0:
 					matrix[pb * w + (_perm[ia] - pb + band)] += g
 		for i in n:
@@ -386,15 +397,24 @@ func _residuals(index_of: PackedInt32Array, n: int) -> PackedFloat64Array:
 	var residual := PackedFloat64Array()
 	residual.resize(n)
 	residual.fill(0.0)
+	_throughput.resize(n)
+	_throughput.fill(0.0)
 	for branch in branches:
 		var q := branch.q
 		var ia := index_of[branch.node_a]
 		var ib := index_of[branch.node_b]
 		if ia >= 0:
 			residual[ia] -= q
+			_throughput[ia] += absf(q)
 		if ib >= 0:
 			residual[ib] += q
+			_throughput[ib] += absf(q)
 	return residual
+
+
+## The imbalance a free node may keep: relative to what it passes.
+func _tolerance_at(slot: int) -> float:
+	return minf(TOLERANCE_LPS, maxf(TOLERANCE_FLOOR_LPS, TOLERANCE_REL * _throughput[slot]))
 
 
 ## Ask every branch its flow, slope and connectivity at the current
