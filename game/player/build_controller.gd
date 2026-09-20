@@ -1901,9 +1901,7 @@ func _raise_selected(dy: float) -> void:
 		if k >= 0 and is_lock(locks, before[k]):
 			hud.toast("a corner of that straight is locked — middle-click it to unlock")
 			return
-	var waypoints := dragged_waypoints(before, path, leg, a2, Vector3.INF, false, locks)
-	waypoints = dragged_waypoints(waypoints, path, leg + 1, b2, Vector3.INF, false, locks)
-	_relay_selected(waypoints, a2, true)
+	_relay_selected(raised_waypoints(before, path, leg, a2, b2), a2, true)
 
 
 ## What a dragged point of a line makes of its waypoints (2026-09-19:
@@ -1919,6 +1917,48 @@ func _raise_selected(dy: float) -> void:
 ## corners stand on one spot at different heights, so a waypoint over
 ## or under the dragged point moves with it. `index` is into `path`,
 ## the line as laid.
+## Both ends of a straight moved in one pass against the path as it
+## was (2026-09-19: two single-point edits in one tick put the far
+## corner ahead of the near one, since the near one had just left the
+## path the second edit ordered itself by, and the line looped back on
+## itself, "the total length of pipe approximately tripled"). An end
+## that is a waypoint is replaced; one that is not is inserted at its
+## place along the path.
+static func raised_waypoints(waypoints: Array, path: Array, leg: int, a2: Vector3, b2: Vector3) -> Array:
+	var a: Vector3 = path[leg]
+	var b: Vector3 = path[leg + 1]
+	var ka := match_waypoint(waypoints, a)
+	var kb := match_waypoint(waypoints, b)
+	var out: Array = []
+	var placed_a := ka >= 0
+	var placed_b := kb >= 0
+	for k in waypoints.size():
+		var w: Vector3 = waypoints[k]
+		if k == ka:
+			out.append(a2)
+			continue
+		if k == kb:
+			out.append(b2)
+			continue
+		var at := -1
+		for i in path.size():
+			if (path[i] as Vector3).distance_to(w) < 0.01:
+				at = i
+				break
+		if not placed_a and (at < 0 or at > leg):
+			out.append(a2)
+			placed_a = true
+		if not placed_b and (at < 0 or at > leg + 1):
+			out.append(b2)
+			placed_b = true
+		out.append(w)
+	if not placed_a:
+		out.append(a2)
+	if not placed_b:
+		out.append(b2)
+	return out
+
+
 ## Which waypoint a point of the player's own route is: the one it
 ## equals, or -1. Never by nearness (director, 2026-09-19: "we cannot
 ## have such proximity based rules").
