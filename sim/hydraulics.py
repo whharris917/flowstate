@@ -219,6 +219,50 @@ class CheckResistance(Resistance):
         return dp > 0.0 and super().is_conducting(dp)
 
 
+class RegulatorResistance(ControlResistance):
+    """A self-acting pressure regulator: a valve whose opening is a
+    function of its own downstream pressure, solved with the network
+    rather than a scan behind it.
+
+        x = clamp((P_set - P_b) / P_band, 0, 1)
+        Q = Cv * x * sqrt(dp / dp_ref)
+
+    Why a branch and not a component adjusting a valve each scan: the
+    downstream side of a regulator is stiff (an orifice, a shut line),
+    so a proportional opening set from last scan's pressure swings from
+    shut to full open and back every scan and never settles. Solved
+    simultaneously it is one equilibrium, found in a few iterations.
+    The slope reported to Newton carries the opening's own dependence
+    on the downstream pressure, so a step lands rather than under-shoots.
+    """
+
+    def __init__(self, node_a: int, node_b: int, cv_lps: float, set_pa: float,
+                 band_pa: float, name: str = "") -> None:
+        super().__init__(node_a, node_b, cv_lps, name)
+        self.set_pa = set_pa
+        self.band_pa = max(band_pa, 1.0)
+        self.opening = 1.0
+
+    def opening_at(self, pb: float) -> float:
+        return min(max((self.set_pa - pb) / self.band_pa, 0.0), 1.0)
+
+    def flow_at(self, pa: float, pb: float) -> float:
+        self.opening = self.opening_at(pb)
+        return self.flow(pa - pb)
+
+    def conductance_at(self, pa: float, pb: float) -> float:
+        x = self.opening_at(pb)
+        self.opening = x
+        g = self.conductance(pa - pb)
+        if 0.0 < x < 1.0:
+            # dQ/dx * dx/dP_b: the seat closing as the outlet rises.
+            g += abs(self.flow(pa - pb)) / (x * self.band_pa)
+        return g
+
+    def is_conducting_at(self, pa: float, pb: float) -> bool:
+        return self.opening_at(pb) > 1e-4
+
+
 class PumpCurve(Branch):
     """A centrifugal pump, with the curve that makes it one.
 
@@ -248,11 +292,17 @@ class PumpCurve(Branch):
     CAVITATION_BAND_PA = 20_000.0
 
     def __init__(self, node_a: int, node_b: int, head_pa: float,
-                 max_lps: float, name: str = "") -> None:
+                 max_lps: float, name: str = "", exponent: float = 2.0) -> None:
         super().__init__(node_a, node_b, name)
         self.head_pa = max(head_pa, _EPS)
         self.max_lps = max(max_lps, _EPS)
         self.running = False
+        # The curve's steepness: H = H0 * (1 - (Q/Qmax)^n). Two is a
+        # centrifugal pump. A positive-displacement machine (a metering
+        # pump) is nearly vertical -- its flow barely moves with the
+        # head until the head runs out -- and a high exponent is that
+        # curve without a cliff Newton cannot follow.
+        self.exponent = max(exponent, 1.0)
 
     def prime(self, suction_pa: float) -> float:
         """How much of its curve it is making, 0 to 1. One whenever
@@ -289,7 +339,7 @@ class PumpCurve(Branch):
         # Past the end of the curve a centrifugal pump stops being a
         # pump and is only a fitting, so cap the runout rather than
         # letting a high-pressure header drive it to silly flows.
-        return min(self.max_lps * math.sqrt(1.0 - rise / self.head_pa),
+        return min(self.max_lps * (1.0 - rise / self.head_pa) ** (1.0 / self.exponent),
                    self.max_lps * self.RUNOUT_FACTOR)
 
     def conductance(self, dp: float) -> float:
@@ -298,8 +348,9 @@ class PumpCurve(Branch):
         rise = -dp
         if rise >= self.head_pa:
             return 0.0
-        return self.max_lps / (2.0 * self.head_pa
-                               * math.sqrt(max(1.0 - rise / self.head_pa, 1e-6)))
+        n = self.exponent
+        left = max(1.0 - rise / self.head_pa, 1e-6)
+        return self.max_lps / (n * self.head_pa) * left ** (1.0 / n - 1.0)
 
 
 class FixedFlow(Branch):

@@ -199,8 +199,16 @@ def sample_components() -> list[Component]:
     from sim import control as ctrl
     from sim import process as proc
     from sim import separation as sep
+    from sim import small_bore as sb
 
     return [
+        sb.Orifice("orifice"),
+        sb.NeedleValve("needle_valve"),
+        sb.BallValve("ball_valve"),
+        sb.SolenoidValve("solenoid_valve"),
+        sb.MeteringPump("metering_pump"),
+        sb.Regulator("regulator"),
+        sb.Rotameter("rotameter"),
         ctrl.PID("controller"),
         ctrl.PLC("plc"),
         comp.Tank("tank", capacity_l=4000.0),

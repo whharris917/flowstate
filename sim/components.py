@@ -48,10 +48,17 @@ class Tank(Component):
         headspace_kpa: float = 0.0,
         elevation_m: float = 0.0,
         nozzle_cv_lps: float = 20.0,
+        open_top: bool = False,
     ) -> None:
         super().__init__(name)
         if capacity_l <= 0.0:
             raise ValueError("capacity_l must be positive")
+        # An open-topped vessel (director, 2026-09-20: "fill an open tank
+        # ... drop by drop"): a line ending in the air above it lands
+        # what it spills here. Nothing else changes: the headspace is
+        # atmospheric either way.
+        self.open_top = bool(open_top)
+        self._falling = Stream.empty()
         if level_l < 0.0:
             raise ValueError("level_l must be non-negative")
         if nozzle_cv_lps <= 0.0:
@@ -179,6 +186,13 @@ class Tank(Component):
     def supplied_stream(self, port_name: str) -> Stream:
         return self.contents.with_flow(1.0)
 
+    def receive(self, stream: Stream) -> None:
+        """Material falling in through the open top this scan, L/s at a
+        composition: an open pipe end above the vessel hands its spill
+        here, and the next tick blends it in like any other arrival."""
+        if stream.flow_lps > 0.0:
+            self._falling = Stream.mix(self._falling, stream)
+
     def tick(self, dt: float) -> None:
         # Both nozzles are signed into the vessel, so one balance covers
         # filling, draining, and a line that reversed on us.
@@ -187,6 +201,10 @@ class Tank(Component):
             port.stream.with_flow(port.flow_lps)
             for port in (self.inlet, self.outlet) if port.flow_lps > 0.0
         ])
+        if self._falling.flow_lps > 0.0:
+            arriving = Stream.mix(arriving, self._falling)
+            net_lps += self._falling.flow_lps
+            self._falling = Stream.empty()
         added_l = arriving.flow_lps * dt
         leaving_l = max(-net_lps + arriving.flow_lps, 0.0) * dt
         demand_l = (self.drain_lps * dt) + leaving_l
@@ -504,8 +522,14 @@ class Cap(Component):
         self.open = False
         self.elevation_m = elevation_m
         self.spilled_l = 0.0
+        # What lands in an open vessel below (director, 2026-09-20: fill
+        # an open tank from a line ending in the air above it). The
+        # plant names the vessel; the kernel hands it the stream.
+        self.catch = None
+        self.delivered_l = 0.0
         self._vent = None
         self.add_observable("spilled_l", "spilled_l")
+        self.add_observable("delivered_l", "delivered_l")
 
     def shared_node_ports(self) -> list[list[str]]:
         return [list(self.material_ports().keys())]
@@ -525,15 +549,29 @@ class Cap(Component):
             self._vent.cv_lps = self.VENT_CV_LPS
             self._vent.opening = 1.0 if self.open else 0.0
 
+    def lands(self) -> bool:
+        """Whether the spill has somewhere to go: an open-topped vessel
+        under the end. Otherwise it is lost to the ground and counted."""
+        return self.catch is not None and getattr(self.catch, "open_top", False)
+
     def tick(self, dt: float) -> None:
-        self.spilled_l += self.spill_lps() * dt
+        q = self.spill_lps()
+        if q <= 0.0:
+            return
+        if self.lands():
+            self.catch.receive(self.inputs["a"].stream.with_flow(q))
+            self.delivered_l += q * dt
+        else:
+            self.spilled_l += q * dt
 
     def state_dict(self) -> dict:
-        return {"open": self.open, "spilled_l": self.spilled_l, "elevation_m": self.elevation_m}
+        return {"open": self.open, "spilled_l": self.spilled_l,
+                "delivered_l": self.delivered_l, "elevation_m": self.elevation_m}
 
     def apply_state(self, state: dict) -> None:
         self.open = bool(state.get("open", self.open))
         self.spilled_l = float(state.get("spilled_l", self.spilled_l))
+        self.delivered_l = float(state.get("delivered_l", self.delivered_l))
         self.elevation_m = float(state.get("elevation_m", self.elevation_m))
 
 
@@ -1173,6 +1211,8 @@ Tank.SPEC = EquipmentSpec(
                                       "a bigger pipe."),
         Param("elevation_m", "m", "Height of the vessel floor above grade. "
                                   "This is what buys you gravity flow."),
+        Param("open_top", "yes/no", "An open-topped vessel: a line ending in "
+                                    "the air above it lands what it spills here."),
     ),
     assumptions=(
         "Perfectly mixed: one temperature and one composition throughout, "
