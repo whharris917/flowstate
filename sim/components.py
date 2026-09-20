@@ -493,16 +493,48 @@ class Cap(Component):
     flow, so a capped line stands at pressure and moves nothing.
     """
 
-    def __init__(self, name: str) -> None:
+    VENT_CV_LPS = 60.0  # an open bore: the line's own resistance limits the spill
+
+    def __init__(self, name: str, elevation_m: float = 0.0) -> None:
         super().__init__(name)
         self.add_input("a", PortKind.PROCESS_MATERIAL)
         self.add_output("b", PortKind.PROCESS_MATERIAL)
+        # Open (director, 2026-09-20): an open pipe end, venting to the
+        # air at its own height, spilling and totalling what arrives.
+        self.open = False
+        self.elevation_m = elevation_m
+        self.spilled_l = 0.0
+        self._vent = None
+        self.add_observable("spilled_l", "spilled_l")
 
     def shared_node_ports(self) -> list[list[str]]:
         return [list(self.material_ports().keys())]
 
+    def spill_lps(self) -> float:
+        if not self.open or self._vent is None:
+            return 0.0
+        return max(self._vent.flow_lps, 0.0)
+
+    def build_hydraulics(self, net, node: dict[str, int]) -> None:
+        air = net.add_node(static_head_pa(self.elevation_m), fixed=True)
+        self._vent = net.add_branch(ControlResistance(
+            node["a"], air, self.VENT_CV_LPS, self.name))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        if self._vent is not None:
+            self._vent.cv_lps = self.VENT_CV_LPS
+            self._vent.opening = 1.0 if self.open else 0.0
+
     def tick(self, dt: float) -> None:
-        pass
+        self.spilled_l += self.spill_lps() * dt
+
+    def state_dict(self) -> dict:
+        return {"open": self.open, "spilled_l": self.spilled_l, "elevation_m": self.elevation_m}
+
+    def apply_state(self, state: dict) -> None:
+        self.open = bool(state.get("open", self.open))
+        self.spilled_l = float(state.get("spilled_l", self.spilled_l))
+        self.elevation_m = float(state.get("elevation_m", self.elevation_m))
 
 
 class SplitTee(Tee):

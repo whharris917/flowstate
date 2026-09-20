@@ -213,6 +213,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_try_place()
 	elif mode == Mode.CONNECT and event.is_action_pressed("place"):
 		_try_pick_port()
+	elif mode == Mode.CONNECT and event.is_action_pressed("interact") and _pending_marker != null:
+		_finish_open()
 	elif mode == Mode.NORMAL and event.is_action_pressed("place"):
 		# Clicking a clickable affordance (the cabinet's EDIT button),
 		# else a click on equipment selects it (director, 2026-09-13).
@@ -454,7 +456,7 @@ func _update_hud() -> void:
 				% [_route_span, SupportCheck.MAX_SPAN])
 			if _pending_marker != null and _route_block != "":
 				support += "\nBLOCKED — the line would pass through %s: route round it or move it" % _route_block
-			hud.set_mode_text("CONNECT — %s · right-click/C/Esc exit%s" % [step, support])
+			hud.set_mode_text("CONNECT — %s · E ends the line open here · right-click/C/Esc exit%s" % [step, support])
 
 
 func _physics_process(_delta: float) -> void:
@@ -1119,6 +1121,30 @@ func _try_pick_port() -> void:
 				_update_hud()
 		return
 	_pick_marker(node as StaticBody3D)
+
+
+## E while routing: the line ends where the last waypoint is, open to
+## the air (director, 2026-09-20). Only from an outlet: an open end
+## feeding an inlet would draw from nowhere.
+func _finish_open() -> void:
+	if bool(_pending_marker.get_meta("is_input")):
+		hud.toast("an open end takes a line from an outlet — start at the outlet")
+		return
+	if _waypoints.is_empty():
+		hud.toast("click a point for the end of the line first, then E")
+		return
+	var local_points: Array = []
+	for point in _waypoints:
+		local_points.append(plant.to_local(point))
+	var error := plant.connect_open(str(_pending_marker.get_meta("record_name")),
+		str(_pending_marker.get_meta("port_name")), local_points)
+	hud.toast("open end — spills to atmosphere; E on it caps it" if error == "" else error)
+	if error != "":
+		return
+	_pending_marker = null
+	_waypoints.clear()
+	_clear_route()
+	_update_hud()
 
 
 ## A fitting picked in connect mode: the first of either kind starts

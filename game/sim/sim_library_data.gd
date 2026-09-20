@@ -475,7 +475,7 @@ const PAGES := {
 	"cap": {
 		"title": "Pipe cap",
 		"tier": "utility",
-		"summary": "A short spool with a nozzle at each end and a blind flange on whichever end carries no line. The two nozzles are one point in the network. A line cut in play leaves a cap on each side of the cut; the pipe behind it stands at pressure and moves nothing, since a dead end has nowhere for material to go. Run a line from a capped end and the blind comes off: the cap is then a plain coupling.",
+		"summary": "A short spool with a nozzle at each end and a blind flange on whichever end carries no line. The two nozzles are one point in the network. A line cut in play leaves a cap on each side of the cut; the pipe behind it stands at pressure and moves nothing, since a dead end has nowhere for material to go. Run a line from a capped end and the blind comes off: the cap is then a plain coupling. A line laid to nowhere ends in an OPEN cap: the blind is off, the end vents to the air at its own height, and whatever the line delivers spills there and is totalled. Press E on it to put the blind on, and again to take it off.",
 		"ports": {
 			"a": "The upstream nozzle: the line arriving at the cap.",
 			"b": "The downstream nozzle: the line leaving it, if any.",
@@ -483,12 +483,14 @@ const PAGES := {
 		"equations": [
 			["P_a = P_b", "One node: both nozzles see the same pressure."],
 			["Q_a = Q_b", "What arrives leaves; with one nozzle blind, both are zero."],
+			["Q_spill = Cv * sqrt(dP / 1 bar), open", "An open end is a free discharge to atmosphere at its own height; the line behind it sets the rate."],
 		],
 		"params": [],
 		"assumptions": [
 			"No pressure drop through the fitting: the lines carry the resistance.",
 			"A blind end holds pressure without leaking; nothing is vented or drained by a cut.",
 			"The cap has no volume: material in the cut line is not stored in it.",
+			"An open end spills to nowhere: what leaves is counted and gone, never pooled.",
 		],
 	},
 	"tee_split": {

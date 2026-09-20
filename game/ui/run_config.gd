@@ -23,6 +23,8 @@ var _grid: GridContainer
 var _swatches: Array[Button] = []
 var _line: LineEdit
 var _clamp: CheckBox
+var _size: OptionButton
+var _size_row: HBoxContainer
 
 
 func _ready() -> void:
@@ -81,6 +83,17 @@ func _ready() -> void:
 	_clamp = CheckBox.new()
 	_clamp.text = "sanitary tri-clamp fittings"
 	column.add_child(_clamp)
+	# The line size (director, 2026-09-20): a nominal bore.
+	_size_row = HBoxContainer.new()
+	_size_row.add_theme_constant_override("separation", 8)
+	column.add_child(_size_row)
+	var size_label := Label.new()
+	size_label.text = "line size"
+	_size_row.add_child(size_label)
+	_size = OptionButton.new()
+	for dn: int in Plant.LINE_SIZES:
+		_size.add_item("DN%d" % dn, dn)
+	_size_row.add_child(_size)
 
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -110,13 +123,17 @@ func _pick(color: Color) -> void:
 
 
 ## Color + label editor for a run.
-func open_for_run(current: Color, label_text: String, apply: Callable, fitting: String = "flange") -> void:
+func open_for_run(current: Color, label_text: String, apply: Callable, fitting: String = "flange",
+		dn: int = 0) -> void:
 	_apply = apply
 	_picked = current
 	_title.text = "Run service — pick a color, name the line"
 	_grid.visible = true
 	_clamp.visible = true
 	_clamp.button_pressed = fitting == "clamp"
+	_size_row.visible = dn > 0
+	if dn > 0:
+		_size.select(_size.get_item_index(dn))
 	_line.text = label_text
 	_open()
 
@@ -127,6 +144,7 @@ func open_for_sign(text: String, apply: Callable) -> void:
 	_title.text = "Sign text"
 	_grid.visible = false
 	_clamp.visible = false
+	_size_row.visible = false
 	_line.text = text
 	_open()
 
@@ -140,7 +158,8 @@ func _open() -> void:
 func _ok() -> void:
 	if _apply.is_valid():
 		if _grid.visible:
-			_apply.call(_picked, _line.text, "clamp" if _clamp.button_pressed else "flange")
+			var dn := _size.get_item_id(_size.selected) if _size_row.visible else 0
+			_apply.call(_picked, _line.text, "clamp" if _clamp.button_pressed else "flange", dn)
 		else:
 			_apply.call(_line.text)
 	close()

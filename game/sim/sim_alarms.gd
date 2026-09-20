@@ -43,6 +43,10 @@ func scan(sim: Simulation) -> Array[Dictionary]:
 			if tank.overflowed_l > was + 1e-9:
 				_raise(seen, tank.comp_name, "OVERFLOWING", now)
 			_tank_overflowed[tank.comp_name] = tank.overflowed_l
+		elif record is SimCap:
+			var cap := record as SimCap
+			if cap.open and cap.spill_lps() > 1e-3:
+				_raise(seen, cap.comp_name, "SPILLING · open end", now)
 		elif record is SimVialFiller:
 			var filler := record as SimVialFiller
 			if filler.is_on and filler.starved:
