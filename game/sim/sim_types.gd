@@ -44,6 +44,20 @@ static func kind_name(kind: PortKind) -> String:
 	return PortKind.keys()[kind].to_lower()
 
 
+## A flow rate in the unit that shows it: litres, millilitres or
+## microlitres a second, since a millimetre line moves microlitres
+## (director, 2026-09-20: "somewhat multiscale").
+static func flow_text(lps: float) -> String:
+	var q := absf(lps)
+	if q >= 0.1:
+		return "%.2f L/s" % lps
+	if q >= 1e-4:
+		return "%.2f mL/s" % (lps * 1e3)
+	if q >= 1e-7:
+		return "%.1f µL/s" % (lps * 1e6)
+	return "0 L/s"
+
+
 ## How a port kind reads to a person rather than to the kernel.
 static func kind_label(kind: PortKind) -> String:
 	match kind:

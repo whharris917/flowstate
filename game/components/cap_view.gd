@@ -101,11 +101,11 @@ func describe() -> String:
 		if not _lined[port]:
 			free.append(port)
 	if cap.open:
-		return "%s — OPEN END: spilling %.2f L/s to atmosphere, %.0f L spilled · E caps it" % [
-			cap.comp_name, cap.spill_lps(), cap.spilled_l]
+		return "%s — OPEN END: spilling %s to atmosphere, %.0f L spilled · E caps it" % [
+			cap.comp_name, SimTypes.flow_text(cap.spill_lps()), cap.spilled_l]
 	var state := "coupling, both sides lined" if free.is_empty() \
 		else "capped on %s — click the blind to run a line from it · E opens it" % " and ".join(free)
-	return "%s — pipe cap: %s\n%.2f L/s through" % [cap.comp_name, state, absf(cap.inputs["a"].flow_lps)]
+	return "%s — pipe cap: %s\n%s through" % [cap.comp_name, state, SimTypes.flow_text(absf(cap.inputs["a"].flow_lps))]
 
 
 ## E: the blind on or off (director, 2026-09-20: "place a cap on the

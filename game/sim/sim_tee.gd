@@ -42,7 +42,7 @@ func leg_flows() -> String:
 	var parts := PackedStringArray()
 	for port_name: String in material_ports():
 		var port: SimPort = material_ports()[port_name]
-		parts.append("%s %.2f" % [port_name, absf(port.flow_lps)])
+		parts.append("%s %s" % [port_name, SimTypes.flow_text(absf(port.flow_lps))])
 	return " · ".join(parts)
 
 

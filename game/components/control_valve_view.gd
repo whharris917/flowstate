@@ -96,8 +96,8 @@ func _process(delta: float) -> void:
 
 
 func describe() -> String:
-	return "%s — control valve\ncmd %.1f %% · position %.1f %% · flow %.2f L/s" % [
-		valve.comp_name, valve.cmd.value, valve.position, valve.flow_lps]
+	return "%s — control valve\ncmd %.1f %% · position %.1f %% · flow %s" % [
+		valve.comp_name, valve.cmd.value, valve.position, SimTypes.flow_text(valve.flow_lps)]
 
 
 func use() -> void:

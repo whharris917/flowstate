@@ -101,12 +101,19 @@ func tick(dt: float) -> void:
 	zsc.value = 1.0 if limit_closed else 0.0
 
 
+## The valve's nominal bore, DN: bought at a size, changed only in its
+## CONFIGURE tab (director, 2026-09-20: "valves should be size-adjustable
+## just like tees").
+var dn: int = 50
+
+
 func state_dict() -> Dictionary:
-	return {"position": position, "hand_open": hand_open}
+	return {"position": position, "hand_open": hand_open, "dn": dn}
 
 
 func apply_state(state_: Dictionary) -> void:
 	position = state_.get("position", position)
+	dn = int(state_.get("dn", dn))
 	hand_open = bool(state_.get("hand_open", hand_open))
 	zso.value = 1.0 if limit_open else 0.0
 	zsc.value = 1.0 if limit_closed else 0.0

@@ -56,9 +56,16 @@ func tick(dt: float) -> void:
 	position += (target - position) * dt / tau_s
 
 
+## The valve's nominal bore, DN: bought at a size, changed only in its
+## CONFIGURE tab (director, 2026-09-20: "valves should be size-adjustable
+## just like tees").
+var dn: int = 50
+
+
 func state_dict() -> Dictionary:
-	return {"position": position}
+	return {"position": position, "dn": dn}
 
 
 func apply_state(state: Dictionary) -> void:
 	position = state.get("position", position)
+	dn = int(state.get("dn", dn))

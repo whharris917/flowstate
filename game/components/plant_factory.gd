@@ -320,11 +320,15 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 		"air_cascade":
 			return sim.add(SimAirCascade.new(name_, AsepticSuite.ROOMS, AsepticSuite.DOORS))
 		"valve":
-			return sim.add(SimControlValve.new(name_,
-				params.get("cv_lps", 6.0), params.get("tau_s", 1.0)))
+			var cv := SimControlValve.new(name_,
+				params.get("cv_lps", 6.0), params.get("tau_s", 1.0))
+			cv.dn = int(params.get("dn", 50))   # bought at a size
+			return sim.add(cv)
 		"block_valve":
-			return sim.add(SimBlockValve.new(name_,
-				params.get("cv_lps", 20.0), params.get("stroke_s", 4.0)))
+			var xv := SimBlockValve.new(name_,
+				params.get("cv_lps", 20.0), params.get("stroke_s", 4.0))
+			xv.dn = int(params.get("dn", 50))
+			return sim.add(xv)
 		"controller":
 			return sim.add(SimPID.new(name_,
 				params.get("kp", 8.0), params.get("ki", 1.5), params.get("kd", 0.0),
@@ -638,10 +642,10 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 ## constructor params and no row here cannot be resized in play.
 const CONFIG := {
 	"tee_split": [
-		{"key": "dn", "label": "Line size", "unit": "DN (25, 40, 50, 80, 100, 150)", "min": 25.0, "max": 150.0, "step": 5.0},
+		{"key": "dn", "label": "Line size", "unit": "DN (1 to 150, a real size)", "min": 1.0, "max": 150.0, "step": 1.0},
 	],
 	"tee_mix": [
-		{"key": "dn", "label": "Line size", "unit": "DN (25, 40, 50, 80, 100, 150)", "min": 25.0, "max": 150.0, "step": 5.0},
+		{"key": "dn", "label": "Line size", "unit": "DN (1 to 150, a real size)", "min": 1.0, "max": 150.0, "step": 1.0},
 	],
 	"tank": [
 		{"key": "height_m", "label": "Height", "unit": "m", "min": 0.5, "max": 12.0, "step": 0.1},
@@ -672,10 +676,12 @@ const CONFIG := {
 	"valve": [
 		{"key": "cv_lps", "label": "Cv", "unit": "L/s at 1 bar", "min": 0.1, "max": 500.0, "step": 0.1},
 		{"key": "tau_s", "label": "Actuator time constant", "unit": "s", "min": 0.1, "max": 60.0, "step": 0.1},
+		{"key": "dn", "label": "Line size", "unit": "DN (1 to 150, a real size)", "min": 1.0, "max": 150.0, "step": 1.0},
 	],
 	"block_valve": [
 		{"key": "cv_lps", "label": "Cv", "unit": "L/s at 1 bar", "min": 0.1, "max": 500.0, "step": 0.1},
 		{"key": "stroke_s", "label": "Stroke time", "unit": "s", "min": 0.5, "max": 60.0, "step": 0.5},
+		{"key": "dn", "label": "Line size", "unit": "DN (1 to 150, a real size)", "min": 1.0, "max": 150.0, "step": 1.0},
 	],
 	"controller": [
 		{"key": "sp", "label": "Setpoint", "unit": "", "min": -1000000.0, "max": 1000000.0, "step": 0.1},

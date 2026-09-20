@@ -578,8 +578,9 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 		var stand := bool(bracket.get("stand", false))
 		var strut := MeshInstance3D.new()
 		var mesh := CylinderMesh.new()
-		mesh.top_radius = 0.045 if stand else 0.03
-		mesh.bottom_radius = 0.045 if stand else 0.03
+		var scale := clampf(_radius / 0.07, 0.12, 1.5)   # hardware sized to the line
+		mesh.top_radius = (0.045 if stand else 0.03) * scale
+		mesh.bottom_radius = mesh.top_radius
 		mesh.height = length
 		strut.mesh = mesh
 		strut.material_override = mat
@@ -590,7 +591,7 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 		_brackets.append(strut)
 		var foot := MeshInstance3D.new()
 		var pad := BoxMesh.new()
-		pad.size = Vector3(0.26, 0.02, 0.26) if stand else Vector3(0.12, 0.03, 0.12)
+		pad.size = (Vector3(0.26, 0.02, 0.26) if stand else Vector3(0.12, 0.03, 0.12)) * clampf(_radius / 0.07, 0.2, 1.5)
 		foot.mesh = pad
 		foot.material_override = mat
 		add_child(foot)
@@ -598,7 +599,7 @@ func set_supports(brackets: Array, unsupported: bool) -> void:
 		if stand:
 			var saddle := MeshInstance3D.new()
 			var saddle_mesh := BoxMesh.new()
-			saddle_mesh.size = Vector3(0.16, 0.05, 0.12)
+			saddle_mesh.size = Vector3(0.16, 0.05, 0.12) * clampf(_radius / 0.07, 0.2, 1.5)
 			saddle.mesh = saddle_mesh
 			saddle.material_override = mat
 			add_child(saddle)
@@ -631,7 +632,9 @@ func describe() -> String:
 ## discharge, a full riser under a stopped pump), or cold. A signal run
 ## only knows live or dead.
 func _live_state() -> int:
-	if _getter.call() > 0.05:
+	# Flowing at the speed a DN50 line shows 0.05 L/s at: a millimetre
+	# line glows on microlitres.
+	if _getter.call() > 0.05 * (_radius / 0.07) * (_radius / 0.07):
 		return 2
 	if _pressure_getter.is_valid() and _pressure_getter.call() > 5000.0:
 		return 1

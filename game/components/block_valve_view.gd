@@ -115,8 +115,8 @@ func describe() -> String:
 	var cmd := ("HAND %s · E to %s" % ["OPEN" if valve.hand_open else "SHUT",
 		"shut" if valve.hand_open else "open"]) if valve.is_hand_operated \
 		else ("cmd " + ("OPEN" if valve.commanded_open else "CLOSE"))
-	return "%s — block valve, Cv %.0f L/s at 1 bar\n%s · %s%s · %s · flow %.2f L/s" % [
-		valve.comp_name, valve.cv_lps, cmd, valve.state(), travel, limits, valve.flow_lps]
+	return "%s — block valve, Cv %.0f L/s at 1 bar\n%s · %s%s · %s · flow %s" % [
+		valve.comp_name, valve.cv_lps, cmd, valve.state(), travel, limits, SimTypes.flow_text(valve.flow_lps)]
 
 
 ## E: a hand valve turns at the handwheel. Once something is wired to

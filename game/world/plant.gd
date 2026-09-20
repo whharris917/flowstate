@@ -1662,17 +1662,21 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 			elif key == "window_s":
 				screen.window_s = clampf(float(values[key]), 60.0, 3600.0)
 		return ""
-	if record is SimTee and values.has("dn"):
-		# A tee is bought at a size: the nearest nominal bore, the view
-		# rebuilt at it, its lines laid again (a reducer where they differ).
+	if values.has("dn") and record.get("dn") != null:
+		# A fitting bought at a size (a tee, a valve): the nearest nominal
+		# bore, the view rebuilt at it, its lines laid again (a reducer
+		# where they differ).
 		var wanted := float(values["dn"])
 		var nearest := LINE_SIZES[0]
 		for size: int in LINE_SIZES:
 			if absf(float(size) - wanted) < absf(float(nearest) - wanted):
 				nearest = size
-		(record as SimTee).dn = nearest
+		record.set("dn", nearest)
+		values = values.duplicate()
+		values.erase("dn")
 		_sync_bores([name_])
-		return ""
+		if values.is_empty():
+			return ""
 	if record is SimTank:
 		var tank_rec := record as SimTank
 		if values.has("nozzle_cv_lps"):
@@ -2314,7 +2318,7 @@ func nearest_wire(world_point: Vector3, max_d: float) -> Dictionary:
 		if visual["node"] == null or not (visual["node"] is PipeView):
 			continue
 		var view := visual["node"] as PipeView
-		if view.style() != "pipe" or view.radius() < 0.03:
+		if view.style() != "pipe":
 			continue
 		var path: Array[Vector3] = _visual_path(visual)
 		if path.size() < 2:
@@ -2422,7 +2426,7 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 	var in_port := str(spot["in"])
 	var out_port := str(spot["out"])
 	var params := {}
-	if type_id == "tee_split" or type_id == "tee_mix":
+	if type_id in ["tee_split", "tee_mix", "valve", "block_valve"]:
 		params["dn"] = int(visual.get("dn", 50))   # bought at the size of the line it is cut into
 	var record := place(type_id, sim.unique_name(type_id), params, to_global(base), rot, false)
 	if record == null:
@@ -3309,12 +3313,12 @@ func _sync_bores(names: Array) -> void:
 				continue
 			if str(visual["a"]) != str(name_) and str(visual["b"]) != str(name_):
 				continue
-			if (visual["node"] as PipeView).style() != "pipe" or (visual["node"] as PipeView).radius() < 0.03:
+			if (visual["node"] as PipeView).style() != "pipe":
 				continue
 			dn = maxi(dn, int(visual.get("dn", 50)))
 			lines.append(visual)
-		if record is SimTee:
-			dn = (record as SimTee).dn   # its own size, never the lines' (director, 2026-09-20)
+		if record.get("dn") != null:
+			dn = int(record.get("dn"))   # its own size, never the lines' (director, 2026-09-20)
 		var r := line_radius(dn)
 		if absf(float(view.get("bore")) - r) < 0.001:
 			continue
@@ -3343,7 +3347,10 @@ func _sync_bores(names: Array) -> void:
 ## Line sizes: nominal bores, DN50 the size every line had before
 ## 2026-09-20 (drawn at radius 0.07), the rest scaled with it; the
 ## resistance scales as (50 / DN)^5, a square law in a rough pipe.
-const LINE_SIZES: Array[int] = [25, 40, 50, 80, 100, 150]
+## Down to a millimetre (director, 2026-09-20: "somewhat multiscale ...
+## micro-fluidic like things with very small pipes"): the resistance
+## law makes a DN1 line pass about half a millilitre a second at 4 bar.
+const LINE_SIZES: Array[int] = [1, 2, 3, 6, 10, 15, 25, 40, 50, 80, 100, 150]
 const LINE_RADIUS_DN50 := 0.07
 
 
@@ -4524,10 +4531,10 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"charge_l": col.charge_l, "max_duty_kw": col.max_duty_kw}
 	if record is SimControlValve:
 		var cvalve := record as SimControlValve
-		return {"cv_lps": cvalve.cv_lps, "tau_s": cvalve.tau_s}
+		return {"cv_lps": cvalve.cv_lps, "tau_s": cvalve.tau_s, "dn": cvalve.dn}
 	if record is SimBlockValve:
 		var xv := record as SimBlockValve
-		return {"cv_lps": xv.cv_lps, "stroke_s": xv.stroke_s}
+		return {"cv_lps": xv.cv_lps, "stroke_s": xv.stroke_s, "dn": xv.dn}
 	if record is SimPID:
 		var pid := record as SimPID
 		return {"kp": pid.kp, "ki": pid.ki, "kd": pid.kd, "sp": pid.sp,

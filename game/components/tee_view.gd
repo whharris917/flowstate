@@ -52,7 +52,7 @@ func setup(tee_: SimTee, bore_r: float = 0.07) -> void:
 
 
 func describe() -> String:
-	return "%s — %s tee: one node, four nozzles\n%s L/s" % [
+	return "%s — %s tee: one node, four nozzles\n%s" % [
 		tee.comp_name, "splitter" if tee.mode == "split" else "mixer", tee.leg_flows()]
 
 
