@@ -15,14 +15,29 @@ var _plume: VaporPlume = null
 var _was_open := false
 
 
-func setup(cap_: SimCap, line_y_: float) -> void:
+var bore := 0.07   # the bore of the line on it
+
+
+func set_bore(r: float) -> void:
+	for child in get_children():
+		remove_child(child)
+		child.free()
+	_blinds = {}
+	_bores = {}
+	_plume = null
+	setup(cap, line_y, r)
+
+
+func setup(cap_: SimCap, line_y_: float, bore_r: float = 0.07) -> void:
 	cap = cap_
 	line_y = line_y_
+	bore = bore_r
 	var steel := ViewUtil.flat(Color(0.62, 0.66, 0.70))
-	var spool := ViewUtil.cylinder(self, 0.07, 0.3, Vector3(0, line_y, 0), steel)
+	var spool := ViewUtil.cylinder(self, bore_r, 0.36, Vector3(0, line_y, 0), steel)
 	spool.rotation_degrees = Vector3(0, 0, 90)
-	for offset: float in [0.13, -0.13]:
-		var flange := ViewUtil.cylinder(self, 0.105, 0.03, Vector3(offset, line_y, 0), steel)
+	# Flanges the mates of the line's own, their faces at the anchors (0.18).
+	for offset: float in [0.1575, -0.1575]:
+		var flange := ViewUtil.cylinder(self, bore_r * 1.8, 0.045, Vector3(offset, line_y, 0), steel)
 		flange.rotation_degrees = Vector3(0, 0, 90)
 	# Blind flanges: a thicker disc with a ring of bolt heads, one each
 	# end, shown while that nozzle has no line.
@@ -31,24 +46,24 @@ func setup(cap_: SimCap, line_y_: float) -> void:
 		var side := -1.0 if port == "a" else 1.0
 		var blind := Node3D.new()
 		add_child(blind)
-		var disc := ViewUtil.cylinder(blind, 0.11, 0.035, Vector3(side * 0.165, line_y, 0), dark)
+		var disc := ViewUtil.cylinder(blind, bore_r * 1.8, 0.035, Vector3(side * 0.1975, line_y, 0), dark)
 		disc.rotation_degrees = Vector3(0, 0, 90)
 		for i in 8:
 			var ang := TAU / 8.0 * i
 			var bolt := ViewUtil.cylinder(blind, 0.01, 0.015,
-				Vector3(side * 0.19, line_y + cos(ang) * 0.085, sin(ang) * 0.085), dark)
+				Vector3(side * 0.222, line_y + cos(ang) * bore_r * 1.4, sin(ang) * bore_r * 1.4), dark)
 			bolt.rotation_degrees = Vector3(0, 0, 90)
 		_blinds[port] = blind
 		# The open bore: a dark disc inset in the flange, shown on an open
 		# end instead of the blind.
 		var bore := Node3D.new()
 		add_child(bore)
-		var hole := ViewUtil.cylinder(bore, 0.06, 0.02, Vector3(side * 0.15, line_y, 0),
+		var hole := ViewUtil.cylinder(bore, bore_r * 0.85, 0.02, Vector3(side * 0.175, line_y, 0),
 			ViewUtil.flat(Color(0.05, 0.05, 0.06)))
 		hole.rotation_degrees = Vector3(0, 0, 90)
 		bore.visible = false
 		_bores[port] = bore
-	_plume = VaporPlume.make(self, Vector3(0.3, line_y - 0.05, 0), 0.5)
+	_plume = VaporPlume.make(self, Vector3(0.28, line_y - 0.05, 0), 0.5)
 	_plume.set_strength(0.0)
 	var tag := ViewUtil.label(self, cap.comp_name, Vector3(0, line_y + 0.35, 0))
 	tag.font_size = 24

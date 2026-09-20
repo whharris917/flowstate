@@ -487,7 +487,8 @@ static func label_for(type_id: String) -> String:
 ## view (a cabinet) can carry markers for several records (its
 ## terminals). anchors_override positions ports the type table can't.
 static func attach_port_markers(view: Node3D, record: SimComponent, type_id: String,
-		anchors_override: Dictionary = {}, skip: Array[String] = []) -> void:
+		anchors_override: Dictionary = {}, skip: Array[String] = [], bore_r: float = 0.07) -> void:
+	var flush := INLINE_FLUSH.has(type_id)
 	# Every port the player can pipe gets a fitting. A record's hidden
 	# ports (a vessel's internal level tap) and a mounted instrument's
 	# process side (wired by the plant when it was mounted) get none.
@@ -502,7 +503,7 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name, kind,
-				_anchor_pos(raw), true, _anchor_dir(raw))
+				_anchor_pos(raw), true, _anchor_dir(raw), bore_r, flush)
 	for port_name: String in record.outputs:
 		if hidden.has(port_name) or skip.has(port_name):
 			continue
@@ -511,7 +512,7 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name,
 				(record.outputs[port_name] as SimOutputPort).kind,
-				_anchor_pos(raw), false, _anchor_dir(raw))
+				_anchor_pos(raw), false, _anchor_dir(raw), bore_r, flush)
 	view.set_meta("port_markers", markers)
 	MeshMerge.merge_markers(view)
 
@@ -529,9 +530,18 @@ static func _anchor_dir(raw: Variant) -> Vector3:
 ## junction boxes with cable glands. A mounting plate seats against
 ## the equipment body; the fitting's local +X points outward along
 ## dir (derived radially when not given).
+## Inline fittings wear their own flanges, built at the bore of the
+## line on them (director, 2026-09-20: "the valve geometry itself
+## matches the radius of the pipe to which it is connected"): their
+## port fittings are flush — the pick volume and the colour ring on
+## the fitting's own face, no neck, no second flange — and a line
+## meets that face.
+const INLINE_FLUSH: Array[String] = ["valve", "block_valve", "gauge_flow", "tee_split", "tee_mix", "cap"]
+
+
 static func make_marker(view: Node3D, record_name: String, port_name: String,
 		kind: SimTypes.PortKind, local_pos: Vector3, is_input: bool,
-		dir: Vector3 = Vector3.ZERO) -> StaticBody3D:
+		dir: Vector3 = Vector3.ZERO, bore_r: float = 0.07, flush: bool = false) -> StaticBody3D:
 	if dir == Vector3.ZERO:
 		dir = Vector3(local_pos.x, 0.0, local_pos.z)
 		dir = dir.normalized() if dir.length() > 0.05 else Vector3.UP
@@ -547,7 +557,7 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	# target from any side (director, 2026-09-18).
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.11
+	capsule.radius = maxf(0.11, bore_r * 1.5)
 	capsule.height = 0.4
 	shape.shape = capsule
 	shape.rotation_degrees = Vector3(0, 0, 90)
@@ -560,15 +570,26 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 		or kind == SimTypes.PortKind.PROCESS_PRESSURE
 	# Where a line meets it: the gasket face of a pipe fitting, the
 	# gland's end of a cable one (Plant.marker_face).
-	body.set_meta("face", 0.175 if is_pipe else 0.145)
-	if is_pipe:
-		ViewUtil.box(body, Vector3(0.06, 0.15, 0.15), Vector3(-0.02, 0, 0), steel)
+	body.set_meta("face", (0.0 if flush else 0.175) if is_pipe else 0.145)
+	if is_pipe and flush:
+		# The colour ring on the fitting's own flange face, nothing else.
+		var ring := ViewUtil.cylinder(body, bore_r * (1.2 if is_input else 1.05), 0.012,
+			Vector3(0.006, 0, 0), ViewUtil.glow(color, 0.8))
+		ring.rotation_degrees = Vector3(0, 0, 90)
+	elif is_pipe:
+		# A nozzle: the neck is the bore, the flange the mate of the
+		# line's own — 1.8 × bore, 0.045 thick, its face where the line's
+		# flange begins (2026-09-20: it was a 0.05 neck under a 0.09
+		# flange against the line's 0.07 and 0.126, and read as a
+		# smaller pipe stuck on every nozzle).
 		var neck_r := 0.032
 		if SimTypes.is_material(kind):
-			neck_r = 0.05
+			neck_r = bore_r
+		var seat := maxf(0.15, neck_r * 3.0)
+		ViewUtil.box(body, Vector3(0.06, seat, seat), Vector3(-0.02, 0, 0), steel)
 		var neck := ViewUtil.cylinder(body, neck_r, 0.15, Vector3(0.07, 0, 0), steel)
 		neck.rotation_degrees = Vector3(0, 0, 90)
-		var flange := ViewUtil.cylinder(body, neck_r * 1.8, 0.03, Vector3(0.145, 0, 0), steel)
+		var flange := ViewUtil.cylinder(body, neck_r * 1.8, 0.045, Vector3(0.1375, 0, 0), steel)
 		flange.rotation_degrees = Vector3(0, 0, 90)
 		# Colored gasket face: a ring on inlets, a solid cap on outlets.
 		var face := ViewUtil.cylinder(body, neck_r * (1.35 if is_input else 1.1), 0.02,

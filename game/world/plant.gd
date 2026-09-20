@@ -1762,6 +1762,7 @@ func connect_equipment(src_name: String, src_port: String,
 	if visible:
 		_wire_visual(src_name, src_port, dst_name, dst_port, waypoints)
 		_sync_caps([src_name, dst_name])
+		_sync_bores([src_name, dst_name])
 	else:
 		_wire_visuals.append({
 			"node": null, "a": src_name, "a_port": src_port,
@@ -1837,6 +1838,7 @@ func set_run_size(view: PipeView, dn: int) -> PipeView:
 		if wire != null and wire.is_material():
 			sim.set_wire_resistance(wire, float(visual.get("k_base", SimWire.DEFAULT_K)) * line_k_scale(dn))
 		_refresh_visual(visual)
+		_sync_bores([str(visual["a"]), str(visual["b"])])
 		_schedule_revalidate()
 		return visual["node"] as PipeView
 	return view
@@ -2147,6 +2149,7 @@ func remove_run(view: PipeView) -> bool:
 			(visual["node"] as Node).queue_free()
 			_wire_visuals.erase(visual)
 			_sync_caps([str(visual["a"]), str(visual["b"])])
+			_sync_bores([str(visual["a"]), str(visual["b"])])
 			return true
 	return false
 
@@ -3230,6 +3233,65 @@ func connect_equipment_checked(src_name: String, src_port: String,
 	return "no clear route: it would pass through %s — route round it or move it" % ", ".join(through)
 
 
+## The bore a line meets at a record: an inline fitting's own (built at
+## the bore of the biggest line on it), a nozzle's DN50.
+func _end_bore(name_: String) -> float:
+	var view: Node3D = views.get(name_)
+	if view != null and PlantFactory.INLINE_FLUSH.has(str(equip_types.get(name_, ""))):
+		return float(view.get("bore"))
+	return LINE_RADIUS_DN50
+
+
+## An inline fitting is bought in the line size (director, 2026-09-20):
+## its body is built at the bore of the biggest material line on it,
+## and rebuilt — body, fittings, merge — when that changes, the lines
+## on it laid again so their ends take the new bore.
+func _sync_bores(names: Array) -> void:
+	var touched := false
+	for name_ in names:
+		var type_id := str(equip_types.get(str(name_), ""))
+		if not PlantFactory.INLINE_FLUSH.has(type_id):
+			continue
+		var view: Node3D = views.get(str(name_))
+		var record := sim.get_component(str(name_))
+		if view == null or record == null:
+			continue
+		var dn := 50
+		var lines: Array = []
+		for visual in _wire_visuals:
+			if visual["node"] == null or not (visual["node"] is PipeView):
+				continue
+			if str(visual["a"]) != str(name_) and str(visual["b"]) != str(name_):
+				continue
+			if (visual["node"] as PipeView).style() != "pipe" or (visual["node"] as PipeView).radius() < 0.03:
+				continue
+			dn = maxi(dn, int(visual.get("dn", 50)))
+			lines.append(visual)
+		var r := line_radius(dn)
+		if absf(float(view.get("bore")) - r) < 0.001:
+			continue
+		var markers: Dictionary = view.get_meta("port_markers", {})
+		for key: String in markers:
+			var marker := markers[key] as Node
+			if is_instance_valid(marker):
+				marker.queue_free()
+		view.set_meta("port_markers", {})
+		view.call("set_bore", r)
+		MeshMerge.merge_view(view)
+		if type_id == "cap":
+			PlantFactory.attach_port_markers(view, record, type_id,
+				PlantFactory.cap_anchors((view as CapView).line_y), [], r)
+		else:
+			PlantFactory.attach_port_markers(view, record, type_id, {}, [], r)
+		if type_id == "cap":
+			_sync_caps([str(name_)])
+		for visual in lines:
+			_refresh_visual(visual)
+		touched = true
+	if touched:
+		_schedule_revalidate()
+
+
 ## Line sizes: nominal bores, DN50 the size every line had before
 ## 2026-09-20 (drawn at radius 0.07), the rest scaled with it; the
 ## resistance scales as (50 / DN)^5, a square law in a rough pipe.
@@ -3281,9 +3343,10 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	var own_path: Array[Vector3] = laid["own_path"]
 	var pipe := PipeView.new()
 	add_child(pipe)
-	# Every material nozzle in the game is a DN50 bore: a line of another
-	# size meets it through a reducer at each end.
-	pipe.end_radius = LINE_RADIUS_DN50 if is_process else 0.025
+	# A nozzle is a DN50 bore, an inline fitting the bore of the biggest
+	# line on it: a line of another size meets either through a reducer.
+	pipe.end_radius_a = _end_bore(src_name) if is_process else 0.025
+	pipe.end_radius_b = _end_bore(dst_name) if is_process else 0.025
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	pipe.set_meta("lane", chosen)
@@ -4619,6 +4682,7 @@ func restore(payload: Dictionary) -> bool:
 			set_run_size((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
 				int(wire_entry["dn"]))
 	sim.time = float(payload.get("time", 0.0))
+	_sync_bores(views.keys())
 
 	tank = sim.get_component("supply_tank") as SimTank
 	switch = sim.get_component("level_switch") as SimFloatSwitch

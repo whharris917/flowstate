@@ -16,21 +16,35 @@ var _last_pos: float = 0.0
 var _moving: bool = false
 
 
-func setup(valve_: SimBlockValve) -> void:
+var bore := 0.07   # the bore of the biggest line on it
+
+
+func set_bore(r: float) -> void:
+	for child in get_children():
+		remove_child(child)
+		child.free()
+	setup(valve, r)
+
+
+func setup(valve_: SimBlockValve, bore_r: float = 0.07) -> void:
 	valve = valve_
+	bore = bore_r
+	var s := bore_r / 0.07
 	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
 	var housing := ViewUtil.flat(Color(0.20, 0.22, 0.26))
 	var actuator := ViewUtil.flat(Color(0.16, 0.36, 0.62))
-	# Body: a short flanged run with the ball housing in the middle.
-	var run := ViewUtil.cylinder(self, 0.08, 0.56, Vector3(0, 0.32, 0), steel)
+	# Body: a short flanged run with the ball housing in the middle, at
+	# the bore of the line; flanges the mates of the lines' own, their
+	# faces at the anchors (0.31).
+	var run := ViewUtil.cylinder(self, 0.08 * s, 0.56, Vector3(0, 0.32, 0), steel)
 	run.rotation_degrees = Vector3(0, 0, 90)
 	for side: float in [-1.0, 1.0]:
-		var flange := ViewUtil.cylinder(self, 0.14, 0.05, Vector3(side * 0.30, 0.32, 0), steel)
+		var flange := ViewUtil.cylinder(self, bore_r * 1.8, 0.045, Vector3(side * 0.2875, 0.32, 0), steel)
 		flange.rotation_degrees = Vector3(0, 0, 90)
 	var ball := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
-	sphere.radius = 0.15
-	sphere.height = 0.30
+	sphere.radius = 0.15 * s
+	sphere.height = 0.30 * s
 	ball.mesh = sphere
 	ball.material_override = housing
 	ball.position = Vector3(0, 0.32, 0)

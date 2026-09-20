@@ -18,7 +18,8 @@ var fitting := "flange"   # "flange" or "clamp" (sanitary tri-clamp)
 ## The bore of the fittings the line meets, set by the plant before
 ## setup; where it differs from the line's own, each end spool is a
 ## concentric reducer tapering between the two (director, 2026-09-20).
-var end_radius := -1.0
+var end_radius_a := -1.0   # the bore of the fitting at the line's start
+var end_radius_b := -1.0   # and at its end
 var _fitting_nodes: Array[Node3D] = []
 
 var _getter: Callable
@@ -100,23 +101,24 @@ func _build_body() -> void:
 			seg_to = to - direction * t_to
 		if seg_from.distance_to(seg_to) > 0.005:
 			var seg_len := seg_from.distance_to(seg_to)
-			var taper := _style == "pipe" and end_radius > 0.0 and absf(end_radius - _radius) > 0.001 \
+			var end_r := end_radius_a if i == 0 else end_radius_b
+			var taper := _style == "pipe" and end_r > 0.0 and absf(end_r - _radius) > 0.001 \
 				and (i == 0 or i == path.size() - 2)
 			if taper:
 				# The reducer: about a diameter and a half of the larger
 				# bore, within this spool, the rest of the spool at the
 				# line's own bore.
-				var length := clampf(3.0 * maxf(_radius, end_radius), 0.2, seg_len * 0.8)
+				var length := clampf(3.0 * maxf(_radius, end_r), 0.2, seg_len * 0.8)
 				if i == 0:
 					var mid := seg_from + direction * length
-					add_child(_collected(reducer_node(seg_from, mid, end_radius, _radius, _cold)))
+					add_child(_collected(reducer_node(seg_from, mid, end_r, _radius, _cold)))
 					if mid.distance_to(seg_to) > 0.005:
 						add_child(_collected(segment_node(mid, seg_to, _radius, _style, _cold)))
 				else:
 					var mid := seg_to - direction * length
 					if seg_from.distance_to(mid) > 0.005:
 						add_child(_collected(segment_node(seg_from, mid, _radius, _style, _cold)))
-					add_child(_collected(reducer_node(mid, seg_to, _radius, end_radius, _cold)))
+					add_child(_collected(reducer_node(mid, seg_to, _radius, end_r, _cold)))
 			else:
 				var seg := segment_node(seg_from, seg_to, _radius, _style, _cold)
 				add_child(seg)
@@ -132,8 +134,8 @@ func _build_body() -> void:
 				add_child(joint)
 				_collect_meshes(joint)
 	if _style == "pipe" and path.size() >= 2:
-		_end_fitting(path[0], path[1])
-		_end_fitting(path[path.size() - 1], path[path.size() - 2])
+		_end_fitting(path[0], path[1], end_radius_a)
+		_end_fitting(path[path.size() - 1], path[path.size() - 2], end_radius_b)
 	_merge_body()
 	_merge_fittings()
 
@@ -173,7 +175,8 @@ func _merge_fittings() -> void:
 ## flange disc, or on a sanitary line a tri-clamp — two ferrules and
 ## the clamp band over them, the fitting a pharmaceutical plant uses
 ## wherever a line has to come apart to be cleaned.
-func _end_fitting(at: Vector3, toward: Vector3) -> void:
+func _end_fitting(at: Vector3, toward: Vector3, end_r: float = -1.0) -> void:
+	_end_now = end_r
 	var direction := (toward - at).normalized()
 	var basis := _segment_basis(direction) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
 	if fitting == "clamp":
@@ -363,9 +366,12 @@ static func reducer_node(from: Vector3, to: Vector3, r_from: float, r_to: float,
 	return root
 
 
-## The bore at the fittings: the nozzle's, or the line's own.
+## The bore at the fitting being drawn: the nozzle's, or the line's own.
+var _end_now := -1.0
+
+
 func _end_r() -> float:
-	return end_radius if end_radius > 0.0 else _radius
+	return _end_now if _end_now > 0.0 else _radius
 
 
 ## Does the path change direction at point k at all? A corner that

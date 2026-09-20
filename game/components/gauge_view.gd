@@ -11,9 +11,20 @@ var _needle_root: Node3D
 var _value_label: Label3D
 
 
-func setup(gauge_: SimGauge, mounted_: bool = false) -> void:
+var bore := 0.07   # an inline element: the bore of the line through it
+
+
+func set_bore(r: float) -> void:
+	for child in get_children():
+		remove_child(child)
+		child.free()
+	setup(gauge, mounted, r)
+
+
+func setup(gauge_: SimGauge, mounted_: bool = false, bore_r: float = 0.07) -> void:
 	gauge = gauge_
 	mounted = mounted_
+	bore = bore_r
 	if mounted:
 		_build_mounted()
 	else:
@@ -32,10 +43,10 @@ func _build_pedestal() -> void:
 	if gauge.kind == "flow":
 		# The line runs through it: a short spool at the base with the
 		# element in it, flanged both ends, the transmitter head above.
-		var spool := ViewUtil.cylinder(self, 0.07, 0.5, Vector3(0, 0.32, 0), ViewUtil.flat(Color(0.45, 0.47, 0.50)))
+		var spool := ViewUtil.cylinder(self, bore, 0.5, Vector3(0, 0.32, 0), ViewUtil.flat(Color(0.45, 0.47, 0.50)))
 		spool.rotation_degrees = Vector3(0, 0, 90)
 		for side: float in [-1.0, 1.0]:
-			var flange := ViewUtil.cylinder(self, 0.11, 0.03, Vector3(side * 0.22, 0.32, 0), steel)
+			var flange := ViewUtil.cylinder(self, bore * 1.8, 0.045, Vector3(side * 0.2275, 0.32, 0), steel)
 			flange.rotation_degrees = Vector3(0, 0, 90)
 		ViewUtil.box(self, Vector3(0.22, 0.2, 0.2), Vector3(0, 0.32, 0),
 			ViewUtil.flat(Color(0.30, 0.31, 0.33)))

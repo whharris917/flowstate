@@ -204,7 +204,7 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
 	var neck := ViewUtil.cylinder(body, neck_r, 0.2, Vector3(-0.01, 0, 0), steel)
 	neck.rotation_degrees = Vector3(0, 0, 90)
-	var flange := ViewUtil.cylinder(body, neck_r * 1.5, 0.03, Vector3(0.12, 0, 0), steel)
+	var flange := ViewUtil.cylinder(body, neck_r * 1.8, 0.045, Vector3(0.1375, 0, 0), steel)
 	flange.rotation_degrees = Vector3(0, 0, 90)
 	var ring := ViewUtil.cylinder(body, neck_r * 1.2, 0.025, Vector3(0.148, 0, 0),
 		ViewUtil.flat(PlantFactory.KIND_COLORS[SimTypes.PortKind.PROCESS_LEVEL if is_level

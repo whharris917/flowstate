@@ -12,17 +12,32 @@ var _air_cool: float = 0.0
 var _seated: bool = true
 
 
-func setup(valve_: SimControlValve) -> void:
+var bore := 0.07   # the bore of the biggest line on it
+
+
+func set_bore(r: float) -> void:
+	for child in get_children():
+		remove_child(child)
+		child.free()
+	_indicator = null
+	setup(valve, r)
+
+
+func setup(valve_: SimControlValve, bore_r: float = 0.07) -> void:
 	valve = valve_
+	bore = bore_r
+	var s := bore_r / 0.07
 	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
 	var green := ViewUtil.flat(Color(0.16, 0.42, 0.28))
-	# Body: horizontal run with flanges, globe bulge below.
-	var body := ViewUtil.cylinder(self, 0.09, 0.56, Vector3(0, 0.32, 0), steel)
+	# Body: horizontal run with flanges, globe bulge below, at the bore
+	# of the line (2026-09-20); the flanges are the mates of the lines'
+	# own, their faces at the anchors (0.31).
+	var body := ViewUtil.cylinder(self, 0.09 * s, 0.56, Vector3(0, 0.32, 0), steel)
 	body.rotation_degrees = Vector3(0, 0, 90)
 	for side: float in [-1.0, 1.0]:
-		var flange := ViewUtil.cylinder(self, 0.15, 0.05, Vector3(side * 0.30, 0.32, 0), steel)
+		var flange := ViewUtil.cylinder(self, bore_r * 1.8, 0.045, Vector3(side * 0.2875, 0.32, 0), steel)
 		flange.rotation_degrees = Vector3(0, 0, 90)
-	ViewUtil.cylinder(self, 0.13, 0.22, Vector3(0, 0.30, 0), green)
+	ViewUtil.cylinder(self, 0.13 * s, 0.22, Vector3(0, 0.30, 0), green)
 	# Bonnet, yoke, and the diaphragm actuator on top.
 	ViewUtil.cylinder(self, 0.08, 0.18, Vector3(0, 0.50, 0), green)
 	for side: float in [-1.0, 1.0]:
@@ -40,7 +55,7 @@ func setup(valve_: SimControlValve) -> void:
 	for side: float in [-1.0, 1.0]:
 		for i in 8:
 			var a := TAU / 8.0 * i
-			var bolt := ViewUtil.cylinder(self, 0.011, 0.02, Vector3(side * 0.33, 0.32 + cos(a) * 0.12, sin(a) * 0.12), steel)
+			var bolt := ViewUtil.cylinder(self, 0.011, 0.02, Vector3(side * 0.315, 0.32 + cos(a) * bore_r * 1.5, sin(a) * bore_r * 1.5), steel)
 			bolt.rotation_degrees = Vector3(0, 0, 90)
 	ViewUtil.box(self, Vector3(0.10, 0.14, 0.08), Vector3(0.16, 0.74, 0.06), ViewUtil.flat(Color(0.22, 0.23, 0.26)))
 	var pgauge := ViewUtil.cylinder(self, 0.025, 0.012, Vector3(0.16, 0.77, 0.105), ViewUtil.flat(Color(0.93, 0.93, 0.90)))
