@@ -1534,6 +1534,24 @@ func _begin_drag() -> void:
 		return
 	_drag = str(collider.get_meta("handle"))
 	plant.begin_gesture()   # one undo step for the whole drag
+	_dup_index = -1
+	if _drag.begins_with("pt") and Input.is_key_pressed(KEY_SHIFT) and _leg_gizmo != null:
+		# Shift: the corner is duplicated in place, the copy next after
+		# it, and the drag that follows moves the copy (director,
+		# 2026-09-19). A stub end or router corner is planted instead.
+		var index := _leg_gizmo.corner_index(_drag)
+		if index >= 0 and index < _leg_gizmo.path.size():
+			var at: Vector3 = _leg_gizmo.path[index]
+			var waypoints := plant.wire_waypoints(_edit_run)
+			var k := match_waypoint(waypoints, at)
+			if k >= 0:
+				waypoints.insert(k + 1, at)
+				_dup_index = k + 1
+			else:
+				waypoints = dragged_waypoints(waypoints, _leg_gizmo.path, index, at, at)
+			_relay_selected(waypoints, at, index == _edit_leg)
+			if _leg_gizmo == null or _drag == "":
+				return
 	if _is_corner_drag():
 		# A corner of a selected leg, or its middle: it moves in its own
 		# level plane.
@@ -1601,6 +1619,7 @@ func _update_drag() -> void:
 
 var _grab_origin := Vector3.ZERO   # where a selected straight was grabbed, plant-local
 var _grab_leg := -1                # which straight of the selected line the crosshair is on
+var _dup_index := -1               # the copy a Shift-drag moves, until its first move parts it from the original
 
 
 ## A drag of one of a line's corners, by any of its handle names.
@@ -1811,7 +1830,8 @@ func _update_corner_drag() -> void:
 	var moved := plant.to_local(target)
 	var before := plant.wire_waypoints(_edit_run)
 	var waypoints := dragged_waypoints(before, _leg_gizmo.path, index, moved, origin, true,
-		plant.wire_locks(_edit_run))
+		plant.wire_locks(_edit_run), _dup_index)
+	_dup_index = -1
 	if waypoints == before:
 		hud.toast("that corner is locked — middle-click it to unlock")
 		_drag = ""
@@ -1981,7 +2001,8 @@ static func is_lock(locks: Array, w: Vector3) -> bool:
 ## `path` is the player's own route, so a waypoint is a point of it
 ## exactly and the ordering of a new one is read off it.
 static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: Vector3,
-		origin: Vector3 = Vector3.INF, keep_height: bool = true, locks: Array = []) -> Array:
+		origin: Vector3 = Vector3.INF, keep_height: bool = true, locks: Array = [],
+		self_override: int = -1) -> Array:
 	# `origin` is where the drag began when that is not a path point:
 	# the middle of a leg, which then becomes a corner before `index`.
 	# With `keep_height` the point stays at its own height and so do
@@ -1991,8 +2012,14 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	var out: Array = []
 	var matched := false
 	var insert_at := 0
+	# `self_override` names the waypoint to move when two stand on one
+	# spot (a fresh copy beside its original); a copy is never locked.
 	var self_index := match_waypoint(waypoints, old)
-	if self_index >= 0 and is_lock(locks, waypoints[self_index]):
+	var overridden := self_override >= 0 and self_override < waypoints.size() \
+		and (waypoints[self_override] as Vector3).distance_to(old) < 0.01
+	if overridden:
+		self_index = self_override
+	elif self_index >= 0 and is_lock(locks, waypoints[self_index]):
 		return waypoints.duplicate()
 	# A mate stands at the matched corner's own plan position (a riser's
 	# other end), never merely near the dragged point.
@@ -2006,8 +2033,10 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 				at = i
 				break
 		var itself := k == self_index
+		# A mate is a riser's other end: the same plan position at
+		# another height — never a copy standing on the same spot.
 		var mate := not itself and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02 \
-			and not is_lock(locks, w)
+			and absf(w.y - anchor.y) > 0.02 and not is_lock(locks, w)
 		if itself:
 			out.append(Vector3(moved.x, w.y, moved.z) if keep_height else moved)
 			matched = true
