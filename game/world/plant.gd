@@ -2302,6 +2302,30 @@ static func inline_need(type_id: String) -> float:
 	return -1.0 if spec.is_empty() else float(spec["half"]) + 0.175 + PipeRoute.STUB
 
 
+## The line nearest a point (world), within `max_d` of its drawn path,
+## and the point of it: {"view", "at"} or {} (director, 2026-09-20: an
+## inline element aimed near a pipe went down beside it, since the snap
+## needed the crosshair on the pipe itself).
+func nearest_wire(world_point: Vector3, max_d: float) -> Dictionary:
+	var local := to_local(world_point)
+	var best := max_d
+	var found := {}
+	for visual in _wire_visuals:
+		if visual["node"] == null or not (visual["node"] is PipeView):
+			continue
+		var view := visual["node"] as PipeView
+		if view.style() != "pipe" or view.radius() < 0.03:
+			continue
+		var path: Array[Vector3] = _visual_path(visual)
+		if path.size() < 2:
+			continue
+		var near := _nearest_on_path(path, local)
+		if float(near["distance"]) < best:
+			best = float(near["distance"])
+			found = {"view": view, "at": to_global(near["point"] as Vector3)}
+	return found
+
+
 ## Where an inline device would sit on a line aimed at, or why not:
 ## {"why", "point" (plant-local, on the pipe axis), "dir", "arc"}. The
 ## device and the stubs of the two pieces must fit on one level

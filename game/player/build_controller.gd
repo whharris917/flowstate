@@ -779,6 +779,7 @@ func _update_ghost() -> void:
 ## the ghost sits on the pipe axis, turned along it, and the click cuts
 ## it in (director, 2026-09-19). True when the crosshair is on a line.
 var _inline: Dictionary = {}   # {"view", "at"} while the ghost is on a line
+const INLINE_SNAP := 0.75       # an inline ghost snaps to a line this near the aim point
 
 
 func _update_inline_ghost() -> bool:
@@ -787,13 +788,21 @@ func _update_inline_ghost() -> bool:
 	var type_id := _current_type()
 	if Plant.inline_spec(type_id).is_empty() or not player.ray.is_colliding():
 		return false
+	# On the pipe itself, or near it: the nearest line within reach of
+	# the aim point (2026-09-20: a pipe is a thin target).
+	var view: PipeView = null
+	var at := Vector3.ZERO
 	var collider := player.ray.get_collider() as Node
-	if collider == null or not collider.has_meta("run"):
-		return false
-	var view := collider.get_meta("run") as PipeView
+	if collider != null and collider.has_meta("run"):
+		view = collider.get_meta("run") as PipeView
+		at = player.ray.get_collision_point()
+	else:
+		var near := plant.nearest_wire(player.ray.get_collision_point(), INLINE_SNAP)
+		if not near.is_empty():
+			view = near["view"] as PipeView
+			at = near["at"] as Vector3
 	if view == null or plant.wire_ends(view).is_empty():
 		return false
-	var at := player.ray.get_collision_point()
 	var spot := plant.inline_spot(view, at, type_id)
 	(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
 	if spot["why"] != "":
