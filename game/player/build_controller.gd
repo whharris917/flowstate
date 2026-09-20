@@ -2341,6 +2341,31 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 			insert_at = out.size()
 	if not matched:
 		out.insert(insert_at, Vector3(moved.x, old.y, moved.z) if keep_height else moved)
+	if keep_height:
+		# A riser moved by one end (2026-09-20: dragging the foot of the
+		# drop at the header left a drop where it was, since a falling
+		# leg drops first, and moved only the foot): the other end of
+		# the riser, when it is the router's and not a waypoint, becomes
+		# a corner of the line at the new spot, so the riser goes along.
+		var moved_at := Vector3(moved.x, old.y, moved.z)
+		var k := -1
+		for i in out.size():
+			if (out[i] as Vector3).distance_to(moved_at) < 0.01:
+				k = i
+				break
+		if k >= 0:
+			for step: int in [-1, 1]:
+				var j: int = index + step
+				if j < 1 or j > path.size() - 2:
+					continue
+				var other: Vector3 = path[j]
+				var plan := Vector2(other.x - old.x, other.z - old.z).length()
+				if plan > 0.02 or absf(other.y - old.y) < 0.02 or match_waypoint(waypoints, other) >= 0:
+					continue
+				var copy := Vector3(moved.x, other.y, moved.z)
+				out.insert(k if step < 0 else k + 1, copy)
+				if step < 0:
+					k += 1
 	return out
 
 
