@@ -2234,6 +2234,13 @@ static func inline_spec(type_id: String) -> Dictionary:
 	return {"in": "inlet", "out": "outlet", "in_angle": PI, "axis": true, "half": op.x, "port_y": ip.y}
 
 
+## The room an inline device needs either side of its centre along
+## the line: its half, the stub end of each piece, a little more.
+static func inline_need(type_id: String) -> float:
+	var spec := inline_spec(type_id)
+	return -1.0 if spec.is_empty() else float(spec["half"]) + 0.175 + PipeRoute.STUB + 0.15
+
+
 ## Where an inline device would sit on a line aimed at, or why not:
 ## {"why", "point" (plant-local, on the pipe axis), "dir", "arc"}. The
 ## device and the stubs of the two pieces must fit on one level
@@ -2259,7 +2266,7 @@ func inline_spot(view: PipeView, at_global: Vector3, type_id: String) -> Diction
 		return {"why": "put it on a level stretch, not a riser"}
 	# Room along this straight for the device, the two stub ends and a
 	# little more, and clear of the fittings either way.
-	var need := half + 0.175 + PipeRoute.STUB + 0.15
+	var need := inline_need(type_id)
 	var length := path[seg].distance_to(path[seg + 1])
 	var t: float = near["t"]
 	if t * length < need or (1.0 - t) * length < need:

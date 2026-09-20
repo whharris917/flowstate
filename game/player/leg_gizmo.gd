@@ -129,12 +129,12 @@ func _make_handle(name_: String, at: Vector3, size: float, color: Color) -> void
 
 
 ## A point the player may move: every corner of the line as laid but
-## the two fittings — a stub end too, since pulling the end of a
-## straight at a fitting puts a corner there (director, 2026-09-19:
-## "the end of the straight segment closer to the pump doesn't have a
-## gold cube"). A stub itself stays: its far end is the fitting.
+## the two fittings and their stub ends (director, 2026-09-20: a stub
+## end dragged beside a valve planted a corner nobody wanted; a stub
+## follows its fitting, and a corner near it is planted by clicking the
+## straight).
 func movable_corner(index: int) -> bool:
-	return index >= 1 and index <= path.size() - 2
+	return index >= 2 and index <= path.size() - 3
 
 
 ## Is the path point a locked waypoint? `path` is the route the player

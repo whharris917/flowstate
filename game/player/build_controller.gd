@@ -1463,7 +1463,7 @@ func _mode_mouse(event: InputEvent) -> bool:
 				_right_wheeled = true
 				rot_y = wrapf(rot_y + notch, 0.0, TAU)
 				_update_hud()
-			elif _carry_name != "":
+			elif _carry_name != "" and _carry_axis.is_empty():
 				_right_wheeled = true
 				_turn_carried(notch)
 			elif mode == Mode.EDIT:
@@ -1543,6 +1543,57 @@ func _begin_carry() -> void:
 	_carry_name = name_
 	_carry_offset = base - hit
 	_carry_moved = false
+	_carry_axis = _inline_slide(name_)
+	if not _carry_axis.is_empty():
+		hud.toast("sliding %s along its line" % name_)
+
+
+var _carry_axis: Dictionary = {}   # an inline element on its line: {origin, axis, t_min, t_max}
+
+
+## An inline element whose lines run straight through it may only
+## slide along that line while carried (director, 2026-09-20: "drag a
+## valve or other inline element along a pipe without actually moving
+## or re-routing the pipe"): the axis is the element's own, the limits
+## the corners either side less the room it needs. {} when it is not
+## inline, or a line bends at it.
+func _inline_slide(name_: String) -> Dictionary:
+	var type_id := str(plant.equip_types.get(name_, ""))
+	var spec := Plant.inline_spec(type_id)
+	if spec.is_empty() or not bool(spec["axis"]):
+		return {}
+	var view := plant.views.get(name_) as Node3D
+	if view == null:
+		return {}
+	var axis := Vector3(cos(view.rotation.y), 0.0, -sin(view.rotation.y))
+	var origin := _base_of(name_)
+	var need := Plant.inline_need(type_id)
+	var t_min := -INF
+	var t_max := INF
+	var found := false
+	for visual in plant._wire_visuals:
+		if visual["node"] == null:
+			continue
+		var path: Array = visual["path"]
+		if path.size() < 4:
+			continue
+		if str(visual["b"]) == name_ and str(visual["b_port"]) == str(spec["in"]):
+			var a := plant.to_global(path[path.size() - 3] as Vector3)
+			var b := plant.to_global(path[path.size() - 2] as Vector3)
+			if (b - a).normalized().cross(axis).length() > 0.02:
+				return {}
+			t_min = maxf(t_min, (a - origin).dot(axis) + need)
+			found = true
+		elif str(visual["a"]) == name_ and str(visual["a_port"]) == str(spec["out"]):
+			var a := plant.to_global(path[1] as Vector3)
+			var b := plant.to_global(path[2] as Vector3)
+			if (b - a).normalized().cross(axis).length() > 0.02:
+				return {}
+			t_max = minf(t_max, (b - origin).dot(axis) - need)
+			found = true
+	if not found:
+		return {}
+	return {"origin": origin, "axis": axis, "t_min": t_min, "t_max": t_max}
 
 
 ## Each physics frame while carried: the equipment follows the point
@@ -1557,6 +1608,15 @@ func _update_carry() -> void:
 	if hit == Vector3.INF:
 		return
 	var target := EditGizmo.move_target(base, hit, _carry_offset, "move_xz")
+	if not _carry_axis.is_empty():
+		# An inline element slides along its line, between the corners
+		# either side, a quarter metre a step; the pieces stretch.
+		var origin: Vector3 = _carry_axis["origin"]
+		var axis: Vector3 = _carry_axis["axis"]
+		var t := snappedf((hit + _carry_offset - origin).dot(axis), 0.25)
+		t = clampf(t, float(_carry_axis["t_min"]), float(_carry_axis["t_max"]))
+		target = origin + axis * t
+		target.y = base.y
 	if target.is_equal_approx(base):
 		return
 	_carry_moved = true
@@ -1584,6 +1644,7 @@ func _turn_carried(angle: float) -> void:
 
 
 func _end_carry() -> void:
+	_carry_axis = {}
 	_carry_name = ""
 	if _gizmo != null:
 		_gizmo.set_blocked(false)
