@@ -1662,6 +1662,17 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 			elif key == "window_s":
 				screen.window_s = clampf(float(values[key]), 60.0, 3600.0)
 		return ""
+	if record is SimTee and values.has("dn"):
+		# A tee is bought at a size: the nearest nominal bore, the view
+		# rebuilt at it, its lines laid again (a reducer where they differ).
+		var wanted := float(values["dn"])
+		var nearest := LINE_SIZES[0]
+		for size: int in LINE_SIZES:
+			if absf(float(size) - wanted) < absf(float(nearest) - wanted):
+				nearest = size
+		(record as SimTee).dn = nearest
+		_sync_bores([name_])
+		return ""
 	if record is SimTank:
 		var tank_rec := record as SimTank
 		if values.has("nozzle_cv_lps"):
@@ -2385,7 +2396,10 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 	var base: Vector3 = spot["base"]
 	var in_port := str(spot["in"])
 	var out_port := str(spot["out"])
-	var record := place_new(type_id, to_global(base), rot)
+	var params := {}
+	if type_id == "tee_split" or type_id == "tee_mix":
+		params["dn"] = int(visual.get("dn", 50))   # bought at the size of the line it is cut into
+	var record := place(type_id, sim.unique_name(type_id), params, to_global(base), rot, false)
 	if record == null:
 		return "could not place %s" % type_id
 	_next_wire_fixed = true
@@ -3267,6 +3281,8 @@ func _sync_bores(names: Array) -> void:
 				continue
 			dn = maxi(dn, int(visual.get("dn", 50)))
 			lines.append(visual)
+		if record is SimTee:
+			dn = (record as SimTee).dn   # its own size, never the lines' (director, 2026-09-20)
 		var r := line_radius(dn)
 		if absf(float(view.get("bore")) - r) < 0.001:
 			continue
@@ -4489,7 +4505,7 @@ func _params_for(record: SimComponent) -> Dictionary:
 	if record is SimMainsFeed:
 		return {"spec": (record as SimMainsFeed).spec, "ways": (record as SimMainsFeed).ways}
 	if record is SimTee:
-		return {"mode": (record as SimTee).mode}
+		return {"mode": (record as SimTee).mode, "dn": (record as SimTee).dn}
 	if record is SimCap:
 		var cap_view := views.get(record.comp_name) as CapView
 		return {"line_y": cap_view.line_y if cap_view != null else 0.35}

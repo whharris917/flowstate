@@ -345,9 +345,13 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimMainsFeed.new(name_, params.get("spec", "480VAC"),
 				int(params.get("ways", 8))))
 		"tee_split":
-			return sim.add(SimTee.new(name_, "split"))
+			var tee_s := SimTee.new(name_, "split")
+			tee_s.dn = int(params.get("dn", 50))
+			return sim.add(tee_s)
 		"tee_mix":
-			return sim.add(SimTee.new(name_, "mix"))
+			var tee_m := SimTee.new(name_, "mix")
+			tee_m.dn = int(params.get("dn", 50))
+			return sim.add(tee_m)
 		"cap":
 			return sim.add(SimCap.new(name_))
 		"psu":
@@ -633,6 +637,12 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 ## min/max are the game's sane range, not physics. A type with
 ## constructor params and no row here cannot be resized in play.
 const CONFIG := {
+	"tee_split": [
+		{"key": "dn", "label": "Line size", "unit": "DN (25, 40, 50, 80, 100, 150)", "min": 25.0, "max": 150.0, "step": 5.0},
+	],
+	"tee_mix": [
+		{"key": "dn", "label": "Line size", "unit": "DN (25, 40, 50, 80, 100, 150)", "min": 25.0, "max": 150.0, "step": 5.0},
+	],
 	"tank": [
 		{"key": "height_m", "label": "Height", "unit": "m", "min": 0.5, "max": 12.0, "step": 0.1},
 		{"key": "diameter_m", "label": "Diameter", "unit": "m", "min": 0.4, "max": 6.0, "step": 0.1},

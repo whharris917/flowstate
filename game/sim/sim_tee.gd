@@ -9,6 +9,10 @@ extends SimComponent
 ## with its own connection points. Mirrors sim/components.py Tee.
 
 var mode: String
+## The tee's nominal bore, DN (director, 2026-09-20: "a tee splitter/mixer
+## should not change size unless I explicitly reconfigure it"): the view
+## is built at it, and a line of another size meets it through a reducer.
+var dn: int = 50
 
 
 func _init(name_: String, mode_: String = "split") -> void:
@@ -40,3 +44,11 @@ func leg_flows() -> String:
 		var port: SimPort = material_ports()[port_name]
 		parts.append("%s %.2f" % [port_name, absf(port.flow_lps)])
 	return " · ".join(parts)
+
+
+func state_dict() -> Dictionary:
+	return {"dn": dn}
+
+
+func apply_state(state: Dictionary) -> void:
+	dn = int(state.get("dn", dn))
