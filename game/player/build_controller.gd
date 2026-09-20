@@ -1535,8 +1535,8 @@ func _begin_drag() -> void:
 	_drag = str(collider.get_meta("handle"))
 	plant.begin_gesture()   # one undo step for the whole drag
 	_dup_index = -1
-	if _drag.begins_with("pt") and Input.is_key_pressed(KEY_SHIFT) and _leg_gizmo != null:
-		# Shift: the corner is duplicated in place, the copy next after
+	if _drag.begins_with("pt") and Input.is_key_pressed(KEY_CTRL) and _leg_gizmo != null:
+		# Ctrl: the corner is duplicated in place, the copy next after
 		# it, and the drag that follows moves the copy (director,
 		# 2026-09-19). A stub end or router corner is planted instead.
 		var index := _leg_gizmo.corner_index(_drag)
