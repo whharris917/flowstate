@@ -83,7 +83,9 @@ func setup(pump_: SimMeteringPump, bore_r: float = 0.07) -> void:
 	_lamp = ViewUtil.glow(Color(0.10, 0.80, 0.35), 1.2)
 	var lamp := ViewUtil.cylinder(self, 0.008, 0.006, Vector3(0.10, 0.265, 0.104), _lamp)
 	lamp.rotation_degrees = Vector3(90, 0, 0)
-	ViewUtil.plate(self, "DOSING PUMP", Vector3(0.02, 0.255, 0.102))
+	var plate := ViewUtil.plate(self, "DOSING PUMP", Vector3(0.02, 0.255, 0.106))
+	plate.font_size = 9
+	plate.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	var tag := ViewUtil.label(self, pump.comp_name, Vector3(0, 0.55, 0))
 	tag.font_size = 24
 	ViewUtil.interact_body(self, Vector3(0.62, 0.42, 0.34), Vector3(0.02, 0.21, 0))

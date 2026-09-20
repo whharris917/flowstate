@@ -53,7 +53,8 @@ func rebuild() -> void:
 	var shell := ViewUtil.cylinder(_built, r, h, Vector3(0, h / 2.0, 0), shell_mat)
 	if tank.open_top:
 		(shell.mesh as CylinderMesh).cap_top = false   # open to the sky
-	ViewUtil.cylinder(_built, r + 0.04, 0.06, Vector3(0, h - 0.02, 0), shell_mat)
+	if not tank.open_top:   # the top band is solid, and would lid an open vessel
+		ViewUtil.cylinder(_built, r + 0.04, 0.06, Vector3(0, h - 0.02, 0), shell_mat)
 	ViewUtil.cylinder(_built, r + 0.04, 0.08, Vector3(0, 0.04, 0),
 		ViewUtil.flat(Color(0.34, 0.35, 0.37)))
 	# Vessel furniture, all above the shell or on the base ring where no
@@ -65,15 +66,24 @@ func rebuild() -> void:
 	if tank.open_top:
 		# An open-topped vessel (director, 2026-09-20): no roof, a rolled
 		# rim, and the liquid seen from above at its real level.
-		ViewUtil.cylinder(_built, r + 0.05, 0.05, Vector3(0, h + 0.005, 0), shell_mat)
+		var rim := MeshInstance3D.new()
+		var rim_mesh := TorusMesh.new()
+		rim_mesh.inner_radius = r - 0.015
+		rim_mesh.outer_radius = r + 0.05
+		rim_mesh.rings = 48
+		rim_mesh.ring_segments = 8
+		rim.mesh = rim_mesh
+		rim.material_override = shell_mat
+		rim.position = Vector3(0, h, 0)
+		_built.add_child(rim)
 		var inner := ViewUtil.flat(Color(0.50, 0.53, 0.56))
 		inner.cull_mode = BaseMaterial3D.CULL_FRONT   # the inside of the shell, seen from above
 		var lining := ViewUtil.cylinder(_built, r - 0.01, h - 0.02, Vector3(0, h / 2.0, 0), inner)
 		(lining.mesh as CylinderMesh).cap_top = false
-		var liquid := ViewUtil.flat(Color(0.30, 0.52, 0.72, 0.85))
+		var liquid := ViewUtil.flat(Color(0.12, 0.30, 0.50, 0.92))
 		liquid.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		liquid.roughness = 0.05
-		liquid.metallic = 0.1
+		liquid.roughness = 0.25
+		liquid.metallic = 0.0
 		_surface = ViewUtil.cylinder(_built, r - 0.015, 0.01, Vector3(0, 0.02, 0), liquid)
 	else:
 		var roof := MeshInstance3D.new()

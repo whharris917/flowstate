@@ -268,7 +268,7 @@ const PORT_ANCHORS := {
 	"solenoid_valve": {
 		"inlet": {"pos": Vector3(-0.20, 0.32, 0), "dir": Vector3.LEFT},
 		"outlet": {"pos": Vector3(0.20, 0.32, 0), "dir": Vector3.RIGHT},
-		"coil": {"pos": Vector3(0, 0.50, 0.075), "dir": Vector3.BACK}},
+		"coil": {"pos": Vector3(0, 0.42, 0.05), "dir": Vector3.BACK}},
 	"metering_pump": {
 		"inlet": {"pos": Vector3(-0.30, 0.32, 0), "dir": Vector3.LEFT},
 		"outlet": {"pos": Vector3(0.30, 0.32, 0), "dir": Vector3.RIGHT},

@@ -3379,7 +3379,7 @@ func _sync_bores(names: Array) -> void:
 		var record := sim.get_component(str(name_))
 		if view == null or record == null:
 			continue
-		var dn := 50
+		var dn := 0   # the biggest line on it; DN50 with none (a fresh fitting)
 		var lines: Array = []
 		for visual in _wire_visuals:
 			if visual["node"] == null or not (visual["node"] is PipeView):
@@ -3388,8 +3388,16 @@ func _sync_bores(names: Array) -> void:
 				continue
 			if (visual["node"] as PipeView).style() != "pipe":
 				continue
+			# Material lines only: a cable landing on a pump or a coil is
+			# a wire visual too, and it is not a DN50 pipe (2026-09-20: the
+			# power cable held the metering pump at DN50 on a DN6 tube).
+			var src := sim.get_component(str(visual["a"]))
+			if src == null or not src.outputs.has(str(visual["a_port"])) 					or not SimTypes.is_material((src.outputs[str(visual["a_port"])] as SimOutputPort).kind):
+				continue
 			dn = maxi(dn, int(visual.get("dn", 50)))
 			lines.append(visual)
+		if dn == 0:
+			dn = 50
 		if record.get("dn") != null:
 			dn = int(record.get("dn"))   # its own size, never the lines' (director, 2026-09-20)
 		var r := line_radius(dn)
