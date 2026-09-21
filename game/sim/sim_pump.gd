@@ -21,6 +21,13 @@ const CAVITATION_PA := -60000.0
 
 var rated_lps: float
 var head_m: float = 30.0
+## The height of its nozzles above grade, re-derived by the plant from
+## where it stands. The network solves piezometric pressures, so the
+## static suction a gauge on the pump reads, and prime and cavitation
+## are judged on, is the node's pressure less rho*g*elevation
+## (director, 2026-09-21: a pump at the top of a rise is not the pump
+## at the bottom of it).
+var elevation_m: float = 0.0
 var mode: String = "auto"
 var running: bool = false
 var starts: int = 0
@@ -39,12 +46,13 @@ var _was_running: bool = false
 
 
 func _init(name_: String, rated_lps_: float, mode_: String = "auto",
-		head_m_: float = 30.0) -> void:
+		head_m_: float = 30.0, elevation_m_: float = 0.0) -> void:
 	super(name_)
 	assert(rated_lps_ > 0.0, "rated_lps must be positive")
 	assert(head_m_ > 0.0, "head_m must be positive")
 	rated_lps = rated_lps_
 	head_m = head_m_
+	elevation_m = elevation_m_
 	set_mode(mode_)
 	run = add_input("run", SimTypes.PortKind.SIGNAL_DISCRETE)
 	power = add_input("power", SimTypes.PortKind.POWER, "480VAC")
@@ -121,12 +129,15 @@ func update_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 		wants = run.value > 0.5
 	# No 480 V at the starter, no motor — hand mode included.
 	running = wants and power.value > 0.5
+	var datum := SimHydraulics.static_head_pa(elevation_m)
 	if _branch != null:
 		_branch.running = running
 		_branch.head_pa = maxf(SimHydraulics.static_head_pa(head_m), 1e-12)
 		_branch.max_lps = maxf(rated_lps, 1e-12)
-	suction_pa = net.pressures[node["inlet"]]
-	discharge_pa = net.pressures[node["outlet"]]
+		_branch.datum_pa = datum
+	# Static pressures at the pump's own height: what its gauges read.
+	suction_pa = net.pressures[node["inlet"]] - datum
+	discharge_pa = net.pressures[node["outlet"]] - datum
 
 
 func tick(dt: float) -> void:

@@ -17,6 +17,11 @@ var set_kpa: float
 var cv_lps: float
 var opening: float = 0.0
 var out_kpa: float = 0.0
+## Nozzle height above grade, re-derived by the plant from where it
+## stands. A regulator holds the static pressure its diaphragm feels,
+## at its own height; in the network's piezometric terms that is the
+## setting plus rho*g*z, and its gauge reads the static value.
+var elevation_m: float = 0.0
 
 var inlet: SimInputPort
 var outlet: SimOutputPort
@@ -49,17 +54,21 @@ var band_pa: float:
 
 func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	_branch = net.add_branch(SimRegulatorResistance.new(node["inlet"], node["outlet"],
-		cv_lps, set_kpa * 1000.0, band_pa, comp_name)) as SimRegulatorResistance
+		cv_lps, set_kpa * 1000.0 + SimHydraulics.static_head_pa(elevation_m), band_pa,
+		comp_name)) as SimRegulatorResistance
 
 
 func update_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	# Read back for the face and the historian; the branch itself
-	# decides the opening as the network is solved.
+	# decides the opening as the network is solved. The setting is
+	# static, at the regulator's height: piezometric, the setting plus
+	# rho*g*z.
+	var datum := SimHydraulics.static_head_pa(elevation_m)
 	var p_out := net.pressures[node["outlet"]]
-	out_kpa = p_out / 1000.0
+	out_kpa = (p_out - datum) / 1000.0
 	if _branch != null:
 		_branch.cv_lps = cv_lps
-		_branch.set_pa = set_kpa * 1000.0
+		_branch.set_pa = set_kpa * 1000.0 + datum
 		_branch.band_pa = band_pa
 		opening = _branch.opening_at(p_out)
 

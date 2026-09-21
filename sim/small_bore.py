@@ -84,7 +84,8 @@ class NeedleValve(Component):
     the whole control system.
     """
 
-    def __init__(self, name: str, cv_lps: float = 0.005, turns: float = 10.0) -> None:
+    def __init__(self, name: str, cv_lps: float = 0.005, turns: float = 10.0,
+                 elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if cv_lps <= 0.0:
             raise ValueError("cv_lps must be positive")
@@ -93,6 +94,11 @@ class NeedleValve(Component):
         self.cv_lps = cv_lps
         self.turns = turns
         self.turns_open = 0.0
+        # Nozzle height above grade: the drop across the valve does not
+        # depend on it, the static pressure a gauge there reads does.
+        self.elevation_m = float(elevation_m)
+        self.inlet_pa = 0.0
+        self.outlet_pa = 0.0
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         self._branch = None
@@ -121,6 +127,9 @@ class NeedleValve(Component):
         if self._branch is not None:
             self._branch.cv_lps = self.cv_lps
             self._branch.opening = self.turns_open / self.turns
+        datum = static_head_pa(self.elevation_m)
+        self.inlet_pa = net.pressures[node["inlet"]] - datum
+        self.outlet_pa = net.pressures[node["outlet"]] - datum
 
     def tick(self, dt: float) -> None:
         pass
@@ -142,7 +151,8 @@ class BallValve(Component):
         Q = Cv * (x/100) * sqrt(dP / 1 bar)
     """
 
-    def __init__(self, name: str, cv_lps: float = 0.5, stroke_s: float = 0.5) -> None:
+    def __init__(self, name: str, cv_lps: float = 0.5, stroke_s: float = 0.5,
+                 elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if cv_lps <= 0.0:
             raise ValueError("cv_lps must be positive")
@@ -152,6 +162,9 @@ class BallValve(Component):
         self.stroke_s = stroke_s
         self.open = False
         self.position = 0.0
+        self.elevation_m = float(elevation_m)  # nozzle height; see NeedleValve
+        self.inlet_pa = 0.0
+        self.outlet_pa = 0.0
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         self._branch = None
@@ -170,6 +183,9 @@ class BallValve(Component):
         if self._branch is not None:
             self._branch.cv_lps = self.cv_lps
             self._branch.opening = self.position / 100.0
+        datum = static_head_pa(self.elevation_m)
+        self.inlet_pa = net.pressures[node["inlet"]] - datum
+        self.outlet_pa = net.pressures[node["outlet"]] - datum
 
     def tick(self, dt: float) -> None:
         target = 100.0 if self.open else 0.0
@@ -202,13 +218,16 @@ class SolenoidValve(Component):
 
     SNAP_S = 0.05
 
-    def __init__(self, name: str, cv_lps: float = 0.3) -> None:
+    def __init__(self, name: str, cv_lps: float = 0.3, elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if cv_lps <= 0.0:
             raise ValueError("cv_lps must be positive")
         self.cv_lps = cv_lps
         self.position = 0.0
         self.cycles = 0
+        self.elevation_m = float(elevation_m)  # nozzle height; see NeedleValve
+        self.inlet_pa = 0.0
+        self.outlet_pa = 0.0
         self.coil = self.add_input("coil", PortKind.SIGNAL_DISCRETE)
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
@@ -234,6 +253,9 @@ class SolenoidValve(Component):
         if self._branch is not None:
             self._branch.cv_lps = self.cv_lps
             self._branch.opening = self.position / 100.0
+        datum = static_head_pa(self.elevation_m)
+        self.inlet_pa = net.pressures[node["inlet"]] - datum
+        self.outlet_pa = net.pressures[node["outlet"]] - datum
 
     def tick(self, dt: float) -> None:
         energized = self.energized
@@ -274,7 +296,8 @@ class MeteringPump(Component):
 
     CURVE_EXPONENT = 8.0
 
-    def __init__(self, name: str, rated_lps: float = 0.01, max_head_m: float = 50.0) -> None:
+    def __init__(self, name: str, rated_lps: float = 0.01, max_head_m: float = 50.0,
+                 elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if rated_lps <= 0.0:
             raise ValueError("rated_lps must be positive")
@@ -282,6 +305,9 @@ class MeteringPump(Component):
             raise ValueError("max_head_m must be positive")
         self.rated_lps = rated_lps
         self.max_head_m = max_head_m
+        # Nozzle height above grade: prime is judged on the static
+        # suction at the pump, the node's piezometric pressure less this.
+        self.elevation_m = float(elevation_m)
         self.stroke_pct = 100.0    # the knob, when nothing is wired to "stroke"
         self.hand_on = False       # the switch, when nothing is wired to "run"
         self.running = False
@@ -333,12 +359,14 @@ class MeteringPump(Component):
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
         self.running = self.wants_run and float(self.power.value) > 0.5
+        datum = static_head_pa(self.elevation_m)
         if self._branch is not None:
             self._branch.running = self.running and self.stroke_now > 0.0
             self._branch.head_pa = max(static_head_pa(self.max_head_m), 1e-12)
             self._branch.max_lps = max(self.rated_lps * self.stroke_now / 100.0, 1e-12)
-        self.suction_pa = net.pressures[node["inlet"]]
-        self.discharge_pa = net.pressures[node["outlet"]]
+            self._branch.datum_pa = datum
+        self.suction_pa = net.pressures[node["inlet"]] - datum
+        self.discharge_pa = net.pressures[node["outlet"]] - datum
 
     def tick(self, dt: float) -> None:
         if self.running and not self._was_running:
@@ -373,7 +401,8 @@ class Regulator(Component):
     setting exactly.
     """
 
-    def __init__(self, name: str, set_kpa: float = 200.0, cv_lps: float = 0.5) -> None:
+    def __init__(self, name: str, set_kpa: float = 200.0, cv_lps: float = 0.5,
+                 elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if set_kpa <= 0.0:
             raise ValueError("set_kpa must be positive")
@@ -381,6 +410,10 @@ class Regulator(Component):
             raise ValueError("cv_lps must be positive")
         self.set_kpa = set_kpa
         self.cv_lps = cv_lps
+        # Nozzle height above grade. A regulator holds the *static*
+        # pressure its diaphragm feels, at its own height; in the
+        # network's piezometric terms that is the setting plus rho*g*z.
+        self.elevation_m = float(elevation_m)
         self.opening = 0.0
         self.out_kpa = 0.0
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
@@ -400,17 +433,21 @@ class Regulator(Component):
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         self._branch = net.add_branch(RegulatorResistance(
-            node["inlet"], node["outlet"], self.cv_lps, self.set_kpa * 1000.0,
+            node["inlet"], node["outlet"], self.cv_lps,
+            self.set_kpa * 1000.0 + static_head_pa(self.elevation_m),
             self.band_pa, self.name))
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
         # The opening is solved with the network (a regulator's
         # downstream is stiff, and a scan-behind opening never settles);
-        # here it is only read back for the face and the historian.
-        self.out_kpa = net.pressures[node["outlet"]] / 1000.0
+        # here it is only read back for the face and the historian. The
+        # setting is static, at the regulator's height: piezometric,
+        # that is the setting plus rho*g*z.
+        datum = static_head_pa(self.elevation_m)
+        self.out_kpa = (net.pressures[node["outlet"]] - datum) / 1000.0
         if self._branch is not None:
             self._branch.cv_lps = self.cv_lps
-            self._branch.set_pa = self.set_kpa * 1000.0
+            self._branch.set_pa = self.set_kpa * 1000.0 + datum
             self._branch.band_pa = self.band_pa
             self.opening = self._branch.opening_at(net.pressures[node["outlet"]])
 
@@ -517,6 +554,8 @@ NeedleValve.SPEC = EquipmentSpec(
     params=(
         Param("cv_lps", "L/s at 1 bar", "Flow at full open across the reference drop."),
         Param("turns", "turns", "How many turns of the stem from shut to full open."),
+        Param("elevation_m", "m", "Nozzle height above grade, from where it stands; "
+                                  "the static pressure at the valve, not the drop across it."),
     ),
     assumptions=(
         "Linear characteristic: a needle valve's is closer to equal percentage.",
@@ -544,6 +583,8 @@ BallValve.SPEC = EquipmentSpec(
     params=(
         Param("cv_lps", "L/s at 1 bar", "Flow at full open across the reference drop."),
         Param("stroke_s", "s", "How long the quarter turn takes."),
+        Param("elevation_m", "m", "Nozzle height above grade, from where it stands; "
+                                  "the static pressure at the valve, not the drop across it."),
     ),
     assumptions=(
         "A linear characteristic through the travel; a ball's is not.",
@@ -572,6 +613,8 @@ SolenoidValve.SPEC = EquipmentSpec(
     ),
     params=(
         Param("cv_lps", "L/s at 1 bar", "Flow at full open across the reference drop."),
+        Param("elevation_m", "m", "Nozzle height above grade, from where it stands; "
+                                  "the static pressure at the valve, not the drop across it."),
     ),
     assumptions=(
         "The coil draws nothing from the signal: no current, no heating.",
@@ -605,6 +648,8 @@ MeteringPump.SPEC = EquipmentSpec(
     params=(
         Param("rated_lps", "L/s", "Delivery at full stroke against no head."),
         Param("max_head_m", "m", "The head the drive can push against."),
+        Param("elevation_m", "m", "Nozzle height above grade, from where it stands: "
+                                  "prime is judged on the static suction there."),
     ),
     assumptions=(
         "No pulsation: the flow is the average over the strokes.",
@@ -634,8 +679,11 @@ Regulator.SPEC = EquipmentSpec(
         Equation("P_band = max(0.1 * P_set, 5 kPa)", "The droop: the outlet sags as flow rises."),
     ),
     params=(
-        Param("set_kpa", "kPa", "The downstream pressure it holds."),
+        Param("set_kpa", "kPa", "The downstream pressure it holds, static, at its own height."),
         Param("cv_lps", "L/s at 1 bar", "Flow at full open across the reference drop."),
+        Param("elevation_m", "m", "Nozzle height above grade, from where it stands. "
+                                  "The diaphragm feels the static pressure there, so "
+                                  "the outlet it holds is the setting at that height."),
     ),
     assumptions=(
         "Proportional only: a real regulator's droop curve is not a straight line.",

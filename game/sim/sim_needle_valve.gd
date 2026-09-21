@@ -11,6 +11,11 @@ extends SimComponent
 var cv_lps: float
 var turns: float
 var turns_open: float = 0.0
+## Nozzle height above grade, re-derived by the plant from where it
+## stands; the static pressure at the valve, not the drop across it.
+var elevation_m: float = 0.0
+var inlet_pa: float = 0.0
+var outlet_pa: float = 0.0
 
 var inlet: SimInputPort
 var outlet: SimOutputPort
@@ -52,10 +57,13 @@ func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 		node["inlet"], node["outlet"], cv_lps, comp_name)) as SimControlResistance
 
 
-func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
+func update_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	if _branch != null:
 		_branch.cv_lps = cv_lps
 		_branch.opening = turns_open / turns
+	var datum := SimHydraulics.static_head_pa(elevation_m)
+	inlet_pa = net.pressures[node["inlet"]] - datum
+	outlet_pa = net.pressures[node["outlet"]] - datum
 
 
 func tick(_dt: float) -> void:

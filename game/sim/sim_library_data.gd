@@ -67,6 +67,7 @@ const PAGES := {
 			["rated_lps", "L/s", "required", "Flow at the rated point. Runout is a third above it."],
 			["mode", "-", "auto", "Manual On, Off, or Auto."],
 			["head_m", "m", "30", "Shutoff head, as metres of liquid. This is the lift it cannot exceed however long you run it."],
+			["elevation_m", "m", "where it stands", "Height of its nozzles above grade, taken from where you put it. Its suction gauge reads the static pressure there, and a pump high above its supply loses prime where the same pump at grade would not."],
 		],
 		"assumptions": [
 			"One generic curve shape for every pump. No published curve, no impeller trim, no speed control.",
@@ -420,6 +421,7 @@ const PAGES := {
 		"params": [
 			["cv_lps", "L/s", "6", "The size of the valve: what it passes wide open across a 1 bar drop. Not US Cv (gpm at 1 psi) and not metric Kv."],
 			["tau_s", "s", "1", "Positioner time constant."],
+			["elevation_m", "m", "where it stands", "Height of its nozzles above grade, taken from where you put it. The drop across the valve does not depend on it; the static pressure a gauge at the valve reads does."],
 		],
 		"assumptions": [
 			"Linear trim only -- no equal-percentage or quick-opening characteristic, so the installed characteristic comes entirely from the line it sits in.",
@@ -447,6 +449,7 @@ const PAGES := {
 		"params": [
 			["cv_lps", "L/s", "20", "The size of the valve: what it passes wide open across a 1 bar drop. Not US Cv (gpm at 1 psi) and not metric Kv."],
 			["stroke_s", "s", "4", "Seat to full open, and back."],
+			["elevation_m", "m", "where it stands", "Height of its nozzles above grade, taken from where you put it. The drop across the valve does not depend on it; the static pressure a gauge at the valve reads does."],
 		],
 		"assumptions": [
 			"Linear travel and a linear trim: a real ball or gate valve passes most of its flow in the first part of its travel.",
@@ -1014,6 +1017,7 @@ const PAGES := {
 		"params": [
 			["cv_lps", "L/s at 1 bar", "0.005", "Flow at full open across the reference drop."],
 			["turns", "turns", "10", "How many turns of the handle from shut to full open."],
+			["elevation_m", "m", "where it stands", "Height of its nozzles above grade, taken from where you put it: the static pressure at the valve, not the drop across it."],
 		],
 		"assumptions": [
 			"A linear characteristic in the turns: a real needle valve is closer to equal percentage, most of its authority in the last turns.",
@@ -1035,6 +1039,7 @@ const PAGES := {
 		"params": [
 			["cv_lps", "L/s at 1 bar", "0.5", "Flow at full open across the reference drop. A full-bore ball valve barely restricts its line."],
 			["stroke_s", "s", "0.5", "How long the quarter turn takes."],
+			["elevation_m", "m", "where it stands", "Height of its nozzles above grade, taken from where you put it: the static pressure at the valve, not the drop across it."],
 		],
 		"assumptions": [
 			"A linear characteristic through the travel; a ball's is not.",
@@ -1056,6 +1061,7 @@ const PAGES := {
 		],
 		"params": [
 			["cv_lps", "L/s at 1 bar", "0.3", "Flow at full open across the reference drop."],
+			["elevation_m", "m", "where it stands", "Height of its nozzles above grade, taken from where you put it: the static pressure at the valve, not the drop across it."],
 		],
 		"assumptions": [
 			"The coil draws nothing from the signal: no current, no heating, no burn-out.",
@@ -1080,6 +1086,7 @@ const PAGES := {
 		"params": [
 			["rated_lps", "L/s", "0.01", "Delivery at full stroke against no head."],
 			["max_head_m", "m", "50", "The head the drive can push against; past it the pump stalls."],
+			["elevation_m", "m", "where it stands", "Height of its nozzles above grade, taken from where you put it: prime is judged on the static suction there."],
 		],
 		"assumptions": [
 			"No pulsation: the flow is the average over the strokes, and nothing downstream sees the pulses.",
@@ -1103,6 +1110,7 @@ const PAGES := {
 		"params": [
 			["set_kpa", "kPa", "200", "The downstream pressure it holds."],
 			["cv_lps", "L/s at 1 bar", "0.5", "Flow at full open across the reference drop: the most it can pass."],
+			["elevation_m", "m", "where it stands", "Height of its nozzles above grade, taken from where you put it. The diaphragm feels the static pressure there, so the outlet it holds is the setting at that height, and its gauge reads the same."],
 		],
 		"assumptions": [
 			"Proportional only, a straight-line droop: a real regulator's curve is not straight.",

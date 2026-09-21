@@ -324,12 +324,19 @@ class PumpCurve(Branch):
         # head until the head runs out -- and a high exponent is that
         # curve without a cliff Newton cannot follow.
         self.exponent = max(exponent, 1.0)
+        # The pump's own height as static head, rho*g*z. Node pressures
+        # are piezometric (P + rho*g*z), so the pressure a gauge on the
+        # suction would read -- the one that decides whether the pump
+        # has prime -- is the node's less this. A pump at the top of a
+        # rise sees a lower static suction than one at the bottom, and
+        # can lose prime where the other does not (director, 2026-09-21).
+        self.datum_pa = 0.0
 
     def prime(self, suction_pa: float) -> float:
         """How much of its curve it is making, 0 to 1. One whenever
         there is real pressure on the suction, tapering to nothing as
-        that approaches a hard vacuum."""
-        headroom = suction_pa - MIN_PRESSURE_PA
+        the *static* suction approaches a hard vacuum."""
+        headroom = suction_pa - self.datum_pa - MIN_PRESSURE_PA
         return min(max(headroom / self.CAVITATION_BAND_PA, 0.0), 1.0)
 
     def flow_at(self, pa: float, pb: float) -> float:

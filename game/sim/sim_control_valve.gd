@@ -14,6 +14,14 @@ extends SimComponent
 var cv_lps: float
 var tau_s: float
 var position: float = 0.0   # percent, follows the command with a lag
+## Nozzle height above grade, re-derived by the plant from where it
+## stands. The drop across a valve is the same whichever way the
+## pressures are reckoned, so the elevation changes no flow; it is
+## what makes the static pressure at the valve, which a gauge there
+## reads, honest (director, 2026-09-21).
+var elevation_m: float = 0.0
+var inlet_pa: float = 0.0    # static, at the valve's own height
+var outlet_pa: float = 0.0
 
 var cmd: SimInputPort
 var inlet: SimInputPort
@@ -45,10 +53,13 @@ func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 		node["inlet"], node["outlet"], cv_lps, comp_name)) as SimControlResistance
 
 
-func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
+func update_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	if _branch != null:
 		_branch.cv_lps = cv_lps
 		_branch.opening = position / 100.0
+	var datum := SimHydraulics.static_head_pa(elevation_m)
+	inlet_pa = net.pressures[node["inlet"]] - datum
+	outlet_pa = net.pressures[node["outlet"]] - datum
 
 
 func tick(dt: float) -> void:

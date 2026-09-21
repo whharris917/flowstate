@@ -311,6 +311,20 @@ func _exercise_build_api() -> void:
 			problems.append("configure_equipment refused a placed tank")
 		if absf(mv_tank.height_m - 2.0) > 1e-6 or absf(mv_tank.nozzle_cv_lps - 60.0) > 1e-6:
 			problems.append("configured tank size did not land on the record")
+		# A transmitter on the shell is ranged again when the vessel is
+		# resized (2026-09-21): its litres per metre are the new
+		# cross-section, or it reads the wrong kPa for the rest of the game.
+		var mv_lt := mount_new("gauge_level", mv_tank.comp_name, 0.4, 0.6) as SimGauge
+		if mv_lt == null:
+			problems.append("could not mount a transmitter on the placed tank")
+		else:
+			if configure_equipment(mv_tank.comp_name, {"diameter_m": 1.8}) != "":
+				problems.append("resize with a transmitter mounted was refused")
+			var ranged := mv_tank.cross_section_m2 * 1000.0
+			if absf(mv_lt.liters_per_meter - ranged) > 1e-6:
+				problems.append("resized tank's transmitter reads %.1f L/m, expected %.1f" % [
+					mv_lt.liters_per_meter, ranged])
+			remove_equipment(mv_lt.comp_name)
 		if configure_equipment(mv_tank.comp_name, {"bogus": 1.0}) == "":
 			problems.append("configure_equipment accepted an unknown key")
 		if configure_equipment("supply_tank", {"height_m": 3.0}) == "":
@@ -600,18 +614,48 @@ func _new_graph() -> void:
 ## deck really does stand above one at grade. The elevation is
 ## re-derived from the saved position on load, and from the new spot
 ## when the equipment is moved.
-const ELEVATED_TYPES: Array[String] = ["tank", "reactor", "crystallizer", "source", "drain"]
+##
+## One rule, not a list (director, 2026-09-21: an open cap kept the
+## vent height it was placed at, since only five types were on the
+## list that re-derived it): every record with an elevation_m property
+## takes it from where it stands, at placement, on a move, and on a
+## load (which places again). What "where it stands" means per type is
+## the one thing tabulated: a vessel, header or drain stands on its
+## base; an inline device (a pump, a valve, a regulator) stands its
+## nozzles a fixed height above its base; a cap stands at its line.
+const NOZZLE_ELEVATION_TYPES: Array[String] = ["pump", "metering_pump", "valve", "block_valve",
+	"ball_valve", "needle_valve", "solenoid_valve", "regulator"]
+
+
+## The height above grade a record of this type reckons its pressures
+## at, standing with its base at base_y (plant-local).
+func _elevation_for(type_id: String, view: Node3D, base_y: float) -> float:
+	if type_id == "cap" and view is CapView:
+		return base_y + (view as CapView).line_y
+	if type_id in NOZZLE_ELEVATION_TYPES:
+		var anchor: Variant = PlantFactory.PORT_ANCHORS.get(type_id, {}).get("inlet")
+		if anchor is Dictionary:
+			return base_y + ((anchor as Dictionary)["pos"] as Vector3).y
+		if anchor is Vector3:
+			return base_y + (anchor as Vector3).y
+	return base_y
+
+
+## Apply the rule above to a record that has just been placed or moved.
+## A saved elevation in params wins on a load, so a plant reloads as
+## it was saved even if the tabulated height of a type has changed.
+func _apply_elevation(record: SimComponent, type_id: String, view: Node3D, base_y: float,
+		params: Dictionary) -> void:
+	if record.get("elevation_m") == null:
+		return
+	var value: float = float(params["elevation_m"]) if params.has("elevation_m") \
+		else snappedf(_elevation_for(type_id, view, base_y), 0.01)
+	record.set("elevation_m", value)
 
 
 func place(type_id: String, name_: String, params: Dictionary,
 		world_pos: Vector3, rot_y: float, is_protected: bool) -> SimComponent:
 	checkpoint()
-	# Nozzle pressures are piezometric, so a vessel on a deck really
-	# does stand above one at grade: the placement height is its
-	# elevation, and it is re-derived from the saved position on load.
-	if type_id in ELEVATED_TYPES and not params.has("elevation_m"):
-		params = params.duplicate()
-		params["elevation_m"] = snappedf(to_local(world_pos).y, 0.01)
 	var record := PlantFactory.make_record(sim, type_id, name_, params)
 	if record == null:
 		return null
@@ -663,8 +707,6 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as TeeView).setup(record as SimTee)
 		"cap":
 			(view as CapView).setup(record as SimCap, float(params.get("line_y", 0.35)))
-			# The air an open end vents to is at the end's own height.
-			(record as SimCap).elevation_m = to_local(world_pos).y + float(params.get("line_y", 0.35))
 		"psu":
 			(view as PsuView).setup(record as SimPowerSupply)
 		"source":
@@ -691,6 +733,9 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as StillView).setup(record as SimStill)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
+	# Where it stands is where it reckons its pressures: the one
+	# elevation rule, for every record that has one.
+	_apply_elevation(record, type_id, view, to_local(world_pos).y, params)
 	# One mesh per look for the furniture; the port fittings come after
 	# and stay separate, since the plant colours and grabs them.
 	MeshMerge.merge_view(view)
@@ -1163,9 +1208,15 @@ func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
 	view.rebuild()
 	MeshMerge.merge_view(view)
 	refresh_wires_of(name_)
-	# Instruments on the shell moved with it; their cables follow.
+	# Instruments on the shell moved with it; their cables follow, and a
+	# level transmitter is ranged again to the new cross-section (found
+	# 2026-09-21 auditing state set once at placement: ranged at the
+	# mount and never after, a resized tank read the wrong kPa).
 	for inst_name: String in mounted:
 		if str((mounted[inst_name] as Dictionary)["host"]) == name_:
+			var inst := sim.get_component(inst_name)
+			if inst is SimGauge and (inst as SimGauge).kind == "level_kpa":
+				(inst as SimGauge).liters_per_meter = record.cross_section_m2 * 1000.0
 			refresh_wires_of(inst_name)
 	_schedule_revalidate()
 
@@ -1630,8 +1681,8 @@ func move_equipment(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 	view.position = to_local(world_pos) + Vector3(0, PlantFactory.Y_OFFSETS.get(type_id, 0.0), 0)
 	view.rotation.y = rot_y
 	var record := sim.get_component(name_)
-	if record != null and type_id in ELEVATED_TYPES:
-		record.set("elevation_m", snappedf(to_local(world_pos).y, 0.01))
+	if record != null and record.get("elevation_m") != null:
+		_apply_elevation(record, type_id, view, to_local(world_pos).y, {})
 		sim.invalidate_network()
 	refresh_wires_of(name_)
 	for inst_name: String in mounted.keys():
@@ -4251,6 +4302,31 @@ func _hydraulics_self_check() -> void:
 	if not (weak.running and weak.flow_lps < 0.01):
 		problems.append("pump lifted past its head (%.2f L/s)" % weak.flow_lps)
 
+	# A pump knows its height (director, 2026-09-21): drawing from an
+	# atmospheric header, one 9 m up sees a static suction of -88 kPa,
+	# inside the prime band, and one 12 m up is past a hard vacuum and
+	# moves nothing; at grade the same pump makes its rating.
+	var at_grade := _pump_rig(300000.0, 4.0, 0.0, 0.0)
+	var raised := _pump_rig(300000.0, 4.0, 0.0, 9.0)
+	var too_high := _pump_rig(300000.0, 4.0, 0.0, 12.0)
+	if not (at_grade > 3.99 and raised > 0.5 and raised < 0.8 * at_grade and too_high == 0.0):
+		problems.append("pump elevation: grade %.2f, 9 m %.2f, 12 m %.2f" % [at_grade, raised, too_high])
+
+	# An open end vents at the height it stands at now, not the height
+	# it was built at: raised after the network was laid out, it spills
+	# less (the cap's air node is refreshed every scan, like a header's).
+	sim = Simulation.new(SIM_DT)
+	var spill_hdr := sim.add(SimSource.new("hdr", "water", 20.0, 50.0)) as SimSource
+	var end := sim.add(SimCap.new("end")) as SimCap
+	end.open = true
+	sim.connect_ports(spill_hdr, "outlet", end, "a")
+	sim.run_for(2.0)
+	var spill_low := end.spill_lps()
+	end.elevation_m = 4.0
+	sim.run_for(2.0)
+	if not (end.spill_lps() > 0.0 and end.spill_lps() < spill_low):
+		problems.append("open end ignores a raised height (%.3f then %.3f L/s)" % [spill_low, end.spill_lps()])
+
 	# The valve equation: half open is more than half the flow, because
 	# flow follows the square root of the drop, not the position.
 	var wide := _valve_flow(100.0)
@@ -4276,12 +4352,13 @@ func _hydraulics_self_check() -> void:
 		push_warning("[flowstate] hydraulics self-check FAILED — %s" % "; ".join(problems))
 
 
-func _pump_rig(head_pa: float, max_lps: float, lift_pa: float) -> float:
+func _pump_rig(head_pa: float, max_lps: float, lift_pa: float, elevation_m: float = 0.0) -> float:
 	var net := SimNetwork.new()
 	var suction := net.add_node(0.0, true)
 	var discharge := net.add_node(lift_pa, true)
 	var pump := net.add_branch(SimPumpCurve.new(suction, discharge, head_pa, max_lps)) as SimPumpCurve
 	pump.running = true
+	pump.datum_pa = SimHydraulics.static_head_pa(elevation_m)
 	net.solve()
 	return pump.flow_lps
 

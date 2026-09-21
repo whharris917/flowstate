@@ -34,6 +34,13 @@ var running: bool = false
 ## is nearly vertical -- its flow barely moves with the head until the
 ## head runs out -- and a high exponent is that curve without a cliff.
 var exponent: float = 2.0
+## The pump's own height as static head, rho*g*z. Node pressures are
+## piezometric (P + rho*g*z), so the pressure a gauge on the suction
+## would read -- the one prime is judged on -- is the node's less this.
+## A pump at the top of a rise sees a lower static suction than one at
+## the bottom, and can lose prime where the other does not (director,
+## 2026-09-21).
+var datum_pa: float = 0.0
 
 
 func _init(node_a_: int, node_b_: int, head_pa_: float, max_lps_: float,
@@ -45,10 +52,10 @@ func _init(node_a_: int, node_b_: int, head_pa_: float, max_lps_: float,
 
 
 ## How much of its curve it is making, 0 to 1. One whenever there is
-## real pressure on the suction, tapering to nothing as that approaches
-## a hard vacuum.
+## real pressure on the suction, tapering to nothing as the static
+## suction approaches a hard vacuum.
 func prime(suction_pa: float) -> float:
-	var headroom := suction_pa - SimHydraulics.MIN_PRESSURE_PA
+	var headroom := suction_pa - datum_pa - SimHydraulics.MIN_PRESSURE_PA
 	return clampf(headroom / CAVITATION_BAND_PA, 0.0, 1.0)
 
 
@@ -107,7 +114,7 @@ func evaluate(pa: float, pb: float) -> void:
 		g = 0.0
 		conducting = false
 		return
-	var p := clampf((pa - SimHydraulics.MIN_PRESSURE_PA) / CAVITATION_BAND_PA, 0.0, 1.0)
+	var p := clampf((pa - datum_pa - SimHydraulics.MIN_PRESSURE_PA) / CAVITATION_BAND_PA, 0.0, 1.0)
 	var fraction := 1.0 - rise / head_pa
 	var on_curve := minf(max_lps * pow(fraction, 1.0 / exponent), max_lps * RUNOUT_FACTOR)
 	q = on_curve * p

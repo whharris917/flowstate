@@ -427,11 +427,16 @@ class Drain(Component):
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         # The far side of the drain valve is the sewer: atmospheric, and
         # it will take whatever it is given.
-        sewer = net.add_node(static_head_pa(self.elevation_m), fixed=True)
+        self._sewer = net.add_node(static_head_pa(self.elevation_m), fixed=True)
         self._branch = net.add_branch(ControlResistance(
-            node["inlet"], sewer, self.rate_lps, self.name))
+            node["inlet"], self._sewer, self.rate_lps, self.name))
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        # The sewer's height is refreshed every scan, like every other
+        # boundary, so a drain moved after it was built vents where it
+        # now stands rather than where it stood when the network was
+        # laid out (2026-09-21).
+        net.set_pressure(self._sewer, static_head_pa(self.elevation_m), fixed=True)
         if self._branch is not None:
             self._branch.cv_lps = self.rate_lps
             self._branch.opening = 1.0 if self.is_open else 0.0
@@ -540,11 +545,14 @@ class Cap(Component):
         return max(self._vent.flow_lps, 0.0)
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
-        air = net.add_node(static_head_pa(self.elevation_m), fixed=True)
+        self._air = net.add_node(static_head_pa(self.elevation_m), fixed=True)
         self._vent = net.add_branch(ControlResistance(
-            node["a"], air, self.VENT_CV_LPS, self.name))
+            node["a"], self._air, self.VENT_CV_LPS, self.name))
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        # The air the end vents to is at the end's height as it stands
+        # now, refreshed every scan like every other boundary.
+        net.set_pressure(self._air, static_head_pa(self.elevation_m), fixed=True)
         if self._vent is not None:
             self._vent.cv_lps = self.VENT_CV_LPS
             self._vent.opening = 1.0 if self.open else 0.0
@@ -614,7 +622,8 @@ class ControlValve(Component):
     actually diagnose.
     """
 
-    def __init__(self, name: str, cv_lps: float = 6.0, tau_s: float = 1.0) -> None:
+    def __init__(self, name: str, cv_lps: float = 6.0, tau_s: float = 1.0,
+                 elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if cv_lps <= 0.0:
             raise ValueError("cv_lps must be positive")
@@ -623,6 +632,13 @@ class ControlValve(Component):
         self.cv_lps = cv_lps
         self.tau_s = tau_s
         self.position = 0.0  # percent, follows the command with a lag
+        # The height of its nozzles above grade. The drop across a valve
+        # is the same whichever way the pressures are reckoned, so the
+        # elevation changes no flow; it is what makes the static
+        # pressure at the valve, which a gauge there reads, honest.
+        self.elevation_m = float(elevation_m)
+        self.inlet_pa = 0.0    # static, at the valve's own height
+        self.outlet_pa = 0.0
         self.cmd = self.add_input("cmd", PortKind.SIGNAL_ANALOG)
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
@@ -642,6 +658,9 @@ class ControlValve(Component):
         if self._branch is not None:
             self._branch.cv_lps = self.cv_lps
             self._branch.opening = self.position / 100.0
+        datum = static_head_pa(self.elevation_m)
+        self.inlet_pa = net.pressures[node["inlet"]] - datum
+        self.outlet_pa = net.pressures[node["outlet"]] - datum
 
     def tick(self, dt: float) -> None:
         target = max(0.0, min(100.0, float(self.cmd.value)))
@@ -662,7 +681,8 @@ class BlockValve(Component):
     it.
     """
 
-    def __init__(self, name: str, cv_lps: float = 20.0, stroke_s: float = 4.0) -> None:
+    def __init__(self, name: str, cv_lps: float = 20.0, stroke_s: float = 4.0,
+                 elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if cv_lps <= 0.0:
             raise ValueError("cv_lps must be positive")
@@ -672,6 +692,9 @@ class BlockValve(Component):
         self.stroke_s = stroke_s
         self.position = 0.0  # percent of travel: 0 shut, 100 open
         self.hand_open = False  # the handwheel, when nothing is wired to "open"
+        self.elevation_m = float(elevation_m)  # nozzle height; see ControlValve
+        self.inlet_pa = 0.0    # static, at the valve's own height
+        self.outlet_pa = 0.0
         self.open_cmd = self.add_input("open", PortKind.SIGNAL_DISCRETE)
         self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
         self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
@@ -727,6 +750,9 @@ class BlockValve(Component):
         if self._branch is not None:
             self._branch.cv_lps = self.cv_lps
             self._branch.opening = self.position / 100.0
+        datum = static_head_pa(self.elevation_m)
+        self.inlet_pa = net.pressures[node["inlet"]] - datum
+        self.outlet_pa = net.pressures[node["outlet"]] - datum
 
     def tick(self, dt: float) -> None:
         target = 100.0 if self.commanded_open else 0.0
@@ -1054,7 +1080,7 @@ class Pump(Component):
     CAVITATION_PA = -60_000.0
 
     def __init__(self, name: str, rated_lps: float, mode: str = "auto",
-                 head_m: float = 30.0) -> None:
+                 head_m: float = 30.0, elevation_m: float = 0.0) -> None:
         super().__init__(name)
         if rated_lps <= 0.0:
             raise ValueError("rated_lps must be positive")
@@ -1062,6 +1088,12 @@ class Pump(Component):
             raise ValueError("head_m must be positive")
         self.rated_lps = rated_lps
         self.head_m = head_m
+        # The height of its nozzles above grade. The network solves
+        # piezometric pressures, so the static suction a gauge on the
+        # pump reads, and prime and cavitation are judged on, is the
+        # node's pressure less rho*g*elevation (director, 2026-09-21: a
+        # pump at the top of a rise is not the pump at the bottom of it).
+        self.elevation_m = float(elevation_m)
         self.mode = "auto"
         self.set_mode(mode)
         self.running = False
@@ -1108,12 +1140,15 @@ class Pump(Component):
             wants = bool(self.run.value)
         # No 480 V at the starter, no motor — hand mode included.
         self.running = wants and float(self.power.value) > 0.5
+        datum = static_head_pa(self.elevation_m)
         if self._branch is not None:
             self._branch.running = self.running
             self._branch.head_pa = max(static_head_pa(self.head_m), 1e-12)
             self._branch.max_lps = max(self.rated_lps, 1e-12)
-        self.suction_pa = net.pressures[node["inlet"]]
-        self.discharge_pa = net.pressures[node["outlet"]]
+            self._branch.datum_pa = datum
+        # Static pressures at the pump's own height: what its gauges read.
+        self.suction_pa = net.pressures[node["inlet"]] - datum
+        self.discharge_pa = net.pressures[node["outlet"]] - datum
 
     def tick(self, dt: float) -> None:
         was_running = getattr(self, "_was_running", False)
@@ -1286,6 +1321,11 @@ Pump.SPEC = EquipmentSpec(
                              "the lift it cannot exceed however long you "
                              "run it."),
         Param("mode", "-", "Hand, Off, or Auto."),
+        Param("elevation_m", "m", "Height of its nozzles above grade, taken "
+                                  "from where it stands. Its suction gauge "
+                                  "reads the static pressure there, and a "
+                                  "pump high above its supply loses prime "
+                                  "where the same pump at grade would not."),
     ),
     assumptions=(
         "One generic curve shape for every pump. No published curve, no "
@@ -1350,6 +1390,10 @@ ControlValve.SPEC = EquipmentSpec(
                                "wide open across a 1 bar drop. Not US Cv "
                                "(gpm at 1 psi) and not metric Kv."),
         Param("tau_s", "s", "Positioner time constant."),
+        Param("elevation_m", "m", "Height of its nozzles above grade, taken "
+                                  "from where it stands. The drop across the "
+                                  "valve does not depend on it; the static "
+                                  "pressure a gauge at the valve reads does."),
     ),
     assumptions=(
         "Linear trim only -- no equal-percentage or quick-opening "
@@ -1413,6 +1457,10 @@ BlockValve.SPEC = EquipmentSpec(
                                "wide open across a 1 bar drop. Not US Cv "
                                "(gpm at 1 psi) and not metric Kv."),
         Param("stroke_s", "s", "Seat to full open, and back."),
+        Param("elevation_m", "m", "Height of its nozzles above grade, taken "
+                                  "from where it stands. The drop across the "
+                                  "valve does not depend on it; the static "
+                                  "pressure a gauge at the valve reads does."),
     ),
     assumptions=(
         "Linear travel and a linear trim: a real ball or gate valve "

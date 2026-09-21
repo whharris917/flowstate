@@ -18,6 +18,7 @@ var lost_product_l: float = 0.0
 var inlet: SimInputPort
 
 var _branch: SimControlResistance = null
+var _sewer: int = -1
 
 
 func _init(name_: String, rate_lps_: float = 1.0, elevation_m_: float = 0.0) -> void:
@@ -39,12 +40,17 @@ var flow_lps: float:
 func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	# The far side of the drain valve is the sewer: atmospheric, and it
 	# will take whatever it is given.
-	var sewer := net.add_node(SimHydraulics.static_head_pa(elevation_m), true)
+	_sewer = net.add_node(SimHydraulics.static_head_pa(elevation_m), true)
 	_branch = net.add_branch(SimControlResistance.new(
-		node["inlet"], sewer, rate_lps, comp_name)) as SimControlResistance
+		node["inlet"], _sewer, rate_lps, comp_name)) as SimControlResistance
 
 
-func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
+func update_hydraulics(net: SimNetwork, _node: Dictionary) -> void:
+	# The sewer's height is refreshed every scan, like every other
+	# boundary, so a drain moved after the network was built vents
+	# where it now stands (2026-09-21).
+	if _sewer >= 0:
+		net.set_pressure(_sewer, SimHydraulics.static_head_pa(elevation_m), true)
 	if _branch != null:
 		_branch.cv_lps = rate_lps
 		_branch.opening = 1.0 if is_open else 0.0

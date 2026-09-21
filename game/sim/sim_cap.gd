@@ -43,13 +43,21 @@ func spill_lps() -> float:
 	return maxf(_vent.flow_lps, 0.0) if open and _vent != null else 0.0
 
 
+var _air: int = -1
+
+
 func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
-	var air := net.add_node(SimHydraulics.static_head_pa(elevation_m), true)
-	_vent = net.add_branch(SimControlResistance.new(node["a"], air, VENT_CV_LPS, comp_name)) \
+	_air = net.add_node(SimHydraulics.static_head_pa(elevation_m), true)
+	_vent = net.add_branch(SimControlResistance.new(node["a"], _air, VENT_CV_LPS, comp_name)) \
 		as SimControlResistance
 
 
-func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
+func update_hydraulics(net: SimNetwork, _node: Dictionary) -> void:
+	# The air the end vents to is at the end's height as it stands now,
+	# refreshed every scan like every other boundary (2026-09-21: an
+	# end moved after the network was built vented where it used to be).
+	if _air >= 0:
+		net.set_pressure(_air, SimHydraulics.static_head_pa(elevation_m), true)
 	if _vent != null:
 		_vent.cv_lps = VENT_CV_LPS
 		_vent.opening = 1.0 if open else 0.0

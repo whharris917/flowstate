@@ -15,6 +15,11 @@ var cv_lps: float
 var stroke_s: float
 var position: float = 0.0   # percent of travel: 0 shut, 100 open
 var hand_open: bool = false  # the handwheel, when nothing is wired to "open"
+## Nozzle height above grade, re-derived by the plant from where it
+## stands; the static pressure at the valve, not the drop across it.
+var elevation_m: float = 0.0
+var inlet_pa: float = 0.0
+var outlet_pa: float = 0.0
 
 var open_cmd: SimInputPort
 var inlet: SimInputPort
@@ -88,10 +93,13 @@ func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 		node["inlet"], node["outlet"], cv_lps, comp_name)) as SimControlResistance
 
 
-func update_hydraulics(_net: SimNetwork, _node: Dictionary) -> void:
+func update_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	if _branch != null:
 		_branch.cv_lps = cv_lps
 		_branch.opening = position / 100.0
+	var datum := SimHydraulics.static_head_pa(elevation_m)
+	inlet_pa = net.pressures[node["inlet"]] - datum
+	outlet_pa = net.pressures[node["outlet"]] - datum
 
 
 func tick(dt: float) -> void:
