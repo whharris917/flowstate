@@ -9,11 +9,16 @@ class_name RoutingExercises
 ##
 ## Exercise 2 is the drip demo (director, 2026-09-20): the small-bore
 ## family on one little line, ending in the air over an open tank.
+##
+## Exercise 3 is the line pressure gauges (director, 2026-09-22: "tap a
+## pressure gauge into any point on a pipe"): three cut into one long
+## line the way the player's click cuts them in.
 
 
 static func build(plant: Plant) -> void:
 	_one_source_one_pump(plant)
 	_drip_demo(plant)
+	_line_gauges(plant)
 
 
 ## Exercise 1: a single supply header leading to a single pump, on the
@@ -112,6 +117,71 @@ static func _drip_demo(plant: Plant) -> void:
 		mp.hand_on = true
 
 
+## Exercise 3: a water header at 400 kPa feeding a drain sixteen metres
+## east through one DN50 line sized as a long run (k 20,000), and three
+## line pressure gauges cut into its level stretch at a quarter, a half
+## and three quarters, through Plant.place_inline as a click does. The
+## pressure falls along the line; the three dials read it falling, and
+## the line passes what it would with no gauges on it.
+const GAUGE_Z := 16.0
+const GAUGE_LINE_K := 20000.0
+
+
+static func _line_gauges(plant: Plant) -> void:
+	plant.place("source", "supply_3", {"pressure_kpa": 400.0}, Vector3(-4.0, 0.0, GAUGE_Z), 0.0, false)
+	plant.place("drain", "drain_3", {}, Vector3(12.0, 0.0, GAUGE_Z), PI, false)
+	var why := plant.connect_equipment("supply_3", "outlet", "drain_3", "inlet")
+	if why != "":
+		push_error("line gauges: " + why)
+		return
+	plant.set_pipe_resistance("supply_3", "outlet", "drain_3", "inlet", GAUGE_LINE_K)
+	var view := _line_from(plant, "supply_3")
+	if view == null:
+		return
+	# The longest level straight of the line as laid.
+	var path := plant.wire_path(view)
+	var best := -1
+	for i in path.size() - 1:
+		if absf(path[i + 1].y - path[i].y) > 0.01:
+			continue
+		if best < 0 or path[i].distance_to(path[i + 1]) > path[best].distance_to(path[best + 1]):
+			best = i
+	if best < 0:
+		push_error("line gauges: no level straight")
+		return
+	var a := path[best]
+	var b := path[best + 1]
+	# Downstream first: each cut after that goes into the upstream piece,
+	# which still starts at the header.
+	for t: float in [0.75, 0.5, 0.25]:
+		var piece := _line_from(plant, "supply_3")
+		if piece == null:
+			push_error("line gauges: the line from the header is gone")
+			return
+		why = plant.place_inline("gauge_line", piece, plant.to_global(a.lerp(b, t)))
+		if why != "":
+			push_error("line gauges, cut at %.2f: %s" % [t, why])
+
+
+static func _line_from(plant: Plant, a: String) -> PipeView:
+	for visual: Dictionary in plant.get("_wire_visuals"):
+		if str(visual["a"]) == a and visual["node"] is PipeView:
+			return visual["node"] as PipeView
+	return null
+
+
+## The gauges of exercise 3 in order along the line, west to east.
+static func _gauges(plant: Plant) -> Array[SimGauge]:
+	var out: Array[SimGauge] = []
+	for name_: String in plant.views:
+		var g := plant.sim.get_component(name_) as SimGauge
+		if g != null and g.kind == "line_kpa":
+			out.append(g)
+	out.sort_custom(func(x: SimGauge, y: SimGauge) -> bool:
+		return (plant.views[x.comp_name] as Node3D).global_position.x < (plant.views[y.comp_name] as Node3D).global_position.x)
+	return out
+
+
 ## A line of the demo: laid by the router, then sized to tubing with
 ## compression fittings and painted for water.
 static func _line(plant: Plant, a: String, a_port: String, b: String, b_port: String) -> void:
@@ -165,6 +235,14 @@ static func report(plant: Plant) -> PackedStringArray:
 		out.append("[flowstate] drip demo: t_2 %.2f L · pump %s %s · solenoid %s" % [
 			t2.level_l, mp.status(), SimTypes.flow_text(mp.flow_lps),
 			"OPEN" if sv.position > 99.0 else "SHUT"])
+	var gauges := _gauges(plant)
+	var drain := plant.sim.get_component("drain_3") as SimDrain
+	if not gauges.is_empty() and drain != null:
+		var parts := PackedStringArray()
+		for g in gauges:
+			parts.append("%s %.1f kPa at %.2f m" % [g.comp_name, g.reading, g.elevation_m])
+		out.append("[flowstate] line gauges: header 400 kPa · %s · drain %s" % [
+			" · ".join(parts), SimTypes.flow_text(drain.inlet.flow_lps)])
 	return out
 
 
@@ -230,4 +308,8 @@ static func _fingerprint(plant: Plant) -> Dictionary:
 		if int(visual.get("dn", 50)) == 6:
 			dn6 += 1
 	out["tubing"] = "%d tube lines, %d at DN6" % [tubes, dn6]
+	var dials := PackedStringArray()
+	for g in _gauges(plant):
+		dials.append("%s %.0f/%.0f" % [g.comp_name, g.reading, g.range_kpa])
+	out["line gauges"] = ", ".join(dials)
 	return out

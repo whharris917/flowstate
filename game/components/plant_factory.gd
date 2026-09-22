@@ -49,6 +49,7 @@ const CATALOG_INSTRUMENTS: Array[Dictionary] = [
 	{"type": "gauge_flow", "label": "Flow gauge"},
 	{"type": "gauge_dp", "label": "DP gauge"},
 	{"type": "gauge_press", "label": "Pressure gauge"},
+	{"type": "gauge_line", "label": "Line pressure gauge"},
 	{"type": "gauge_temp", "label": "Temperature gauge"},
 	{"type": "gauge_conc", "label": "Purity analyser"},
 	{"type": "controller", "label": "PID controller"},
@@ -77,6 +78,7 @@ const FOOTPRINTS := {
 	"gauge_flow": Vector3(0.5, 1.8, 0.5),
 	"gauge_dp": Vector3(0.5, 1.8, 0.5),
 	"gauge_press": Vector3(0.5, 1.8, 0.5),
+	"gauge_line": Vector3(0.3, 0.45, 0.25),
 	"column": Vector3(1.7, 11.2, 1.7),
 	"float_switch": Vector3(0.25, 0.6, 0.25),
 	"valve": Vector3(0.7, 1.3, 0.55),
@@ -114,7 +116,7 @@ const FOOTPRINTS := {
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5, "hmi_trend": 1.6,
 	"gauge_level": 0.0, "gauge_flow": 0.0, "gauge_dp": 0.0,
-	"gauge_press": 0.0, "column": 0.0,
+	"gauge_press": 0.0, "gauge_line": 0.0, "column": 0.0,
 	"float_switch": 0.0, "air_cascade": 0.0,
 	"valve": 0.0, "block_valve": 0.0, "controller": 0.0, "cabinet": 0.0, "junction_box": 0.0,
 	"control_station": 0.0,
@@ -159,6 +161,12 @@ const PORT_ANCHORS := {
 	"gauge_press": {
 		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
 		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
+	# A tapping in a pipe: a short spool on the line's axis, the base at
+	# the axis, the gauge on a nipple above it.
+	"gauge_line": {
+		"inlet": {"pos": Vector3(-0.12, 0, 0), "dir": Vector3.LEFT},
+		"outlet": {"pos": Vector3(0.12, 0, 0), "dir": Vector3.RIGHT},
+		"signal": {"pos": Vector3(0, 0.34, -0.05), "dir": Vector3.FORWARD}},
 	"gauge_temp": {
 		"process": {"pos": Vector3(0, 0.25, 0.04), "dir": Vector3.BACK},
 		"signal": {"pos": Vector3(0, 1.32, -0.04), "dir": Vector3.FORWARD}},
@@ -358,6 +366,9 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimGauge.new(name_, "dp_pa"))
 		"gauge_press":
 			return sim.add(SimGauge.new(name_, "press_kpa"))
+		"gauge_line":
+			return sim.add(SimGauge.new(name_, "line_kpa", 45.45, "product", SimGauge.METER_K,
+				params.get("range_kpa", 600.0)))
 		"gauge_temp":
 			return sim.add(SimGauge.new(name_, "temp_c"))
 		"gauge_conc":
@@ -479,7 +490,7 @@ static func make_view(type_id: String, record: SimComponent,
 		"float_switch":
 			view = FloatSwitchView.new()
 		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", \
-		"gauge_temp", "gauge_conc":
+		"gauge_temp", "gauge_conc", "gauge_line":
 			view = GaugeView.new()
 		"column":
 			view = ColumnView.new()
@@ -626,8 +637,11 @@ static func _anchor_dir(raw: Variant) -> Vector3:
 ## port fittings are flush — the pick volume and the colour ring on
 ## the fitting's own face, no neck, no second flange — and a line
 ## meets that face.
-const INLINE_FLUSH: Array[String] = ["valve", "block_valve", "gauge_flow", "tee_split", "tee_mix", "cap",
+const INLINE_FLUSH: Array[String] = ["valve", "block_valve", "gauge_flow", "gauge_line", "tee_split", "tee_mix", "cap",
 	"orifice", "needle_valve", "ball_valve", "solenoid_valve", "metering_pump", "regulator", "rotameter"]
+## Types that exist only cut into a line: aimed anywhere else they are
+## refused, since standing free they would have nothing to read.
+const LINE_ONLY: Array[String] = ["gauge_line"]
 ## The small-bore family: on tubing their bodies shorten, and their
 ## inlet and outlet faces come in with them (SmallBoreUtil.half_scale).
 const SMALL_BORE_TYPES: Array[String] = ["orifice", "needle_valve", "ball_valve", "solenoid_valve",
@@ -806,6 +820,9 @@ const CONFIG := {
 	],
 	"gauge_conc": [
 		{"key": "species", "label": "Species", "options": "species"},
+	],
+	"gauge_line": [
+		{"key": "range_kpa", "label": "Dial range", "unit": "kPa", "min": 10.0, "max": 10000.0, "step": 10.0},
 	],
 	"column": [
 		{"key": "charge_l", "label": "Charge", "unit": "L", "min": 10.0, "max": 20000.0, "step": 10.0},

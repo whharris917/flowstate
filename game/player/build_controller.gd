@@ -778,6 +778,9 @@ func _update_ghost() -> void:
 	_ghost_valid = _footprint_clear(footprint, _ghost_pos, rot_y, null)
 	if _ghost_valid and not _is_equipment_page():
 		_ghost_valid = StructureFactory.placement_ok(type_id, _ghost_pos, rot_y, space) == ""
+	if type_id in PlantFactory.LINE_ONLY:
+		_ghost_valid = false
+		_inline_why = "a line pressure gauge goes on a pipe — aim at a level stretch of a line"
 	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
 		else Color(0.9, 0.25, 0.2, 0.45)
 

@@ -650,7 +650,7 @@ func _new_graph() -> void:
 ## base; an inline device (a pump, a valve, a regulator) stands its
 ## nozzles a fixed height above its base; a cap stands at its line.
 const NOZZLE_ELEVATION_TYPES: Array[String] = ["pump", "metering_pump", "valve", "block_valve",
-	"ball_valve", "needle_valve", "solenoid_valve", "regulator"]
+	"ball_valve", "needle_valve", "solenoid_valve", "regulator", "gauge_line"]
 
 
 ## The height above grade a record of this type reckons its pressures
@@ -717,7 +717,7 @@ func place(type_id: String, name_: String, params: Dictionary,
 		"float_switch":
 			(view as FloatSwitchView).setup(record as SimFloatSwitch)
 		"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", \
-		"gauge_temp", "gauge_conc":
+		"gauge_temp", "gauge_conc", "gauge_line":
 			(view as GaugeView).setup(record as SimGauge)
 		"column":
 			(view as ColumnView).setup(record as SimColumn)
@@ -1826,6 +1826,7 @@ func remove_equipment(name_: String) -> bool:
 		if host_view != null:
 			host_view.unmount(views[name_] as Node3D)
 		mounted.erase(name_)
+	var rejoin := _line_through(name_) if PlantFactory.LINE_ONLY.has(str(equip_types.get(name_, ""))) else {}
 	sim.remove_component(name_)
 	var keep: Array[Dictionary] = []
 	for visual in _wire_visuals:
@@ -1838,7 +1839,58 @@ func remove_equipment(name_: String) -> bool:
 	(views[name_] as Node).queue_free()
 	views.erase(name_)
 	equip_types.erase(name_)
+	if not rejoin.is_empty():
+		_rejoin_line(rejoin)
 	return true
+
+
+## The line a fitting that exists only in a line is cut into: the far
+## ends of its two pieces, their corners in order, and what the line
+## was (size, service, resistance), or {} when it is not on one.
+func _line_through(name_: String) -> Dictionary:
+	var up: Dictionary = {}
+	var down: Dictionary = {}
+	for visual in _wire_visuals:
+		if visual["node"] == null:
+			continue
+		if str(visual["b"]) == name_ and str(visual["b_port"]) == "inlet":
+			up = visual
+		elif str(visual["a"]) == name_ and str(visual["a_port"]) == "outlet":
+			down = visual
+	if up.is_empty() or down.is_empty():
+		return {}
+	var corners: Array = (up["waypoints"] as Array).duplicate()
+	corners.append_array(down["waypoints"] as Array)
+	return {"a": up["a"], "a_port": up["a_port"], "b": down["b"], "b_port": down["b_port"],
+		"corners": corners, "dn": int(up.get("dn", 50)),
+		"k": float(up.get("k_base", SimWire.DEFAULT_K)) + float(down.get("k_base", SimWire.DEFAULT_K)),
+		"color": str(up.get("color", "")), "label": str(up.get("label", "")),
+		"fitting": str(up.get("fitting", ""))}
+
+
+## Lay the line a removed tapping was cut into back as one (director,
+## 2026-09-22): the pipe it was, through the pieces' corners, at its
+## size, service and resistance.
+func _rejoin_line(line: Dictionary) -> void:
+	var a := str(line["a"])
+	var a_port := str(line["a_port"])
+	var b := str(line["b"])
+	var b_port := str(line["b_port"])
+	_next_wire_fixed = true
+	var why := connect_equipment(a, a_port, b, b_port, line["corners"] as Array)
+	_next_wire_fixed = false
+	if why != "":
+		push_warning("could not rejoin the line %s.%s -> %s.%s: %s" % [a, a_port, b, b_port, why])
+		return
+	for visual in _wire_visuals:
+		if str(visual["a"]) == a and str(visual["a_port"]) == a_port and visual["node"] != null:
+			var view := visual["node"] as PipeView
+			if int(line["dn"]) != 50:
+				view = set_run_size(view, int(line["dn"]))
+			if str(line["color"]) != "":
+				set_run_service(view, Color.html(str(line["color"])), str(line["label"]), str(line["fitting"]))
+			break
+	set_pipe_resistance(a, a_port, b, b_port, float(line["k"]))
 
 
 ## Connect two ports (by record/port name), optionally routed through
@@ -2531,6 +2583,8 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 	var label_ := str(visual.get("label", ""))
 	var fitting := str(visual.get("fitting", ""))
 	var dn := int(visual.get("dn", 50))
+	var k_base := float(visual.get("k_base", SimWire.DEFAULT_K))
+	var total_arc := maxf(float(_nearest_on_path(path, point)["total"]), 1e-6)
 	remove_run(view)
 	# The device on the pipe axis, its inlet toward the upstream piece.
 	var rot: float = spot["rot"]
@@ -2560,6 +2614,14 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 					piece = set_run_size(piece, dn)   # the pieces keep the size of the line
 				if color != "":
 					set_run_service(piece, Color.html(color), label_, fitting)
+	if type_id in PlantFactory.LINE_ONLY:
+		# A tapping is a hole in the pipe wall, not a length of pipe: the
+		# two pieces share the line's resistance by length, so the line
+		# passes what it passed before and the gauge reads the pressure
+		# at the point it stands (director, 2026-09-22).
+		var f := clampf(arc / total_arc, 0.01, 0.99)
+		set_pipe_resistance(a_name, a_port, record.comp_name, in_port, k_base * f)
+		set_pipe_resistance(record.comp_name, out_port, b_name, b_port, k_base * (1.0 - f))
 	return ""
 
 
@@ -4917,7 +4979,8 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"low_l": fs.low_l, "high_l": fs.high_l}
 	if record is SimGauge:
 		var g := record as SimGauge
-		return {"liters_per_meter": g.liters_per_meter, "species": g.species_key(), "meter_k": g.meter_k}
+		return {"liters_per_meter": g.liters_per_meter, "species": g.species_key(), "meter_k": g.meter_k,
+			"range_kpa": g.range_kpa}
 	if record is SimColumn:
 		var col := record as SimColumn
 		return {"charge_l": col.charge_l, "max_duty_kw": col.max_duty_kw}

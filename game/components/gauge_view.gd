@@ -34,6 +34,9 @@ func setup(gauge_: SimGauge, mounted_: bool = false, bore_r: float = 0.07) -> vo
 ## A dial on a post, for anything that stands in the plant: an inline
 ## flow meter, a pressure gauge on a tapping.
 func _build_pedestal() -> void:
+	if gauge.kind == "line_kpa":
+		_build_tapping()
+		return
 	var dark := ViewUtil.flat(Color(0.16, 0.17, 0.19))
 	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
 	ViewUtil.box(self, Vector3(0.08, 1.2, 0.08), Vector3(0, 0.6, 0), dark)
@@ -66,6 +69,37 @@ func _build_pedestal() -> void:
 	_build_dial(Vector3(0, 1.32, 0), Vector3(0, 1.02, 0.06))
 	ViewUtil.label(self, gauge.comp_name, Vector3(0, 1.68, 0))
 	ViewUtil.interact_body(self, Vector3(0.55, 0.6, 0.3), Vector3(0, 1.3, 0))
+
+
+## A pressure gauge tapped into a pipe: a short spool on the line's axis
+## at the line's bore, flanged both ends, a boss on its crown, a nipple
+## with an isolation valve, and the dial on top facing +z. The base is
+## the pipe's axis, so the part stands wherever the line does.
+func _build_tapping() -> void:
+	var dark := ViewUtil.flat(Color(0.16, 0.17, 0.19))
+	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
+	var half := 0.12
+	var flange_t := 0.045
+	var spool := ViewUtil.cylinder(self, bore, 2.0 * half - 2.0 * flange_t, Vector3.ZERO,
+		ViewUtil.flat(Color(0.45, 0.47, 0.50)))
+	spool.rotation_degrees = Vector3(0, 0, 90)
+	for side: float in [-1.0, 1.0]:
+		var flange := ViewUtil.cylinder(self, bore * 1.8, flange_t, Vector3(side * (half - flange_t / 2.0), 0, 0), steel)
+		flange.rotation_degrees = Vector3(0, 0, 90)
+	# The boss welded on the crown, the nipple up to the gauge.
+	ViewUtil.cylinder(self, maxf(bore * 0.35, 0.012), 0.03, Vector3(0, bore + 0.01, 0), steel)
+	var top := 0.26
+	ViewUtil.cylinder(self, 0.009, top - bore, Vector3(0, (top + bore) / 2.0, 0), steel)
+	# A gauge cock partway up: a small body and a red handle.
+	var cock_y := bore + (top - bore) * 0.4
+	ViewUtil.box(self, Vector3(0.035, 0.035, 0.035), Vector3(0, cock_y, 0), steel)
+	ViewUtil.box(self, Vector3(0.06, 0.008, 0.012), Vector3(0.03, cock_y + 0.02, 0),
+		ViewUtil.flat(Color(0.75, 0.20, 0.15)))
+	# The gauge: its socket under the case, the dial above it.
+	ViewUtil.box(self, Vector3(0.03, 0.03, 0.03), Vector3(0, top, 0), steel)
+	_build_dial_into(self, Vector3(0, top + 0.08, 0), Vector3(0.3, top + 0.08, 0.03), 0.075)
+	ViewUtil.label(self, gauge.comp_name, Vector3(0, top + 0.32, 0))
+	ViewUtil.interact_body(self, Vector3(0.24, 0.42, 0.16), Vector3(0, 0.17, 0))
 
 
 ## A transmitter on the shell. Local +x is the outward normal of the
@@ -130,6 +164,8 @@ func describe() -> String:
 		gauge.full_scale(), gauge.units()]
 	if gauge.kind == "flow":
 		text += " · totalized %.1f L" % gauge.total_l
+	elif gauge.kind == "line_kpa":
+		text += " · static, at %.2f m" % gauge.elevation_m
 	return text
 
 

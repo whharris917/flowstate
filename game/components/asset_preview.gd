@@ -58,7 +58,7 @@ static func build(type_id: String) -> Node3D:
 				(node as TeeView).setup(record as SimTee)
 			"float_switch":
 				(node as FloatSwitchView).setup(record as SimFloatSwitch)
-			"gauge_level", "gauge_flow", "gauge_dp", "gauge_press":
+			"gauge_level", "gauge_flow", "gauge_dp", "gauge_press", "gauge_line":
 				(node as GaugeView).setup(record as SimGauge)
 			"column":
 				(node as ColumnView).setup(record as SimColumn)

@@ -297,6 +297,11 @@ class Gauge(Component):
         (process_a - process_b), Pa — the cleanroom Magnehelic.
       - "press_kpa": a single pressure tap. PROCESS_PRESSURE ports
         carry Pa everywhere; this dial is scaled in kPa.
+      - "line_kpa": a pressure gauge tapped into a pipe at any point
+        along it (director, 2026-09-22). It is cut into the line like
+        the flow element, but its inlet and outlet are one hydraulic
+        node, so it costs the line nothing; it reads that node's static
+        pressure at its own height, kPa gauge.
 
     The reading is mirrored on an analog signal output so it can later
     feed controllers — a gauge today, a transmitter when wired.
@@ -309,6 +314,7 @@ class Gauge(Component):
         "conc_pct": PortKind.PROCESS_MATERIAL,
         "dp_pa": PortKind.PROCESS_PRESSURE,
         "press_kpa": PortKind.PROCESS_PRESSURE,
+        "line_kpa": PortKind.PROCESS_MATERIAL,
     }
     UNITS = {
         "level_kpa": "kPa",
@@ -317,6 +323,7 @@ class Gauge(Component):
         "conc_pct": "%",
         "dp_pa": "Pa",
         "press_kpa": "kPa",
+        "line_kpa": "kPa",
     }
     WATER_KPA_PER_M = 9.81
     #: The kinds that tap a line rather than a signal. A tap observes
@@ -334,6 +341,8 @@ class Gauge(Component):
         liters_per_meter: float = 45.45,
         species: str = "product",
         meter_k: float = METER_K,
+        elevation_m: float = 0.0,
+        range_kpa: float = 600.0,
     ) -> None:
         super().__init__(name)
         if kind not in self.KINDS:
@@ -348,10 +357,16 @@ class Gauge(Component):
         self.species = species  # which species a "conc_pct" analyser reads
         self.reading = 0.0
         self.total_l = 0.0  # the flow kind totalizes forward flow
+        # The line kind: where it stands, for the static pressure it
+        # reads, and the top of its dial.
+        self.elevation_m = float(elevation_m)
+        self.range_kpa = float(range_kpa)
+        self._net = None
+        self._node = -1
         if kind == "dp_pa":
             self.process_a = self.add_input("process_a", self.KINDS[kind])
             self.process_b = self.add_input("process_b", self.KINDS[kind])
-        elif kind == "flow":
+        elif kind in ("flow", "line_kpa"):
             self.inlet = self.add_input("inlet", PortKind.PROCESS_MATERIAL)
             self.outlet = self.add_output("outlet", PortKind.PROCESS_MATERIAL)
         else:
@@ -364,10 +379,21 @@ class Gauge(Component):
     def tap_ports(self) -> set[str]:
         return {"process"} if self.kind in self.TAP_KINDS else set()
 
+    def shared_node_ports(self) -> list[list[str]]:
+        # A tapping is a hole in the pipe wall, not a restriction: the
+        # line either side of it is one node.
+        return [["inlet", "outlet"]] if self.kind == "line_kpa" else []
+
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         if self.kind == "flow":
             net.add_branch(Resistance(node["inlet"], node["outlet"],
                                       self.meter_k, self.name))
+
+    def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        if self.kind == "line_kpa":
+            # Read after the solve, in tick, so the dial is this scan's.
+            self._net = net
+            self._node = node["inlet"]
 
     def units(self) -> str:
         return self.UNITS[self.kind]
@@ -381,6 +407,12 @@ class Gauge(Component):
             )
         elif self.kind == "press_kpa":
             self.reading = float(self.process.value) / 1000.0
+        elif self.kind == "line_kpa":
+            # Static, at the gauge's own height (every gauge shows static
+            # pressure): the node is piezometric.
+            if self._net is not None and 0 <= self._node < len(self._net.pressures):
+                pa = self._net.pressures[self._node] - static_head_pa(self.elevation_m)
+                self.reading = pa / 1000.0
         elif self.kind == "flow":
             # Signed: positive is forward through the meter.
             self.reading = self.inlet.flow_lps
@@ -1662,9 +1694,10 @@ Gauge.SPEC = EquipmentSpec(
     ports={
         "process": "The tap, for the tapped kinds: a level, a thermowell, "
                    "an analyser sample, a pressure tapping.",
-        "inlet": "Inline flow meter, upstream side. The line runs through "
-                 "the element.",
-        "outlet": "Inline flow meter, downstream side.",
+        "inlet": "Inline flow meter or line pressure gauge, upstream "
+                 "side. The line runs through it.",
+        "outlet": "Inline flow meter or line pressure gauge, downstream "
+                  "side.",
         "process_a": "High-side tap on a differential gauge.",
         "process_b": "Low-side tap on a differential gauge.",
         "signal": "The reading, mirrored as a 4-20 mA analog output.",
@@ -1702,10 +1735,16 @@ Gauge.SPEC = EquipmentSpec(
             "reading = P_a - P_b              [dp_pa]",
             "Differential pressure across two taps.",
         ),
+        Equation(
+            "reading = (P_node - rho*g*z) / 1000   [line_kpa]",
+            "A tapping in a pipe: the static pressure of the line at the "
+            "point the gauge stands, kPa gauge. Its inlet and outlet are "
+            "one node, so it costs the line nothing.",
+        ),
     ),
     params=(
-        Param("kind", "-", "level_kpa, flow, temp_c, conc_pct, dp_pa, or "
-                           "press_kpa."),
+        Param("kind", "-", "level_kpa, flow, temp_c, conc_pct, dp_pa, "
+                           "press_kpa or line_kpa."),
         Param("liters_per_meter", "L/m", "Vessel cross-section, for "
                                          "turning level into head."),
         Param("species", "-", "Which species an analyser reads."),
@@ -1713,6 +1752,9 @@ Gauge.SPEC = EquipmentSpec(
                                        "line, for the flow kind. Size it to "
                                        "the line: about 10 to 30 kPa at "
                                        "design flow."),
+        Param("elevation_m", "m", "The line kind's height, for the static "
+                                  "pressure it reads."),
+        Param("range_kpa", "kPa", "The line kind's dial: full scale."),
     ),
     assumptions=(
         "No sensor lag, no noise, no drift, no calibration error. The "

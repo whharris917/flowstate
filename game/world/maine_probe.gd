@@ -35,6 +35,10 @@ func _run(world: WorldBase) -> void:
 		await _view(player, Vector3(-4.5, 0.35, 12.0), -0.9, -0.3, 0.0, "drip_line")
 		await _view(player, Vector3(0.6, 0.35, 12.3), 0.0, -0.3, 0.0, "drip_end")
 		await _view(player, Vector3(3.2, 0.35, 11.0), 0.0, -0.35, 0.0, "dosing_line")
+		# The line pressure gauges (2026-09-22): the line from its west
+		# end, then the middle dial close up.
+		await _view(player, Vector3(-6.0, 0.35, 19.0), -0.9, -0.2, 0.0, "line_gauges")
+		await _view(player, Vector3(4.1, 0.35, 17.0), 0.0, -0.35, 0.0, "line_gauge_close")
 		# The same corner, up at the heighliner hanging over the sea.
 		await _view(player, Vector3(70.0, 0.35, 55.0), -2.35, 0.30, 0.0, "heighliner")
 	if not world is MaineMap:

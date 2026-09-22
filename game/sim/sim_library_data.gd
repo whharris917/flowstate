@@ -840,6 +840,29 @@ const PAGES := {
 			"No sensor lag, no noise, no drift, no calibration error. The gauge reads the process exactly.",
 		],
 	},
+	"gauge_line": {
+		"title": "Line Pressure Gauge",
+		"tier": "control",
+		"summary": "A pressure gauge tapped into a pipe wherever you put it. Aim it at a level stretch of any line and it is cut in there: a short spool with a boss on its crown, a gauge cock, and the dial on top. A tapping is a hole in the pipe wall, not a restriction, so the gauge costs the line nothing, and the line's resistance is shared between the two pieces by length, so the line passes what it passed before. What it reads is the pressure at that point of the line, as a gauge there would show it.",
+		"ports": {
+			"inlet": "The upstream piece of the line it was cut into.",
+			"outlet": "The downstream piece. Inlet and outlet are one point of the line: the same pressure, the same flow.",
+			"signal": "The reading, mirrored as a 4-20 mA analog output, so the gauge is a transmitter the moment you wire it.",
+		},
+		"equations": [
+			["reading = (P - rho*g*z) / 1000", "Static gauge pressure in kPa at the height the gauge stands. The solver works in piezometric pressure; the gauge takes its own height off it, like every gauge."],
+			["k_up = k * s / L,  k_down = k * (1 - s / L)", "Where it is cut in at a distance s along a line of length L, the two pieces share the line's resistance k. A gauge near the supply reads more than one near the far end."],
+		],
+		"params": [
+			["range_kpa", "kPa", "600", "Full scale of the dial. The needle stops at the ends; the printed value does not."],
+			["elevation_m", "m", "where it stands", "Height of the line's axis at the gauge, taken from where you put it."],
+		],
+		"assumptions": [
+			"No sensor lag, no noise, no drift, no calibration error. The gauge reads the line exactly.",
+			"It goes on a level stretch only, not a riser, and it needs a short length of straight pipe either side, as any inline fitting does.",
+			"Taking it out lays the line back as one pipe, at its size, service and resistance.",
+		],
+	},
 	"gauge_temp": {
 		"title": "Gauge / Transmitter",
 		"tier": "control",

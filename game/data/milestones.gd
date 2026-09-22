@@ -43,7 +43,7 @@ const LADDER: Array[Dictionary] = [
 		"requires": [
 			{"kind": "relay_cycles", "target": 5.0, "label": "relay cycles", "unit": ""},
 		],
-		"unlocks": ["cabinet", "junction_box", "control_station", "gauge_flow", "gauge_level",
+		"unlocks": ["cabinet", "junction_box", "control_station", "gauge_flow", "gauge_line", "gauge_level",
 			"solenoid_valve", "metering_pump"],
 	},
 	{
