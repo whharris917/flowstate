@@ -325,6 +325,32 @@ func _exercise_build_api() -> void:
 				problems.append("resized tank's transmitter reads %.1f L/m, expected %.1f" % [
 					mv_lt.liters_per_meter, ranged])
 			remove_equipment(mv_lt.comp_name)
+		# A nozzle's weld is the kernel's nozzle height (director,
+		# 2026-09-22), and it follows a resize; a line's size is the
+		# nozzle's size, in the kernel and on the fitting.
+		var mv_view := views[mv_tank.comp_name] as TankView
+		mv_view.set_nozzle("outlet", 0.5, 0.0)
+		if absf(mv_tank.nozzle_height("outlet") - 0.5 * mv_tank.height_m) > 1e-6:
+			problems.append("welded outlet stands %.2f m up, expected %.2f" % [
+				mv_tank.nozzle_height("outlet"), 0.5 * mv_tank.height_m])
+		if configure_equipment(mv_tank.comp_name, {"height_m": 2.6}) != "":
+			problems.append("resize after a weld was refused")
+		if absf(mv_tank.nozzle_height("outlet") - 1.3) > 1e-6:
+			problems.append("welded outlet did not follow the resize: %.2f m, expected 1.3" % mv_tank.nozzle_height("outlet"))
+		var mv_run := _visible_run_of(mv_tank.comp_name)
+		if mv_run == null:
+			problems.append("no run on the placed tank to size")
+		else:
+			set_run_size(mv_run, 15)
+			if int(mv_tank.nozzle_dn.get("outlet", 0)) != 15:
+				problems.append("a DN15 line left the outlet at DN%d" % int(mv_tank.nozzle_dn.get("outlet", 0)))
+			if absf(_end_bore(mv_tank.comp_name, "outlet") - line_radius(15)) > 1e-6:
+				problems.append("the outlet fitting is not built at the line's bore")
+			if absf(mv_tank.nozzle_cv("outlet") - mv_tank.nozzle_cv_lps * 0.09) > 1e-6:
+				problems.append("a DN15 nozzle's Cv is not 9 %% of the DN50 figure")
+			var mv_drain_fit := _end_bore(mv_drain.comp_name, "inlet")
+			if absf(mv_drain_fit - line_radius(15)) > 1e-6:
+				problems.append("the drain's inlet fitting is %.3f, expected the DN15 bore" % mv_drain_fit)
 		if configure_equipment(mv_tank.comp_name, {"bogus": 1.0}) == "":
 			problems.append("configure_equipment accepted an unknown key")
 		if configure_equipment("supply_tank", {"height_m": 3.0}) == "":
@@ -3442,12 +3468,126 @@ func connect_equipment_checked(src_name: String, src_port: String,
 
 
 ## The bore a line meets at a record: an inline fitting's own (built at
-## the bore of the biggest line on it), a nozzle's DN50.
-func _end_bore(name_: String) -> float:
+## the bore of the biggest line on it), or the nozzle's own, which is
+## the size of the line on it once one has landed (director,
+## 2026-09-22: "nozzles should be auto-size-matched") and DN50 before.
+func _end_bore(name_: String, port_: String = "") -> float:
 	var view: Node3D = views.get(name_)
-	if view != null and PlantFactory.INLINE_FLUSH.has(str(equip_types.get(name_, ""))):
+	if view == null:
+		return LINE_RADIUS_DN50
+	if PlantFactory.INLINE_FLUSH.has(str(equip_types.get(name_, ""))):
 		return float(view.get("bore"))
+	var markers: Dictionary = view.get_meta("port_markers", {})
+	var marker: Variant = markers.get("%s:%s" % [name_, port_])
+	if marker is Node and is_instance_valid(marker) and (marker as Node).has_meta("bore"):
+		return float((marker as Node).get_meta("bore"))
 	return LINE_RADIUS_DN50
+
+
+## The nominal size of the material line on one port of a record, 0
+## with none: what its nozzle is built to. A cable is a wire visual of
+## style pipe too, so the source port's kind decides (2026-09-20).
+func _line_dn_on(name_: String, port_: String) -> int:
+	for visual in _wire_visuals:
+		if visual["node"] == null or not (visual["node"] is PipeView):
+			continue
+		var on_a := str(visual["a"]) == name_ and str(visual["a_port"]) == port_
+		var on_b := str(visual["b"]) == name_ and str(visual["b_port"]) == port_
+		if not on_a and not on_b:
+			continue
+		if (visual["node"] as PipeView).style() != "pipe":
+			continue
+		var src := sim.get_component(str(visual["a"]))
+		if src == null or not src.outputs.has(str(visual["a_port"])) \
+				or not SimTypes.is_material((src.outputs[str(visual["a_port"])] as SimOutputPort).kind):
+			continue
+		return int(visual.get("dn", 50))
+	return 0
+
+
+## The material lines on a record, as wire visuals.
+func _material_lines_on(name_: String) -> Array:
+	var lines: Array = []
+	for visual in _wire_visuals:
+		if visual["node"] == null or not (visual["node"] is PipeView):
+			continue
+		if str(visual["a"]) != name_ and str(visual["b"]) != name_:
+			continue
+		if (visual["node"] as PipeView).style() != "pipe":
+			continue
+		var src := sim.get_component(str(visual["a"]))
+		if src == null or not src.outputs.has(str(visual["a_port"])) \
+				or not SimTypes.is_material((src.outputs[str(visual["a_port"])] as SimOutputPort).kind):
+			continue
+		lines.append(visual)
+	return lines
+
+
+## Free a view's port fittings and the meshes they were merged into.
+func _free_markers(view: Node3D) -> void:
+	var markers: Dictionary = view.get_meta("port_markers", {})
+	for key: String in markers:
+		var marker := markers[key] as Node
+		if is_instance_valid(marker):
+			marker.queue_free()
+	view.set_meta("port_markers", {})
+	for child in view.get_children():
+		if child.has_meta("merged_markers"):
+			view.remove_child(child)
+			child.queue_free()
+
+
+## A nozzle is built at the size of the line on it (director,
+## 2026-09-22: "nozzles should be auto-size-matched"): each material
+## port of a record that is not an inline fitting gets a fitting at
+## its own line's bore, DN50 with none, and a tank's kernel nozzle
+## takes the size too, so its Cv follows the bore. Rebuilt when any
+## port's size changes, its lines laid again to meet the new fitting.
+func _sync_nozzle_bores(name_: String, type_id: String, view: Node3D, record: SimComponent) -> bool:
+	var pending := int(_pending_dn.get(name_, 0))
+	var hidden := record.hidden_ports()
+	var wanted: Dictionary = {}   # port -> radius
+	var dns: Dictionary = {}      # port -> dn
+	for port_name: String in record.material_ports():
+		if hidden.has(port_name):
+			continue
+		if mounted.has(name_) and str(PlantFactory.MOUNTED_INPUT.get(type_id, "")) == port_name:
+			continue
+		var dn := _line_dn_on(name_, port_name)
+		if dn == 0:
+			dn = pending if pending > 0 else 50
+		dns[port_name] = dn
+		wanted[port_name] = line_radius(dn)
+	if wanted.is_empty():
+		return false
+	var changed := false
+	if view is TankView:
+		var tank_view := view as TankView
+		var tank := record as SimTank
+		for port_name: String in wanted:
+			tank.set_nozzle_dn(port_name, int(dns[port_name]))
+			if tank_view.set_nozzle_bore(port_name, float(wanted[port_name])):
+				changed = true
+		return changed
+	var markers: Dictionary = view.get_meta("port_markers", {})
+	for port_name: String in wanted:
+		var marker: Variant = markers.get("%s:%s" % [name_, port_name])
+		if not (marker is Node) or not is_instance_valid(marker):
+			continue
+		if absf(float((marker as Node).get_meta("bore", LINE_RADIUS_DN50)) - float(wanted[port_name])) > 0.001:
+			changed = true
+	if not changed:
+		return false
+	_free_markers(view)
+	var skip: Array[String] = []
+	var anchors: Dictionary = {}
+	if mounted.has(name_):
+		skip = [str(PlantFactory.MOUNTED_INPUT[type_id])]
+		anchors = PlantFactory.MOUNTED_ANCHORS.get(type_id, {})
+	elif type_id == "mains":
+		anchors = PlantFactory.mains_anchors((record as SimMainsFeed).ways)
+	PlantFactory.attach_port_markers(view, record, type_id, anchors, skip, LINE_RADIUS_DN50, wanted)
+	return true
 
 
 ## An inline fitting is bought in the line size (director, 2026-09-20):
@@ -3458,11 +3598,17 @@ func _sync_bores(names: Array) -> void:
 	var touched := false
 	for name_ in names:
 		var type_id := str(equip_types.get(str(name_), ""))
-		if not PlantFactory.INLINE_FLUSH.has(type_id):
-			continue
 		var view: Node3D = views.get(str(name_))
 		var record := sim.get_component(str(name_))
 		if view == null or record == null:
+			continue
+		if not PlantFactory.INLINE_FLUSH.has(type_id):
+			# A nozzle takes the size of its own line.
+			if _sync_nozzle_bores(str(name_), type_id, view, record):
+				clearance.clear()
+				for visual in _material_lines_on(str(name_)):
+					_refresh_visual(visual)
+				touched = true
 			continue
 		var dn := 0   # the biggest line on it; DN50 with none (a fresh fitting)
 		var lines: Array = []
@@ -3567,10 +3713,11 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	var own_path: Array[Vector3] = laid["own_path"]
 	var pipe := PipeView.new()
 	add_child(pipe)
-	# A nozzle is a DN50 bore, an inline fitting the bore of the biggest
-	# line on it: a line of another size meets either through a reducer.
-	pipe.end_radius_a = _end_bore(src_name) if is_process else 0.025
-	pipe.end_radius_b = _end_bore(dst_name) if is_process else 0.025
+	# A fitting is built at the bore of its line (a nozzle its own
+	# line's, an inline fitting the biggest on it): a line of another
+	# size meets it through a reducer.
+	pipe.end_radius_a = _end_bore(src_name, src_port) if is_process else 0.025
+	pipe.end_radius_b = _end_bore(dst_name, dst_port) if is_process else 0.025
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	pipe.set_meta("lane", chosen)
@@ -4056,7 +4203,7 @@ func _stub_of(record_name: String, port_name: String, radius: float) -> float:
 	var record := sim.get_component(record_name)
 	if record == null or not record.material_ports().has(port_name):
 		return PipeRoute.STUB   # a cable keeps the gland stub it always had
-	return PipeRoute.stub_for(maxf(radius, _end_bore(record_name)))
+	return PipeRoute.stub_for(maxf(radius, _end_bore(record_name, port_name)))
 
 
 func _radius_of(record_name: String, port_name: String) -> float:
@@ -4263,6 +4410,23 @@ func _hydraulics_self_check() -> void:
 	sim.run_for(200.0)
 	if dst_t.level_l > 0.1 or absf(src_t.level_l - 400.0) > 0.1:
 		problems.append("gravity ran uphill")
+
+	# A nozzle stands where it was welded (director, 2026-09-22): an
+	# outlet 0.3 m up the shell drains the vessel to a 0.3 m heel and
+	# no further, and a nozzle above the liquid passes nothing out.
+	sim = Simulation.new(SIM_DT)
+	var heel_t := sim.add(SimTank.new("heel", 100.0, 100.0, 0.0, 1.0, 0.36, 0.0, 0.0, 5.0)) as SimTank
+	var heel_d := sim.add(SimDrain.new("heel_d", 50.0)) as SimDrain
+	heel_t.set_nozzle_height("outlet", 0.3)
+	sim.connect_ports(heel_t, "outlet", heel_d, "inlet")
+	sim.run_for(240.0)
+	if absf(heel_t.depth_m - 0.3) > 0.035:
+		problems.append("welded-up outlet left a %.2f m heel, expected 0.3" % heel_t.depth_m)
+	heel_t.set_nozzle_height("outlet", SimTank.AT_ROOF)
+	var held := heel_t.level_l
+	sim.run_for(30.0)
+	if absf(heel_t.level_l - held) > 0.05:
+		problems.append("a nozzle above the liquid passed %.2f L out" % (held - heel_t.level_l))
 
 	# Header -> pump -> tank -> drain: the header meters what was
 	# pulled, the drain runs faster under more head, and mass closes.

@@ -12,7 +12,7 @@ import math
 
 from sim.core import Component, PortKind
 from sim.hydraulics import (
-    CheckResistance, ControlResistance, PumpCurve, Resistance, static_head_pa,
+    ControlResistance, NozzleResistance, PumpCurve, Resistance, static_head_pa,
 )
 from sim.library import Equation, EquipmentSpec, Param
 from sim.stream import AMBIENT_C, Stream
@@ -21,11 +21,16 @@ from sim.stream import AMBIENT_C, Stream
 class Tank(Component):
     """Holds liquid, and knows what the liquid is.
 
-    Two nozzles, and the difference between them is where they are. The
-    outlet is at the bottom, so it carries the static head of whatever
-    is standing above it — which is why a full tank will drain into an
-    empty one through nothing but a pipe. The inlet is at the top, at
-    headspace pressure, so filling it never has to fight the level.
+    Two nozzles, and the difference between them is where they are.
+    Each stands at a height on the shell (director, 2026-09-22: the
+    nozzle's position belongs in the kernel), and what it feels is
+    where it stands against the liquid: under the surface it carries
+    the static head of whatever is standing above it -- which is why a
+    full tank will drain into an empty one through nothing but a pipe
+    -- and above it it sits at headspace pressure, so a line can fall
+    in but nothing can come back out. The defaults put the outlet on
+    the floor and the inlet at the roof; the game sets both where the
+    player welded them, so a tank keeps a heel below its outlet.
 
     Inflow is blended into the inventory: the contents take a
     volume-weighted temperature and composition, which is what makes a
@@ -49,6 +54,8 @@ class Tank(Component):
         elevation_m: float = 0.0,
         nozzle_cv_lps: float = 20.0,
         open_top: bool = False,
+        nozzle_h_m: dict[str, float] | None = None,
+        nozzle_dn: dict[str, int] | None = None,
     ) -> None:
         super().__init__(name)
         if capacity_l <= 0.0:
@@ -68,7 +75,17 @@ class Tank(Component):
         self.drain_lps = drain_lps
         self.headspace_kpa = headspace_kpa
         self.elevation_m = elevation_m
-        self.nozzle_cv_lps = nozzle_cv_lps  # both nozzles, sized to their lines
+        self.nozzle_cv_lps = nozzle_cv_lps  # both nozzles, at DN50
+        # Where each nozzle stands on the shell, metres above the base
+        # (AT_ROOF for the roof, whatever the height), and its nominal
+        # size: a nozzle takes the size of the line on it, and its Cv
+        # scales with the bore's area from the DN50 figure above.
+        self.nozzle_h_m: dict[str, float] = {"inlet": self.AT_ROOF, "outlet": 0.0}
+        self.nozzle_dn: dict[str, int] = {"inlet": 50, "outlet": 50}
+        for port, h in (nozzle_h_m or {}).items():
+            self.set_nozzle(port, height_m=h)
+        for port, dn in (nozzle_dn or {}).items():
+            self.set_nozzle(port, dn=dn)
         if height_m > 0.0 and diameter_m > 0.0:
             self.height_m = height_m
             self.diameter_m = diameter_m
@@ -144,43 +161,77 @@ class Tank(Component):
     def _headspace_pa(self) -> float:
         return self.headspace_kpa * 1000.0
 
-    #: The nozzle and its stub, Pa per (L/s)^2.
-    NOZZLE_K = 800.0
-    #: Flow the bottom nozzle passes at the reference drop.
+    #: Flow a DN50 nozzle passes at the reference drop.
     OUTLET_CV_LPS = 20.0
-    #: Depth over which the bottom nozzle uncovers as the level falls
-    #: past it. Smooth, so an emptying vessel tails off instead of
-    #: chattering shut.
+    #: Depth over which a nozzle uncovers as the level falls past it.
+    #: Smooth, so an emptying vessel tails off instead of chattering
+    #: shut.
     UNCOVER_M = 0.03
+    #: A nozzle height meaning "at the roof", whatever the height is.
+    AT_ROOF = -1.0
+    #: The bore every nozzle had before they took their line's size.
+    NOZZLE_DN_REF = 50
+
+    def nozzle_ports(self) -> tuple[str, ...]:
+        return self._feed_ports() + ("outlet",)
+
+    def set_nozzle(self, port: str, height_m: float | None = None,
+                   dn: int | None = None) -> None:
+        """Where a nozzle stands on the shell, metres above the base,
+        and its nominal size. Either may be left as it is."""
+        if port not in self.nozzle_ports():
+            raise ValueError("no nozzle %r" % port)
+        if height_m is not None:
+            self.nozzle_h_m[port] = (self.AT_ROOF if height_m == self.AT_ROOF
+                                     else max(float(height_m), 0.0))
+        if dn is not None:
+            if dn <= 0:
+                raise ValueError("dn must be positive")
+            self.nozzle_dn[port] = int(dn)
+
+    def nozzle_height(self, port: str) -> float:
+        """Metres above the base, never above the roof."""
+        h = self.nozzle_h_m.get(port, 0.0)
+        if h == self.AT_ROOF:
+            return self.height_m
+        return min(h, self.height_m)
+
+    def nozzle_cv(self, port: str) -> float:
+        """What the nozzle passes wide open across the reference drop:
+        the DN50 figure scaled by the bore's area."""
+        return self.nozzle_cv_lps * (self.nozzle_dn.get(port, 50) / self.NOZZLE_DN_REF) ** 2
+
+    def nozzle_submergence(self, port: str) -> float:
+        """0 with the level below the nozzle, 1 with it well above,
+        ramping over UNCOVER_M between."""
+        return min(max((self.depth_m - self.nozzle_height(port)) / self.UNCOVER_M, 0.0), 1.0)
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
-        self._roof = net.add_node(0.0, fixed=True)
-        self._floor = net.add_node(0.0, fixed=True)
-        # The top nozzle's stub is sized with the bottom nozzle: the
-        # default pair (800 Pa/(L/s)^2 and Cv 20) scales together.
-        inlet_k = self.NOZZLE_K * (self.OUTLET_CV_LPS / self.nozzle_cv_lps) ** 2
-        for feed in self._feed_ports():
-            net.add_branch(CheckResistance(
-                node[feed], self._roof, inlet_k,
-                "%s.%s" % (self.name, feed)))
-        self._outlet_branch = net.add_branch(ControlResistance(
-            self._floor, node["outlet"], self.nozzle_cv_lps,
-            self.name + ".outlet"))
+        # One boundary node per nozzle, at the pressure the nozzle
+        # feels where it stands; one nozzle branch each.
+        self._nozzle_nodes: dict[str, int] = {}
+        self._nozzle_branches: dict[str, NozzleResistance] = {}
+        for port in self.nozzle_ports():
+            self._nozzle_nodes[port] = net.add_node(0.0, fixed=True)
+            self._nozzle_branches[port] = net.add_branch(NozzleResistance(
+                self._nozzle_nodes[port], node[port], self.nozzle_cv(port),
+                "%s.%s" % (self.name, port)))
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
+        # Piezometric, so a submerged nozzle at any height reads the
+        # same as the floor: headspace plus the head of the whole
+        # depth. Above the liquid it reads headspace at its own height,
+        # and passes nothing out.
         headspace_pa = self._headspace_pa()
-        roof = headspace_pa + static_head_pa(self.elevation_m + self.height_m)
-        floor = headspace_pa + static_head_pa(self.elevation_m + self.depth_m)
-        net.set_pressure(self._roof, roof, fixed=True)
-        net.set_pressure(self._floor, floor, fixed=True)
-        # The bottom nozzle uncovers as the level drops past it. Filling
-        # back in through it is always allowed -- that is how you charge
-        # a vessel from below.
-        # Which way it went last scan, read off the branch itself: a
-        # node pressure can be floating, a solved flow cannot.
-        filling = self._outlet_branch.flow_lps < -1e-9
-        self._outlet_branch.opening = (
-            1.0 if filling else min(self.depth_m / self.UNCOVER_M, 1.0))
+        depth = self.depth_m
+        for port in self.nozzle_ports():
+            h = self.nozzle_height(port)
+            net.set_pressure(self._nozzle_nodes[port],
+                             headspace_pa + static_head_pa(self.elevation_m + max(depth, h)),
+                             fixed=True)
+            branch = self._nozzle_branches[port]
+            branch.set_cv(self.nozzle_cv(port))
+            branch.submergence = self.nozzle_submergence(port)
 
 
     def supplied_stream(self, port_name: str) -> Stream:
@@ -1174,32 +1225,41 @@ Tank.SPEC = EquipmentSpec(
         "vessel and a reagent charge genuinely changes what is in it. "
         "What leaves does so at whatever the contents currently are. "
         "Overfill it and it spills, and the spill is counted.\n\n"
-        "Its two nozzles differ only in where they are, and that is the "
-        "whole of its hydraulic behaviour: the outlet is at the bottom "
-        "and carries the head of everything standing above it, the inlet "
-        "is at the top at headspace pressure. Which is why a full tank "
-        "will drain into an empty one through nothing but a pipe, and "
-        "why filling one never has to fight its own level."
+        "Its two nozzles differ only in where they stand on the shell, "
+        "and that is the whole of its hydraulic behaviour. A nozzle under "
+        "the liquid carries the head of everything standing above it; "
+        "one above the liquid sits at headspace pressure and passes "
+        "nothing out. Which is why a full tank will drain into an empty "
+        "one through nothing but a pipe, why filling one through a top "
+        "nozzle never has to fight its own level, and why a vessel keeps "
+        "a heel below its outlet."
     ),
     ports={
-        "inlet": "Top nozzle. Several runs may land here; they meet at a "
-                 "tee and blend. It sits above the liquid, so it cannot "
-                 "flow backwards.",
+        "inlet": "A nozzle, at the roof unless it was welded lower. Above "
+                 "the liquid it cannot flow backwards; once the level is "
+                 "over it, it carries head like any other.",
         "level": "Level tap, in litres, for a switch or a transmitter.",
         "contents": "Internal tap of the contents that a temperature probe "
                     "mounted on the shell reads. Nothing flows through it; "
                     "it holds what the vessel holds.",
-        "outlet": "Bottom nozzle, at headspace pressure plus the static "
-                  "head of the liquid. Material goes whichever way the "
-                  "network solves -- charging a vessel up through it is "
-                  "normal.",
+        "outlet": "A nozzle, on the floor unless it was welded higher. "
+                  "Under the liquid it carries the static head; material "
+                  "goes whichever way the network solves, and charging a "
+                  "vessel up through it is normal. It stops passing "
+                  "anything out once the level has fallen past it.",
     },
     equations=(
         Equation(
-            "P_outlet = P_headspace + rho*g*(z + depth)",
-            "The boundary pressure the network sees at the bottom "
-            "nozzle. Piezometric, so elevation costs head without the "
-            "solver ever learning what elevation is.",
+            "P_nozzle = P_headspace + rho*g*(z + max(depth, h))",
+            "The boundary pressure the network sees at a nozzle standing "
+            "h above the base. Piezometric, so a submerged nozzle reads "
+            "the same at any height, and elevation costs head without "
+            "the solver ever learning what elevation is.",
+        ),
+        Equation(
+            "Cv_nozzle = nozzle_cv_lps * (DN / 50)^2",
+            "A nozzle takes the size of the line on it, and passes flow "
+            "in proportion to its bore's area.",
         ),
         Equation(
             "dV/dt = F_inlet + F_outlet  (both signed into the vessel)",
@@ -1217,10 +1277,10 @@ Tank.SPEC = EquipmentSpec(
             "Temperature blends the same way.",
         ),
         Equation(
-            "opening = min(depth / 0.03 m, 1)",
-            "The bottom nozzle uncovers as the level falls past it, so a "
-            "vessel tails off instead of siphoning itself dry. Smooth, "
-            "so it does not chatter shut.",
+            "submergence = clamp((depth - h) / 0.03 m, 0, 1)",
+            "A nozzle uncovers as the level falls past it, so a vessel "
+            "tails off instead of siphoning itself dry. Smooth, so it "
+            "does not chatter shut. Inflow is never limited by it.",
         ),
     ),
     params=(
@@ -1231,19 +1291,25 @@ Tank.SPEC = EquipmentSpec(
                                   "standing in for an unmodelled user. "
                                   "Not a nozzle: it takes no head."),
         Param("height_m", "m", "Shell height. Sets capacity with diameter, "
-                               "and sets how high the top nozzle sits."),
+                               "and where a nozzle at the roof sits."),
         Param("diameter_m", "m", "Shell diameter."),
         Param("temp_c", "C", "Starting temperature of the contents."),
         Param("comp", "-", "Starting composition, as species fractions."),
         Param("headspace_kpa", "kPa", "Blanket pressure over the liquid. "
                                       "Adds to both nozzles equally."),
-        Param("nozzle_cv_lps", "L/s", "Size of the nozzles: what the bottom "
-                                      "nozzle passes wide open across a 1 bar "
-                                      "drop, with the top nozzle's stub sized "
-                                      "to match. The default suits a few "
-                                      "litres a second; a line carrying tens "
-                                      "needs a bigger vessel nozzle as much as "
-                                      "a bigger pipe."),
+        Param("nozzle_cv_lps", "L/s", "What a DN50 nozzle passes wide open "
+                                      "across a 1 bar drop; a nozzle of "
+                                      "another size scales with its bore's "
+                                      "area. The default suits a few litres "
+                                      "a second; a line carrying tens needs "
+                                      "a bigger vessel nozzle as much as a "
+                                      "bigger pipe."),
+        Param("nozzle_h_m", "m", "Where each nozzle stands on the shell, "
+                                 "above the base: the outlet on the floor "
+                                 "and the inlet at the roof unless set "
+                                 "otherwise (set_nozzle)."),
+        Param("nozzle_dn", "DN", "Each nozzle's nominal size, the size of "
+                                 "the line on it."),
         Param("elevation_m", "m", "Height of the vessel floor above grade. "
                                   "This is what buys you gravity flow."),
         Param("open_top", "yes/no", "An open-topped vessel: a line ending in "
@@ -1257,6 +1323,8 @@ Tank.SPEC = EquipmentSpec(
         "vessel does not compress it and draining does not pull vacuum.",
         "Only the two nozzles exist. There is no vent line, no overflow "
         "nozzle you can pipe, and a spill just leaves the model.",
+        "A nozzle is a point at a height. It has no diameter of its own "
+        "against the level: the 3 cm it uncovers over stands in for that.",
     ),
 )
 

@@ -232,6 +232,64 @@ class CheckResistance(Resistance):
         return dp > 0.0 and super().is_conducting(dp)
 
 
+class NozzleResistance(Resistance):
+    """A vessel nozzle: node_a is the vessel side, node_b the line, so
+    a positive flow leaves the vessel.
+
+    What a nozzle passes depends on where it stands relative to the
+    liquid (director, 2026-09-22: the nozzle's position on the shell
+    belongs in the kernel). Inflow is always free: a line can discharge
+    into a vessel through a nozzle above the liquid or under it. Outflow
+    needs liquid standing over the nozzle, and ``submergence`` (0..1)
+    is how much of it does: 1 well under the surface, 0 once the level
+    has fallen past it, the ramp between them the same 3 cm the bottom
+    nozzle always tailed off over, so an emptying vessel does not
+    chatter shut.
+
+    Dry, it is a check valve seen from the vessel's side, and it keeps
+    the check valve's lesson: no flow out, but the *slope* reported is
+    the open side's, so Newton lands on the crack point instead of
+    stepping past it for ever. Connectivity still sees a wall.
+    """
+
+    REF_DROP_PA = ControlResistance.REF_DROP_PA
+
+    def __init__(self, node_a: int, node_b: int, cv_lps: float,
+                 name: str = "") -> None:
+        super().__init__(node_a, node_b, self.REF_DROP_PA / max(cv_lps, _EPS) ** 2, name)
+        self.cv_lps = cv_lps
+        self.submergence = 0.0
+
+    def set_cv(self, cv_lps: float) -> None:
+        """Size the nozzle: the flow it passes wide open across the
+        reference drop. A nozzle takes the size of the line on it."""
+        self.cv_lps = cv_lps
+        self.k = self.REF_DROP_PA / max(cv_lps, _EPS) ** 2
+
+    def _k_out(self) -> float:
+        effective = self.cv_lps * self.submergence
+        return self.REF_DROP_PA / max(effective, _EPS) ** 2
+
+    def flow(self, dp: float) -> float:
+        if dp > 0.0:
+            if self.submergence <= 1e-4:
+                return 0.0
+            return _square_law_flow(dp, self._k_out())
+        return _square_law_flow(dp, self.k)
+
+    def conductance(self, dp: float) -> float:
+        if dp > 0.0 and self.submergence > 1e-4:
+            return _square_law_slope(dp, self._k_out())
+        # The inflow slope: the branch in force for inflow, and the
+        # open side's slope while the nozzle stands dry.
+        return _square_law_slope(dp, self.k)
+
+    def is_conducting(self, dp: float) -> bool:
+        if dp > 0.0:
+            return self.submergence > 1e-4
+        return True
+
+
 class RegulatorResistance(ControlResistance):
     """A self-acting pressure regulator: a valve whose opening is a
     function of its own downstream pressure, solved with the network
@@ -434,6 +492,10 @@ class Network:
     #: How many times to halve a step that is not helping before giving
     #: up on it and re-linearising.
     MAX_HALVINGS = 8
+    #: Scales tried when no halving helps: a step that stopped short
+    #: of a plateau's edge (a dry nozzle, a shut check) is lengthened
+    #: before the solve gives up.
+    LENGTHENINGS = (1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0)
 
     def __init__(self) -> None:
         self.pressures: list[float] = []
@@ -564,7 +626,9 @@ class Network:
             saved = [self.pressures[node] for node in free]
             scale = 1.0
             improved = False
+            shortest = scale
             for _attempt in range(self.MAX_HALVINGS):
+                shortest = scale
                 for slot, node in enumerate(free):
                     move = step[slot] * scale
                     move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
@@ -574,11 +638,47 @@ class Network:
                     break
                 scale *= 0.5
             if not improved:
+                # No shorter step helps. Before giving up, try a longer
+                # one: a node on a plateau -- liquid arriving at a dry
+                # nozzle or a shut check, whose flow is flat until the
+                # pressure reaches the crack point -- gets a step sized
+                # by the open side's slope, and that step reaches the
+                # crack only when the flow to push is large against the
+                # gap (2026-09-22: a Cv-sized nozzle fell 300 Pa short
+                # where the old fixed stub cleared it, and the solve
+                # stopped with 1.6 L/s unbalanced). Every scale between
+                # here and MAX_STEP_PA costs one residual evaluation.
+                # The ladder climbs by 1.5 and 2 in turn: the window of
+                # scales that improves the norm past a plateau opens at
+                # the crack and closes where the open side overshoots,
+                # and doubling alone stepped clean over it (the case
+                # above wanted 1.1 to 1.9).
+                longest = max(abs(v) for v in step)
+                for scale in self.LENGTHENINGS:
+                    if longest * scale > 2.0 * self.MAX_STEP_PA:
+                        break
+                    for slot, node in enumerate(free):
+                        move = step[slot] * scale
+                        move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
+                        self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
+                    if _norm(self._residuals(index_of, n)) < before:
+                        improved = True
+                        break
+            if not improved:
                 # No scale of this step helps, so re-linearising will
                 # not either: a trickle into a shut check valve, whose
                 # crack point is tens of kPa away and whose slope says
                 # otherwise. The imbalance is below anything the plant
-                # can see; stop rather than grind out the cap every scan.
+                # can see; stop rather than grind out the cap every scan
+                # -- at the shortest step tried, not back at the start:
+                # that nudge is what lets the next scan leave a plateau
+                # whose slope reads zero (a regulator shut a hair above
+                # its setpoint, 2026-09-22: restored exactly, the drip
+                # demo never reopened it).
+                for slot, node in enumerate(free):
+                    move = step[slot] * shortest
+                    move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
+                    self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
                 break
 
         # Flows are what the converged pressures say, recorded BEFORE

@@ -3,11 +3,16 @@ extends SimComponent
 ## Holds liquid, and knows what the liquid is. Mirrors
 ## sim/components.py Tank.
 ##
-## Two nozzles, and the difference between them is where they are. The
-## outlet is at the bottom, so it carries the static head of whatever
-## is standing above it — which is why a full tank will drain into an
-## empty one through nothing but a pipe. The inlet is at the top, at
-## headspace pressure, so filling it never has to fight the level.
+## Two nozzles, and the difference between them is where they are.
+## Each stands at a height on the shell (director, 2026-09-22: the
+## nozzle's position belongs in the kernel; the view sets it where the
+## player welded it), and what it feels is where it stands against the
+## liquid: under the surface it carries the static head of whatever is
+## standing above it, which is why a full tank will drain into an
+## empty one through nothing but a pipe, and above it it sits at
+## headspace pressure, so a line can fall in but nothing can come back
+## out. So a tank keeps a heel below its outlet. The defaults put the
+## outlet on the floor and the inlet at the roof.
 ##
 ## Inflow is blended into the inventory: the contents take a
 ## volume-weighted temperature and composition, which is what makes a
@@ -20,17 +25,19 @@ extends SimComponent
 ## Bare-vessel heat loss to the hall. Slow: a hot batch left overnight
 ## is cold in the morning, but nothing changes in a minute.
 const LOSS_PER_S := 0.0002
-## The nozzle and its stub, Pa per (L/s)^2.
-const NOZZLE_K := 800.0
-## Flow the bottom nozzle passes at the reference drop.
+## Flow a DN50 nozzle passes at the reference drop.
 const OUTLET_CV_LPS := 20.0
-## Both nozzles, sized to their lines: the bottom nozzle's Cv, with the
-## top nozzle's stub scaled from the default pair to match.
+## What a DN50 nozzle passes wide open across a 1 bar drop; a nozzle
+## of another size scales with its bore's area (nozzle_cv).
 var nozzle_cv_lps: float = OUTLET_CV_LPS
-## Depth over which the bottom nozzle uncovers as the level falls past
-## it. Smooth, so an emptying vessel tails off instead of chattering
-## shut.
+## Depth over which a nozzle uncovers as the level falls past it.
+## Smooth, so an emptying vessel tails off instead of chattering shut.
 const UNCOVER_M := 0.03
+## A nozzle height meaning "at the roof", whatever the height is.
+const AT_ROOF := -1.0
+## The bore every nozzle had before they took their line's size.
+const NOZZLE_DN_REF := 50
+const NOZZLE_PORTS: Array[String] = ["inlet", "outlet"]
 
 var capacity_l: float
 var level_l: float
@@ -47,6 +54,11 @@ var ran_dry_ticks: int = 0
 ## drop by drop"): a line ending in the air above it lands what it
 ## spills here. The headspace is atmospheric either way.
 var open_top: bool = false
+## Where each nozzle stands on the shell, metres above the base
+## (AT_ROOF for the roof), and its nominal size. The plant keeps both
+## current: the height from the view's weld, the size from the line.
+var nozzle_h_m: Dictionary = {"inlet": AT_ROOF, "outlet": 0.0}
+var nozzle_dn: Dictionary = {"inlet": NOZZLE_DN_REF, "outlet": NOZZLE_DN_REF}
 var _falling: SimStream = SimStream.empty()
 
 var inlet: SimInputPort
@@ -54,9 +66,8 @@ var outlet: SimOutputPort
 var level: SimOutputPort
 var contents_tap: SimOutputPort
 
-var _roof: int = -1
-var _floor: int = -1
-var _outlet_branch: SimControlResistance = null
+var _nozzle_nodes: Dictionary = {}      # port -> fixed node
+var _nozzle_branches: Dictionary = {}   # port -> SimNozzleResistance
 
 
 func _init(name_: String, capacity_l_: float, level_l_: float = 0.0, drain_lps_: float = 0.0,
@@ -105,7 +116,7 @@ var cross_section_m2: float:
 	get:
 		return PI * pow(diameter_m / 2.0, 2)
 
-## How deep the liquid stands. This is what the outlet nozzle feels,
+## How deep the liquid stands. This is what a submerged nozzle feels,
 ## and what a level transmitter is really measuring.
 var depth_m: float:
 	get:
@@ -151,26 +162,73 @@ func set_size(height_m_: float, diameter_m_: float) -> void:
 	level_l = minf(level_l, capacity_l)
 
 
+## ---- nozzles ---------------------------------------------------------------
+
+## Where a nozzle stands on the shell, metres above the base (AT_ROOF
+## for the roof). The view calls this where the player welded it.
+func set_nozzle_height(port: String, height_m_: float) -> void:
+	if not NOZZLE_PORTS.has(port):
+		return
+	nozzle_h_m[port] = AT_ROOF if height_m_ == AT_ROOF else maxf(height_m_, 0.0)
+
+
+## A nozzle's nominal size: the size of the line on it (the plant
+## keeps it current). Its Cv follows the bore's area.
+func set_nozzle_dn(port: String, dn: int) -> void:
+	if not NOZZLE_PORTS.has(port) or dn <= 0:
+		return
+	nozzle_dn[port] = dn
+
+
+## Metres above the base, never above the roof.
+func nozzle_height(port: String) -> float:
+	var h := float(nozzle_h_m.get(port, 0.0))
+	if h == AT_ROOF:
+		return height_m
+	return minf(h, height_m)
+
+
+## What the nozzle passes wide open across the reference drop: the
+## DN50 figure scaled by the bore's area.
+func nozzle_cv(port: String) -> float:
+	var ratio := float(int(nozzle_dn.get(port, NOZZLE_DN_REF))) / float(NOZZLE_DN_REF)
+	return nozzle_cv_lps * ratio * ratio
+
+
+## 0 with the level below the nozzle, 1 with it well above, ramping
+## over UNCOVER_M between.
+func nozzle_submergence(port: String) -> float:
+	return clampf((depth_m - nozzle_height(port)) / UNCOVER_M, 0.0, 1.0)
+
+
 func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
-	_roof = net.add_node(0.0, true)
-	_floor = net.add_node(0.0, true)
-	var inlet_k := NOZZLE_K * pow(OUTLET_CV_LPS / nozzle_cv_lps, 2.0)
-	net.add_branch(SimCheckResistance.new(node["inlet"], _roof, inlet_k, comp_name + ".inlet"))
-	_outlet_branch = net.add_branch(SimControlResistance.new(
-		_floor, node["outlet"], nozzle_cv_lps, comp_name + ".outlet")) as SimControlResistance
+	# One boundary node per nozzle, at the pressure the nozzle feels
+	# where it stands; one nozzle branch each.
+	_nozzle_nodes.clear()
+	_nozzle_branches.clear()
+	for port in NOZZLE_PORTS:
+		var fixed := net.add_node(0.0, true)
+		_nozzle_nodes[port] = fixed
+		_nozzle_branches[port] = net.add_branch(SimNozzleResistance.new(
+			fixed, node[port], nozzle_cv(port), comp_name + "." + port))
 
 
 func update_hydraulics(net: SimNetwork, _node: Dictionary) -> void:
+	# Piezometric, so a submerged nozzle at any height reads the same
+	# as the floor: headspace plus the head of the whole depth. Above
+	# the liquid it reads headspace at its own height, and passes
+	# nothing out.
 	var headspace_pa := headspace_kpa * 1000.0
-	net.set_pressure(_roof, headspace_pa + SimHydraulics.static_head_pa(elevation_m + height_m), true)
-	net.set_pressure(_floor, headspace_pa + SimHydraulics.static_head_pa(elevation_m + depth_m), true)
-	# The bottom nozzle uncovers as the level drops past it. Filling
-	# back in through it is always allowed -- that is how you charge a
-	# vessel from below. Which way it went last scan is read off the
-	# branch itself: a node pressure can be floating, a solved flow
-	# cannot.
-	var filling := _outlet_branch.flow_lps < -1e-9
-	_outlet_branch.opening = 1.0 if filling else minf(depth_m / UNCOVER_M, 1.0)
+	var depth := depth_m
+	for port in NOZZLE_PORTS:
+		var h := nozzle_height(port)
+		net.set_pressure(int(_nozzle_nodes[port]),
+			headspace_pa + SimHydraulics.static_head_pa(elevation_m + maxf(depth, h)), true)
+		var branch := _nozzle_branches[port] as SimNozzleResistance
+		var cv := nozzle_cv(port)
+		if absf(branch.cv_lps - cv) > 1e-9:
+			branch.set_cv(cv)
+		branch.submergence = nozzle_submergence(port)
 
 
 func supplied_stream(_port_name: String) -> SimStream:

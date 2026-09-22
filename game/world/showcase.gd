@@ -612,18 +612,21 @@ static func _unit_400(plant: Plant) -> void:
 	plant.mount_instrument("gauge_level", "li_402", {}, "t_402", 0.35, PI / 2.0, false)
 	plant.mount_instrument("gauge_level", "li_403", {}, "t_403", 0.5, -PI / 2.0, false)
 
-	# Nozzles face their runs. The sump's outlet sits low so the sewer
-	# line keeps some head to the end of the heel; the tank outlets
-	# above sit a little higher so their lines clear the toe boards.
+	# Nozzles face their runs, and every outlet sits low: a nozzle is
+	# where the kernel's nozzle stands (2026-09-22), so a tank drains
+	# only to its outlet, and an outlet at 16 % of the height left
+	# 163 L in a 1,018 L tank whose step exits at the 150 L heel
+	# switch — the sequence stood at DRAIN T-401 for the rest of the
+	# soak. At 6 % the heel is 61 L, under every switch.
 	var sump := plant.views["t_403"] as TankView
 	sump.set_nozzle("outlet", 0.06, PI)
 	sump.set_nozzle("inlet", 0.92, PI / 2.0)
 	var mid := plant.views["t_402"] as TankView
 	mid.set_nozzle("inlet", 0.92, 0.0)
-	mid.set_nozzle("outlet", 0.16, -PI / 2.0)
+	mid.set_nozzle("outlet", 0.06, -PI / 2.0)
 	var top := plant.views["t_401"] as TankView
 	top.set_nozzle("inlet", 0.92, PI)
-	top.set_nozzle("outlet", 0.16, -PI / 2.0)
+	top.set_nozzle("outlet", 0.06, -PI / 2.0)
 
 	# ---- process path ------------------------------------------------
 	# Both pumps and the sewer line draw off the sump: a tee at its

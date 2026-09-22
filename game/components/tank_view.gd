@@ -22,6 +22,11 @@ var nozzles := {
 	"outlet": {"frac": 0.10, "angle": -0.7},
 }
 
+## Each nozzle's bore, port -> radius: the size of the line on it, set
+## by the plant (director, 2026-09-22: nozzles are auto-size-matched).
+## DN50 until a line lands.
+var nozzle_bores: Dictionary = {}
+
 var _strips: Array[MeshInstance3D] = []
 var _nozzle_nodes: Dictionary = {}   # port -> Node3D
 var _built: Node3D = null
@@ -230,7 +235,8 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	# nozzle, fatter than its pipe with a flange twice its width, read
 	# as cartoonish), with a slimmer flange and a thin colour band.
 	var is_level := port == "level"
-	var neck_r := 0.035 if is_level else 0.07
+	var neck_r := 0.035 if is_level else float(nozzle_bores.get(port, 0.07))
+	body.set_meta("bore", neck_r)   # what a line meets here (Plant._end_bore)
 	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
 	var neck := ViewUtil.cylinder(body, neck_r, 0.2, Vector3(-0.01, 0, 0), steel)
 	neck.rotation_degrees = Vector3(0, 0, 90)
@@ -262,17 +268,22 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	_built.add_child(body)
 	_nozzle_nodes[port] = body
 	MeshMerge.merge_view(body)  # the nozzle's parts as one mesh per look; the body is what moves
-	_place_nozzle(body, spot)
+	_place_nozzle(port, body, spot)
 	return body
 
 
-func _place_nozzle(body: StaticBody3D, spot: Dictionary) -> void:
+func _place_nozzle(port: String, body: StaticBody3D, spot: Dictionary) -> void:
 	var r := tank.diameter_m / 2.0
 	var angle := float(spot["angle"])
 	var dir := Vector3(cos(angle), 0, sin(angle))
-	body.position = dir * (r + 0.10) + Vector3(0, tank.height_m * float(spot["frac"]), 0)
+	var height := tank.height_m * float(spot["frac"])
+	body.position = dir * (r + 0.10) + Vector3(0, height, 0)
 	# The neck's local +X points outward, along the shell normal.
 	body.basis = Basis(dir, Vector3.UP, dir.cross(Vector3.UP))
+	# The kernel's nozzle stands where the weld is (director, 2026-09-22):
+	# the one place the height is set, so a weld, a resize and a load
+	# all land it, and a tank keeps a heel below its outlet.
+	tank.set_nozzle_height(port, height)
 
 
 ## Move a nozzle to a new spot on the shell (G-grab commit).
@@ -280,7 +291,25 @@ func set_nozzle(port: String, frac: float, angle: float) -> void:
 	if not nozzles.has(port):
 		return
 	nozzles[port] = {"frac": clampf(frac, 0.04, 0.97), "angle": angle}
-	_place_nozzle(_nozzle_nodes[port], nozzles[port])
+	_place_nozzle(port, _nozzle_nodes[port], nozzles[port])
+
+
+## Rebuild one nozzle at the bore of the line on it. Returns whether
+## anything changed. The nozzle is movable, so it keeps its own merged
+## mesh and nothing of it lives in the view's.
+func set_nozzle_bore(port: String, bore_r: float) -> bool:
+	if not nozzles.has(port):
+		return false
+	if absf(float(nozzle_bores.get(port, 0.07)) - bore_r) < 0.001:
+		return false
+	nozzle_bores[port] = bore_r
+	var old := _nozzle_nodes.get(port) as Node
+	if old != null and is_instance_valid(old):
+		old.queue_free()
+	var markers: Dictionary = get_meta("port_markers", {})
+	markers["%s:%s" % [tank.comp_name, port]] = _build_nozzle(port)
+	set_meta("port_markers", markers)
+	return true
 
 
 func get_nozzles() -> Dictionary:
@@ -324,6 +353,12 @@ func describe() -> String:
 	var lines: Array[String] = ["%s — %.0f L %svessel, %.1f m × ⌀%.1f m (E resizes)" % [
 		tank.comp_name, tank.capacity_l, "open-topped " if tank.open_top else "", tank.height_m, tank.diameter_m]]
 	lines.append("sight glass reads %.0f L" % tank.level_l)
+	# The nozzles a person could read off the shell: size and height.
+	var nozzle_notes: Array[String] = []
+	for port: String in SimTank.NOZZLE_PORTS:
+		nozzle_notes.append("%s DN%d at %.2f m" % [port, int(tank.nozzle_dn.get(port, 50)),
+			tank.nozzle_height(port)])
+	lines.append(" · ".join(nozzle_notes))
 	var faces: Array[String] = []
 	for inst in mounted:
 		if inst.has_method("summary"):

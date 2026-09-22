@@ -576,7 +576,8 @@ static func label_for(type_id: String) -> String:
 ## view (a cabinet) can carry markers for several records (its
 ## terminals). anchors_override positions ports the type table can't.
 static func attach_port_markers(view: Node3D, record: SimComponent, type_id: String,
-		anchors_override: Dictionary = {}, skip: Array[String] = [], bore_r: float = 0.07) -> void:
+		anchors_override: Dictionary = {}, skip: Array[String] = [], bore_r: float = 0.07,
+		bores: Dictionary = {}) -> void:
 	var flush := INLINE_FLUSH.has(type_id)
 	# Every port the player can pipe gets a fitting. A record's hidden
 	# ports (a vessel's internal level tap) and a mounted instrument's
@@ -592,7 +593,7 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name, kind,
-				_anchor_pos(raw), true, _anchor_dir(raw), bore_r, flush)
+				_anchor_pos(raw), true, _anchor_dir(raw), float(bores.get(port_name, bore_r)), flush)
 	for port_name: String in record.outputs:
 		if hidden.has(port_name) or skip.has(port_name):
 			continue
@@ -601,7 +602,7 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name,
 				(record.outputs[port_name] as SimOutputPort).kind,
-				_anchor_pos(raw), false, _anchor_dir(raw), bore_r, flush)
+				_anchor_pos(raw), false, _anchor_dir(raw), float(bores.get(port_name, bore_r)), flush)
 	view.set_meta("port_markers", markers)
 	MeshMerge.merge_markers(view)
 
@@ -683,6 +684,9 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	# Where a line meets it: the gasket face of a pipe fitting, the
 	# gland's end of a cable one (Plant.marker_face).
 	body.set_meta("face", (0.0 if flush else 0.175) if is_pipe else 0.145)
+	# The bore a line meets here (Plant._end_bore): a nozzle is built at
+	# the size of the line on it (director, 2026-09-22).
+	body.set_meta("bore", bore_r)
 	if is_pipe and flush:
 		# The colour ring on the fitting's own flange face, nothing else.
 		var ring := ViewUtil.cylinder(body, bore_r * (1.2 if is_input else 1.05), 0.012,

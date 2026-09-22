@@ -41,6 +41,10 @@ const MAX_STEP_PA := 150000.0
 ## How many times to halve a step that is not helping before giving up
 ## on it and re-linearising.
 const MAX_HALVINGS := 8
+## Scales tried when no halving helps: a step that stopped short of a
+## plateau's edge (a dry nozzle, a shut check) is lengthened before the
+## solve gives up.
+const LENGTHENINGS: Array[float] = [1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0]
 
 var pressures: PackedFloat64Array = PackedFloat64Array()
 var fixed: Array[bool] = []
@@ -214,8 +218,10 @@ func solve() -> void:
 		for slot in n:
 			saved[slot] = pressures[free[slot]]
 		var scale := 1.0
+		var shortest := 1.0
 		var improved := false
 		for _attempt in MAX_HALVINGS:
+			shortest = scale
 			for slot in n:
 				var move := clampf(rhs[_perm[slot]] * scale, -MAX_STEP_PA, MAX_STEP_PA)
 				pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
@@ -225,11 +231,42 @@ func solve() -> void:
 				break
 			scale *= 0.5
 		if not improved:
+			# No shorter step helps. Before giving up, try a longer one:
+			# a node on a plateau -- liquid arriving at a dry nozzle or a
+			# shut check, whose flow is flat until the pressure reaches
+			# the crack point -- gets a step sized by the open side's
+			# slope, and that step reaches the crack only when the flow
+			# to push is large against the gap (2026-09-22: a Cv-sized
+			# nozzle fell 300 Pa short where the old fixed stub cleared
+			# it, and the solve stopped with 1.6 L/s unbalanced). The
+			# ladder climbs by 1.5 and 2 in turn, since the window of
+			# scales that improves the norm opens at the crack and closes
+			# where the open side overshoots, and doubling alone stepped
+			# over it. Each rung costs one evaluation of the branches.
+			for scale_up: float in LENGTHENINGS:
+				if biggest * scale_up > 2.0 * MAX_STEP_PA:
+					break
+				for slot in n:
+					var move := clampf(rhs[_perm[slot]] * scale_up, -MAX_STEP_PA, MAX_STEP_PA)
+					pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
+				_evaluate_all()
+				if _norm(_residuals(index_of, n)) < before:
+					improved = true
+					break
+		if not improved:
 			# No scale of this step helps, so re-linearising will not
 			# either: a trickle into a shut check valve, whose crack
 			# point is tens of kPa away and whose slope says otherwise.
 			# The imbalance is below anything the plant can see; stop
-			# rather than grind out the cap every scan.
+			# rather than grind out the cap every scan -- at the shortest
+			# step tried, not back at the start: that nudge is what lets
+			# the next scan leave a plateau whose slope reads zero (a
+			# regulator shut a hair above its setpoint, 2026-09-22:
+			# restored exactly, the drip demo never reopened it).
+			for slot in n:
+				var move := clampf(rhs[_perm[slot]] * shortest, -MAX_STEP_PA, MAX_STEP_PA)
+				pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
+			_evaluate_all()
 			break
 
 	# Flows are what the converged pressures say, recorded BEFORE any
