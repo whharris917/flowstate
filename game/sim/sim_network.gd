@@ -149,6 +149,7 @@ func solve() -> void:
 	var saved := PackedFloat64Array()
 	saved.resize(n)
 	_evaluate_all()
+	var crossed := false
 	for _iteration in MAX_ITERATIONS:
 		iterations += 1
 		# What is actually connected decides two things at once: which
@@ -239,6 +240,15 @@ func solve() -> void:
 			newton_at[slot] = pressures[free[slot]]
 		var newton_norm := _norm(_residuals(index_of, n)) if improved else before
 		if _plateau_step(free, index_of, n, residual, reachable, saved, newton_norm):
+			improved = true
+		elif not improved and not crossed 				and _plateau_step(free, index_of, n, residual, reachable, saved, INF, true):
+			# Newton's own step failed and a wall stands in the way: cross
+			# it anyway, once a solve. Judged where it lands, the step looks
+			# worse -- the node rose, so what feeds it pushes harder for a
+			# moment -- but from the open side the next iteration settles
+			# (2026-09-22: a tank's drain line started 38 kPa under the
+			# sewer and sat four scans).
+			crossed = true
 			improved = true
 		else:
 			for slot in n:
@@ -520,7 +530,7 @@ func _drop_dead(matrix: PackedFloat64Array, rhs: PackedFloat64Array, reachable: 
 ## the gap over twenty scans with the valve's whole flow unbalanced.
 func _plateau_step(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 		residual: PackedFloat64Array, reachable: PackedByteArray, saved: PackedFloat64Array,
-		before: float) -> bool:
+		before: float, cracks_only: bool = false) -> bool:
 	for slot in n:
 		pressures[free[slot]] = saved[slot]
 	# Back at the start of the step: the branches, and the throughput the
@@ -540,6 +550,11 @@ func _plateau_step(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 				continue
 			var target := branch.crack_target(node, pa, pb, push)
 			if is_nan(target):
+				continue
+			# Forced, only a real crack: the vacuum floor suits a pump
+			# pulling, but a gravity line pulled against a dry nozzle simply
+			# stops, and the floor would be wrong.
+			if cracks_only and target <= SimHydraulics.MIN_PRESSURE_PA:
 				continue
 			# The nearest wall opens first.
 			if not targets.has(slot):

@@ -656,6 +656,7 @@ class Network:
                     self.pressures[node] = seed
             self._solved_once = True
 
+        crossed = False
         for _ in range(self.MAX_ITERATIONS):
             self.iterations += 1
             # What is actually connected decides two things at once:
@@ -754,6 +755,17 @@ class Network:
             newton_norm = _norm(self._residuals(index_of, n)) if improved else before
             if self._plateau_step(free, index_of, n, residual, reachable,
                                   throughput, saved, newton_norm):
+                improved = True
+            elif (not improved and not crossed
+                  and self._plateau_step(free, index_of, n, residual, reachable,
+                                         throughput, saved, math.inf, cracks_only=True)):
+                # Newton's own step failed and a wall stands in the way:
+                # cross it anyway, once a solve. Judged where it lands,
+                # the step looks worse -- the node rose, so what feeds it
+                # pushes harder for a moment -- but from the open side the
+                # next iteration settles (2026-09-22: a tank's drain line
+                # started 38 kPa under the sewer and sat four scans).
+                crossed = True
                 improved = True
             else:
                 for slot, node in enumerate(free):
@@ -936,7 +948,7 @@ class Network:
     def _plateau_step(self, free: list[int], index_of: dict[int, int], n: int,
                       residual: list[float], reachable: list[bool],
                       throughput: list[float], saved: list[float],
-                      before: float) -> bool:
+                      before: float, cracks_only: bool = False) -> bool:
         """Step every node stranded below a closed one-way wall -- a dry
         nozzle, a shut check, a one-way drain -- with flow pushing at it
         to the pressure at which the wall passes that flow, and let the
@@ -964,6 +976,11 @@ class Network:
                     continue
                 target = branch.crack_target(node, pa, pb, push)
                 if target is None:
+                    continue
+                # Forced, only a real crack: the vacuum floor suits a pump
+                # pulling, but a gravity line pulled against a dry nozzle
+                # simply stops, and the floor would be wrong.
+                if cracks_only and target <= MIN_PRESSURE_PA:
                     continue
                 # The nearest wall opens first.
                 if slot not in targets:
