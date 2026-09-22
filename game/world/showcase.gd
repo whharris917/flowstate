@@ -303,6 +303,10 @@ static func _unit_300(plant: Plant) -> void:
 	# (a 6 m riser to the top head would be an unsupported span).
 	var pt_view := plant.views["pt_300"] as TankView
 	pt_view.set_nozzle("inlet", 0.10, -1.9)
+	# The outlet as low as a weld goes (2026-09-22): at the default tenth
+	# of its seven metres it stood above the whole commissioned heel, and
+	# the filler drew from nothing.
+	pt_view.set_nozzle("outlet", 0.04, -0.7)
 
 	# ---- process path ----------------------------------------------
 	plant.connect_equipment("supply_301a", "outlet", "p_301a", "inlet")
@@ -471,11 +475,12 @@ static func _unit_300(plant: Plant) -> void:
 	solvent[SimSpecies.SOLVENT] = 0.97
 	solvent[SimSpecies.IMPURITY] = 0.03
 	(plant.sim.get_component("sv_308") as SimTank).charge(900.0, solvent, 30.0)
-	# A heel of dried product in the silo so filling can run at once.
+	# A heel of dried product in the silo so filling can run at once:
+	# 3000 L stands 0.37 m, above the outlet at 0.28 m.
 	var dry := SimStream.zero_amounts()
 	dry[SimSpecies.PRODUCT] = 0.94
 	dry[SimSpecies.IMPURITY] = 0.06
-	(plant.sim.get_component("pt_300") as SimTank).charge(1500.0, dry, 24.0)
+	(plant.sim.get_component("pt_300") as SimTank).charge(3000.0, dry, 24.0)
 
 	_service_wire(plant, "sg_301", "e_301", Color(0.78, 0.79, 0.82), "ST-301")
 	# Product-side lines are sanitary: tri-clamp fittings wherever a line

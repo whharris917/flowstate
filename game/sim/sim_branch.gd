@@ -77,6 +77,18 @@ func is_conducting_at(pa: float, pb: float) -> bool:
 	return is_conducting(pa - pb)
 
 
+## Where `node` must stand for this branch, a one-way wall shut against
+## it, to pass `push` L/s (positive: net inflow, so the node must rise;
+## negative: it must fall), or NAN when the branch is not such a wall.
+## The solver's way off a plateau (2026-09-22): between a node and a
+## shut check or a dry nozzle nothing flows until the crack, so Newton's
+## local slope climbs a 10 kPa gap in steps of a few hundred pascals
+## while the flow arriving stays unbalanced. Mirrors crack_target in
+## sim/hydraulics.py.
+func crack_target(_node: int, _pa: float, _pb: float, _push: float) -> float:
+	return NAN
+
+
 ## All three answers in one call. Subclasses override this inline.
 func evaluate(pa: float, pb: float) -> void:
 	q = flow_at(pa, pb)

@@ -75,6 +75,18 @@ def _square_law_flow(dp: float, k: float) -> float:
     return dp * math.sqrt(_DP_FLOOR_PA / k) / _DP_FLOOR_PA
 
 
+def _drop_for(q: float, k: float) -> float:
+    """The pressure drop at which a square-law element passes |q|: the
+    inverse of ``_square_law_flow``, linear part included. A plateau step
+    aims exactly there -- a fixed margin of a pascal through a wide open
+    end is a flow a thousand times a drip's, and the step overshoots."""
+    q = abs(q)
+    dp = k * q * q
+    if dp >= _DP_FLOOR_PA:
+        return dp
+    return q * math.sqrt(k * _DP_FLOOR_PA)
+
+
 def _square_law_slope(dp: float, k: float) -> float:
     if abs(dp) >= _DP_FLOOR_PA:
         return 1.0 / (2.0 * math.sqrt(k * abs(dp)))
@@ -140,6 +152,18 @@ class Branch:
 
     def is_conducting_at(self, pa: float, pb: float) -> bool:
         return self.is_conducting(pa - pb)
+
+    def crack_target(self, node: int, pa: float, pb: float,
+                     push: float) -> float | None:
+        """Where ``node`` must stand for this branch, a one-way wall shut
+        against it, to pass ``push`` L/s (positive: net inflow, so the
+        node must rise; negative: it must fall), or None when the branch
+        is not such a wall. The solver's way off a plateau (2026-09-22):
+        between a node and a shut check or a dry nozzle nothing flows
+        until the crack, so Newton's local slope climbs a 10 kPa gap in
+        steps of a few hundred pascals while the flow arriving stays
+        unbalanced."""
+        return None
 
 
 class Resistance(Branch):
@@ -211,6 +235,19 @@ class ControlResistance(Resistance):
             return False
         return super().is_conducting(dp)
 
+    def crack_target(self, node: int, pa: float, pb: float,
+                     push: float) -> float | None:
+        if not self.one_way or self.opening <= 1e-4 or pa > pb:
+            return None
+        drop = _drop_for(push, self._k_now())
+        if node == self.node_a and push < 0.0:
+            return MIN_PRESSURE_PA    # a sewer supplies nothing: the suction runs out
+        if node == self.node_a and push > 0.0:
+            return pb + drop
+        if node == self.node_b and push < 0.0:
+            return pa - drop
+        return None
+
 
 class CheckResistance(Resistance):
     """A resistance with a check valve in it: flow from a to b only.
@@ -242,6 +279,17 @@ class CheckResistance(Resistance):
 
     def is_conducting(self, dp: float) -> bool:
         return dp > 0.0 and super().is_conducting(dp)
+
+    def crack_target(self, node: int, pa: float, pb: float,
+                     push: float) -> float | None:
+        if pa > pb:
+            return None
+        drop = _drop_for(push, self.k)
+        if node == self.node_a and push > 0.0:
+            return pb + drop
+        if node == self.node_b and push < 0.0:
+            return pa - drop
+        return None
 
 
 class NozzleResistance(Resistance):
@@ -300,6 +348,19 @@ class NozzleResistance(Resistance):
         if dp > 0.0:
             return self.submergence > 1e-4
         return True
+
+    def crack_target(self, node: int, pa: float, pb: float,
+                     push: float) -> float | None:
+        # Dry, nothing leaves the vessel: a line node standing below the
+        # vessel side with liquid arriving must rise past it to pass it in;
+        # one pulled on (a pump drawing from a vessel gone dry) can get
+        # nothing from it and falls to where whatever pulls runs out of
+        # suction, the hard-vacuum floor.
+        if node == self.node_b and pb < pa and self.submergence <= 1e-4:
+            if push > 0.0:
+                return pa + _drop_for(push, self.k)
+            return MIN_PRESSURE_PA
+        return None
 
 
 class RegulatorResistance(ControlResistance):
@@ -465,17 +526,43 @@ class FixedFlow(Branch):
     nozzle sat behind a check that had not cracked yet, the solver
     decided nothing could reach it, and the two ends waited for each
     other for ever.
+
+    What it draws, though, has to be there (2026-09-22): drawing from a
+    line nothing supplies, it starves as its suction nears a hard vacuum,
+    the pump's taper over the same band. Imposed regardless, the vial
+    filler "filled" from a silo whose outlet stood above the liquid, and
+    every millilitre was an imbalance the solve could never close. A
+    machine drawing from its own fixed bowl or drum never nears vacuum
+    and is unchanged. The flow depends on the suction alone, so the
+    branch is two-sided: all of its slope on the a side, none on the b.
     """
+
+    STARVE_BAND_PA = PumpCurve.CAVITATION_BAND_PA
+    two_sided = True
 
     def __init__(self, node_a: int, node_b: int, lps: float = 0.0,
                  name: str = "") -> None:
         super().__init__(node_a, node_b, name)
         self.lps = lps
 
+    def supply(self, suction_pa: float) -> float:
+        """How much of its rate the suction lets it draw, 0 to 1."""
+        return min(max((suction_pa - MIN_PRESSURE_PA) / self.STARVE_BAND_PA, 0.0), 1.0)
+
     def flow(self, dp: float) -> float:
         return self.lps
 
     def conductance(self, dp: float) -> float:
+        return 0.0
+
+    def flow_at(self, pa: float, pb: float) -> float:
+        return self.lps * self.supply(pa)
+
+    def conductance_at(self, pa: float, pb: float) -> float:
+        s = self.supply(pa)
+        return self.lps / self.STARVE_BAND_PA if 0.0 < s < 1.0 else 0.0
+
+    def conductance_b_at(self, pa: float, pb: float) -> float:
         return 0.0
 
     def is_conducting(self, dp: float) -> bool:
@@ -515,6 +602,11 @@ class Network:
         self.branches: list[Branch] = []
         self.iterations = 0
         self.residual_lps = 0.0
+        #: Whether the last solve landed: every node joined to a fixed
+        #: pressure within its tolerance (2026-09-22). A solve that stops
+        #: short records flows that do not balance, and inside a machine
+        #: that passes material through that is material made or lost.
+        self.converged = True
         self._solved_once = False
         self._islanded: set[int] = set()
 
@@ -546,9 +638,11 @@ class Network:
         index_of = {node: slot for slot, node in enumerate(free)}
         n = len(free)
         self.iterations = 0
+        self.converged = True
         if n == 0:
             self._record_flows()
             return
+        self.converged = False
 
         # Cold start: put the free nodes somewhere plausible rather than
         # at zero, which may be a long way from any pressure in the
@@ -576,27 +670,10 @@ class Network:
             throughput = self._throughput(index_of, n)
             if all(abs(r) < self._tolerance_at(throughput[i])
                    for i, r in enumerate(residual) if reachable[i]):
+                self.converged = True
                 break
 
-            jacobian = [[0.0] * n for _ in range(n)]
-            neighbours: list[list[int]] = [[] for _ in range(n)]
-            for branch in self.branches:
-                a, b = branch.node_a, branch.node_b
-                g = branch.conductance_at(self.pressures[a], self.pressures[b])
-                gb = (branch.conductance_b_at(self.pressures[a], self.pressures[b])
-                      if branch.two_sided else g)
-                if a in index_of:
-                    ia = index_of[a]
-                    jacobian[ia][ia] -= g
-                    neighbours[ia].append(b)
-                    if b in index_of:
-                        jacobian[ia][index_of[b]] += gb
-                if b in index_of:
-                    ib = index_of[b]
-                    jacobian[ib][ib] -= gb
-                    neighbours[ib].append(a)
-                    if a in index_of:
-                        jacobian[ib][index_of[a]] += g
+            jacobian = self._jacobian(index_of, n)
 
             # Nodes with no conductive path back to a fixed pressure
             # have no equation to satisfy. That covers a dead-ended
@@ -612,15 +689,7 @@ class Network:
             # (``reachable`` was worked out at the top of the iteration,
             # because the convergence test needs it too.)
             rhs = [-r for r in residual]
-            dead: list[int] = []
-            for i in range(n):
-                if not reachable[i] or abs(jacobian[i][i]) < 1e-12:
-                    for j in range(n):
-                        jacobian[i][j] = 0.0
-                        jacobian[j][i] = 0.0
-                    jacobian[i][i] = -1.0
-                    rhs[i] = 0.0
-                    dead.append(i)
+            self._drop_dead(jacobian, rhs, reachable)
 
             step = _solve_dense(jacobian, rhs)
             if step is None:
@@ -676,6 +745,19 @@ class Network:
                     if _norm(self._residuals(index_of, n)) < before:
                         improved = True
                         break
+            # A node stranded below a closed one-way wall with flow
+            # pushing at it: step it to the wall's crack, and keep that
+            # instead when it leaves less imbalance than Newton's step
+            # (2026-09-22). Newton's own step can keep improving a little
+            # and run out the iteration cap crawling up the gap.
+            newton_at = [self.pressures[node] for node in free]
+            newton_norm = _norm(self._residuals(index_of, n)) if improved else before
+            if self._plateau_step(free, index_of, n, residual, reachable,
+                                  throughput, saved, newton_norm):
+                improved = True
+            else:
+                for slot, node in enumerate(free):
+                    self.pressures[node] = newton_at[slot]
             if not improved:
                 # No scale of this step helps, so re-linearising will
                 # not either: a trickle into a shut check valve, whose
@@ -692,6 +774,15 @@ class Network:
                     move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
                     self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
                 break
+
+        if not self.converged:
+            # The loop left without checking: at the cap, or on a step
+            # that helped nothing. Judge where it stopped.
+            reachable, _ = self._reachable_from_fixed(index_of)
+            residual = self._residuals(index_of, n)
+            throughput = self._throughput(index_of, n)
+            self.converged = all(abs(r) < self._tolerance_at(throughput[i])
+                                 for i, r in enumerate(residual) if reachable[i])
 
         # Flows are what the converged pressures say, recorded BEFORE
         # any island is settled: settling averages stale pressures, and
@@ -793,6 +884,97 @@ class Network:
             if b in index_of:
                 through[index_of[b]] += q
         return through
+
+    def _jacobian(self, index_of: dict[int, int], n: int) -> list[list[float]]:
+        """dQ/dP at the current pressures: every branch's slope lands on
+        both its end nodes."""
+        jacobian = [[0.0] * n for _ in range(n)]
+        for branch in self.branches:
+            a, b = branch.node_a, branch.node_b
+            g = branch.conductance_at(self.pressures[a], self.pressures[b])
+            gb = (branch.conductance_b_at(self.pressures[a], self.pressures[b])
+                  if branch.two_sided else g)
+            if a in index_of:
+                ia = index_of[a]
+                jacobian[ia][ia] -= g
+                if b in index_of:
+                    jacobian[ia][index_of[b]] += gb
+            if b in index_of:
+                ib = index_of[b]
+                jacobian[ib][ib] -= gb
+                if a in index_of:
+                    jacobian[ib][index_of[a]] += g
+        return jacobian
+
+    @staticmethod
+    def _drop_dead(jacobian: list[list[float]], rhs: list[float],
+                   reachable: list[bool]) -> None:
+        """A node with no conductive path to a fixed pressure has no
+        equation: its row and column become a bare -1."""
+        n = len(rhs)
+        for i in range(n):
+            if not reachable[i] or abs(jacobian[i][i]) < 1e-12:
+                for j in range(n):
+                    jacobian[i][j] = 0.0
+                    jacobian[j][i] = 0.0
+                jacobian[i][i] = -1.0
+                rhs[i] = 0.0
+
+    def _plateau_step(self, free: list[int], index_of: dict[int, int], n: int,
+                      residual: list[float], reachable: list[bool],
+                      throughput: list[float], saved: list[float],
+                      before: float) -> bool:
+        """Step every node stranded below a closed one-way wall -- a dry
+        nozzle, a shut check, a one-way drain -- with flow pushing at it
+        to the pressure at which the wall passes that flow, and let the
+        rest of the network follow by the linear solve with those nodes
+        held. Kept only if it leaves less imbalance than ``before``; the
+        caller puts its own step back otherwise.
+
+        Why (2026-09-22): XV-401 opens onto T-402's dry roof nozzle 10
+        kPa above the line. Nothing flows until the crack, so the local
+        slope sizes Newton's step at a few hundred pascals, and the line
+        crawled up the gap over twenty scans with the valve's whole flow
+        unbalanced."""
+        for slot, node in enumerate(free):
+            self.pressures[node] = saved[slot]
+        targets: dict[int, float] = {}
+        for branch in self.branches:
+            pa = self.pressures[branch.node_a]
+            pb = self.pressures[branch.node_b]
+            for node in (branch.node_a, branch.node_b):
+                slot = index_of.get(node)
+                if slot is None:
+                    continue
+                push = residual[slot]
+                if abs(push) < self._tolerance_at(throughput[slot]):
+                    continue
+                target = branch.crack_target(node, pa, pb, push)
+                if target is None:
+                    continue
+                # The nearest wall opens first.
+                if slot not in targets:
+                    targets[slot] = target
+                elif push > 0.0:
+                    targets[slot] = min(targets[slot], target)
+                else:
+                    targets[slot] = max(targets[slot], target)
+        if not targets:
+            return False
+        jacobian = self._jacobian(index_of, n)
+        rhs = [-r for r in residual]
+        self._drop_dead(jacobian, rhs, reachable)
+        for slot, target in targets.items():
+            jacobian[slot] = [0.0] * n
+            jacobian[slot][slot] = 1.0
+            rhs[slot] = target - self.pressures[free[slot]]
+        step = _solve_dense(jacobian, rhs)
+        if step is None:
+            return False
+        for slot, node in enumerate(free):
+            move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, step[slot]))
+            self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
+        return _norm(self._residuals(index_of, n)) < before
 
     def _residuals(self, index_of: dict[int, int], n: int) -> list[float]:
         """Net flow into each free node. Zero everywhere is the answer."""

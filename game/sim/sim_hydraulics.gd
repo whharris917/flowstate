@@ -72,6 +72,18 @@ static func square_law_flow(dp: float, k: float) -> float:
 	return dp * sqrt(DP_FLOOR_PA / k) / DP_FLOOR_PA
 
 
+## The pressure drop at which a square-law element passes |q|: the
+## inverse of square_law_flow, linear part included. A plateau step aims
+## exactly there -- a fixed margin of a pascal through a wide open end is
+## a flow a thousand times a drip's, and the step overshoots.
+static func drop_for(q: float, k: float) -> float:
+	q = absf(q)
+	var dp := k * q * q
+	if dp >= DP_FLOOR_PA:
+		return dp
+	return q * sqrt(k * DP_FLOOR_PA)
+
+
 static func square_law_slope(dp: float, k: float) -> float:
 	if absf(dp) >= DP_FLOOR_PA:
 		return 1.0 / (2.0 * sqrt(k * absf(dp)))

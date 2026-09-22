@@ -269,6 +269,8 @@ class Simulation:
             raise ValueError("dt must be positive")
         self.dt = dt
         self.time = 0.0
+        self.unconverged_scans = 0
+        self.unconverged_worst_lps = 0.0
         self.components: list[Component] = []
         self.wires: list[Wire] = []
         self.historian: Optional[Historian] = None
@@ -349,6 +351,11 @@ class Simulation:
                 component.update_hydraulics(
                     net, {name: port.node for name, port in ports.items()})
         net.solve()
+        if not net.converged:
+            # Solves that did not land (2026-09-22): their flows do not
+            # balance, so they are counted where they cannot be missed.
+            self.unconverged_scans += 1
+            self.unconverged_worst_lps = max(self.unconverged_worst_lps, net.residual_lps)
 
         # What each component sees at each nozzle: the net flow arriving
         # from the pipe runs attached to it. At a boundary the vessel

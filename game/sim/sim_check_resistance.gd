@@ -32,6 +32,17 @@ func is_conducting_at(pa: float, pb: float) -> bool:
 	return pa > pb
 
 
+func crack_target(node: int, pa: float, pb: float, push: float) -> float:
+	if pa > pb:
+		return NAN
+	var drop := SimHydraulics.drop_for(push, k)
+	if node == node_a and push > 0.0:
+		return pb + drop
+	if node == node_b and push < 0.0:
+		return pa - drop
+	return NAN
+
+
 func evaluate(pa: float, pb: float) -> void:
 	var dp := pa - pb
 	conducting = dp > 0.0

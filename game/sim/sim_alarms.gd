@@ -26,6 +26,10 @@ var _tank_overflowed: Dictionary = {}
 func scan(sim: Simulation) -> Array[Dictionary]:
 	var now := sim.time
 	var seen := {}
+	# The solver itself (2026-09-22): a solve that did not land in the
+	# last second has recorded flows that do not balance.
+	if now - sim.unconverged_last_t <= 1.0:
+		_raise(seen, "hydraulics", "NOT CONVERGED", now)
 	for record in sim.components:
 		if record is SimPump:
 			var pump := record as SimPump

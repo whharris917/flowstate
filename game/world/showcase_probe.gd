@@ -223,6 +223,10 @@ func _run(world: Node) -> void:
 	print("[probe] --- after a simulated %.0f minutes (worst residual %.5f L/s, %d scans hit the iteration cap) ---" % [
 		soak_min, worst_residual, capped_scans])
 	print("[probe] u400 sequence: %s" % " → ".join(u400_timeline))
+	var sim := plant.sim
+	print("[probe] hydraulic solves that did not converge since t=0: %d · worst %s unbalanced at t=%.2f s: %s" % [
+		sim.unconverged_scans, SimTypes.flow_text(sim.unconverged_worst_lps), sim.unconverged_worst_t,
+		sim.unconverged_worst_at])
 	print("[probe] reactor %.0f L %.1f C · %.1f%% product %.1f%% impurity" % [
 		reac.volume_l, reac.temp_c, reac.purity_frac * 100.0, reac.impurity_frac * 100.0])
 	print("[probe] crystallizer %.0f L %.1f C · %.1f%% solids (%s)" % [

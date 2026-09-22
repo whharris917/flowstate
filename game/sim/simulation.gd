@@ -19,6 +19,14 @@ var historian: SimHistorian = null
 ## variables.
 var solve_ms: float = 0.0
 var newton_ms: float = 0.0
+## Solves that did not land since the simulation began (2026-09-22):
+## how many, the worst imbalance left, where and when. The smoke runs
+## and the probes print it; the annunciator raises it while it lasts.
+var unconverged_scans: int = 0
+var unconverged_worst_lps: float = 0.0
+var unconverged_worst_at: String = ""
+var unconverged_worst_t: float = 0.0
+var unconverged_last_t: float = -INF
 
 var _by_name: Dictionary = {}  # String -> SimComponent
 var _network: SimNetwork = null
@@ -179,6 +187,13 @@ func _solve_hydraulics() -> void:
 	var started := Time.get_ticks_usec()
 	net.solve()
 	newton_ms = (Time.get_ticks_usec() - started) / 1000.0
+	if not net.converged:
+		unconverged_scans += 1
+		unconverged_last_t = time
+		if net.residual_lps > unconverged_worst_lps:
+			unconverged_worst_lps = net.residual_lps
+			unconverged_worst_at = net.describe_node(net.worst_node)
+			unconverged_worst_t = time
 
 	# What each component sees at each nozzle: the net flow arriving
 	# from the pipe runs attached to it. At a boundary the vessel

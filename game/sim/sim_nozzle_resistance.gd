@@ -68,6 +68,19 @@ func is_conducting(dp: float) -> bool:
 	return true
 
 
+## Dry, nothing leaves the vessel: a line node standing below the
+## vessel side with liquid arriving must rise past it to pass it in; one
+## pulled on (a pump drawing from a vessel gone dry) can get nothing from
+## it and falls to where whatever pulls runs out of suction, the
+## hard-vacuum floor.
+func crack_target(node: int, pa: float, pb: float, push: float) -> float:
+	if node == node_b and pb < pa and submergence <= 1e-4:
+		if push > 0.0:
+			return pa + SimHydraulics.drop_for(push, k)
+		return SimHydraulics.MIN_PRESSURE_PA
+	return NAN
+
+
 func is_conducting_at(pa: float, pb: float) -> bool:
 	return is_conducting(pa - pb)
 

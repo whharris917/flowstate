@@ -151,6 +151,10 @@ func _headless_reports() -> void:
 	print("[flowstate] runs through solid geometry: %s" % ("none" if through.is_empty() else str(through.size())))
 	for line in through:
 		print("    " + line)
+	var sim := plant.sim
+	print("[flowstate] hydraulic solves that did not converge since t=0: %s" % ("none" if sim.unconverged_scans == 0
+		else "%d · worst %s unbalanced at t=%.2f s: %s" % [sim.unconverged_scans,
+			SimTypes.flow_text(sim.unconverged_worst_lps), sim.unconverged_worst_t, sim.unconverged_worst_at]))
 	var priced := plant.resistance_report()
 	print("[flowstate] lines priced by their length and size: %s" % ("all" if priced.is_empty() else "%d are NOT" % priced.size()))
 	for line in priced:
