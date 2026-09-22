@@ -2614,15 +2614,24 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 					piece = set_run_size(piece, dn)   # the pieces keep the size of the line
 				if color != "":
 					set_run_service(piece, Color.html(color), label_, fitting)
-	if type_id in PlantFactory.LINE_ONLY:
-		# A tapping is a hole in the pipe wall, not a length of pipe: the
-		# two pieces share the line's resistance by length, so the line
-		# passes what it passed before and the gauge reads the pressure
-		# at the point it stands (director, 2026-09-22).
-		var f := clampf(arc / total_arc, 0.01, 0.99)
-		set_pipe_resistance(a_name, a_port, record.comp_name, in_port, k_base * f)
-		set_pipe_resistance(record.comp_name, out_port, b_name, b_port, k_base * (1.0 - f))
+	# The two pieces are the line: they share its resistance by length,
+	# so cutting a device in changes nothing but the device itself
+	# (director, 2026-09-22: each piece had taken the whole line's
+	# resistance, so every cut-in doubled it). A tapping then reads the
+	# pressure at the point it stands.
+	_split_resistance(a_name, a_port, record.comp_name, in_port, record.comp_name, out_port,
+		b_name, b_port, k_base, arc / total_arc)
 	return ""
+
+
+## Share a line's base resistance between the two pieces it was cut
+## into, `f` of it to the upstream piece.
+func _split_resistance(a_name: String, a_port: String, up_name: String, up_port: String,
+		down_name: String, down_port: String, b_name: String, b_port: String,
+		k_base: float, f: float) -> void:
+	f = clampf(f, 0.01, 0.99)
+	set_pipe_resistance(a_name, a_port, up_name, up_port, k_base * f)
+	set_pipe_resistance(down_name, down_port, b_name, b_port, k_base * (1.0 - f))
 
 
 func cut_wire(view: PipeView, at_global: Vector3) -> String:
@@ -2666,6 +2675,7 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 	var label_ := str(visual.get("label", ""))
 	var fitting := str(visual.get("fitting", ""))
 	var dn := int(visual.get("dn", 50))
+	var k_base := float(visual.get("k_base", SimWire.DEFAULT_K))
 	remove_run(view)
 	# Two caps, a hand apart either side of the cut, their spools along
 	# the line: the first takes the upstream piece on its a-nozzle, the
@@ -2694,6 +2704,8 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 					piece = set_run_size(piece, dn)   # the pieces keep the size of the line
 				if color != "":
 					set_run_service(piece, Color.html(color), label_, fitting)
+	_split_resistance(a_name, a_port, names[0], "a", names[1], "b", b_name, b_port, k_base,
+		best_arc / maxf(arc, 1e-6))
 	return ""
 
 

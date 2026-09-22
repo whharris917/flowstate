@@ -243,6 +243,20 @@ static func report(plant: Plant) -> PackedStringArray:
 			parts.append("%s %.1f kPa at %.2f m" % [g.comp_name, g.reading, g.elevation_m])
 		out.append("[flowstate] line gauges: header 400 kPa · %s · drain %s" % [
 			" · ".join(parts), SimTypes.flow_text(drain.inlet.flow_lps)])
+		# The pieces are the line: cutting three gauges in must leave its
+		# resistance as it was (2026-09-22: each piece used to take all of it).
+		var k_sum := 0.0
+		var pieces := 0
+		for w in plant.sim.wires:
+			if not w.is_material():
+				continue
+			var ends := [w.src.owner_name, w.dst.owner_name]
+			if ends.has("supply_3") or ends.has("drain_3") 					or (plant.sim.get_component(w.src.owner_name) is SimGauge and plant.sim.get_component(w.dst.owner_name) is SimGauge):
+				k_sum += w.k_pa_per_lps2
+				pieces += 1
+		var ok := absf(k_sum - GAUGE_LINE_K) < 1.0
+		out.append("[flowstate] line gauges: %d pieces, resistance %.0f of the line's %.0f — %s" % [
+			pieces, k_sum, GAUGE_LINE_K, "OK" if ok else "FAILED: a cut changed the line's resistance"])
 	return out
 
 
