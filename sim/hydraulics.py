@@ -669,7 +669,7 @@ class Network:
             residual = self._residuals(index_of, n)
             throughput = self._throughput(index_of, n)
             if all(abs(r) < self._tolerance_at(throughput[i])
-                   for i, r in enumerate(residual) if reachable[i]):
+                   for i, r in enumerate(residual)):
                 self.converged = True
                 break
 
@@ -714,7 +714,7 @@ class Network:
                     move = step[slot] * scale
                     move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
                     self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
-                if _norm(self._residuals(index_of, n)) < before:
+                if _improves(_norm(self._residuals(index_of, n)), before, scale):
                     improved = True
                     break
                 scale *= 0.5
@@ -742,7 +742,7 @@ class Network:
                         move = step[slot] * scale
                         move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
                         self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
-                    if _norm(self._residuals(index_of, n)) < before:
+                    if _improves(_norm(self._residuals(index_of, n)), before, scale):
                         improved = True
                         break
             # A node stranded below a closed one-way wall with flow
@@ -782,7 +782,7 @@ class Network:
             residual = self._residuals(index_of, n)
             throughput = self._throughput(index_of, n)
             self.converged = all(abs(r) < self._tolerance_at(throughput[i])
-                                 for i, r in enumerate(residual) if reachable[i])
+                                 for i, r in enumerate(residual))
 
         # Flows are what the converged pressures say, recorded BEFORE
         # any island is settled: settling averages stale pressures, and
@@ -909,16 +909,29 @@ class Network:
     @staticmethod
     def _drop_dead(jacobian: list[list[float]], rhs: list[float],
                    reachable: list[bool]) -> None:
-        """A node with no conductive path to a fixed pressure has no
-        equation: its row and column become a bare -1."""
+        """A node with no slope at all has no equation: its row and column
+        become a bare -1.
+
+        A node cut off from every fixed pressure keeps its equation
+        (2026-09-22), with a slight tie to where it stands so the island's
+        common level is still determined. Frozen, as they were, a false
+        island stayed false: the drip line stranded between a regulator
+        shut above its set point and a one-way open end shut below the air
+        had liquid still pushing through it, nothing moved it, and the
+        solve, which ignored islands, called it converged. Kept live, the
+        liquid inside it moves its pressures, a wall reopens, and the line
+        is solved; a real dead leg simply comes to one pressure. So every
+        node counts for convergence now."""
         n = len(rhs)
         for i in range(n):
-            if not reachable[i] or abs(jacobian[i][i]) < 1e-12:
+            if abs(jacobian[i][i]) < 1e-12:
                 for j in range(n):
                     jacobian[i][j] = 0.0
                     jacobian[j][i] = 0.0
                 jacobian[i][i] = -1.0
                 rhs[i] = 0.0
+            elif not reachable[i]:
+                jacobian[i][i] -= ISLAND_TIE * abs(jacobian[i][i])
 
     def _plateau_step(self, free: list[int], index_of: dict[int, int], n: int,
                       residual: list[float], reachable: list[bool],
@@ -974,7 +987,7 @@ class Network:
         for slot, node in enumerate(free):
             move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, step[slot]))
             self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
-        return _norm(self._residuals(index_of, n)) < before
+        return _improves(_norm(self._residuals(index_of, n)), before)
 
     def _residuals(self, index_of: dict[int, int], n: int) -> list[float]:
         """Net flow into each free node. Zero everywhere is the answer."""
@@ -1015,6 +1028,17 @@ def _norm(values: list[float]) -> float:
     return math.sqrt(sum(v * v for v in values))
 
 
+def _improves(after: float, before: float, scale: float = 1.0) -> bool:
+    """Whether a step cut the imbalance enough for its length (the
+    Armijo condition): by a ten-thousandth of it per unit of step. A
+    Newton step on a square law lands near the mirror image of where it
+    started, nearly the same imbalance the other side; a bare "less than"
+    accepted it for a hair of improvement, and a stopped pump's suction
+    flipped between the two for twenty iterations (2026-09-22). Refused,
+    the first halving lands on the answer."""
+    return after < before * (1.0 - 1e-4 * scale)
+
+
 def _solve_dense(matrix: list[list[float]], rhs: list[float]) -> list[float] | None:
     """Gaussian elimination with partial pivoting.
 
@@ -1050,6 +1074,11 @@ def static_head_pa(depth_m: float) -> float:
     """Pressure at the bottom of a column of liquid this deep."""
     return HEAD_PA_PER_M * max(depth_m, 0.0)
 
+
+#: How strongly a node cut off from every fixed pressure is tied to
+#: where it stands, relative to its own slope: enough to fix an island's
+#: common level, too little to hold its liquid still.
+ISLAND_TIE = 1e-6
 
 #: Darcy friction factor for clean commercial pipe in turbulent flow.
 FRICTION_FACTOR = 0.02

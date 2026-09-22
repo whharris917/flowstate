@@ -50,6 +50,9 @@ func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	_air = net.add_node(SimHydraulics.static_head_pa(elevation_m), true)
 	_vent = net.add_branch(SimControlResistance.new(node["a"], _air, VENT_CV_LPS, comp_name)) \
 		as SimControlResistance
+	# One-way (2026-09-22): below the air at its height an open end draws
+	# air, not water; two-way, a raised end drew 35 L/s in from nowhere.
+	_vent.one_way = true
 
 
 func update_hydraulics(net: SimNetwork, _node: Dictionary) -> void:

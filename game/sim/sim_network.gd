@@ -201,7 +201,7 @@ func solve() -> void:
 				var move := clampf(rhs[_perm[slot]] * scale, -MAX_STEP_PA, MAX_STEP_PA)
 				pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
 			_evaluate_all()
-			if _norm(_residuals(index_of, n)) < before:
+			if _improves(_norm(_residuals(index_of, n)), before, scale):
 				improved = true
 				break
 			scale *= 0.5
@@ -225,7 +225,7 @@ func solve() -> void:
 					var move := clampf(rhs[_perm[slot]] * scale_up, -MAX_STEP_PA, MAX_STEP_PA)
 					pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
 				_evaluate_all()
-				if _norm(_residuals(index_of, n)) < before:
+				if _improves(_norm(_residuals(index_of, n)), before, scale_up):
 					improved = true
 					break
 		# A node stranded below a closed one-way wall with flow pushing at
@@ -473,21 +473,29 @@ func _assemble(matrix: PackedFloat64Array, rhs: PackedFloat64Array, residual: Pa
 		rhs[_perm[i]] = -residual[i]
 
 
-## Nodes with no conductive path back to a fixed pressure have no
-## equation to satisfy. That covers a dead-ended nozzle, but also a
-## whole island cut off by a shut valve at one end and a blocked check
-## valve at the other. Such an island makes the matrix singular, and a
-## solver that gives up on the whole system because one corner of it is
-## adrift will leave real flows uncorrected everywhere else. So find
-## what is actually connected, and let the rest equalise with its
-## neighbours the way a dead leg does.
+## A node with no slope at all has no equation: its row and column
+## become a bare -1.
+##
+## A node cut off from every fixed pressure keeps its equation
+## (2026-09-22), with a slight tie to where it stands so the island's
+## common level is still determined (an island alone is singular).
+## Frozen, as they were, a false island stayed false: the drip line
+## stranded between a regulator shut above its set point and a one-way
+## open end shut below the air had liquid still pushing through it,
+## nothing moved it, and the solve, which ignored islands, called it
+## converged. Kept live, the liquid inside it moves its pressures, a wall
+## reopens, and the line is solved; a real dead leg simply comes to one
+## pressure. So every node counts for convergence now.
 func _drop_dead(matrix: PackedFloat64Array, rhs: PackedFloat64Array, reachable: PackedByteArray,
 		n: int) -> void:
 	var band := _band
 	var w := 2 * band + 1
 	for i in n:
 		var pi := _perm[i]
-		if reachable[i] == 0 or absf(matrix[pi * w + band]) < 1e-12:
+		if reachable[i] == 0 and absf(matrix[pi * w + band]) >= 1e-12:
+			matrix[pi * w + band] -= SimHydraulics.ISLAND_TIE * absf(matrix[pi * w + band])
+			continue
+		if absf(matrix[pi * w + band]) < 1e-12:
 			for k in range(-band, band + 1):
 				var other := pi + k
 				if other < 0 or other >= n:
@@ -564,12 +572,13 @@ func _plateau_step(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 		var move := clampf(rhs[_perm[slot]], -MAX_STEP_PA, MAX_STEP_PA)
 		pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
 	_evaluate_all()
-	return _norm(_residuals(index_of, n)) < before
+	return _improves(_norm(_residuals(index_of, n)), before)
 
 
-func _within_tolerance(reachable: PackedByteArray, residual: PackedFloat64Array, n: int) -> bool:
+## Every node counts, cut off or not (2026-09-22; see _drop_dead).
+func _within_tolerance(_reachable: PackedByteArray, residual: PackedFloat64Array, n: int) -> bool:
 	for i in n:
-		if reachable[i] == 1 and absf(residual[i]) >= _tolerance_at(i):
+		if absf(residual[i]) >= _tolerance_at(i):
 			return false
 	return true
 
@@ -631,6 +640,17 @@ func describe_node(node: int) -> String:
 		elif branch.node_b == node:
 			parts.append("%s <-%.3f" % [branch.branch_name, branch.flow_lps])
 	return "node %d at %.0f Pa: %s" % [node, pressures[node], ", ".join(parts)]
+
+
+## Whether a step cut the imbalance enough for its length (the Armijo
+## condition): by a ten-thousandth of it per unit of step. A Newton step
+## on a square law lands near the mirror image of where it started,
+## nearly the same imbalance the other side; a bare "less than" accepted
+## it for a hair of improvement, and a stopped pump's suction flipped
+## between the two for twenty iterations (2026-09-22). Refused, the first
+## halving lands on the answer. Mirrors _improves in sim/hydraulics.py.
+static func _improves(after: float, before: float, scale: float = 1.0) -> bool:
+	return after < before * (1.0 - 1e-4 * scale)
 
 
 static func _norm(values: PackedFloat64Array) -> float:

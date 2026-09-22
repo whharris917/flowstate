@@ -31,6 +31,10 @@ const EPS := 1e-12
 ## Below this a branch is treated as carrying nothing, for the purpose
 ## of working out what is connected to what.
 const CONDUCTING_EPS := 1e-12
+## How strongly a node cut off from every fixed pressure is tied to where
+## it stands, relative to its own slope: enough to fix an island's common
+## level, too little to hold its liquid still. Mirrors ISLAND_TIE.
+const ISLAND_TIE := 1e-6
 
 
 ## Pressure at the bottom of a column of liquid this deep.

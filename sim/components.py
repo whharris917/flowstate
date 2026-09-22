@@ -630,8 +630,11 @@ class Cap(Component):
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         self._air = net.add_node(static_head_pa(self.elevation_m), fixed=True)
+        # One-way (2026-09-22): below the air at its height an open end
+        # draws air, not water; two-way, a raised end drew 35 L/s in from
+        # nowhere.
         self._vent = net.add_branch(ControlResistance(
-            node["a"], self._air, self.VENT_CV_LPS, self.name))
+            node["a"], self._air, self.VENT_CV_LPS, self.name, one_way=True))
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
         # The air the end vents to is at the end's height as it stands
