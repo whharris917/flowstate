@@ -21,6 +21,11 @@ var running: bool = false
 var evap_lps: float = 0.0
 var dried_l: float = 0.0
 var product_lps: float = 0.0
+## What is inside it between scans (2026-09-22): its discharges are
+## imposed at the next solve from what it drew at this one, so one scan
+## of feed is always in the machine. The material balance counts it as
+## held.
+var in_flight_l: float = 0.0
 
 var inlet: SimInputPort
 var heat_duty: SimInputPort
@@ -43,6 +48,7 @@ func _init(name_: String, rate_lps_: float = 2.0) -> void:
 	add_observable("evap_lps", &"evap_lps")
 	add_observable("dried_l", &"dried_l")
 	add_observable("draw_lps", &"draw_lps")
+	add_observable("in_flight_l", &"in_flight_l")
 
 
 var draw_lps: float:
@@ -79,6 +85,7 @@ func tick(dt: float) -> void:
 	if rate <= 1e-9:
 		evap_lps = 0.0
 		product_lps = 0.0
+		in_flight_l = 0.0
 		return
 
 	var amounts := SimStream.zero_amounts()
@@ -112,6 +119,7 @@ func tick(dt: float) -> void:
 	evap_lps = evaporated
 	dried_l += evaporated * dt
 	product_lps = rate - evaporated
+	in_flight_l = product_lps * dt
 	_cake = SimStream.make(maxf(product_lps, 1e-9), feed.temp_c,
 		SimStream.normalized(amounts),
 		solid_lps / product_lps if product_lps > 0.0 else 0.0)

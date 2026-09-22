@@ -585,6 +585,31 @@ class TestVacuumLock:
         # Pressure stays physical throughout.
         assert lock.PRESS_VAC_PA * 0.9 <= lock.press_pa <= lock.PRESS_ATM_PA + 1.0
 
+    def test_it_drains_exactly_what_it_condensed(self) -> None:
+        # Between cycles nothing is in flight: the drain has taken every
+        # cycle's condensate, to the millilitre, and not a drop more. The
+        # last scan of each drain used to run at the full rate on less
+        # than a scan's worth, creating 0.04 L a cycle (2026-09-22).
+        sim, lock, drain = self._lock()
+        lock.is_on = True
+        while lock.cycles < 5:
+            sim.run(0.05)
+        sim.run(0.2)   # the last scan's discharge lands, the next cycle evacuates
+        assert lock.state == "evacuate"
+        assert drain.total_l == pytest.approx(5 * lock.CONDENSATE_PER_CYCLE_L, abs=1e-6)
+
+    def test_its_books_close_every_scan(self) -> None:
+        # What it condensed is what the drain took plus what is still in
+        # the chamber, at every scan, mid-drain included (the balance
+        # counted the chamber's condensate as fed and swung five litres
+        # every drain, 2026-09-22).
+        sim, lock, drain = self._lock()
+        lock.is_on = True
+        for _ in range(int(120.0 / 0.05)):
+            sim.run(0.05)
+            assert drain.total_l + lock.holdup_l == pytest.approx(lock.condensed_l, abs=1e-6)
+        assert lock.cycles >= 2
+
     def test_power_loss_mid_cycle_equalizes(self) -> None:
         sim, lock, drain = self._lock()
         lock.is_on = True

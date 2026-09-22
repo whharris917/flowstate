@@ -587,6 +587,12 @@ class VacuumLock(Component):
         self.condensate_l = 0.0
         self.draining_lps = 0.0
         self.cycles = 0
+        # The material balance's two numbers (2026-09-22): everything
+        # condensed (what the lock feeds the plant) and what is still in
+        # the chamber, this scan's discharge included (the drainer pushes
+        # it at the next solve).
+        self.condensed_l = 0.0
+        self.holdup_l = 0.0
         self.vent_bursts_done = 0    # lifetime counter; views watch edges
         self.timer_s = 0.0
         self.power = self.add_input("power", PortKind.POWER, "480VAC")
@@ -596,6 +602,8 @@ class VacuumLock(Component):
         self.add_observable("press_pa", "press_pa")
         self.add_observable("condensate_l", "condensate_l")
         self.add_observable("cycles", "cycles")
+        self.add_observable("condensed_l", "condensed_l")
+        self.add_observable("holdup_l", "holdup_l")
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         # The drainer pushes condensate out; where it goes is the
@@ -640,15 +648,22 @@ class VacuumLock(Component):
                     self.timer_s = self.VENT_PAUSE_S
                     if self.press_pa >= self.PRESS_ATM_PA - 100.0:
                         self.condensate_l += self.CONDENSATE_PER_CYCLE_L
+                        self.condensed_l += self.CONDENSATE_PER_CYCLE_L
                         self.state = "drain"
             elif self.state == "drain":
-                rate = self.DRAIN_LPS if self.condensate_l > 0.0 else 0.0
-                self.condensate_l = max(self.condensate_l - rate * dt, 0.0)
+                # Drain what is there and no more: the last scan of a
+                # cycle has less than a full scan's worth left, and
+                # running it at the full rate pushed out 0.04 L a cycle
+                # that nothing had supplied (2026-09-22).
+                drained = min(self.condensate_l, self.DRAIN_LPS * dt)
+                self.condensate_l -= drained
+                rate = drained / dt if dt > 0.0 else 0.0
                 if self.condensate_l <= 0.0:
                     self.cycles += 1
                     self.state = "evacuate"
         self.press.value = self.press_pa
         self.draining_lps = rate
+        self.holdup_l = self.condensate_l + self.draining_lps * dt
 
 
 class VialFiller(Component):

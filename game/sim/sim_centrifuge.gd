@@ -24,6 +24,11 @@ var starts: int = 0
 var cake_lps: float = 0.0
 var liquor_lps: float = 0.0
 var wash_lps: float = 0.0
+## What is inside it between scans (2026-09-22): its discharges are
+## imposed at the next solve from what it drew at this one, so one scan
+## of feed is always in the machine. The material balance counts it as
+## held.
+var in_flight_l: float = 0.0
 
 var inlet: SimInputPort
 # Wash liquor: sprayed onto the cake while the bowl spins, it displaces
@@ -58,6 +63,7 @@ func _init(name_: String, rate_lps_: float = 4.0, capture_eff_: float = 0.95,
 	add_observable("liquor_lps", &"liquor_lps")
 	add_observable("draw_lps", &"draw_lps")
 	add_observable("wash_lps", &"wash_lps")
+	add_observable("in_flight_l", &"in_flight_l")
 
 
 var draw_lps: float:
@@ -106,7 +112,7 @@ func supplied_stream(port_name: String) -> SimStream:
 	return null
 
 
-func tick(_dt: float) -> void:
+func tick(dt: float) -> void:
 	var now_spinning := is_on and power.value > 0.5
 	if now_spinning and not spinning:
 		starts += 1
@@ -118,6 +124,7 @@ func tick(_dt: float) -> void:
 	if rate <= 1e-9 and wash_lps <= 1e-9:
 		cake_lps = 0.0
 		liquor_lps = 0.0
+		in_flight_l = 0.0
 		return
 
 	var liquid_comp := feed.liquid_comp()
@@ -153,6 +160,7 @@ func tick(_dt: float) -> void:
 
 	cake_lps = cake_total
 	liquor_lps = liquor_total
+	in_flight_l = (cake_lps + liquor_lps) * dt
 	_cake = SimStream.make(maxf(cake_total, 1e-9), cake_temp,
 		SimStream.normalized(cake_amounts),
 		captured / cake_total if cake_total > 0.0 else 0.0)

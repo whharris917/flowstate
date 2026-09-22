@@ -27,6 +27,11 @@ var boilup_lps: float = 0.0
 var distillate_lps: float = 0.0
 var bottoms_lps: float = 0.0
 var recovered_l: float = 0.0
+## What is inside it between scans (2026-09-22): its discharges are
+## imposed at the next solve from what it drew at this one, so one scan
+## of feed is always in the machine. The material balance counts it as
+## held; left out, a running still read as 0.05 L gone missing.
+var in_flight_l: float = 0.0
 
 var inlet: SimInputPort
 var heat_duty: SimInputPort
@@ -58,6 +63,7 @@ func _init(name_: String, rate_lps_: float = 3.0, cut_c_: float = 150.0,
 	add_observable("distillate_lps", &"distillate_lps")
 	add_observable("recovered_l", &"recovered_l")
 	add_observable("draw_lps", &"draw_lps")
+	add_observable("in_flight_l", &"in_flight_l")
 
 
 var draw_lps: float:
@@ -102,6 +108,7 @@ func tick(dt: float) -> void:
 	if rate <= 1e-9:
 		distillate_lps = 0.0
 		bottoms_lps = 0.0
+		in_flight_l = 0.0
 		return
 
 	var solid_lps := rate * feed.solids_frac
@@ -131,6 +138,7 @@ func tick(dt: float) -> void:
 
 	distillate_lps = top_total
 	bottoms_lps = bottom_total
+	in_flight_l = (distillate_lps + bottoms_lps) * dt
 	recovered_l += top_total * dt
 	_top = SimStream.make(maxf(top_total, 1e-9), condenser_c,
 		SimStream.normalized(top_amounts))

@@ -45,7 +45,7 @@ static func unit_label(unit: int) -> String:
 static func counts(comp: SimComponent) -> bool:
 	return comp is SimSource or comp is SimDrain or comp is SimTank or comp is SimReactor \
 		or comp is SimCrystallizer or comp is SimVacuumLock or comp is SimSteamGen \
-		or comp is SimDryer or comp is SimVialFiller or comp is SimCap
+		or comp is SimDryer or comp is SimVialFiller or comp is SimCap 		or comp is SimCentrifuge or comp is SimStill
 
 
 ## Distinct units with at least one counted record, ascending.
@@ -79,8 +79,10 @@ static func accounts(sim: Simulation, names: Array) -> Dictionary:
 		if comp is SimSource:
 			fed += (comp as SimSource).total_l
 		elif comp is SimVacuumLock:
+			# Fed: all it has condensed. Held: what is still in its chamber.
 			var lock := comp as SimVacuumLock
-			fed += lock.cycles * SimVacuumLock.CONDENSATE_PER_CYCLE_L + lock.condensate_l
+			fed += lock.condensed_l
+			held += lock.holdup_l
 		elif comp is SimSteamGen:
 			var sg := comp as SimSteamGen
 			fed += sg.steam_total_l - sg.feedwater_total_l
@@ -100,6 +102,11 @@ static func accounts(sim: Simulation, names: Array) -> Dictionary:
 			out += (comp as SimDrain).total_l
 		elif comp is SimDryer:
 			out += (comp as SimDryer).dried_l
+			held += (comp as SimDryer).in_flight_l
+		elif comp is SimCentrifuge:
+			held += (comp as SimCentrifuge).in_flight_l
+		elif comp is SimStill:
+			held += (comp as SimStill).in_flight_l
 		elif comp is SimVialFiller:
 			out += (comp as SimVialFiller).filled_l
 		elif comp is SimCap:
@@ -121,8 +128,8 @@ static func tags(sim: Simulation, names: Array) -> Dictionary:
 		if comp is SimSource:
 			fed.append([n + ".total_l", 1.0])
 		elif comp is SimVacuumLock:
-			fed.append([n + ".cycles", SimVacuumLock.CONDENSATE_PER_CYCLE_L])
-			fed.append([n + ".condensate_l", 1.0])
+			fed.append([n + ".condensed_l", 1.0])
+			held.append([n + ".holdup_l", 1.0])
 		elif comp is SimSteamGen:
 			fed.append([n + ".steam_total_l", 1.0])
 			fed.append([n + ".feedwater_total_l", -1.0])
@@ -140,6 +147,9 @@ static func tags(sim: Simulation, names: Array) -> Dictionary:
 			out.append([n + ".total_l", 1.0])
 		elif comp is SimDryer:
 			out.append([n + ".dried_l", 1.0])
+			held.append([n + ".in_flight_l", 1.0])
+		elif comp is SimCentrifuge or comp is SimStill:
+			held.append([n + ".in_flight_l", 1.0])
 		elif comp is SimVialFiller:
 			out.append([n + ".filled_l", 1.0])
 		elif comp is SimCap:
