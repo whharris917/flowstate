@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flowstate Routing Explained</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root{
+  --bg:#F4F5F3; --panel:#FFFFFF; --code:#ECEFEC; --ink:#17201F; --muted:#5A6663;
+  --accent:#0B6B74; --accent2:#B4552A; --rule:#D1D7D4; --rule2:#B9C1BD; --shade:#E4E9E6;
+  --sans:"IBM Plex Sans",system-ui,Segoe UI,Helvetica,Arial,sans-serif;
+  --serif:"Spectral",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",Consolas,"Courier New",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#131817; --panel:#1A201F; --code:#1E2624; --ink:#E4E9E6; --muted:#98A49F;
+    --accent:#62C3CA; --accent2:#E48F62; --rule:#2B3432; --rule2:#3B4644; --shade:#212927;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131817; --panel:#1A201F; --code:#1E2624; --ink:#E4E9E6; --muted:#98A49F;
+  --accent:#62C3CA; --accent2:#E48F62; --rule:#2B3432; --rule2:#3B4644; --shade:#212927;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.6;margin:0;padding-inline:16px;padding-block:0 64px}
+.head{font-family:var(--sans);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-block:12px;max-width:1040px;margin:0 auto}
+article{max-width:1040px;margin:0 auto}
+.titleblock{padding-block:40px 24px;border-bottom:1px solid var(--rule)}
+h1{font-family:var(--sans);font-weight:600;font-size:clamp(28px,4vw,40px);line-height:1.15;letter-spacing:-.01em;margin:0 0 14px;text-wrap:balance;max-width:24em}
+.byline{font-family:var(--sans);font-size:15px;color:var(--muted);margin:0 0 6px;max-width:68ch}
+.byline b{color:var(--ink);font-weight:500}
+.toc{font-family:var(--sans);font-size:14px;columns:2;column-gap:28px;padding-block:20px;border-bottom:1px solid var(--rule)}
+.toc a{color:var(--ink);text-decoration:none;display:block;padding:2px 0;break-inside:avoid}
+.toc a:hover{color:var(--accent)}
+.toc .n{color:var(--muted);display:inline-block;width:2.4em;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.toc{columns:1}}
+.body p,.body ol,.body ul,.body h2,.body h3,.body .note,.body .eq,.body dl{max-width:68ch}
+h2{font-family:var(--sans);font-weight:600;font-size:24px;line-height:1.2;margin:56px 0 14px;text-wrap:balance;letter-spacing:-.005em}
+h2 .n,h3 .n{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:.5em}
+h3{font-family:var(--sans);font-weight:600;font-size:17.5px;margin:32px 0 8px;text-wrap:balance}
+p{margin:0 0 14px}
+p.lead{font-size:18px}
+a{color:var(--accent)}
+code,kbd{font-family:var(--mono);font-size:.86em;background:var(--code);padding:1px 4px;border-radius:3px}
+dfn{font-style:normal;font-weight:600;font-family:var(--sans);font-size:.95em;color:var(--accent)}
+figure{margin:24px 0 28px;max-width:100%}
+figure svg{max-width:100%;height:auto;display:block;color:var(--ink);font-family:var(--sans)}
+figcaption{font-family:var(--sans);font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5;max-width:68ch}
+figcaption b{color:var(--ink);font-weight:500}
+.tablewrap{overflow-x:auto;margin:16px 0 22px;max-width:100%}
+table{border-collapse:collapse;font-family:var(--sans);font-size:14px;line-height:1.45;min-width:100%}
+caption{text-align:left;font-size:14px;color:var(--muted);padding:0 0 8px;caption-side:top}
+caption b{color:var(--ink);font-weight:500}
+th{text-align:left;font-weight:600;border-bottom:2px solid var(--rule2);padding:6px 10px 6px 0;vertical-align:bottom}
+td{border-bottom:1px solid var(--rule);padding:6px 10px 6px 0;vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td code{white-space:nowrap}
+.note{border-left:3px solid var(--accent);background:var(--shade);padding:10px 14px;margin:16px 0 18px;font-size:15.5px}
+.note b{font-family:var(--sans);font-weight:600}
+.why{border-left-color:var(--accent2)}
+ol,ul{padding-left:1.4em;margin:0 0 14px}
+li{margin:0 0 6px}
+dl{margin:0 0 16px}
+dt{font-family:var(--sans);font-weight:600;margin-top:10px}
+dd{margin:2px 0 0 0}
+.svgt{font-size:12px;fill:currentColor}
+.svgs{font-size:11px;fill:var(--muted)}
+.box{fill:var(--panel);stroke:currentColor;stroke-width:1.2}
+.boxa{fill:var(--panel);stroke:var(--accent);stroke-width:1.6}
+.solid{fill:var(--shade);stroke:var(--rule2);stroke-width:1.2}
+.ln{stroke:currentColor;stroke-width:1.2;fill:none}
+.pipe{stroke:var(--accent);stroke-width:4;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.pipe2{stroke:currentColor;stroke-width:4;fill:none;stroke-linejoin:round;stroke-linecap:round;opacity:.55}
+.pipeb{stroke:var(--accent2);stroke-width:4;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.thin{stroke:var(--accent);stroke-width:1.4;fill:none}
+.dash{stroke-dasharray:4 3}
+.dot{fill:var(--accent);stroke:none}
+.dotb{fill:var(--accent2);stroke:none}
+.cube{fill:#D9A83A;stroke:currentColor;stroke-width:1}
+hr{border:0;border-top:1px solid var(--rule);margin:40px 0}
+.small{font-size:14px;color:var(--muted);font-family:var(--sans)}
+</style>
+
+<div class="head"><span>Companion to the platform exposition</span><span>Source tree of 21 September 2026, including the elevation change of that day</span></div>
+
+<article>
+<div class="titleblock">
+  <h1>How Flowstate lays a pipe: the routing of runs from first principles</h1>
+  <p class="byline"><b>Scope</b> Everything that happens between a player connecting two nozzles and a pipe standing in the world: the shape of a route, keeping out of solid geometry, keeping out of other pipes, bridging the pipes it must cross, the support rule, sizes and fittings, and how a laid pipe is edited afterwards.</p>
+  <p class="byline"><b>Reading</b> Every term is defined where it first appears and set in <dfn>this style</dfn>; a glossary at the end collects them. No knowledge of the rest of the platform is assumed beyond one fact: a plant is a set of pieces of equipment with connection points, and a connection between two of them is a line that is drawn in three dimensions.</p>
+</div>
+
+<nav class="toc">
+  <a href="#s1"><span class="n">1</span>What is being routed</a>
+  <a href="#s2"><span class="n">2</span>The shape of a route</a>
+  <a href="#s3"><span class="n">3</span>The life of a line: new, swept, baked</a>
+  <a href="#s4"><span class="n">4</span>Pass one: keeping out of solid things</a>
+  <a href="#s5"><span class="n">5</span>Pass two: keeping out of other runs</a>
+  <a href="#s6"><span class="n">6</span>Pass three: bridging what must be crossed</a>
+  <a href="#s7"><span class="n">7</span>The deferred sweep</a>
+  <a href="#s8"><span class="n">8</span>Holding a run up: the support rule</a>
+  <a href="#s9"><span class="n">9</span>Sizes, reducers, inline devices, cuts and open ends</a>
+  <a href="#s10"><span class="n">10</span>Editing a laid line</a>
+  <a href="#s11"><span class="n">11</span>The reports</a>
+  <a href="#s12"><span class="n">12</span>A worked example</a>
+  <a href="#gl"><span class="n"></span>Glossary</a>
+</nav>
+
+<div class="body">
+
+<h2 id="s1"><span class="n">1</span>What is being routed</h2>
+<p class="lead">A plant in Flowstate is made of <dfn>records</dfn>: pieces of equipment such as a tank, a pump, a valve or a control cabinet, each with a simulated state. A record has <dfn>ports</dfn>, its connection points. A port that carries liquid is a <dfn>nozzle</dfn>; a port that carries an electrical signal or power is a <dfn>terminal</dfn>. Each port has a direction: an <dfn>outlet</dfn> is where something leaves the record, an <dfn>inlet</dfn> is where something enters it.</p>
+<p>A connection from an outlet on one record to an inlet on another is a <dfn>wire</dfn>. A wire is the simulation's object: for liquid it is a pipe with a resistance to flow, for a signal it is a cable. The routing subsystem's job is to give every visible wire a three-dimensional shape and draw it. That drawn shape is a <dfn>run</dfn>. A run made of liquid pipe is called a <dfn>line</dfn> or a pipe; a run made of cable is a <dfn>conduit</dfn>. Some wires are <dfn>hidden</dfn>, meaning they exist in the simulation but have no run at all: the wiring inside a cabinet, the invisible link between a vessel and an instrument mounted on its shell, and the individual circuits inside a multi-core cable. Hidden wires are never routed.</p>
+<p>There is a second kind of run that has no wire behind it. A <dfn>placed run</dfn> is infrastructure the player lays by hand before any equipment exists: a <dfn>cable tray</dfn> (an open channel that carries cables), a rack pipe, or a <dfn>multicore</dfn> (one thick cable that carries several circuits from a junction box to a cabinet). A placed run is drawn straight through the points the player clicked and is never shifted, searched or bridged; it is something other runs must route around, and, for a tray, something they may rest on.</p>
+<p>Where a run meets a port there is a <dfn>fitting</dfn>: the physical stub, flange or cable gland on the equipment that the run attaches to. A fitting has a position and an <dfn>axis</dfn>, the direction pointing outward from the equipment, and every run leaves or arrives along that axis. A fitting also has a <dfn>face</dfn>, the distance along its axis at which its outer surface sits; a route starts and ends at the face, not at the port's centre. Two fittings therefore define the two ends of every routed run.</p>
+<p>Runs have a size. A pipe's <dfn>nominal bore</dfn>, written DN followed by a number of millimetres, is the standard size of the line. Flowstate offers twelve sizes from DN1 to DN150; DN50 is the default and is drawn with a radius of 7 cm. The drawn <dfn>radius</dfn> of a line scales with its bore (0.07 × DN/50 metres); a conduit is drawn at a fixed 2.5 cm.</p>
+
+<div class="note"><b>The rule that makes routing tractable: one line per nozzle.</b> A nozzle takes exactly one visible line, and a terminal exactly one cable. Joining two lines or splitting one is done with a <dfn>tee</dfn>, a placeable fitting with its own separate nozzles. Consequently every routed run has exactly two ends, at two fittings, and never fans out.</div>
+
+<h2 id="s2"><span class="n">2</span>The shape of a route</h2>
+<h3><span class="n">2.1</span>Paths, corners and legs</h3>
+<p>A run's shape is a <dfn>path</dfn>: an ordered list of points in three dimensions, joined by straight segments. A point in the list where the direction changes is a <dfn>corner</dfn>; the straight segment between two consecutive points is a <dfn>straight</dfn> (Figure 1). A straight that is horizontal is a <dfn>level</dfn> straight; one that is vertical is a <dfn>riser</dfn> if the run goes up along it and a <dfn>drop</dfn> if it goes down, though both words are used loosely for any vertical.</p>
+<p>The first and last straights of any route are special. A <dfn>stub</dfn> is the short straight that leaves a fitting along its axis before the run may turn. Its length is five times the line's radius, so 0.35 m for a DN50 pipe and 4 cm for a DN6 tube, with a floor of 3 cm; a cable always keeps 0.35 m. The point at the far end of the stub is the <dfn>stub end</dfn>. Between the two stub ends, the route is free.</p>
+
+<figure>
+<svg viewBox="0 0 760 230" role="img" aria-label="A route drawn from a fitting on the left to a fitting on the right: a stub, a corner, a level straight, a riser, a level straight, a stub. Labels name each part.">
+  <defs><marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+  <rect x="30" y="120" width="70" height="70" rx="3" class="solid"/><text x="65" y="205" class="svgs" text-anchor="middle">equipment A</text>
+  <rect x="660" y="40" width="70" height="70" rx="3" class="solid"/><text x="695" y="125" class="svgs" text-anchor="middle">equipment B</text>
+  <rect x="100" y="150" width="14" height="10" class="box"/><text x="107" y="176" class="svgs" text-anchor="middle">fitting</text>
+  <rect x="646" y="70" width="14" height="10" class="box"/><text x="653" y="96" class="svgs" text-anchor="middle">fitting</text>
+  <path d="M114 155 H160 H330 V75 H600 H646" class="pipe"/>
+  <circle cx="160" cy="155" r="4" class="dotb"/><text x="160" y="142" class="svgs" text-anchor="middle">stub end</text>
+  <circle cx="330" cy="155" r="4" class="dot"/><text x="330" y="176" class="svgs" text-anchor="middle">corner</text>
+  <circle cx="330" cy="75" r="4" class="dot"/><text x="330" y="62" class="svgs" text-anchor="middle">corner</text>
+  <circle cx="600" cy="75" r="4" class="dotb"/><text x="600" y="62" class="svgs" text-anchor="middle">stub end</text>
+  <text x="137" y="120" class="svgs" text-anchor="middle">stub</text>
+  <text x="245" y="120" class="svgs" text-anchor="middle">level straight</text>
+  <text x="352" y="118" class="svgs">riser</text>
+  <text x="465" y="100" class="svgs" text-anchor="middle">level straight</text>
+  <text x="623" y="100" class="svgs" text-anchor="middle">stub</text>
+  <line x1="114" y1="210" x2="160" y2="210" class="ln" marker-end="url(#ax)"/><text x="170" y="214" class="svgs">fitting axis: the run leaves straight along it</text>
+</svg>
+<figcaption><b>Figure 1.</b> The anatomy of a route. The stubs (orange stub ends) belong to the fittings and follow the equipment; the corners between them (teal) are what the router decides or the player sets.</figcaption>
+</figure>
+
+<h3><span class="n">2.2</span>Waypoints and legs</h3>
+<p>While connecting two ports the player may click points in the world that the line must pass through. Such a point is a <dfn>waypoint</dfn>. Waypoints belong to the player; the router never invents one and never removes one. The stretch of route between two consecutive waypoints, or between a stub end and the first waypoint, is a <dfn>leg</dfn>. A leg may contain several straights and corners once it has been laid, but it is the unit the router thinks in: legs are laid one at a time, in order from the source fitting to the destination fitting.</p>
+
+<h3><span class="n">2.3</span>The direct-line rule</h3>
+<p>How is a single leg shaped when nothing is in its way? The <dfn>direct-line rule</dfn> says that a leg between two points is at most two straights: one horizontal straight at whatever compass bearing joins the two points in plan, and one vertical, with the pipe trade's convention deciding which comes first. A <dfn>rising leg</dfn>, whose far end is higher than its near end, runs level first and comes up at the far end. A <dfn>falling leg</dfn>, whose far end is lower, drops first and then runs level (Figure 2). A leg whose ends are at the same height is one horizontal straight; a leg whose ends are directly above one another is one vertical. Horizontal straights are never forced onto the world's north-south and east-west axes; before 13 September 2026 they were, and a line between two hand-placed tanks looked "so weird" that the rule was replaced.</p>
+
+<figure>
+<svg viewBox="0 0 760 200" role="img" aria-label="Two side views. Left: a rising leg runs level then comes up at the far end. Right: a falling leg drops first then runs level. Both are two straights.">
+  <text x="30" y="26" class="svgt" font-weight="600">Rising leg: level first, up at the far end</text>
+  <circle cx="60" cy="150" r="5" class="dot"/><text x="60" y="172" class="svgs" text-anchor="middle">near (low)</text>
+  <circle cx="330" cy="60" r="5" class="dot"/><text x="330" y="48" class="svgs" text-anchor="middle">far (high)</text>
+  <path d="M60 150 H330 V60" class="pipe"/>
+  <path d="M60 150 L330 60" class="ln dash"/>
+  <text x="180" y="100" class="svgs">not a diagonal: verticals are vertical</text>
+  <text x="420" y="26" class="svgt" font-weight="600">Falling leg: drop first, then level</text>
+  <circle cx="450" cy="60" r="5" class="dot"/><text x="450" y="48" class="svgs" text-anchor="middle">near (high)</text>
+  <circle cx="720" cy="150" r="5" class="dot"/><text x="720" y="172" class="svgs" text-anchor="middle">far (low)</text>
+  <path d="M450 60 V150 H720" class="pipe"/>
+</svg>
+<figcaption><b>Figure 2.</b> The direct-line rule. In plan the horizontal straight takes the shortest bearing between the two points; in elevation the change of height is one vertical placed by the trade's convention. The dashed diagonal is what the rule forbids.</figcaption>
+</figure>
+
+<h3><span class="n">2.4</span>Folds and the square leg</h3>
+<p>Two consecutive straights meet at an angle. If the change of direction at a corner exceeds 135 degrees, so that the run turns back on itself at an interior angle sharper than 45 degrees, the corner is a <dfn>fold</dfn>. Folds are forbidden: a line arriving from behind a nozzle once folded straight back through the nozzle. A fold is split by inserting a <dfn>square leg</dfn>, a straight 0.45 m long at a right angle to the way the run came in, after which the run completes the turn (Figure 3). The square leg goes on the longer of the corner's two straights so that a stub, which is short and must stay straight, is never bent. A turn off a very short straight (under 0.3 m), such as the sidestep a lane adds, is a jog rather than a fold and is left alone. If the square leg would run into something solid on one side and is clear on the other, it takes the clear side. The 45-degree floor is the director's: sharper turns were disallowed as "acute angles", and 45 degrees was then chosen as the limit because a corner a player sets deliberately is theirs.</p>
+
+<figure>
+<svg viewBox="0 0 760 190" role="img" aria-label="Left: a fold, where a run leaving a fitting turns back on itself through a sharp angle. Right: the same corner split by a 0.45 m square leg at a right angle to the way in, then the rest of the turn.">
+  <text x="30" y="26" class="svgt" font-weight="600">A fold (forbidden)</text>
+  <rect x="40" y="90" width="14" height="10" class="box"/>
+  <path d="M54 95 H130 L60 150" class="pipeb"/>
+  <text x="140" y="99" class="svgs">stub end</text>
+  <text x="40" y="176" class="svgs">the run comes back past its own fitting</text>
+  <text x="400" y="26" class="svgt" font-weight="600">Split with a square leg</text>
+  <rect x="410" y="90" width="14" height="10" class="box"/>
+  <path d="M424 95 H500 V140 L430 160" class="pipe"/>
+  <circle cx="500" cy="95" r="4" class="dot"/><circle cx="500" cy="140" r="4" class="dot"/>
+  <text x="510" y="120" class="svgs">square leg, 0.45 m, at a right angle to the way in</text>
+  <text x="510" y="164" class="svgs">then the rest of the turn</text>
+</svg>
+<figcaption><b>Figure 3.</b> The fold rule. No two straights may meet at an interior angle sharper than 45 degrees. The square leg is inserted <em>before</em> the avoidance search runs, so that the geometry the search checks is the geometry that is drawn.</figcaption>
+</figure>
+
+<h2 id="s3"><span class="n">3</span>The life of a line: new, swept, baked</h2>
+<p>The router does a great deal of work on a line, but only once. Understanding when it works requires three ideas.</p>
+<p><b>Order.</b> Every wire carries an <dfn>order</dfn>, its place in the sequence in which runs were laid, taken from a counter that only ever increases. The <dfn>order rule</dfn>, set on 12 September 2026, is that a run is laid around the runs laid <em>before</em> it and never reacts to the runs laid <em>after</em> it. The rule exists because two runs that both shift to avoid each other still meet; if only the later one moves, the pair settles. Every part of the router that looks at other runs asks only about earlier ones. There is one exception: the first and last 0.45 m of a later run cannot move, since they are its stubs, so a crossing there is the earlier run's to fix.</p>
+<p><b>New and fixed.</b> A line that has just been connected is <dfn>new</dfn>. A new line is laid by the full three-pass pipeline described in Sections 4 to 6. A line is <dfn>fixed</dfn> once it has been <dfn>baked</dfn> (Section 7): its drawn corners have been copied into its waypoints, and from then on it is laid plainly through those waypoints by the direct-line rule alone, with no search, no lane and no bridge. A fixed line is never routed again. If the equipment at one end moves, only the leg at that end stretches. This was the director's model: "waypoints should never differ from actual points on the pipe", and "when a pipe is laid, only that pipe should auto-route; existing pipes should not be recalculated."</p>
+<p><b>The sweep.</b> The world's physics engine does not know about a body until the frame after it is added, so a line laid in the same frame as the equipment it must avoid cannot see that equipment. Three frames after any change to the plant, a <dfn>deferred sweep</dfn> revisits every new line, re-lays those that would now come out differently, and repeats for a few rounds until nothing moves. When a round changes nothing, every new line is baked. A line's life is therefore: connected (new, laid once) → swept (re-laid at most a few times over a few frames) → baked (fixed, never routed again, edited by hand thereafter).</p>
+
+<figure>
+<svg viewBox="0 0 760 150" role="img" aria-label="A pipeline of boxes: waypoints, pass one search, pass two lanes, pass three bridges, the sweep, then bake; an arrow returns from bake to waypoints.">
+  <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+  <rect x="10" y="40" width="100" height="44" rx="3" class="box"/><text x="60" y="58" class="svgt" text-anchor="middle">waypoints</text><text x="60" y="74" class="svgs" text-anchor="middle">the player's</text>
+  <rect x="140" y="40" width="110" height="44" rx="3" class="boxa"/><text x="195" y="58" class="svgt" text-anchor="middle">pass 1: search</text><text x="195" y="74" class="svgs" text-anchor="middle">round solids</text>
+  <rect x="280" y="40" width="110" height="44" rx="3" class="boxa"/><text x="335" y="58" class="svgt" text-anchor="middle">pass 2: lanes</text><text x="335" y="74" class="svgs" text-anchor="middle">beside other runs</text>
+  <rect x="420" y="40" width="110" height="44" rx="3" class="boxa"/><text x="475" y="58" class="svgt" text-anchor="middle">pass 3: bridges</text><text x="475" y="74" class="svgs" text-anchor="middle">over crossings</text>
+  <rect x="560" y="40" width="90" height="44" rx="3" class="box"/><text x="605" y="58" class="svgt" text-anchor="middle">sweep</text><text x="605" y="74" class="svgs" text-anchor="middle">a few rounds</text>
+  <rect x="680" y="40" width="70" height="44" rx="3" class="box"/><text x="715" y="58" class="svgt" text-anchor="middle">bake</text><text x="715" y="74" class="svgs" text-anchor="middle">fixed</text>
+  <line x1="110" y1="62" x2="140" y2="62" class="ln" marker-end="url(#a2)"/>
+  <line x1="250" y1="62" x2="280" y2="62" class="ln" marker-end="url(#a2)"/>
+  <line x1="390" y1="62" x2="420" y2="62" class="ln" marker-end="url(#a2)"/>
+  <line x1="530" y1="62" x2="560" y2="62" class="ln" marker-end="url(#a2)"/>
+  <line x1="650" y1="62" x2="680" y2="62" class="ln" marker-end="url(#a2)"/>
+  <path d="M715 84 V118 H60 V84" class="ln dash" marker-end="url(#a2)"/>
+  <text x="380" y="134" class="svgs" text-anchor="middle">after the bake the drawn corners are the waypoints, and the three passes never run on this line again</text>
+</svg>
+<figcaption><b>Figure 4.</b> The life of a line. Each pass takes the previous pass's output and has less freedom than it. The bake closes the loop.</figcaption>
+</figure>
+
+<h2 id="s4"><span class="n">4</span>Pass one: keeping out of solid things</h2>
+<h3><span class="n">4.1</span>What counts as solid: the clearance oracle</h3>
+<p>Before a route can avoid things, something must answer the question "may a run pass through this point?" In Flowstate exactly one object answers it, the <dfn>clearance oracle</dfn> (the class <code>RunClearance</code>), and nothing else in the router probes the world for solids. It was written on 18 September 2026 to replace six earlier answers, under the director's instruction that the fix for runs passing through equipment must not "spiral into spaghetti code" of special cases. Its rule has four parts.</p>
+<ol>
+<li><b>What is solid.</b> World geometry (the ground, walls, a building), placed structure (columns, beams, decks, stairs, railings) and the volume of every piece of equipment. Other runs are <em>never</em> solid to the oracle; keeping runs apart is the job of passes two and three.</li>
+<li><b>A run's own equipment is partly open to it.</b> A run leaves through its own equipment's volume, so the two records at its ends are open to it within a <dfn>reach</dfn> of each fitting. The reach is 1.2 m (the <dfn>stub clearance</dfn>) plus half the equipment's footprint, because a line from a nozzle at the bottom of a tank runs out from under the tank. Its own equipment is also open to it anywhere along a vertical straight, so a line may drop down the flank of its own vessel. A level straight, however, must go round its own tank. An instrument mounted on a vessel's shell counts as that vessel, and the vessel counts as the instrument's own.</li>
+<li><b>Resting is not passing through.</b> A cable lying on the floor and a tray sitting on its beam are carried by those things, not inside them. A surface within 10 cm below the run, facing upward, does not block. For a placed thing the carrying surface must be that thing's own; for world geometry any upward surface will do, because the floor and the slab laid on it are two overlapping bodies.</li>
+<li><b>The probe.</b> The oracle tests a sphere of the run's radius plus 3 cm, at the run's own height. What it finds is cached per tenth-of-a-metre cell and per radius until the plant changes, because probing the physics engine is the expensive part.</li>
+</ol>
+<p>The oracle offers a few questions. <code>blocked_by</code> names what blocks a run at a point, or nothing. <code>hits</code> samples a whole path every 15 cm and lists each solid thing it passes through, once each. <code>leg_clear</code> says whether one straight is clear. And <code>busy</code>, used by the search below, says whether some <em>earlier</em> run from another record already lies at a point. Placed structure has its own rules, but they are about the structure's placement (a beam needs bearing at both ends, a deck at two of four corners), not about routing.</p>
+
+<h3><span class="n">4.2</span>The plain leg and when to search</h3>
+<p>Each leg is first laid by the direct-line rule, giving one or two straights. That <dfn>plain leg</dfn> is sampled every 15 cm and each sample is put to the oracle. If every sample is clear, the plain leg is the answer and nothing more is done: a run laid where the direct line puts it is the point. Only a leg whose plain shape passes through something solid is <dfn>searched</dfn>.</p>
+
+<h3><span class="n">4.3</span>The grid search</h3>
+<p>A searched leg is found by <dfn>A* search</dfn>, a standard method for finding a cheapest path across a grid by exploring cells in order of their cost so far plus an estimate of the cost remaining. The grid has half-metre cells and is anchored at the leg's own start point, so that the found path leaves the start with no jog; the goal is the cell containing the leg's end, which may be up to a quarter metre off, a difference the straightening step (Section 4.4) takes up. From any cell six moves are allowed: forward, back, left, right, up and down. The search is bounded to a box fourteen cells beyond the leg's own extent, may expand at most 3,000 cells before giving up, and never steps below grade. Each candidate cell is put to the oracle; a vertical step also probes the halfway point, because a deck is thinner than the gap between two cells and a step could otherwise hop through it.</p>
+<p>Every move has an integer cost, and the costs are the design (Table 1). They favour few bends, few verticals, and the trade's convention of running low: dropping first, staying near the floor, and rising only at the end. A cell above the leg's higher end is expensive because a run up there has nothing to carry it. A cell that an earlier run from a different record already occupies costs extra, so that a detour lands in a free corridor beside a neighbour rather than on top of it; such a cell is a cost, not a wall. The estimate of remaining cost is deliberately a little too large (three per cell, against a straight step's two), which makes the search prefer to push toward the goal instead of exploring the countless equal-length routes an orthogonal grid offers; the code notes that exploring them all is what made the search slow. Identical legs, such as twenty feeds dropping from one trunk, are searched once and served from a cache.</p>
+
+<div class="tablewrap"><table>
+<caption><b>Table 1.</b> The cost of each move in the grid search. "Higher end" and "lower end" refer to the two ends of the leg being searched.</caption>
+<tr><th>Move</th><th class="num">Cost</th><th>Why</th></tr>
+<tr><td>A level step</td><td class="num">2</td><td>the base cost</td></tr>
+<tr><td>A vertical step</td><td class="num">3</td><td>a riser costs more than a straight</td></tr>
+<tr><td>Into a cell an earlier run from another record occupies</td><td class="num">+5</td><td>land in a free corridor, not on a neighbour</td></tr>
+<tr><td>A change of direction</td><td class="num">+2</td><td>fewer bends</td></tr>
+<tr><td>A cell above the leg's higher end</td><td class="num">+6</td><td>overhead, with nothing to carry it</td></tr>
+<tr><td>A cell below the leg's lower end</td><td class="num">+2</td><td>a dip has to come back up</td></tr>
+<tr><td>A cell more than one above the lower end</td><td class="num">+1</td><td>run low before rising</td></tr>
+<tr><td>Estimate of the cost remaining</td><td class="num">3 per cell</td><td>a little over the true cost, to stop the search wandering</td></tr>
+</table></div>
+
+<h3><span class="n">4.4</span>Pulling the staircase straight</h3>
+<p>Because the grid walks in six directions only, the path it finds is a staircase. It is then <dfn>pulled straight</dfn>: starting at the first cell, the router looks for the farthest later cell whose direct line (by the direct-line rule) is clear, replaces the staircase between them with that direct line, and continues from there; the last straight ends on the leg's true end point exactly. Three guards apply. A straight may not fold against the direction the run arrived in. It must be clear of solids. And it may not lie through more cells of other runs than the staircase it replaces, plus one: the search paid a cost to sidestep a neighbouring run, and a straight that grazed that neighbour the whole way would throw the sidestep away. The first case found was a shallow diagonal that grazed a neighbouring line for nine metres.</p>
+
+<h3><span class="n">4.5</span>Arriving at the far fitting</h3>
+<p>The last leg ends at the destination's stub end, and the run must then travel the stub into the fitting along the fitting's axis. If the last straight arrives against that axis, the arrival is a fold at the stub; the router therefore places a square leg before the stub and re-routes the last leg to the square leg's outer corner, so that what arrives at the fitting was itself checked.</p>
+
+<div class="note why"><b>An impossible route belongs to the player.</b> If, after all this, the route still passes through something (a leg boxed in on every side, say), the game does not thread the line through. While the player is routing, the preview turns red and names the thing the line would pass through; the click that would finish the line is refused with that reason, and the partly laid route is kept for the player to fix with another waypoint. Lines laid by code, such as a saved plant, are laid regardless and counted by the intersection report (Section 11). This was the director's call on 18 September 2026: "it's the player's responsibility to not attempt to route pipes where it's truly impossible."</div>
+
+<h2 id="s5"><span class="n">5</span>Pass two: keeping out of other runs</h2>
+<h3><span class="n">5.1</span>Overlaps and crossings</h3>
+<p>The clearance oracle ignores other runs, so after pass one a new line may lie exactly inside an earlier one along a shared corridor, or pass straight through one where their paths cross. These are two different problems with two different names. An <dfn>overlap</dfn> is a stretch where two runs lie within each other's radii for some length: they share a corridor. A <dfn>crossing</dfn> is a place where two runs pass through each other at an angle: they meet once and go on. A very shallow crossing, under about nine degrees, is treated as an overlap, since it is a long stretch rather than a point. Pass two removes overlaps by moving the whole route sideways; pass three removes crossings by lifting the route over, or dipping it under, the run it crosses.</p>
+
+<h3><span class="n">5.2</span>Lanes</h3>
+<p>A <dfn>lane</dfn> is a fixed offset from the searched route, the way a lane on a road is an offset from its centreline. Lane 0 is the searched route itself, unshifted. The other 32 lanes are each a combination of three things (Figure 5): a <dfn>side</dfn> (left or right of the route's direction of travel), a <dfn>step</dfn> (how many run-widths outward, one to four, each step being twice the radius plus 3 cm), and a <dfn>tier</dfn> (how many run-widths upward, zero to three, each tier being a step plus 2 cm, the way cables stack in a bundle). Lanes are tried in a fixed order, which matters because ties go to the first: every step outward on the ground tier before the first lift, because a lifted run beside a column leaves the reach of the floor that was carrying it. A run re-laid by the sweep tries its previous lane first, so that a run which keeps its lane moves nothing else.</p>
+
+<figure>
+<svg viewBox="0 0 760 240" role="img" aria-label="Left: a plan view of a base route with four offset lanes on each side. Right: an elevation with four tiers stacked above the base. A note gives the try order.">
+  <text x="20" y="24" class="svgt" font-weight="600">Plan view: side and step</text>
+  <line x1="40" y1="130" x2="340" y2="130" class="pipe"/>
+  <text x="345" y="134" class="svgs">lane 0: the searched route</text>
+  <line x1="40" y1="110" x2="340" y2="110" class="ln dash"/><text x="345" y="114" class="svgs">step 1</text>
+  <line x1="40" y1="90" x2="340" y2="90" class="ln dash"/><text x="345" y="94" class="svgs">step 2</text>
+  <line x1="40" y1="70" x2="340" y2="70" class="ln dash"/><text x="345" y="74" class="svgs">step 3</text>
+  <line x1="40" y1="50" x2="340" y2="50" class="ln dash"/><text x="345" y="54" class="svgs">step 4</text>
+  <line x1="40" y1="150" x2="340" y2="150" class="ln dash"/><text x="345" y="154" class="svgs">step 1</text>
+  <line x1="40" y1="170" x2="340" y2="170" class="ln dash"/><text x="345" y="174" class="svgs">step 2</text>
+  <line x1="40" y1="190" x2="340" y2="190" class="ln dash"/><text x="345" y="194" class="svgs">step 3</text>
+  <line x1="40" y1="210" x2="340" y2="210" class="ln dash"/><text x="345" y="214" class="svgs">step 4</text>
+  <text x="40" y="232" class="svgs">one step = 2 × radius + 3 cm (17 cm for DN50)</text>
+  <text x="450" y="24" class="svgt" font-weight="600">Elevation: tier</text>
+  <line x1="470" y1="190" x2="740" y2="190" class="ln"/><text x="470" y="206" class="svgs">floor</text>
+  <circle cx="600" cy="170" r="7" class="dot"/><text x="617" y="174" class="svgs">tier 0: on the base</text>
+  <circle cx="600" cy="150" r="7" class="box"/><text x="617" y="154" class="svgs">tier 1: one step + 2 cm up</text>
+  <circle cx="600" cy="130" r="7" class="box"/><text x="617" y="134" class="svgs">tier 2</text>
+  <circle cx="600" cy="110" r="7" class="box"/><text x="617" y="114" class="svgs">tier 3</text>
+  <text x="470" y="60" class="svgs">Try order: every step out on a tier</text>
+  <text x="470" y="76" class="svgs">before the first lift to the next tier.</text>
+</svg>
+<figcaption><b>Figure 5.</b> The lane space: two sides, four steps and four tiers make 32 shifted lanes beside lane 0. A lane is not simply taken; every lane is scored and the cheapest wins (Section 5.4).</figcaption>
+</figure>
+
+<h3><span class="n">5.3</span>How a lane moves a route</h3>
+<p>A lane is not applied to the route as a whole. The first version shifted the entire path by one vector and walked bundles of cables into rack columns and drains. Instead the offset is applied <dfn>leg by leg</dfn>. For each horizontal straight the router first measures the <dfn>room</dfn> beside it: how many steps outward on the chosen side the straight can move before its shifted copy passes through something solid, tested at the tier's own height (a lifted lane once rose into a valve the base route had passed under). Each straight then takes the smaller of the lane's step and its room. Where two horizontal straights meet, the corner moves to where the two shifted lines intersect, at whatever angle they meet; if they are nearly parallel, the first straight's shift is used. At a stub end the route <dfn>sidesteps</dfn>: it keeps the stub end where it is and adds a short straight at a right angle to the stub out to the lane, so that a lone line becomes stub, sidestep, straight, riser, stub, and never a diagonal jog off a nozzle. A vertical straight stays vertical; it takes the shift of the longer of its two neighbouring straights (a bundle's shared straight is the long one) and, instead of being lifted, <dfn>slides</dfn> along that straight by up to 0.3 m so that two risers side by side are separated; further than 0.3 m a riser leaves the reach of whatever carried it. A route with no corner on its horizontal is given one at the middle of its longest level straight, added to its corners rather than replacing them, so that a lane has somewhere to bend it. After the shift the whole thing is re-laid by the direct-line rule and the fold rule, which turns any leftover mismatch between legs into a short jog.</p>
+
+<h3><span class="n">5.4</span>Scoring a lane</h3>
+<p>Every lane produces a candidate path, and each candidate is scored; the cheapest wins, lane 0 is always among those tried, and ties go to the lowest lane (Table 2). The weights encode a hierarchy. Overlapping an earlier run is nearly forbidden. A crossing is cheap because pass three can bridge it, and the four points is the price of a bridge's four bends, so a tier that clears a crossing outright beats hopping over it. Failing the support rule (Section 8) costs more than any number of crossings, because a crossing is bridged and an unsupported span is a rule broken. Passing through something solid is worst of all. The two expensive checks, support and solids, are only paid by a candidate that would otherwise win.</p>
+
+<div class="tablewrap"><table>
+<caption><b>Table 2.</b> How a candidate lane is scored. An overlap is counted only beyond an allowance (Section 5.5).</caption>
+<tr><th>What the candidate does</th><th class="num">Cost</th></tr>
+<tr><td>Shares a corridor with an earlier run beyond the allowance</td><td class="num">1000 + the metres shared</td></tr>
+<tr><td>Each crossing of an earlier run that a bridge would have to fix</td><td class="num">4</td></tr>
+<tr><td>Fails the support rule</td><td class="num">50</td></tr>
+<tr><td>Each solid thing it passes through</td><td class="num">200</td></tr>
+</table></div>
+
+<h3><span class="n">5.5</span>Allowed overlap</h3>
+<p>Some shared corridor is legitimate. Two runs that leave the same record (a trunk feeding several loads) may share 1.5 m anywhere: that is the fan where the trunk parts. Two runs that both end on the same machine (a pump's suction line and its power cable) may share 1.5 m within 2.5 m of it: they arrive side by side. The modules inside one cabinet count as that cabinet for this purpose. Anywhere else, 0.5 m of shared corridor is an overlap.</p>
+
+<h2 id="s6"><span class="n">6</span>Pass three: bridging what must be crossed</h2>
+<p>After the lane, the router finds every place the new run still passes through an earlier run and lifts it clear with a <dfn>bridge</dfn> (called a jumper in the code): the run goes up, across and down, reaching 0.3 m either side of the crossing, leaving 8 cm of air between the two runs' surfaces (Figure 6). A crossing is found by comparing each straight of the new run with every straight of every earlier run: they cross when the closest approach between them is less than the two radii plus 3 cm and they are not nearly parallel. Crossings in the first or last 0.4 m of the new run are ignored, since that is the fitting's own; crossings with a run laid <em>later</em> count only within 0.45 m of that later run's ends, where it cannot move. Several crossings on one straight merge into one <dfn>span</dfn>, and a span shorter than 0.2 m is refused.</p>
+
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="Three cases. Left: a bridge over a horizontal run, up across and down. Middle: a thinner run dipping under a thicker one. Right: a sideways jog round a riser, seen in plan.">
+  <text x="20" y="24" class="svgt" font-weight="600">Over (side view)</text>
+  <circle cx="130" cy="120" r="8" fill="none" stroke="currentColor" stroke-width="3" opacity=".55"/>
+  <text x="130" y="145" class="svgs" text-anchor="middle">earlier run, end on</text>
+  <path d="M30 150 H100 V102 H160 V150 H230" class="pipe"/>
+  <text x="30" y="176" class="svgs">0.3 m either side, 8 cm of air</text>
+  <text x="280" y="24" class="svgt" font-weight="600">Under (side view)</text>
+  <circle cx="390" cy="110" r="12" fill="none" stroke="currentColor" stroke-width="3" opacity=".55"/>
+  <text x="390" y="90" class="svgs" text-anchor="middle">thicker earlier run</text>
+  <path d="M290 110 H360 V140 H420 V110 H490" class="pipe"/>
+  <text x="290" y="176" class="svgs">the thinner run dips: a conduit under a pipe</text>
+  <text x="540" y="24" class="svgt" font-weight="600">Sideways (plan view)</text>
+  <circle cx="650" cy="120" r="8" fill="none" stroke="currentColor" stroke-width="3" opacity=".55"/>
+  <text x="650" y="145" class="svgs" text-anchor="middle">a riser, seen from above</text>
+  <path d="M550 120 H620 V95 H680 V120 H750" class="pipe"/>
+  <text x="540" y="176" class="svgs">jogged round it, the smaller jog first</text>
+</svg>
+<figcaption><b>Figure 6.</b> The three bridge shapes. A span with any horizontal in it goes over or under; a span that is a riser is jogged round; a span with both is passed over the deck and beside the ramp at once.</figcaption>
+</figure>
+
+<p>Which way to bridge follows the pipe trade: the thinner run dips under (a conduit passes under a pipe) and the thicker goes over. Under is tried only if there is room beneath (at least a radius plus 5 cm above the floor); over is raised, up to three times, above anything else that already crosses under the same spot, such as another run's bridge. A sideways jog round a riser is tried on the nearer side first and must be at least three radii wide, so that its elbows can sweep. A bridge is accepted only if its four points are clear of solids (with the crossed run's own two fittings treated as open, since a bridge in front of a nozzle cluster is not inside the machine) and only if, extended half a metre each way, it crosses no other run; a jog round a riser must not come down on the line that riser feeds. Where no bridge is acceptable, the crossing stays and the crossing report (Section 11) names it. Trays are never bridged: a conduit lands on a tray. Cables that leave one record together are <dfn>bundle-mates</dfn> and never bridge each other.</p>
+
+<h2 id="s7"><span class="n">7</span>The deferred sweep</h2>
+<p>Three frames after any change to the plant, the sweep walks the new (not yet baked) lines in laying order. For each it asks four questions, each more expensive than the last: would the search now give different corners; with the same corners, would the lane or the bridges now come out differently; has an earlier run since moved onto it; and has its lane left it unsupported. A line that answers yes is re-laid on the spot, preferring its old lane. Because a run yields only to earlier runs, one pass in order should settle everything; two brakes stand behind that in case it does not. A run already re-laid twice since the plant last changed is left where it is, because a knot of short cables at one cabinet once traded lanes for ever. And the sweep runs at most six rounds, after which the report says how many runs were left past the cap. A run whose re-lay changed nothing is marked, so that a crossing nothing of its own can fix does not make it re-lay every round. The oracle's cache and the search's leg cache are cleared once per sweep, not once per round, which saved over a second a round when nothing had moved.</p>
+<p>When a round re-lays nothing, the sweep does four things: it <b>bakes</b> every new line (Section 3), copying every drawn point except the two fittings and their stub ends into the line's waypoints; it evaluates the support rule and draws brackets and stands on every run (Section 8); it builds a pedestal under any pump standing above the floor; and it works out which open pipe ends hang over an open-topped vessel. The bake is also applied immediately after a corner is deleted and after any edit gesture on a line, so that a straight the lay added during a drag becomes the player's own corner.</p>
+
+<h2 id="s8"><span class="n">8</span>Holding a run up: the support rule</h2>
+<p>The simulation knows the height of every piece of equipment (its pressures are reckoned at that height) but nothing about the shape of a run between two pieces, so the rule that a pipe must be held up lives on the engine side. The <dfn>support rule</dfn> is that no run may have an unsupported <dfn>span</dfn> longer than 3 m. To evaluate it, a run's path is sampled every half metre and each sample is tested for support: a sample is <dfn>supported</dfn> when something that can carry a pipe lies within a sphere of 0.65 m of it (Figure 7). What can carry a pipe is defined by which physics layer it is on. Layer 1 holds world geometry, placed structure and placed infrastructure (trays and rack pipe), all of which support a run. Layer 4 holds the volumes that stand in for each piece of equipment's bulk, which also support a run, since a line clamped to a tank is held. Wire runs themselves live on layer 8, deliberately, so that a pipe never counts as support for another pipe. The first and last metre of a run are supported by fiat: the nozzle and its stub fitting carry them.</p>
+
+<figure>
+<svg viewBox="0 0 760 230" role="img" aria-label="A run sampled every half metre. Samples near a column and near the floor are supported; a long level stretch far from anything is unsupported and gets pipe stands to the floor at even fractions of the straight.">
+  <line x1="20" y1="190" x2="740" y2="190" class="ln"/><text x="20" y="206" class="svgs">floor (layer 1)</text>
+  <rect x="80" y="60" width="18" height="130" class="solid"/><text x="89" y="52" class="svgs" text-anchor="middle">column</text>
+  <path d="M40 90 H700" class="pipe"/>
+  <g>
+    <circle cx="60" cy="90" r="3" class="dot"/><circle cx="110" cy="90" r="3" class="dot"/>
+    <circle cx="160" cy="90" r="3" class="dotb"/><circle cx="210" cy="90" r="3" class="dotb"/><circle cx="260" cy="90" r="3" class="dotb"/><circle cx="310" cy="90" r="3" class="dotb"/><circle cx="360" cy="90" r="3" class="dotb"/><circle cx="410" cy="90" r="3" class="dotb"/><circle cx="460" cy="90" r="3" class="dotb"/><circle cx="510" cy="90" r="3" class="dotb"/><circle cx="560" cy="90" r="3" class="dotb"/><circle cx="610" cy="90" r="3" class="dotb"/>
+    <circle cx="660" cy="90" r="3" class="dot"/>
+  </g>
+  <circle cx="110" cy="90" r="30" class="thin dash"/><text x="145" y="72" class="svgs">reach 0.65 m: the column is inside it</text>
+  <text x="380" y="120" class="svgs" text-anchor="middle">samples every 0.5 m; orange = nothing within reach</text>
+  <path d="M260 90 V190" class="ln"/><rect x="250" y="184" width="20" height="6" class="box"/>
+  <path d="M480 90 V190" class="ln"/><rect x="470" y="184" width="20" height="6" class="box"/>
+  <text x="370" y="160" class="svgs" text-anchor="middle">pipe stands at even fractions of the level straight, at most 2.2 m apart,</text>
+  <text x="370" y="176" class="svgs" text-anchor="middle">wherever a floor lies within 6 m below</text>
+</svg>
+<figcaption><b>Figure 7.</b> The support rule. Every sample within 0.65 m of structure, world geometry or equipment bulk is supported; the longest unsupported stretch must stay under 3 m. A level stretch that would fail is stood on pipe stands where there is a floor to stand them on.</figcaption>
+</figure>
+
+<p>Where a run is supported, a <dfn>bracket</dfn> (the clamp hardware that is drawn) is placed every 2.2 m of run, anchored to the nearest surface, looking down first, then sideways, then up for an overhead hanger. Since 19 September 2026 a level stretch that would fail the rule is stood on <dfn>pipe stands</dfn>: posts down to the nearest floor, slab or deck within 6 m below (layer 1 only; a stand never rests on equipment). Stands are placed at fixed fractions of the level straight, evenly spaced at most 2.2 m apart, rather than measured from where the unsupported stretch begins, because that beginning moves as a line is raised and the director "saw one appear and vanish between notches"; one more stand goes at an end where the riser before or after would otherwise make the span too long. A riser is never stood; a run higher than a stand reaches still needs a rack; and a stand is added only where a span would otherwise fail, so nothing already carried changes. A run that fails the rule is painted alarm red and its hover text says so; the rule is otherwise silent. The rule is also a veto: while the player is routing, the preview is checked against it, and a connection whose route would fail is refused with the routing kept for the player to add structure or a waypoint.</p>
+
+<h2 id="s9"><span class="n">9</span>Sizes, reducers, inline devices, cuts and open ends</h2>
+<p><b>Sizes.</b> A line's bore is chosen in the run editor (double-click a line). Changing it re-lays the line at the new radius and rescales its resistance to flow by (50 ÷ DN)<sup>5</sup>, the law for turbulent flow in a rough pipe, so that a DN1 line passes about half a millilitre a second at 4 bar. Every nozzle on a tank, header or pump is a DN50 bore, so a line of another size meets it through a <dfn>reducer</dfn>, a cone drawn in the end spool tapering between the two bores over about a diameter and a half of the larger. <dfn>Inline fittings</dfn> (valves, tees, flow gauges, caps and the small-bore devices) are different: they are built at the bore of the largest line on them, wear their own flanges, and their fittings are flush with their faces, so that a line of the same size meets them with no reducer. A tee or valve bought at a size keeps it until reconfigured; its lines meet it through reducers if they differ.</p>
+<p><b>Inline placement.</b> Some device types have an inlet and an outlet facing each other along one axis: pumps, valves, flow gauges, tees and (specially) tanks. Such a type may be placed <dfn>inline</dfn> on an existing line: the placement ghost snaps onto the pipe axis within 0.75 m of the aim point, turns so its inlet faces upstream, and the click cuts the line at that spot, places the device, and connects the two pieces to it as fixed lines carrying the original line's colour and label, all as one undo step. The device needs room: its own half-length, its flange, and the stub every fitting keeps (0.78 m each way for a pump). The placement is refused, with the reason shown, on a riser, on a straight without that room, too close to a fitting, where a vessel would have nothing to stand on, or where the line is too low for the device's nozzle height. An inline device carried afterwards <dfn>slides</dfn> only along its line, a quarter metre a step, between the corners either side, the two pieces stretching and shrinking without any re-route.</p>
+<p><b>Cuts.</b> Holding the right button on a line and pulling the view across it <dfn>cuts</dfn> the line: the wire is removed, a <dfn>cap</dfn> (a fitting with a blind flange) is stood 0.45 m either side of the cut at the line's height, and the two pieces are laid again as fixed lines. A capped line stands at pressure and moves nothing. A line from one cap to another, or to anything, takes the blind off. A riser cannot be cut, nor the last 0.9 m at a fitting.</p>
+<p><b>Open ends.</b> While routing from an outlet, pressing E ends the line at its last waypoint with an <dfn>open cap</dfn>, a cap without its blind: the line simply ends in the air and whatever arrives spills out at atmospheric pressure, into an open-topped vessel if one stands beneath, otherwise onto the ground. The cap vents to the air at its own height, which the plant re-derives from where the cap stands whenever it is placed, moved or loaded, so of two open ends fed from one header the lower one spills faster, by the head of the height between them. An open end can only follow an outlet; one feeding an inlet would draw from nowhere.</p>
+
+<h2 id="s10"><span class="n">10</span>Editing a laid line</h2>
+<p>A click on one straight of a line selects that straight: a translucent sleeve shows along it, and a gold cube <dfn>handle</dfn> appears at every corner of the whole line except the two fittings and their stub ends, which follow the equipment and cannot be moved (Figure 8). The handles stand on the line's <dfn>own route</dfn>, which after the bake is the drawn path exactly, so every cube is a real point of the pipe. Which waypoint a handle is, is decided by exact equality of position to within a centimetre, never by nearness; the director's words on 19 September 2026 were "we cannot have such proximity based rules", after a day in which distance-matched handles swallowed a corner planted beside another.</p>
+
+<figure>
+<svg viewBox="0 0 760 200" role="img" aria-label="A selected line with gold cube handles at each corner, a translucent sleeve on the selected straight, and no cubes at the fittings or stub ends. Callouts list the mouse actions.">
+  <rect x="30" y="120" width="14" height="10" class="box"/><rect x="716" y="60" width="14" height="10" class="box"/>
+  <path d="M44 125 H90 H300 V65 H560 H670 H716" class="pipe"/>
+  <path d="M300 125 V65" stroke="var(--accent)" stroke-width="14" opacity=".25" stroke-linecap="round"/>
+  <circle cx="90" cy="125" r="4" class="dotb"/><circle cx="670" cy="65" r="4" class="dotb"/>
+  <rect x="292" y="117" width="16" height="16" class="cube"/><rect x="292" y="57" width="16" height="16" class="cube"/><rect x="552" y="57" width="16" height="16" class="cube"/>
+  <text x="90" y="145" class="svgs" text-anchor="middle">stub end: no handle</text>
+  <text x="300" y="155" class="svgs" text-anchor="middle">gold cube: a corner you may move</text>
+  <text x="330" y="100" class="svgs">selected straight (sleeve)</text>
+  <text x="560" y="45" class="svgs" text-anchor="middle">a corner the player planted</text>
+  <text x="30" y="185" class="svgs">Left-drag a cube: move it. Left-click the straight: plant a corner. Right-click a cube: delete it. Middle-click a cube: lock it. Ctrl + wheel: raise or lower.</text>
+</svg>
+<figcaption><b>Figure 8.</b> Editing a line. Handles stand on real points of the pipe; the two fittings and their stub ends never have one.</figcaption>
+</figure>
+
+<p>Every editing operation obeys one invariant, set after a drag once sent every corner the router had derived back to the router as if the player had set it, so that each lay derived new corners from the last and "a spaghetti pile rapidly emerged": <b>only the player's waypoints are kept</b>. When a handle is dragged, the corner under it moves if it is already a waypoint, and otherwise is inserted as a new waypoint at its place along the route; a line therefore gains exactly one waypoint per corner the player has touched. The operations are:</p>
+<ul>
+<li><b>Drag a handle</b> to move that corner in its level plane, snapped to a quarter metre, the line re-laid a few times a second. A riser's other end (the point directly above or below it) follows sideways so the riser stays vertical; if that other end was the router's rather than the player's, it becomes a waypoint too, so that the riser travels with the drag rather than leaving a second riser behind.</li>
+<li><b>Click the selected straight</b> to plant a corner there at once, with its cube up; a pull that follows drags it. This is how a triangle-shaped bend is made from three clicks and a pull.</li>
+<li><b>Ctrl at the press on a cube</b> to duplicate the corner; the copy goes before or after the original according to which way it is first pulled, and a copy taken off either end of a riser lands cleanly beyond the riser's other end.</li>
+<li><b>Right-click a cube</b> to delete that corner; the leg between its two neighbours (the next corners either side, or the stub ends) is routed afresh, plain where clear and searched round solids otherwise, and the line is baked again. A stub end refuses, since it follows the fitting; a locked corner refuses.</li>
+<li><b>Middle-click a cube</b> to <dfn>lock</dfn> the corner where it stands, or unlock it. A locked cube is steel grey. A locked corner never moves when other things are dragged around it; a drag on it returns the line unchanged with a message; a raise of a straight refuses when either end is locked. Locks save with the line.</li>
+<li><b>Ctrl and the wheel</b> over a selected line to raise or lower a held cube a quarter metre a notch, or with nothing held the whole selected level straight, its two ends becoming corners at the new height, both moved in one pass against the path as it was; two single-point edits in one tick once ordered the far corner ahead of the near one and the line looped back on itself at three times its length. A riser cannot be raised, only its ends; nothing goes below 0.15 m.</li>
+</ul>
+<p>After every gesture the line is baked again, so any straight the lay added during the drag becomes a corner with a handle of its own.</p>
+
+<h2 id="s11"><span class="n">11</span>The reports</h2>
+<p>Because every rule above can be broken by a plant laid by hand or by code, the plant prints four reports on every automated run, twenty frames after start so that the sweep has settled, and the showcase probe prints them after its soak. Each reads the path a run was actually drawn with, never a recomputation, so the report, the support check and what is rendered agree. The <dfn>overlap report</dfn> lists every pair of runs sharing a corridor beyond the allowance, worst first, with each run's lane. The <dfn>crossing report</dfn> lists every place two runs still pass through each other. The <dfn>unsupported report</dfn> lists every run failing the support rule and where its longest span begins. The <dfn>intersection report</dfn> lists every run passing through solid geometry by the oracle's rule, one line per run and per thing it passes through. A fifth, the <dfn>fan-out report</dfn>, lists any port carrying more than one wire in the simulation, hidden wires included, and its only legitimate entries are instrument taps. The standings of the showcase plant on 21 September 2026 are 0 overlaps, 0 unsupported runs, 9 crossings and 20 runs through solids. The nine crossings are all cables meeting their fittings where neither over nor under has room; the twenty intersections are layout debt of the hand-laid showcase, such as two conduits through a control-room door, since the model has no wall penetrations, and nozzles on a tower that face its railings. The director's method is to perfect routing on simple configurations examined one at a time, never on the showcase.</p>
+
+<h2 id="s12"><span class="n">12</span>A worked example</h2>
+<p>The first routing exercise on the test site is a supply header and a pump eight metres apart on one axis, the header's outlet facing the pump's inlet in plan. The header's outlet fitting stands 1.55 m above the ground; the pump's inlet stands 0.42 m up. The player connects the two with no waypoints.</p>
+<ol>
+<li>The route has one leg, from the header's stub end (0.35 m out along its axis, at 1.55 m) to the pump's stub end (0.35 m out along its axis, at 0.42 m). The far end is lower, so it is a falling leg: by the direct-line rule the line drops first, at the header, to 0.42 m and then runs level to the pump's stub end.</li>
+<li>The plain leg is sampled every 15 cm and put to the clearance oracle. The drop is within the header's reach and on a vertical, so the header is open to it; the level straight is clear of everything, since the ground is beneath it rather than through it. No search runs.</li>
+<li>There are no earlier runs, so lane 0 scores zero and wins at once; there are no crossings, so no bridges.</li>
+<li>Three frames later the sweep finds nothing changed and bakes the line: its waypoints are now the two corners of the drop. The support rule samples the level straight every half metre: the ground is within 0.65 m of a run at 0.42 m, so every sample is supported and brackets are drawn every 2.2 m; no stands are needed.</li>
+<li>The drawn line is: stub out of the header, a drop of 1.13 m, a level straight of about 7 m on brackets, and the stub into the pump. Selecting it shows two gold cubes, at the top and bottom of the drop. The director's finding was that it was clean.</li>
+</ol>
+<p>The same configuration in the showcase plant once produced a convoluted line, because its wires carried hand-set waypoints from before the direct-line rule that the router faithfully obeyed. Removing them exposed a second bug: the square leg for a fold was being inserted after the search, moving a leg 0.45 m back through a pump the search had gone round. Both fixes are in the rules above: the router obeys waypoints exactly, and the square leg goes in first.</p>
+
+</div>
+
+<hr>
+<h2 id="gl" style="margin-top:0">Glossary</h2>
+<div class="tablewrap"><table>
+<tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>Record</td><td>A simulated piece of equipment.</td></tr>
+<tr><td>Port, nozzle, terminal</td><td>A record's connection point; a nozzle carries liquid, a terminal carries a signal or power.</td></tr>
+<tr><td>Wire</td><td>The simulation's connection from an outlet to an inlet: a pipe with a resistance, or a cable. Hidden wires have no run.</td></tr>
+<tr><td>Run, line, conduit</td><td>The drawn three-dimensional shape of a wire; a line carries liquid, a conduit carries cable.</td></tr>
+<tr><td>Placed run</td><td>Infrastructure laid by hand with no wire behind it (tray, rack pipe, multicore); never shifted, searched or bridged.</td></tr>
+<tr><td>Fitting, axis, face</td><td>The physical attachment at a port; the outward direction a run leaves along; the outer surface where a route starts or ends.</td></tr>
+<tr><td>Bore, DN, radius</td><td>A line's nominal size in millimetres (DN1 to DN150, DN50 default) and its drawn radius (0.07 × DN/50 m).</td></tr>
+<tr><td>Path, corner, straight</td><td>The ordered points of a run; a point where direction changes; the segment between two points.</td></tr>
+<tr><td>Level, riser, drop</td><td>A horizontal straight; a vertical straight going up; one going down.</td></tr>
+<tr><td>Stub, stub end</td><td>The short straight leaving a fitting along its axis (five radii, 3 cm to 0.35 m); its far point.</td></tr>
+<tr><td>Waypoint</td><td>A point the player clicked that the line must pass through; owned by the player.</td></tr>
+<tr><td>Leg</td><td>The stretch of route between two consecutive waypoints or stub ends; the router's unit of work.</td></tr>
+<tr><td>Direct-line rule</td><td>A leg is one horizontal straight at any bearing plus one vertical; rising legs rise at the far end, falling legs drop first.</td></tr>
+<tr><td>Fold, square leg</td><td>A corner turning through more than 135 degrees; the 0.45 m right-angle straight inserted to split it.</td></tr>
+<tr><td>Order, order rule</td><td>A wire's place in the laying sequence; a run yields only to runs laid before it.</td></tr>
+<tr><td>New, fixed, bake</td><td>A line not yet baked is routed by all three passes; baking copies its drawn corners into its waypoints, after which it is fixed and laid plainly forever.</td></tr>
+<tr><td>Clearance oracle</td><td>The one object that answers "may a run pass here?": solids are world, structure and equipment; own equipment open within reach and on verticals; resting is not passing through.</td></tr>
+<tr><td>Reach, stub clearance</td><td>How far from its fitting a run's own equipment is open to it: 1.2 m plus half the footprint.</td></tr>
+<tr><td>Plain leg, searched leg</td><td>A leg laid by the direct-line rule and found clear; one whose plain shape hit something and was found by grid search.</td></tr>
+<tr><td>A* search</td><td>The grid search: half-metre cells, six moves, integer costs, a slightly overestimated remaining cost.</td></tr>
+<tr><td>Pull straight</td><td>Replacing the search's staircase with the fewest clear direct lines.</td></tr>
+<tr><td>Overlap, crossing</td><td>Two runs sharing a corridor; two runs passing through each other at a point.</td></tr>
+<tr><td>Lane, side, step, tier</td><td>A fixed offset from the searched route (33 lanes): which side, how many run-widths out, how many run-widths up.</td></tr>
+<tr><td>Room, sidestep, slide</td><td>How far a straight may move before hitting something; the right-angle jog a lane adds at a stub end; the along-the-leg shift of a riser.</td></tr>
+<tr><td>Bridge, span</td><td>The up-across-down (or sideways) detour over a crossing; the merged stretch of one straight that one bridge covers.</td></tr>
+<tr><td>Bundle-mates</td><td>Runs leaving one record together; they never bridge each other.</td></tr>
+<tr><td>Deferred sweep</td><td>The re-lay of new lines three frames after a change, in laying order, up to six rounds, ending in the bake.</td></tr>
+<tr><td>Support rule, span, reach</td><td>No unsupported span over 3 m; samples every 0.5 m; supported when something on layer 1 or 4 is within 0.65 m.</td></tr>
+<tr><td>Bracket, pipe stand</td><td>Clamp hardware every 2.2 m of supported run; a post to a floor within 6 m under a level straight that would otherwise fail.</td></tr>
+<tr><td>Reducer, inline fitting</td><td>The cone where a line meets a nozzle of another bore; a device built at its line's bore with flush fittings.</td></tr>
+<tr><td>Inline placement, slide</td><td>Cutting a device into an existing line; carrying it along that line only.</td></tr>
+<tr><td>Cut, cap, open cap</td><td>Splitting a line into two capped pieces; the blind-flanged fitting; the same fitting left open to spill.</td></tr>
+<tr><td>Handle, own route, lock</td><td>A gold cube at a corner; the drawn path the handles stand on; a corner pinned in place.</td></tr>
+<tr><td>The reports</td><td>Overlap, crossing, unsupported, intersection and fan-out: the standing measures of a plant's routing.</td></tr>
+</table></div>
+<p class="small">Code: <code>game/components/pipe_route.gd</code> (legs, folds, the grid search, straightening), <code>game/world/run_clearance.gd</code> (the oracle), <code>game/world/plant.gd</code> (lanes, bridges, the sweep, the bake, sizes, inline placement, cuts, the reports), <code>game/components/support_check.gd</code> (the support rule, brackets and stands), <code>game/components/pipe_view.gd</code> (drawing), <code>game/player/build_controller.gd</code> and <code>game/player/leg_gizmo.gd</code> (editing).</p>
+</article>

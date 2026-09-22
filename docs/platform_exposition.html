@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flowstate Platform Exposition</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root{
+  --bg:#F4F5F3; --panel:#FFFFFF; --code:#ECEFEC; --ink:#17201F; --muted:#5A6663;
+  --accent:#0B6B74; --accent2:#B4552A; --rule:#D1D7D4; --rule2:#B9C1BD; --shade:#E4E9E6;
+  --sans:"IBM Plex Sans",system-ui,Segoe UI,Helvetica,Arial,sans-serif;
+  --serif:"Spectral",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",Consolas,"Courier New",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#131817; --panel:#1A201F; --code:#1E2624; --ink:#E4E9E6; --muted:#98A49F;
+    --accent:#62C3CA; --accent2:#E48F62; --rule:#2B3432; --rule2:#3B4644; --shade:#212927;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131817; --panel:#1A201F; --code:#1E2624; --ink:#E4E9E6; --muted:#98A49F;
+  --accent:#62C3CA; --accent2:#E48F62; --rule:#2B3432; --rule2:#3B4644; --shade:#212927;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.58;margin:0;padding-inline:16px;padding-block:0 64px}
+.head{font-family:var(--sans);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-block:12px;max-width:1040px;margin:0 auto}
+.wrap{max-width:1040px;margin:0 auto}
+.titleblock{padding-block:40px 24px;border-bottom:1px solid var(--rule)}
+h1{font-family:var(--sans);font-weight:600;font-size:clamp(28px,4vw,40px);line-height:1.15;letter-spacing:-.01em;margin:0 0 14px;text-wrap:balance;max-width:26em}
+.byline{font-family:var(--sans);font-size:15px;color:var(--muted);margin:0 0 6px}
+.byline b{color:var(--ink);font-weight:500}
+.abstract{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;padding-block:28px;border-bottom:1px solid var(--rule)}
+@media(min-width:860px){.abstract{grid-template-columns:2fr 1fr}}
+.abstract h2{font-family:var(--sans);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.abstract p{margin:0 0 12px;font-size:16.5px}
+.kw{font-family:var(--sans);font-size:14px;color:var(--muted);line-height:1.6}
+.kw span{display:inline-block;border:1px solid var(--rule2);border-radius:3px;padding:1px 7px;margin:0 6px 6px 0;color:var(--ink)}
+.toc{font-family:var(--sans);font-size:14px;columns:2;column-gap:28px;padding-block:20px;border-bottom:1px solid var(--rule)}
+.toc a{color:var(--ink);text-decoration:none;display:block;padding:2px 0;break-inside:avoid}
+.toc a:hover{color:var(--accent)}
+.toc .n{color:var(--muted);display:inline-block;width:2.4em;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.toc{columns:1}}
+article{max-width:1040px;margin:0 auto}
+.body p,.body ol,.body ul,.body h2,.body h3,.body .note,.body .eq{max-width:68ch}
+h2{font-family:var(--sans);font-weight:600;font-size:24px;line-height:1.2;margin:56px 0 14px;text-wrap:balance;letter-spacing:-.005em}
+h2 .n,h3 .n{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:.5em}
+h3{font-family:var(--sans);font-weight:600;font-size:17.5px;margin:32px 0 8px;text-wrap:balance}
+p{margin:0 0 14px}
+p.lead{font-size:18px}
+a{color:var(--accent)}
+code,kbd{font-family:var(--mono);font-size:.86em;background:var(--code);padding:1px 4px;border-radius:3px}
+pre{font-family:var(--mono);font-size:13px;line-height:1.5;background:var(--code);border:1px solid var(--rule);border-radius:4px;padding:12px 14px;overflow-x:auto;margin:14px 0 18px;max-width:100%}
+pre code{background:none;padding:0;font-size:inherit}
+figure{margin:24px 0 28px;max-width:100%}
+figure svg{max-width:100%;height:auto;display:block;color:var(--ink);font-family:var(--sans)}
+figcaption{font-family:var(--sans);font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5;max-width:68ch}
+figcaption b{color:var(--ink);font-weight:500}
+.tablewrap{overflow-x:auto;margin:16px 0 22px;max-width:100%}
+table{border-collapse:collapse;font-family:var(--sans);font-size:14px;line-height:1.4;min-width:100%}
+caption{text-align:left;font-size:14px;color:var(--muted);padding:0 0 8px;caption-side:top}
+caption b{color:var(--ink);font-weight:500}
+th{text-align:left;font-weight:600;border-bottom:2px solid var(--rule2);padding:6px 10px 6px 0;vertical-align:bottom}
+td{border-bottom:1px solid var(--rule);padding:6px 10px 6px 0;vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td code{white-space:nowrap}
+.note{border-left:3px solid var(--accent);background:var(--shade);padding:10px 14px;margin:16px 0 18px;font-size:15.5px}
+.note b{font-family:var(--sans);font-weight:600}
+.fail{border-left-color:var(--accent2)}
+ol,ul{padding-left:1.4em;margin:0 0 14px}
+li{margin:0 0 6px}
+.eq{overflow-x:auto;max-width:100%}
+.refs{font-family:var(--sans);font-size:14px;line-height:1.5}
+.refs li{margin:0 0 8px}
+.small{font-size:14px;color:var(--muted);font-family:var(--sans)}
+hr{border:0;border-top:1px solid var(--rule);margin:40px 0}
+.svgt{font-size:12px;fill:currentColor}
+.svgs{font-size:11px;fill:var(--muted)}
+.box{fill:var(--panel);stroke:currentColor;stroke-width:1.2}
+.boxa{fill:var(--panel);stroke:var(--accent);stroke-width:1.6}
+.ln{stroke:currentColor;stroke-width:1.2;fill:none}
+.lna{stroke:var(--accent);stroke-width:1.8;fill:none}
+.lnb{stroke:var(--accent2);stroke-width:1.6;fill:none}
+.dash{stroke-dasharray:4 3}
+.fixed{fill:var(--accent);stroke:none}
+.free{fill:var(--panel);stroke:currentColor;stroke-width:1.4}
+sup{line-height:0}
+</style>
+<script>
+window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},svg:{fontCache:'global'},options:{skipHtmlTags:['script','noscript','style','textarea','pre','code']}};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"></script>
+
+<div class="head"><span>Technical exposition · platform architecture</span><span>Source tree of 21 September 2026, including the elevation change of that day</span></div>
+
+<article>
+<div class="titleblock">
+  <h1>Flowstate: a pressure-solved process-plant simulation platform with order-consistent routing of pipe and conduit</h1>
+  <p class="byline"><b>Repository</b> whharris917/flowstate · Python reference kernel (<code>sim/</code>) and GDScript port on Godot 4.7.2 (<code>game/</code>)</p>
+  <p class="byline"><b>Prepared</b> from the working tree of 21 September 2026; measurements from the headless showcase run and the pytest suite of the same day</p>
+</div>
+
+<div class="abstract">
+  <div>
+    <h2>Abstract</h2>
+    <p>Flowstate is a simulation platform for first-person construction of a chemical process plant, in which every placed object is backed by a simulation record and every material connection is a branch of a hydraulic network. Its central design decision is that <em>nothing asserts a flow rate</em>: headers and vessels impose boundary pressures, pumps add head on a curve, valves and pipe runs resist by a square law, and the flow in every line is whatever satisfies nodal conservation at once. This article describes the platform as it stands in its source tree: the deterministic scan; the material-stream model that carries composition through the network one node per scan; the nodal Newton–Raphson solver and the eleven numerical pathologies it was hardened against; the unit-operation library with its deliberately simple internal equations; the signal layer with its scanned ladder logic and positional PID; the historian and material-balance accounting; the engine-side integration, including a scan that runs on a worker thread within the render window; and the routing subsystem that lays pipe and conduit through a searched, laned and bridged pipeline under a total laying order, against a single clearance oracle and a support rule, before baking each route into player-owned waypoints. The reference kernel is written in Python and mirrored class for class in GDScript; the port's departures are catalogued. Current standings from the headless showcase are reported.</p>
+  </div>
+  <div>
+    <h2>Keywords</h2>
+    <div class="kw"><span>hydraulic network analysis</span><span>nodal Newton–Raphson</span><span>process simulation</span><span>ladder logic</span><span>PID</span><span>process historian</span><span>pipe routing</span><span>A* search</span><span>Godot</span><span>deterministic simulation</span></div>
+    <h2 style="margin-top:18px">Scale</h2>
+    <div class="kw">Python kernel 6,750 lines in 12 modules · GDScript 34,264 lines in 163 files · 274 pytest cases passing in 217 s · 220 commits since 29 August 2026</div>
+  </div>
+</div>
+
+<nav class="toc">
+  <a href="#s1"><span class="n">1</span>Introduction</a>
+  <a href="#s2"><span class="n">2</span>Architecture</a>
+  <a href="#s3"><span class="n">3</span>The scan</a>
+  <a href="#s4"><span class="n">4</span>Streams, species and composition transport</a>
+  <a href="#s5"><span class="n">5</span>The hydraulic solver</a>
+  <a href="#s6"><span class="n">6</span>Unit operations</a>
+  <a href="#s7"><span class="n">7</span>Signal layer and control tier</a>
+  <a href="#s8"><span class="n">8</span>Historian, balance and alarms</a>
+  <a href="#s9"><span class="n">9</span>Engine integration</a>
+  <a href="#s10"><span class="n">10</span>Routing of runs</a>
+  <a href="#s11"><span class="n">11</span>Verification</a>
+  <a href="#s12"><span class="n">12</span>Discussion and limitations</a>
+  <a href="#refs"><span class="n"></span>References</a>
+</nav>
+
+<div class="body">
+
+<h2 id="s1"><span class="n">1</span>Introduction</h2>
+<p class="lead">Factory-building games conventionally model material transport as bookkeeping. A machine is labelled with a throughput, a conveyor with a capacity, and the simulation moves items at the labelled rates, decrementing one inventory and incrementing another. The model is easy to build and easy to balance, but it has no notion of <em>why</em> a rate is what it is: a pump delivers its rating whether it lifts one metre or forty, a valve half open passes half the flow, and two pumps in parallel deliver twice as much. Flowstate's first version was such a model. It surfaced its own inadequacy as a port on a supply header named <code>draw</code>, through which every consumer had to announce what it took so the header could decrement its inventory. A supply header physically has no inlet. The port existed so that the arithmetic would close.</p>
+<p>The platform described here replaced that model on 31 August 2026 with the rule that <b>pressure drives flow and nothing asserts a rate</b>. Each material nozzle is a node of a hydraulic network; each pipe run is a branch with a resistance; vessels and headers impose boundary pressures; pumps add head on a curve; and the solver finds the node pressures at which every free node conserves flow. Direction is an answer, not a declaration: a vessel's bottom nozzle carries the head of the liquid standing above it, so a full tank drains into an empty one through nothing but a pipe, and a pump asked to lift more than its shutoff head dead-heads in plain view.</p>
+<p>This article is a technical exposition of the platform as it exists in its source tree. It is written for a reader who knows process engineering or simulation and has not seen the code. Its scope is the platform: the two simulation kernels, the unit-operation and control libraries, the historian and accounting, the engine integration, and the routing of pipe and conduit. The game built on the platform (its narrative, campaign ladder, landscapes and showcase set pieces) is out of scope except where a worked example is needed, and the showcase plant is used as the standing benchmark because it is the largest network in the tree. Sections 2 to 4 set out the architecture and the scan; Section 5 is the hydraulic solver; Section 6 the unit operations; Section 7 the signal layer; Section 8 the historian; Section 9 the engine integration; Section 10 the routing subsystem; Section 11 the verification apparatus; and Section 12 discusses limitations and the discrepancies found between authored documentation and code.</p>
+<p><b>Units and notation.</b> Throughout the kernel, flow is volumetric in L/s, pressure is Pa gauge, temperature is °C, and one litre is taken as one kilogram, so mass fractions and volume fractions coincide and no species carries a density. \(\rho g\) is fixed at 9,810 Pa/m. A branch runs from node \(a\) to node \(b\), \(\Delta p = P_a - P_b\), and positive flow runs from \(a\) to \(b\). At a nozzle, the signed flow \(q\) is positive into the component. A "scan" is one fixed-rate tick of the simulation, 50 ms of simulated time.</p>
+
+<h2 id="s2"><span class="n">2</span>Architecture</h2>
+<p>Flowstate is two implementations of one kernel and one engine layer over the second of them (Figure 1). The <b>Python reference kernel</b> under <code>sim/</code> was written first and is where mechanics are prototyped and validated against a pytest suite; it is unoptimised by policy. The <b>GDScript kernel</b> under <code>game/sim/</code> mirrors it class for class, under the constraint that sim classes are plain <code>RefCounted</code> objects with no scene-tree inheritance and no reference to any node; it is what the game runs. The <b>engine layer</b> under <code>game/world/</code>, <code>game/components/</code>, <code>game/player/</code> and <code>game/ui/</code> owns the scene: it maps records to views, drives the fixed-rate tick, lays and validates runs, renders, and takes input.</p>
+
+<figure>
+<svg viewBox="0 0 760 300" role="img" aria-label="Three layers: the Python reference kernel and the GDScript kernel mirror each other; the engine layer sits over the GDScript kernel and owns records, views, routing and display.">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+  <rect x="20" y="20" width="330" height="120" rx="3" class="box"/>
+  <text x="34" y="44" class="svgt" font-weight="600">Python reference kernel  ·  sim/</text>
+  <text x="34" y="66" class="svgs">core.py · hydraulics.py · stream.py · species.py</text>
+  <text x="34" y="82" class="svgs">components.py · process.py · separation.py · small_bore.py</text>
+  <text x="34" y="98" class="svgs">control.py · historian.py · library.py</text>
+  <text x="34" y="124" class="svgs">tests/ (274 cases) · tools/demo_gui.py (browser HMI)</text>
+
+  <rect x="410" y="20" width="330" height="120" rx="3" class="boxa"/>
+  <text x="424" y="44" class="svgt" font-weight="600">GDScript kernel  ·  game/sim/</text>
+  <text x="424" y="66" class="svgs">simulation.gd · sim_network.gd · sim_branch.gd (+5 kinds)</text>
+  <text x="424" y="82" class="svgs">sim_stream.gd · sim_species.gd · sim_&lt;unit&gt;.gd × 30</text>
+  <text x="424" y="98" class="svgs">sim_plc.gd · sim_pid.gd · sim_historian.gd</text>
+  <text x="424" y="124" class="svgs">GD-only: sim_alarms.gd · sim_balance.gd · sim_library_data.gd</text>
+
+  <line x1="350" y1="80" x2="410" y2="80" class="ln" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <text x="380" y="70" class="svgs" text-anchor="middle">mirror</text>
+
+  <rect x="410" y="180" width="330" height="100" rx="3" class="box"/>
+  <text x="424" y="204" class="svgt" font-weight="600">Engine layer  ·  game/world, components, player, ui</text>
+  <text x="424" y="226" class="svgs">Plant: records ↔ views, tick on a thread, save/undo</text>
+  <text x="424" y="242" class="svgs">PipeRoute · RunClearance · SupportCheck · MeshMerge</text>
+  <text x="424" y="258" class="svgs">BuildController · DeviceMenu · HMI panels · audio</text>
+  <line x1="575" y1="140" x2="575" y2="180" class="lna" marker-end="url(#ar)"/>
+  <text x="588" y="164" class="svgs">reads state, never a node in return</text>
+
+  <text x="20" y="200" class="svgs">Rule: the sim is data plus a tick.</text>
+  <text x="20" y="216" class="svgs">Nodes render and take input; no game</text>
+  <text x="20" y="232" class="svgs">logic runs in _process. Every visual object</text>
+  <text x="20" y="248" class="svgs">is backed by a record.</text>
+</svg>
+<figcaption><b>Figure 1.</b> The three parts of the platform. The GDScript kernel is a class-for-class port of the Python reference and never touches a scene node, which is what later permits the scan to run on a worker thread (Section 9.2). The engine layer reads kernel state and writes only through the kernel's own API.</figcaption>
+</figure>
+
+<p>Four architectural rules are stated in the project's working agreement and are visible everywhere in the code. First, <b>the sim is data plus a tick</b>: simulation logic lives in plain classes with declared input and output ports and a <code>tick(dt)</code>; nodes only render and take input. Second, there are <b>two layers</b>, process (material streams) and signal (24 V discrete, 4–20 mA analog), and components bridge them: a level switch reads process and drives signal, a pump reads signal and drives process. Third, <b>rich streams between units, simple equations inside them</b>: material moves as a stream carrying rate, temperature, composition and a suspended-solids fraction, conserved when streams merge, split and blend into a vessel, but a unit's interior is a handful of algebraic and first-order relations, never discretised transport, vapour–liquid equilibrium or film coefficients. Fourth, <b>every visual object is backed by a record</b>; a run's truth is the kernel wire it visualises.</p>
+
+<h2 id="s3"><span class="n">3</span>The scan</h2>
+<p>The kernel is a graph of components. Each component declares typed input and output ports and implements <code>tick(dt)</code>; components read only their own input ports and never another component directly. A scan proceeds in a fixed order (Figure 2): every non-material input port resets to its default; every non-material wire copies its source output value into its destination input; the hydraulic network is solved; every component ticks in insertion order; simulated time advances by \(\Delta t\); the historian samples.</p>
+
+<figure>
+<svg viewBox="0 0 760 170" role="img" aria-label="The five phases of one scan in order: reset inputs, propagate wires, solve hydraulics, tick components, sample the historian; an annotation states that a value published at scan n is read at scan n plus one.">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+  <g>
+    <rect x="10" y="30" width="124" height="54" rx="3" class="box"/><text x="72" y="52" class="svgt" text-anchor="middle">1  reset inputs</text><text x="72" y="70" class="svgs" text-anchor="middle">non-material only</text>
+    <rect x="164" y="30" width="124" height="54" rx="3" class="box"/><text x="226" y="52" class="svgt" text-anchor="middle">2  propagate</text><text x="226" y="70" class="svgs" text-anchor="middle">wires copy outputs</text>
+    <rect x="318" y="30" width="124" height="54" rx="3" class="boxa"/><text x="380" y="52" class="svgt" text-anchor="middle">3  solve network</text><text x="380" y="70" class="svgs" text-anchor="middle">update → Newton → mix</text>
+    <rect x="472" y="30" width="124" height="54" rx="3" class="box"/><text x="534" y="52" class="svgt" text-anchor="middle">4  tick components</text><text x="534" y="70" class="svgs" text-anchor="middle">insertion order</text>
+    <rect x="626" y="30" width="124" height="54" rx="3" class="box"/><text x="688" y="52" class="svgt" text-anchor="middle">5  historian</text><text x="688" y="70" class="svgs" text-anchor="middle">t += Δt, sample</text>
+    <line x1="134" y1="57" x2="164" y2="57" class="ln" marker-end="url(#ar2)"/>
+    <line x1="288" y1="57" x2="318" y2="57" class="ln" marker-end="url(#ar2)"/>
+    <line x1="442" y1="57" x2="472" y2="57" class="ln" marker-end="url(#ar2)"/>
+    <line x1="596" y1="57" x2="626" y2="57" class="ln" marker-end="url(#ar2)"/>
+  </g>
+  <path d="M688 84 V120 H72 V84" class="ln dash" marker-end="url(#ar2)"/>
+  <text x="380" y="140" class="svgs" text-anchor="middle">an output published during phase 4 of scan n is what phase 2 of scan n+1 delivers: one scan of latency per hop</text>
+  <text x="380" y="158" class="svgs" text-anchor="middle">material ports are not reset and receive nothing by wire; phase 3 decides what is at each nozzle</text>
+</svg>
+<figcaption><b>Figure 2.</b> The scan. Signals are propagated before the solve so that a valve knows its command and a pump knows whether it is running before the network is solved on them. Material does not propagate along a wire at all: a material wire is a pipe, and what moves through it is what the solve says.</figcaption>
+</figure>
+
+<p>Two consequences are deliberate. Because outputs are read one scan after they are written, every hop through the graph costs one scan of latency, which is what real relay and PLC scan delay looks like and what makes phenomena such as pump chatter reproducible; a test pins the path switch → relay → pump at exactly three ticks. And because an input port is blanked at the top of every scan, <b>a command must be wired, never poked</b>: a value written directly onto an input port is gone before its component ticks. The test helpers therefore stand in real sources (<code>Duty</code> for analog, <code>Contact</code> for discrete) rather than assign port values.</p>
+<p>Ports carry a <em>kind</em> and wires may join only ports of the same kind: discrete (bool), analog (float), material, level (an instrument tap in litres), pressure (an instrument tap in Pa), and power (1.0 = energised, with a voltage-class string such as <code>480VAC</code> or <code>24VDC</code> that must match at both ends or the wire is refused). Discrete inputs accept several wires and OR them, as parallel contacts do; every other signal input accepts one. A material input accepts several because several runs on one nozzle is a tee that the network resolves by solving the node. Ports know their owner's <em>name</em>, never the owner object, because a component-to-port back-reference would be a reference cycle in the GDScript kernel's reference-counted objects and would leak the graph; observables are attribute names for the same reason.</p>
+
+<h2 id="s4"><span class="n">4</span>Streams, species and composition transport</h2>
+<h3><span class="n">4.1</span>The stream value</h3>
+<p>A <code>Stream</code> is an immutable value \((F, T, \mathbf{x}, s)\): rate in L/s, temperature, a composition vector over the species table that always sums to one, and a suspended-solids fraction \(s \in [0,1]\), the fraction of the whole stream present as crystal rather than dissolved. The solid is always the single crystallising species (product), so the phase split is one number rather than a per-species table, with the invariant \(s \le x_{\text{product}}\) enforced by <code>clamped_solids()</code>. A composition that is empty or all zero normalises to pure water, so every stream in the kernel has a defined material. Two streams merge at a tee by flow weighting:</p>
+<div class="eq">\[ F = F_a + F_b,\qquad T = \frac{F_a T_a + F_b T_b}{F},\qquad x_i = \frac{F_a x_{ia} + F_b x_{ib}}{F},\qquad s = \frac{F_a s_a + F_b s_b}{F}. \]</div>
+<p>Temperature is weighted by flow rather than by heat capacity, a stated simplification that is exact when the streams share a \(c_p\). Mixing a dead stream with a live one returns the live one untouched, so a zero-flow stream's temperature never pollutes a blend. A split is the same material at another rate (<code>with_flow</code>). The liquid composition with the crystals removed (the mother liquor) is obtained by subtracting \(s\) from the product entry and renormalising by \(1-s\). The heat capacity of a stream is \(c_p = \sum_i x_i c_{p,i}\).</p>
+
+<h3><span class="n">4.2</span>The species table</h3>
+<p>Six species carry only the properties some equation consults: a heat capacity for energy balances, a boiling point for the still and the reactor's bubble-point clamp, and a linear solubility curve \(S(T) = \max(S_{20} + m\,(T-20),\,0)\) in g/L for the crystalliser. There is no activity model, no vapour pressure, no enthalpy of mixing.</p>
+<div class="tablewrap"><table>
+<caption><b>Table 1.</b> The species table (<code>sim/species.py</code>). Only product crystallises; the impurity is deliberately heavy so the reactor cannot strip itself clean by boiling.</caption>
+<tr><th>Key</th><th class="num">\(c_p\) kJ/kg·K</th><th class="num">Boil °C</th><th class="num">\(S_{20}\) g/L</th><th class="num">\(m\) g/L·K</th><th>Crystallises</th></tr>
+<tr><td>water</td><td class="num">4.18</td><td class="num">100</td><td class="num">0</td><td class="num">0</td><td>no</td></tr>
+<tr><td>solvent</td><td class="num">1.70</td><td class="num">111</td><td class="num">0</td><td class="num">0</td><td>no</td></tr>
+<tr><td>reagent_a</td><td class="num">2.10</td><td class="num">205</td><td class="num">0</td><td class="num">0</td><td>no</td></tr>
+<tr><td>reagent_b</td><td class="num">2.00</td><td class="num">220</td><td class="num">0</td><td class="num">0</td><td>no</td></tr>
+<tr><td>product</td><td class="num">2.20</td><td class="num">320</td><td class="num">40</td><td class="num">6</td><td>yes</td></tr>
+<tr><td>impurity</td><td class="num">2.00</td><td class="num">280</td><td class="num">300</td><td class="num">4</td><td>no</td></tr>
+</table></div>
+
+<h3><span class="n">4.3</span>Composition transport</h3>
+<p>The solver (Section 5) yields a flow per branch. Composition is then resolved per node from the <em>previous</em> scan's node streams: for each branch with flow \(q\), the upstream node's stream at rate \(|q|\) is appended to the downstream node's arrivals, and each node's new stream is the flow-weighted mix of its arrivals. Composition therefore moves one node per scan, the same one-scan latency every other hop in the kernel costs. This is what lets a recycle loop close without a simultaneous solve: the ring fills up over a few scans, as a real one does. Four overrides follow the mix, in this order in the Python kernel: a component that is a <em>source</em> of material (a vessel discharging, a header) overrides its node with its own supplied stream wherever its port is discharging; a node with nothing moving keeps what it last held at zero rate, so a restarted pump does not briefly deliver water it never contained; a vessel's <em>standing</em> port (the contents tap a shell-mounted probe reads) is set to the contents whether or not anything moves, after the memory step because nothing flows there; and an instrument <em>tap</em> node copies both stream and pressure from the node it watches. A wire to a tap creates no branch, so a thermowell or analyser reads the line without being a hole in it. Finally every port is handed its node's stream at the magnitude of its own signed flow, except a tap, which reports the line's own rate. The GDScript port accumulates the mix in four flat packed arrays rather than one stream object per branch, because allocation cost dominates arithmetic there, and reaches the same fixed point with the standing and memory steps reordered.</p>
+
+<h2 id="s5"><span class="n">5</span>The hydraulic solver</h2>
+<h3><span class="n">5.1</span>Formulation</h3>
+<p>The network is a set of nodes with pressures \(P_i\), partitioned into fixed nodes \(\mathcal F\) (boundaries whose pressure a component sets each scan) and free nodes \(\mathcal U\), joined by branches. Each branch \(b\) between \(a_b\) and \(b_b\) answers three questions at the current pressures: its flow \(Q_b(P_a, P_b)\), its slope \(g_b = \partial Q_b / \partial \Delta p\), and whether it is <em>conducting</em>, that is whether material can cross it at all right now. The unknowns are the free pressures and the equations are conservation at each free node,</p>
+<div class="eq">\[ r_i \;=\; \sum_{b:\; b_b = i} Q_b \;-\; \sum_{b:\; a_b = i} Q_b \;=\; 0 \qquad (i \in \mathcal U), \]</div>
+<p>solved by Newton–Raphson with a Jacobian assembled per branch: \(J_{aa} \mathrel{-}= g\), \(J_{bb} \mathrel{-}= g_b\), \(J_{ab} \mathrel{+}= g_b\), \(J_{ba} \mathrel{+}= g\), where \(g_b = g\) except for two-sided branches (Section 5.6). The step solves \(J\,\delta = -r\). This is the nodal ("H-equation") formulation of Cross [1] and of the global gradient method that EPANET uses [2, 3], in the form where the only unknowns are nodal heads. The solve is warm-started: pressures keep what the previous scan left, which is nearly the answer, so at steady state the solve converges in two iterations. On the first scan the free nodes are seeded at the mean of the fixed pressures rather than at zero, which may be far from any pressure in the plant.</p>
+
+<h3><span class="n">5.2</span>Branch constitutive relations</h3>
+<p>Five branch kinds exist in both kernels (Table 2). A <em>resistance</em> is any element that turns pressure into nothing but noise and heat, with the square law of turbulent flow, \(k\) in Pa per (L/s)². A <em>control resistance</em> is a valve whose coefficient opens and closes; its sizing basis is <code>cv_lps</code>, the flow at full open across a reference drop of 1 bar, which reads in the game's own units and is deliberately neither US Cv nor metric Kv. Shut, it passes exactly nothing rather than a very large resistance, so a closed valve is closed. A <em>check resistance</em> is a resistance that flows one way. A <em>pump curve</em> is a centrifugal pump. A <em>fixed flow</em> is a machine that sets its own throughput.</p>
+<div class="tablewrap"><table>
+<caption><b>Table 2.</b> Branch kinds as coded in <code>sim/hydraulics.py</code>. \(\Delta p = P_a - P_b\); \(\Delta p_{\text{ref}} = 10^5\) Pa; \(\text{rise} = -\Delta p\) for a pump. "Conducting" is what connectivity uses; "slope" is what Newton uses, and the two deliberately differ for the check valve.</caption>
+<tr><th>Kind</th><th>Flow \(Q\)</th><th>Slope reported to Newton</th><th>Conducting</th></tr>
+<tr><td>Resistance</td><td>\(\operatorname{sgn}(\Delta p)\sqrt{|\Delta p|/k}\)</td><td>\(1/(2\sqrt{k|\Delta p|})\)</td><td>slope &gt; 10⁻¹²</td></tr>
+<tr><td>ControlResistance</td><td>\(C_v\,x\,\sqrt{\Delta p/\Delta p_{\text{ref}}}\), i.e. the square law with \(k = \Delta p_{\text{ref}}/(C_v x)^2\); zero when \(x \le 10^{-4}\)</td><td>as resistance at \(k(x)\)</td><td>\(x &gt; 10^{-4}\)</td></tr>
+<tr><td>CheckResistance</td><td>square law when \(\Delta p &gt; 0\), else 0</td><td>the open-side slope, on <em>both</em> sides</td><td>\(\Delta p &gt; 0\)</td></tr>
+<tr><td>PumpCurve</td><td>\(\pi(P_a)\,\min\!\big(Q_{\max}(1-\text{rise}/H_0)^{1/n},\,1.35\,Q_{\max}\big)\); 0 when stopped or rise ≥ \(H_0\)</td><td>\(\pi\,\frac{Q_{\max}}{nH_0}(1-\text{rise}/H_0)^{1/n-1} + \frac{Q}{\Delta p_{\text{band}}}\) inside the prime band</td><td>running and prime &gt; 0</td></tr>
+<tr><td>FixedFlow</td><td>an imposed \(Q\)</td><td>0</td><td>always</td></tr>
+<tr><td>RegulatorResistance</td><td>\(C_v\,x(P_b)\sqrt{\Delta p/\Delta p_{\text{ref}}}\), \(x = \operatorname{clamp}((P_{\text{set}}-P_b)/P_{\text{band}},0,1)\)</td><td>two-sided: \(g_a\) as a valve; \(g_b = g_a + |Q|/(x P_{\text{band}})\)</td><td>\(x &gt; 10^{-4}\)</td></tr>
+</table></div>
+<p>The pump is the generic curve \(H = H_0\,[1 - (Q/Q_{\max})^n]\) with \(n = 2\) for a centrifugal machine and \(n = 8\) for the positive-displacement metering pump, whose curve is nearly vertical until the head runs out. Runout is capped at 1.35 × rated so that a high-pressure header cannot drive a pump to absurd flows once past the end of its curve. There is no efficiency, no best-efficiency point and no NPSH; cavitation is a <em>prime</em> factor \(\pi(P_a) = \operatorname{clamp}((P_a - P_{\min})/\Delta p_{\text{band}}, 0, 1)\) that tapers the whole curve to nothing over the last 20 kPa above hard vacuum (\(P_{\min} = -101{,}300\) Pa gauge), because the species table carries no vapour pressure.</p>
+
+<h3><span class="n">5.3</span>Regularisation at zero flow</h3>
+<p>The square law has infinite slope at \(\Delta p = 0\). Below a floor of \(\Delta p_0 = 1\) Pa the law is replaced by the straight line that meets it at the floor, and, critically, the replacement is applied to the <em>flow</em> as well as to the slope:</p>
+<div class="eq">\[ Q(\Delta p) = \begin{cases}\operatorname{sgn}(\Delta p)\sqrt{|\Delta p|/k} &amp; |\Delta p| \ge \Delta p_0\\[2pt] \Delta p\,\sqrt{\Delta p_0/k}\,/\,\Delta p_0 &amp; |\Delta p| &lt; \Delta p_0\end{cases}\qquad g(\Delta p) = \begin{cases}1/(2\sqrt{k|\Delta p|}) \\[2pt] \sqrt{\Delta p_0/k}\,/\,\Delta p_0.\end{cases} \]</div>
+<p>Regularising only the slope leaves Newton chasing a target its own derivative disagrees with; the project's record is that this cost 47 ms and 60 iterations a scan against 1.3 ms and 2 once the two were made consistent. The same lesson recurs for the pump's prime taper: scaling only the conductance by \(\pi\) leaves the solver under-stepping at about eight iterations, while adding the taper's own derivative \(Q/\Delta p_{\text{band}}\) to the Jacobian brings it back to two.</p>
+
+<h3><span class="n">5.4</span>The iteration</h3>
+<p>Each iteration recomputes connectivity (Section 5.5) and residuals, tests convergence, assembles the Jacobian, replaces dead rows, solves, and takes a <em>damped</em> step. Convergence is judged per node, relative to what the node passes: node \(i\) is converged when</p>
+<div class="eq">\[ |r_i| &lt; \min\!\Big(10^{-4},\ \max\!\big(10^{-8},\ 10^{-3}\textstyle\sum_{b \ni i}|Q_b|\big)\Big)\ \text{L/s}, \]</div>
+<p>never looser than the old absolute tolerance of a tenth of a millilitre per second and tighter where flows are small; a drip line moving a tenth of a millilitre a second had reported an open end at three times its own rotameter, both "converged", before this rule. The damped step tries the full Newton step with every node's move clipped to ±150 kPa and floored at \(P_{\min}\), evaluates the residual 2-norm, and halves the scale up to eight times until the norm improves. If no scale improves it the loop stops rather than re-linearise, because re-linearising will not help either: the standing example is a trickle into a shut check valve whose crack point is tens of kilopascals away, where the imbalance is below anything the plant can see and grinding out the cap every scan was half the kernel's cost. An undamped step on a square law leaps clean over the answer and lands the same distance the other side, forever; the cap of 150 kPa costs a few iterations on the first solve and nothing afterwards. The cap on iterations is 20; a singular system aborts the solve and the plant keeps last scan's answer rather than crash.</p>
+
+<h3><span class="n">5.5</span>Connectivity, dead nodes and islands</h3>
+<p>A free node with no conducting path back to any fixed pressure has no equation to satisfy. That covers a dead-ended nozzle but also, and this is the case that bites, a whole island cut off by a shut valve at one end and a blocked check valve at the other. Such an island makes the matrix singular, and a solver that gives up on the whole system because one corner is adrift leaves real flows uncorrected everywhere else. So at the top of every iteration a breadth-first search from the fixed nodes over <em>conducting</em> branches marks the reachable free nodes; an unreachable node, or one whose diagonal has vanished, has its row and column zeroed, a bare −1 placed on the diagonal and a zero right-hand side, and is excluded from the convergence test (counting its residual meant the loop never broke early and burned the cap for the rest of the run). After the iteration, and only then, each island is settled to the mean of its members' pressures, following conducting branches only, and every branch with both ends in an island has its flow zeroed. Two orderings matter and both were found the hard way. Settling mid-solve moves pressures behind Newton's back and it never converges. And flows are recorded <em>before</em> settling: settling averages stale pressures, and a check valve read at the average can open on paper and push material into a vessel from nowhere (1.9 L/s into a batch tank the moment its feed pump stopped). Averaging across a <em>stopped</em> pump is likewise wrong, since it drags the island toward the header it is isolated from and the leftover difference pushes material nothing supplied; hence "conducting" for a stopped pump is false.</p>
+
+<h3><span class="n">5.6</span>Where slope and connectivity disagree</h3>
+<p>"Does it conduct?" and "what is its slope?" are different questions, and three branch kinds answer them differently on purpose (Figure 3).</p>
+
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="A plot of flow against pressure difference for a check valve: zero for negative dp, a square-root curve for positive dp; dashed tangent lines show that the slope reported to Newton on the shut side is the open-side slope, while connectivity treats the shut side as a wall.">
+  <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+  <line x1="60" y1="200" x2="720" y2="200" class="ln" marker-end="url(#ar3)"/>
+  <line x1="390" y1="230" x2="390" y2="20" class="ln" marker-end="url(#ar3)"/>
+  <text x="716" y="222" class="svgt" text-anchor="end">Δp = P_a − P_b</text>
+  <text x="400" y="30" class="svgt">Q</text>
+  <text x="390" y="220" class="svgs" text-anchor="middle">0</text>
+  <path d="M60 200 H390" class="lnb"/>
+  <path d="M390 200 C 420 200, 440 150, 470 130 C 520 100, 620 70, 720 52" class="lna"/>
+  <path d="M290 250 L490 150" class="ln dash"/>
+  <text x="250" y="150" class="svgs">slope reported to Newton at Δp ≤ 0:</text>
+  <text x="250" y="166" class="svgs">the open-side slope (dashed), so a step</text>
+  <text x="250" y="182" class="svgs">lands on the crack point in two iterations</text>
+  <text x="150" y="222" class="svgs">flow while shut: exactly zero</text>
+  <text x="150" y="238" class="svgs">connectivity: a wall (not conducting)</text>
+  <text x="560" y="60" class="svgs">Δp &gt; 0: square law, conducting</text>
+  <circle cx="390" cy="200" r="4" fill="var(--accent2)"/>
+</svg>
+<figcaption><b>Figure 3.</b> The check valve. A shut check reporting zero slope tells Newton the node is insensitive, so it steps as if only the pipe were there and sails past the pressure at which the valve cracks, then back, forever. Reporting the open-side slope says "there is a wall a few hundred pascals away" and it lands in two steps; the flow it passes while shut is still exactly zero, so nothing is invented. Connectivity must still treat it as a wall or island detection breaks. The symptom was a pump feeding a vessel's top nozzle grinding at the iteration cap, geometry-dependent: it reproduced at a vessel height of 2.4 m and not at 3.0 m.</figcaption>
+</figure>
+
+<p>A <b>FixedFlow</b> is the opposite of a wall: zero conductance, since pressure does not change what it does, but emphatically conducting, since material crosses it and whatever it discharges into has a pressure to find. Reading its flat slope as "not conducting" made a hopper's inlet look adrift; a dryer pushing cake at it, behind a check that had not cracked yet, waited for the hopper for ever. A <b>regulator</b> is the third case. Its opening follows its own downstream pressure, so a component adjusting a valve from last scan's pressure swung shut and open for ever against a stiff downstream (an orifice, a shut line). It is instead a branch solved simultaneously with the network, and because its flow depends on its two end pressures differently, it reports a slope per end: the b-side slope carries \(\partial Q/\partial x \cdot \partial x/\partial P_b = |Q|/(x P_{\text{band}})\), hundreds of times the a-side slope. Reporting the sum symmetrically told Newton the inlet was that stiff, the step failed every halving and the solve broke after one iteration with a tenth of a litre a second unbalanced; with the right slopes it lands in two iterations. The Jacobian is therefore asymmetric for a regulator, which the banded solver below tolerates.</p>
+
+<div class="note fail"><b>An internal node with a single branch can carry no flow.</b> Conservation says so. A machine that gives its feed pump a private drum node and nothing else has built a dead end and can never start. The boiler drum is therefore the steam nozzle itself, and the centrifuge bowl, dryer drum and still sump are fixed boundaries, because their discharges are imposed from last scan's split and a machine that has never run has never drawn anything.</div>
+
+<h3><span class="n">5.7</span>The GDScript solver</h3>
+<p>The Python reference solves the Newton system by dense Gaussian elimination with partial pivoting, which costs nothing at tens of nodes in CPython but cost 15 ms a scan in GDScript. The port keeps the equations and changes the linear algebra. The free nodes are ordered once per topology by reverse Cuthill–McKee [4] over the topological graph (every branch, conducting or not, so one ordering serves every iteration), starting each connected component from its lowest-degree node; the half-bandwidth \(\beta\) that falls out is the largest permuted index difference across any branch, and the system is solved by Gaussian elimination within that band in a packed \(n \times (2\beta+1)\) array, with no pivoting. Pivoting is unnecessary because the Jacobian is diagonally dominant with every dead row already replaced by a bare −1. A plant network is a sparse graph in which free nodes only ever chain through fixed vessel nodes, so the showcase's band is 1 and the solve is linear in \(n\). The second port-specific economy is that <code>SimBranch.evaluate(pa, pb)</code> answers flow, slope and connectivity in one call into three fields and the solver reads the fields, since in GDScript a method call costs about as much as a dozen float operations and three calls per branch per iteration was half the solve; a damped step's evaluation is reused at the top of the next iteration.</p>
+
+<h3><span class="n">5.8</span>Cost</h3>
+<p>On the full showcase (93 nodes, 78 branches) the GDScript hydraulic pass costs about 11 ms a scan through the startup transient at about five iterations and about 5 ms at steady state at two, of which the Newton solve is roughly half and the composition pass a third; the budget is 50 ms at 20 Hz. On the director's laptop (Ryzen 7 5700U) the whole scan measures about 9 ms alone: hydraulics 4.9 (Newton 3.0), historian 2.4 before its sampling was reduced to once a second, signals 0.9, components 0.7. The Python reference runs the recycle ring at about 5 ms a tick at 51 nodes, dominated by <code>Stream</code> construction, and is left unoptimised by policy.</p>
+
+<div class="tablewrap"><table>
+<caption><b>Table 3.</b> The solver's recorded pathologies and their remedies. Each was found as a symptom in a running plant and is now a rule in the code; the list is reproduced here because the remedies are the design.</caption>
+<tr><th>Symptom</th><th>Cause</th><th>Remedy</th></tr>
+<tr><td>Oscillation about the answer forever</td><td>Undamped Newton on a square law</td><td>Halve the step until the residual improves; cap moves at 150 kPa</td></tr>
+<tr><td>Grinds against the cap every scan (47 ms, 60 iterations)</td><td>Slope regularised near zero, flow not</td><td>Linearise flow and slope consistently below 1 Pa</td></tr>
+<tr><td>Solver abandons the whole plant</td><td>An island makes the matrix singular</td><td>Reachability from fixed nodes; dead rows get −1</td></tr>
+<tr><td>Material pushed by nothing after settling</td><td>Island averaged across a stopped pump, or mid-solve</td><td>Settle once, after iteration, over conducting branches only</td></tr>
+<tr><td>Pump into a top nozzle grinds; height-dependent</td><td>Shut check reports zero slope</td><td>Report open-side slope; connectivity still a wall</td></tr>
+<tr><td>Dryer and hopper wait for each other for ever</td><td>FixedFlow read as a wall</td><td>Zero conductance but conducting</td></tr>
+<tr><td>Machine with a private drum never starts</td><td>One-branch internal node carries no flow</td><td>Drum is the nozzle, or a fixed boundary</td></tr>
+<tr><td>1.9 L/s into a tank from nowhere when its pump stops</td><td>Flows recorded after settling</td><td>Record flows before settling</td></tr>
+<tr><td>619 of 24,000 scans at the cap; half the kernel's cost</td><td>Trickle into a shut check; no step scale helps</td><td>Stop when no scale improves the residual</td></tr>
+<tr><td>Pump on an empty vessel pins suction at vacuum</td><td>A pinned node's imbalance cannot reach zero</td><td>Prime taper over 20 kPa, with its derivative in the Jacobian</td></tr>
+<tr><td>Open end reads three times its rotameter, "converged"</td><td>Absolute tolerance too loose for a drip line</td><td>Per-node tolerance relative to throughput</td></tr>
+<tr><td>Regulator breaks the solve, or chatters</td><td>Symmetric slope, or scan-behind opening</td><td>Solve with the network; two-sided slope</td></tr>
+</table></div>
+
+<h2 id="s6"><span class="n">6</span>Unit operations</h2>
+<p>Every unit follows one contract: it declares ports; <code>build_hydraulics</code> adds its internal branches and any internal fixed nodes once per topology; <code>update_hydraulics</code> refreshes boundary pressures and branch settings every scan before the solve; <code>supplied_stream</code> says what it pushes out of a nozzle when it is a source rather than a pass-through; and <code>tick(dt)</code> advances its state from the signed flows the solve left at its nozzles. Only wire branches feed port flows; a unit's internal branches move material between its own nodes and do not themselves register on a port. Table 4 summarises how each unit participates in the network; the equations follow.</p>
+
+<div class="tablewrap"><table>
+<caption><b>Table 4.</b> Network participation by unit. "Free" nozzle nodes are solved; fixed nodes are boundaries a unit sets each scan. \(z\) is the placement elevation, taken from the placed height in the engine.</caption>
+<tr><th>Unit</th><th>Internal branches</th><th>Internal fixed nodes</th><th>Elevation term</th></tr>
+<tr><td>Tank</td><td>Check inlet→roof, \(k = 800\,(20/C_{v,n})^2\); valve floor→outlet, \(C_v = C_{v,n}\)</td><td>roof, floor</td><td>\(z + H\) (roof), \(z + d\) (floor)</td></tr>
+<tr><td>Reactor</td><td>two check feeds→roof (\(k=800\)); valve floor→outlet (\(C_v = 20\))</td><td>roof, floor</td><td>same, headspace 0</td></tr>
+<tr><td>Crystalliser</td><td>check inlet→roof; valve floor→outlet</td><td>roof, floor</td><td>same</td></tr>
+<tr><td>Source (header)</td><td>none; outlet pinned at \(P_{\text{set}} + \rho g z\)</td><td>the outlet itself</td><td>yes</td></tr>
+<tr><td>Drain</td><td>valve inlet→sewer, \(C_v =\) rate, open/shut</td><td>sewer at \(\rho g z\)</td><td>yes</td></tr>
+<tr><td>Cap</td><td>valve a→air, \(C_v = 60\), open/shut</td><td>air at \(\rho g z\)</td><td>yes (line height)</td></tr>
+<tr><td>Tee</td><td>none; all legs one shared node</td><td>—</td><td>—</td></tr>
+<tr><td>Valves (control, block, ball, needle, solenoid)</td><td>ControlResistance inlet→outlet</td><td>—</td><td>nozzle height; static gauge readings only, the drop is unchanged</td></tr>
+<tr><td>Orifice, rotameter, flow element</td><td>Resistance inlet→outlet</td><td>—</td><td>—</td></tr>
+<tr><td>Regulator</td><td>RegulatorResistance inlet→outlet</td><td>—</td><td>nozzle height; the setting is static there, \(P_{\text{set}} + \rho g z\) piezometric</td></tr>
+<tr><td>Pump / metering pump</td><td>PumpCurve inlet→outlet, \(n = 2\) / \(n = 8\)</td><td>—</td><td>nozzle height; prime and cavitation are judged on the static suction, node pressure less \(\rho g z\)</td></tr>
+<tr><td>Steam generator</td><td>PumpCurve feedwater→steam (110 m)</td><td>steam nozzle pinned at drum pressure</td><td>—</td></tr>
+<tr><td>Heat exchanger</td><td>Resistance shell (k 4×10⁵); Resistance tubes (k 2×10³)</td><td>—</td><td>—</td></tr>
+<tr><td>Centrifuge</td><td>PumpCurve inlet→bowl (18 m); valve wash→bowl; FixedFlow bowl→cake; FixedFlow bowl→liquor</td><td>bowl at 0</td><td>—</td></tr>
+<tr><td>Dryer</td><td>PumpCurve inlet→drum (12 m); FixedFlow drum→product</td><td>drum at 0</td><td>—</td></tr>
+<tr><td>Still</td><td>PumpCurve inlet→sump (20 m); FixedFlow to distillate and bottoms</td><td>sump at 0</td><td>—</td></tr>
+<tr><td>Vacuum lock, vial filler</td><td>FixedFlow from a fixed node / to a fixed "away" node</td><td>at 0</td><td>—</td></tr>
+<tr><td>Temperature and purity gauges</td><td>none: tap ports</td><td>—</td><td>—</td></tr>
+</table></div>
+
+<h3><span class="n">6.1</span>The vessel idiom</h3>
+<p>Tank, reactor and crystalliser share one hydraulic idiom (Figure 4). Two internal fixed nodes are created at build time, the <em>roof</em> and the <em>floor</em>, and the nozzle nodes stay free. Each feed nozzle reaches the roof through a check resistance: the line discharges above the liquid, so material can fall in and nothing can come back out, which is not a detail, since without it an empty vessel will happily supply liquid it does not have through the nozzle at its top. The outlet leaves the floor through a control resistance whose opening follows the depth. Each scan,</p>
+<div class="eq">\[ P_{\text{roof}} = P_{\text{hs}} + \rho g\,(z + H),\qquad P_{\text{floor}} = P_{\text{hs}} + \rho g\,(z + d),\qquad x_{\text{out}} = \begin{cases}1 &amp; \text{filling through the outlet}\\ \min(d/0.03,\,1) &amp; \text{otherwise},\end{cases} \]</div>
+<p>where \(H\) is the shell height, \(d = V/A\) the liquid depth and \(P_{\text{hs}}\) a fixed headspace pressure. Pressures are piezometric (\(P + \rho g z\)), so elevation costs head without the solver ever learning about the shape of the runs between boundaries, and the bottom nozzle uncovers smoothly over the last 3 cm so an emptying vessel tails off instead of chattering shut. What the kernel knows of height is exactly this: the elevation of every boundary (vessels, headers, drains, caps) and, since 21 September 2026, of every inline pump and valve, each re-derived by the engine from where the record stands whenever it is placed, moved or loaded. It never knows whether a run rises or drops between two of them, because in a continuous liquid column the piezometric difference does not depend on the path. Whether the outlet is filling is read off the branch's own last flow, since a node pressure can float but a solved flow cannot.</p>
+
+<figure>
+<svg viewBox="0 0 760 260" role="img" aria-label="A vessel drawn with its two internal fixed nodes: the inlet nozzle node connects through a check resistance to the fixed roof node; the fixed floor node connects through a control resistance to the outlet nozzle node; pressures at the roof and floor are labelled.">
+  <defs><marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+  <rect x="300" y="30" width="200" height="200" rx="10" class="box" style="fill:var(--shade)"/>
+  <rect x="302" y="130" width="196" height="98" rx="8" fill="var(--accent)" opacity="0.18"/>
+  <text x="400" y="150" class="svgs" text-anchor="middle">liquid, depth d = V/A</text>
+  <circle cx="120" cy="60" r="7" class="free"/><text x="120" y="45" class="svgt" text-anchor="middle">inlet node (free)</text>
+  <line x1="127" y1="60" x2="300" y2="60" class="ln" marker-end="url(#ar4)"/>
+  <rect x="180" y="48" width="70" height="24" rx="3" class="box"/><text x="215" y="64" class="svgs" text-anchor="middle">check, k_in</text>
+  <circle cx="310" cy="60" r="7" class="fixed"/>
+  <text x="330" y="52" class="svgs">roof (fixed)</text>
+  <text x="330" y="68" class="svgs">P_hs + ρg(z+H)</text>
+  <circle cx="310" cy="220" r="7" class="fixed"/>
+  <text x="330" y="204" class="svgs">floor (fixed)</text>
+  <text x="330" y="220" class="svgs">P_hs + ρg(z+d)</text>
+  <line x1="300" y1="220" x2="127" y2="220" class="ln" marker-end="url(#ar4)"/>
+  <rect x="170" y="208" width="90" height="24" rx="3" class="box"/><text x="215" y="224" class="svgs" text-anchor="middle">valve, C_v, x(d)</text>
+  <circle cx="120" cy="220" r="7" class="free"/><text x="120" y="248" class="svgt" text-anchor="middle">outlet node (free)</text>
+  <circle cx="560" cy="130" r="7" class="free"/><line x1="500" y1="130" x2="553" y2="130" class="ln dash"/>
+  <text x="575" y="126" class="svgs">contents tap: standing port,</text>
+  <text x="575" y="142" class="svgs">no branch, always the contents</text>
+  <text x="575" y="60" class="svgs">Filled: fixed node absorbs</text>
+  <text x="575" y="76" class="svgs">whatever arrives; inventory</text>
+  <text x="575" y="92" class="svgs">changes to match.</text>
+</svg>
+<figcaption><b>Figure 4.</b> The vessel idiom shared by tank, reactor and crystalliser. The roof and floor are fixed-pressure boundaries the vessel sets every scan; the nozzle nodes are solved. A top nozzle cannot flow backwards; a bottom nozzle carries the head of what stands above it and shuts as the level falls past it.</figcaption>
+</figure>
+
+<p>Inflow is blended into the inventory by volume weighting, using the mixing rule of Section 4.1 with volumes in the rate slot, so that with \(V\) held and \(F_{\text{in}}\Delta t\) arriving, \(x_{\text{new}} = (V x + F_{\text{in}}\Delta t\,x_{\text{in}})/(V + F_{\text{in}}\Delta t)\) and likewise for temperature. Both nozzles are signed into the vessel, so one balance covers filling, draining and a line that reversed. Whatever leaves does so at the current contents composition and never changes it. A tank loses heat to ambient at a first-order rate of \(2\times10^{-4}\) s⁻¹, overflows into a counter (<code>overflowed_l</code>) rather than out of a nozzle, and, if open-topped, receives what an open pipe end above it spills through <code>receive()</code>. The tank's geometry resolves from whatever is given: height and diameter, height alone, or capacity alone at an aspect ratio of 1.4.</p>
+
+<h3><span class="n">6.2</span>Sources, drains, tees and caps</h3>
+<p>A <b>supply header</b> has one nozzle and no inlet; it pins its own outlet node at \(P_{\text{set}} + \rho g z\), supplies a fixed species at a fixed temperature, and totalises what it delivers. It is infinitely available and perfectly stiff, and cannot be pushed into. A <b>drain</b> is a valve of coefficient \(C_v = \) rate into a fixed sewer node at \(\rho g z\); it totalises what it takes and, separately, the product lost to sewer. It does not check, so a sewer set above what it serves pushes back up the line. A <b>tee</b> is a placeable fitting whose four nozzles map to one hydraulic node through <code>shared_node_ports()</code>: equal pressure at every leg, flows summing to zero, composition the flow-weighted blend the composition pass makes; it exists because the design rule of one line per nozzle needs joining and splitting to be a fitting with its own separated connection points. A <b>cap</b> is two nozzles on one node; a capped line stands at pressure and moves nothing, since a node with one branch carries no flow. An <em>open</em> cap vents its node to a fixed air node at its own height through a wide free discharge (\(C_v = 60\) L/s at 1 bar), spills what arrives and totalises it, or hands it to the open-topped vessel whose rim holds it in plan.</p>
+
+<h3><span class="n">6.3</span>Valves and pumps</h3>
+<p>A <b>control valve</b> is a control resistance whose opening follows a first-order positioner, \(\dot x = (u - x)/\tau\) with the command \(u\) clamped to 0–100 % and \(\tau = 1\) s by default, explicit Euler. Its trim is linear, so the installed characteristic comes entirely from the line. A <b>block valve</b> strokes at a constant rate over <code>stroke_s</code> (4 s default), carries ZSO and ZSC limit contacts made in the last and first 2 % of travel, and is a hand valve while nothing is wired to its <code>open</code> input. A <b>pump</b> runs when its selector (Manual On / Off / Auto, with Auto following the wired <code>run</code> input) wants it and its 480 V power input is above 0.5, and reads its suction and discharge pressures back from the network each scan as <em>static</em> pressures at its own height, the node's piezometric value less \(\rho g z\); it counts starts on the rising edge, accumulates dry-running time while it runs and moves nothing, and reports cavitating below a static suction of −60 kPa. The pump curve carries the same datum, so the prime taper of Section 5.2 acts on the static suction: a pump 9 m above an atmospheric tank sees −88 kPa there and makes about two thirds of its curve, and one 12 m above it is past a hard vacuum and moves nothing, while the same pump at grade makes its rating. Before 21 September 2026 pumps had no elevation and a pump at the top of a rise was indistinguishable from one at the bottom. Its rated flow is \(Q_{\max}\) and its shutoff head \(H_0 = \rho g\,h_{\text{rated}}\) (30 m default). A pump is its own check valve in both directions: stopped, it blocks the line completely.</p>
+
+<h3><span class="n">6.4</span>Thermal units</h3>
+<p>The <b>steam generator</b>'s drum is a fixed-pressure boundary at the steam nozzle, fed by an internal pump curve of 110 m shutoff head. Its pressure is first order toward a target set by feedwater rate, \(\dot P = (P_{\text{full}}\min(F_{\text{feed}}/F_{\text{rated}},1) - P)/10\ \text{s}\), with \(P_{\text{full}} = 800\) kPa, and its saturation temperature is a straight line from 100 °C at zero to 180 °C at full pressure. There is no inventory: feedwater in becomes steam out on the same scan, and because the drum is a boundary it hands out whatever steam is drawn and makes up the difference from nowhere. Mass does not close across the boiler; it is the one place in the plant where that is true, and the balance accounting (Section 8) counts the makeup rather than hiding it. The <b>heat exchanger</b> is two plain resistances, shell and tubes, with no fixed nodes; an exchanger whose condensate has nowhere to go passes no steam and delivers no duty. Its duty ladder is</p>
+<div class="eq">\[ Q_{\text{offered}} = \min(F_{\text{steam}}\,\lambda,\ Q_{\max}),\quad T_{\text{out}} = \min\!\Big(T_{\text{in}} + \frac{Q_{\text{offered}}}{F c_p},\ \max(T_{\text{steam}} - 5,\ T_{\text{in}})\Big),\quad Q = F c_p (T_{\text{out}} - T_{\text{in}}), \]</div>
+<p>with \(\lambda = 2000\) kJ/kg. Duty is recomputed from the rise actually achieved, so the signal never claims heat the process did not take; everything admitted condenses; there is no LMTD, no U and no area.</p>
+
+<h3><span class="n">6.5</span>Reaction and separation</h3>
+<p>The <b>jacketed stirred reactor</b> takes two feeds and a heat-duty signal in kW, needs 480 V for its agitator, and per scan: blends arrivals, applies the energy balance \(\dot T = Q/(m c_p) - 8\times10^{-4}(T - 20)\) with \(m = \max(V, 50)\) kg, clamps at the bubble point (the lowest boiling point among species present above 1 %) by boiling off the lightest species with the surplus energy at a latent heat of 900 kJ/kg into a counter, and then reacts:</p>
+<div class="eq">\[ \Delta n = \min\!\big(r\,\phi_T\,\phi_{\text{mix}}\,\Delta t,\ n_A,\ n_B\big),\quad \phi_T = \operatorname{clamp}\!\Big(\frac{T-60}{100-60},0,1\Big),\quad \phi_{\text{mix}} = \begin{cases}1 &amp; \text{agitating}\\0.05 &amp; \text{not}\end{cases} \]</div>
+<div class="eq">\[ n_A \mathrel{-}= \Delta n,\quad n_B \mathrel{-}= \Delta n,\quad n_{\text{prod}} \mathrel{+}= 2\Delta n\,(1-\beta),\quad n_{\text{imp}} \mathrel{+}= 2\Delta n\,\beta,\quad \beta = \operatorname{clamp}(0.02 + 0.004\,(T-70),0,1). \]</div>
+<p>Volume closes exactly (one litre of A and one of B make two litres of products) and the impurity yield rises with temperature, so heat buys rate and spends selectivity. There is no heat of reaction and no activation energy. The <b>cooling crystalliser</b> removes a duty, clamps at a 5 °C coolant while cooling, and grows crystal toward saturation as a first-order approach with time constant 60 s, slowed tenfold without agitation, the same equation running in both directions so warming redissolves:</p>
+<div class="eq">\[ \frac{ds}{dt} = \frac{\big[(x_{\text{prod}} - s) - S(T)/1000\big]\,\phi_{\text{mix}}}{60\ \text{s}},\qquad 0 \le s \le x_{\text{prod}}, \]</div>
+<p>where the division by 1000 turns g/L into a volume fraction, valid only because 1 L = 1 kg. Crystals are pure and have no size distribution. The <b>centrifuge</b> draws through an internal pump into a fixed bowl, admits wash through a valve interlocked to the spin, and imposes its two discharges from last scan's split: solids captured at a fixed efficiency (0.95), cake liquid limited to a wetness (0.25 of captured solids), and ideal displacement washing in which the fraction of original liquor the cake keeps is \(\kappa = \exp(-W/L_{\text{cake}})\) for wash rate \(W\), so one cake-liquid volume of wash removes 63 % of the liquor and its impurity, and cake plus liquor equals feed plus wash exactly. The <b>cake dryer</b> evaporates \(\min(Q/\lambda, F(1-s))\) with \(\lambda = 900\) kJ/kg, strictly in ascending order of boiling point and never touching the solid part of the product, so it concentrates impurity as surely as product; the cake leaves at the feed temperature. The <b>solvent recovery still</b> splits each species about a cut temperature (150 °C default) by a sharpness \(\eta = 0.95\): species boiling below the cut go overhead at \(\eta\), the rest at \(1-\eta\), the whole scaled down to the boilup \(Q/\lambda\) if the wanted overhead exceeds it, with all solids to the bottoms and the distillate stamped at the condenser temperature. No trays, no reflux ratio, no column pressure. The <b>vial filler</b> imposes a fill draw of 10 mL per 1.1 s during its fill state in a 2.4 s index–fill–cap cycle, and records what actually went into the vials, including the product fraction of it. The <b>vacuum lock</b> is a state machine (idle, evacuate, hold, vent, drain) whose chamber pressure is not a network node; it drains a fixed condensate volume per cycle through a fixed flow.</p>
+
+<h3><span class="n">6.6</span>The small-bore family</h3>
+<p>Seven devices exist for small lines, each a new machine with its own equations rather than a large one drawn small. The <b>restriction orifice</b> is a resistance sized by one number, L/s at 1 bar (default 1 mL/s). The <b>needle valve</b> is a control resistance whose opening is <code>turns_open / turns</code> over ten turns. The <b>ball valve</b> strokes in half a second under a hand lever. The <b>solenoid valve</b> is normally closed, snaps in 50 ms on a 24 V discrete coil, and has no hand override. The <b>metering pump</b> is a pump curve with exponent 8 on 24 V DC, its \(Q_{\max}\) scaled by a stroke setting from a knob or a 4–20 mA signal, so it stalls rather than dead-heads. The <b>regulator</b> is the two-sided branch of Section 5.6, with droop \(P_{\text{band}} = \max(0.1\,P_{\text{set}}, 5\ \text{kPa})\) and no relief; its setting is the static pressure its diaphragm feels at its own height, so the branch's setpoint in piezometric terms is \(P_{\text{set}} + \rho g z\) and its gauge reads the static value. The <b>rotameter</b> is a resistance dropping 5 kPa at full scale, with a float position and no signal.</p>
+
+<h3><span class="n">6.7</span>The assumptions ledger and the library</h3>
+<p>Each Python unit carries an <code>EquipmentSpec</code>: a summary, a meaning for every port, its equations, its parameters, and an honest list of what the model does not do. <code>sim/library.py</code> reads port tables and constructor parameters off a real constructed component, so those cannot drift, and a test fails if any real port lacks an authored meaning or a meaning names a port that no longer exists. The equations and assumptions are prose and can drift, and Section 12 lists where they have. The in-game library pages are a second, hand-authored copy under the director's editorial review, deliberately not generated from the Python specs; port names, kinds and directions are still read off the live record so that a page cannot list I/O the machine does not have, and a probe scene lists every page missing prose, an equation or a port meaning as an editorial to-do list.</p>
+
+<h2 id="s7"><span class="n">7</span>Signal layer and control tier</h2>
+<h3><span class="n">7.1</span>Power and field devices</h3>
+<p>A <b>mains feeder</b> has \(N\) numbered ways at one voltage class, each a separate output pinned at 1.0, because a terminal takes one cable and a feeder that serves \(N\) loads has \(N\) ways; it has infinite capacity, no breaker and no load accounting. A <b>power supply</b> turns 480 V AC into 24 V DC one scan later. Consumers are genuinely dead unpowered: a pump in Manual On with no 480 V at its starter does not turn, a PLC with a program and no 24 V does not scan. A <b>float switch</b> is a hysteresis latch, closed at or below its low level, open at or above its high level, holding between, and \(\text{low} = \text{high}\) is legal and is the chattering configuration. A <b>relay</b>'s contact follows its coil one scan later and counts cycles on the rising edge, the wear metric that makes chatter a number. A <b>terminal</b> passes in to out one scan late, the honest cost of landing a wire on a strip. A <b>pushbutton</b> is momentary with a 0.6 s hold or maintained, normally open or normally closed; a <b>pilot light</b> is lit from its lamp circuit.</p>
+
+<h3><span class="n">7.2</span>The PLC and its ladder</h3>
+<p>The PLC has discrete inputs and outputs, analog inputs and outputs, memory bits and TON timers (defaults 8/8/4/4, 16 memories, 4 timers; a cabinet-mounted CPU is built with 16/16/8/8). Its program is a list of rungs, each a coil and a logic list of parallel branches of series elements; an element is a reference with a normally-closed flag. A reference may read a discrete input, an output (readback), a memory bit or a timer's <em>done</em> bit; a coil may drive an output, a memory bit or a timer's <em>run</em>. Analog moves are scaled straight-through maps \(ao = k\cdot ai + b\). The validator compiles references against these families and index bounds, rejects an empty branch, and rebuilds the program as a normalised copy so that no caller-owned dictionary leaks into the scan; the GDScript port returns the refusal as a string because its caller is an in-game editor. A rung evaluates as</p>
+<div class="eq">\[ \text{coil} = \bigvee_{\text{branch}} \bigwedge_{e \in \text{branch}} \big[\text{read}(e.\text{ref}) \ne e.\text{nc}\big], \]</div>
+<p>parallel branches OR, series elements AND, and \(\ne\) nc is the contact type. Coils are written into live state inside the loop, so a later rung sees an earlier rung's coil this scan and an earlier rung reading a later coil sees last scan's; that ordering is stated as the design, not a quirk, since it is what makes seal-in circuits and one-shots behave as they do in a real cabinet. There is no latch instruction: a seal-in is a memory coil in its own rung's second branch. TON semantics are three rules: a timer no rung drives this scan is released; while run, \(\text{acc} = \min(\text{acc} + \Delta t, \text{preset})\), while released \(\text{acc} = 0\); done when \(\text{acc} \ge \text{preset} - 10^{-9}\), read the next scan. Undriven discrete outputs are cleared at the top of each scan, and the last rung to drive a coil wins. Unpowered, outputs and timers drop and the program does not run; memory bits hold. This subset of IEC 61131-3 ladder [8] is deliberately minimal: no compare, no arithmetic, no one-shot instruction.</p>
+
+<h3><span class="n">7.3</span>The PID controller</h3>
+<p>The controller is positional, with independent gains, derivative on measurement, conditional back-calculation for anti-windup and integrator tracking for bumpless transfer [7]:</p>
+<div class="eq">\[ e = SP - PV,\qquad I \mathrel{+}= k_i\, e\,\Delta t,\qquad D = -k_d\,\frac{PV - PV_{\text{prev}}}{\Delta t},\qquad u = \operatorname{clamp}(k_p e + I + D,\ u_{\min},\ u_{\max}), \]</div>
+<div class="eq">\[ \text{if railed: } I = u - k_p e - D;\qquad \text{in manual: } u = \operatorname{clamp}(u_{\text{man}}),\ \ I = u - k_p e. \]</div>
+<p>Because the rail correction is exact rather than a decay, a loop comes off its limit the moment the error reverses. The scan is the simulation tick; there is no separate controller execution period, no derivative filter, no output rate limit and no deadband. Direct and reverse action are carried in the sign of the gains: positive gains raise the output when the measurement is below setpoint (heating, filling), negative when above (cooling), so the showcase's crystalliser temperature loop is written with negative gains. A subtlety worth recording is that \(k_i\) is applied inside the accumulator, so changing it at runtime does not rescale the history already banked. Pointed at a duty input the output is kilowatts; pointed at a valve it is percent.</p>
+
+<h3><span class="n">7.4</span>Cabinets, junction boxes and stations (engine layer)</h3>
+<p>Field wiring is modelled the way a plant wires a field. A <b>cabinet</b> starts as an empty enclosure with three DIN rails of twelve slots; the cabinet editor mounts modules (a PSU, one PLC CPU, I/O cards, relays, terminal strips), each backed by real kernel records (a terminal strip is eight separate terminal records), and lands internal wiring as <em>hidden</em> kernel wires, real wires with no 3D run. I/O cards gate channel banks: a card claims the lowest unused bank of its family, and only backed channels are offered by the cabinet editor and the ladder editor, a plant-layer policy over a kernel record that owns all its ports. A <b>junction box</b> owns discrete terminal records on its flank; a <b>multicore</b> is a hidden kernel wire per circuit plus one visible cable run that lights while any circuit is live and is support-checked like any run. A <b>control station</b> holds pushbutton and pilot-light records, each its own interaction target. A shell-mounted instrument (level switch, level transmitter, temperature probe) lands its hidden wire from the vessel's hidden <code>level</code> or <code>contents</code> tap, and a transmitter is ranged to its vessel automatically. The unit HMI's loop sheet is generated by walking the kernel's wire list from each PLC channel through terminals to the field device: nothing is drawn from a drawing.</p>
+
+<h2 id="s8"><span class="n">8</span>Historian, balance and alarms</h2>
+<p>The historian is first-class. Every output port and observable of every component is a tag; a material output fans out into its rate, temperature, solids fraction and one fraction per species, so composition is historised data rather than something a display infers. Tags may be registered mid-run (an instrument just installed) and retired (removed; history kept, growth stopped), and a tag's series aligns with the shared time axis through its start index. The Python historian samples every tick without bound; the GDScript historian samples once per second of simulated time into a rolling two-hour window of 7,200 samples trimmed in chunks of 600, and holds each tag's samples in a small <code>Series</code> object because a packed array fetched out of a dictionary is a copy, and appending to a copy and writing it back was 700 copies a tick, each growing with the session. The rule for displays is absolute: trend pages, HMIs and gauges read historian samples or live state and never compute, smooth or invent; the Python-phase browser GUI (<code>tools/demo_gui.py</code>, a stdlib HTTP server whose page renders only what the server reports, with an append-only delta feed) established the contract that the in-engine screens inherit.</p>
+<p><b>Material balance</b> is accounted per unit from the records' own meters, never from an integral a display keeps for itself. Units are read off tag numbers (an isolated three-digit group floored to the hundred; <code>t_403</code> is Unit 400), with an override table for two headers the naming rule filed wrongly, which the first plant-wide run caught as a thousand litres fed to the home loop and missing from Unit 300. Fed is headers, the lock's condensate and the steam drum's makeup (steam out minus feedwater in, the known gap counted rather than hidden); out is drains, vials, dryer vapour, boil-off, overflow and spills to ground; held is vessel inventory. The residual \(\text{fed} - \text{out} - (\text{held} - \text{held}_0)\) is what a closed balance keeps at zero, and the closure \(100\,(\text{out} + \text{held} - \text{held}_0)/\text{fed}\) is the probe's number: the showcase's Unit 300 soaks twenty simulated minutes and reports 100.0 % closed. The residual is also replayed from historian samples as a trend, reading each series once rather than calling the historian per tag per sample.</p>
+<p><b>Alarms</b> are scanned twice a second off the records' own state: pump dead-headed or cavitating, reactor boiling, tank overflowing, cap spilling, filler starved, block valve failed to open or close (no limit within two strokes of a command edge), PLC unpowered with a program loaded, PID output at a limit for 30 s in auto, centrifuge spinning dry for 10 s. The memory some conditions need (command edge times, how long a loop has been pinned) lives in the scanner keyed by record name, never on the records. An alarm's age is the age of the condition, not of the scan; a new alarm rings once.</p>
+
+<h2 id="s9"><span class="n">9</span>Engine integration</h2>
+<h3><span class="n">9.1</span>Records and views</h3>
+<p>The <code>Plant</code> node owns the sim graph and the fixed-rate tick; child views only render. A view carries its record's name and type in metadata, and parallel dictionaries map record name to view, type, protection, enclosure membership and mount. <code>PlantFactory</code> is the one place that knows how to make each type: a catalog per build page, a footprint, a floor offset, the port anchors (position and outward direction of each fitting, the contract every route starts and ends on), a configuration table naming which constructor parameters the CONFIGURE tab may edit under the same keys the save file carries, and the two forty-arm constructors <code>make_record</code> and <code>make_view</code>. Placement applies one elevation rule to every record that carries an <code>elevation_m</code> property, re-derived from where the record stands at placement, on a move and on a load: a vessel, header or drain reckons from its base, an inline pump or valve from its nozzle height above its base, a cap from its line. Until 21 September 2026 this was a list of five types, and an open cap moved after placement kept the vent height it was placed at; the property-based rule replaced the list. Placement then registers the record with the historian, builds the view, merges its furniture (Section 9.3) and attaches port markers, each a static body on its own collision layer with a capsule pick volume along the fitting's axis and a <code>face</code> distance where a line meets it. <code>connect_equipment</code> enforces the kernel's rules (kind match, voltage class, single source) and, for visible lines, <b>one line per nozzle, one cable per terminal</b>: a nozzle already carrying a line refuses another with "split it with a tee, or use another way", a tap does not count as a line on what it reads, and hidden wires are the plant's own bookkeeping. <code>fanout_report</code> counts kernel wires per port so that hidden fan-out is visible too; the showcase's five remaining entries are instrument taps.</p>
+
+<h3><span class="n">9.2</span>The scan on a thread</h3>
+<p>The tick is 20 Hz, decoupled from the frame rate: the physics step accumulates frame time into scans due, capped at three a frame because a hitch is not repaid with a longer hitch (the sim slips behind the clock by the scans it drops). Since 13 September 2026 the scans a frame owes run on a worker thread while the frame is drawn (Figure 5). The thread is started at <code>RenderingServer.frame_pre_draw</code> and collected at <code>frame_post_draw</code> only if finished; otherwise it runs on through the next frame's input and physics and is collected, blocking, at <code>SceneTree.process_frame</code>, which is emitted before any node's <code>_process</code>. Further barriers stand wherever something acts on the sim outside that window: any key or mouse button in the world's input handler (a keypress may act on the sim), before a routing sweep (it repaints runs off the kernel's flows), and during a nozzle grab (it writes an elevation). This is safe because the sim never touches a node, every reader or writer of sim state runs past one of those joins, and the render thread reads only render resources. Headless, and under <code>FLOWSTATE_SYNC_SCAN=1</code>, the scan runs in the physics step, so smoke runs stay deterministic. The HUD probe measures the residue: on the laptop the scan takes 18–21 ms while it competes with the main thread's render submission against 9–11 alone, and 20–40 % of Low-preset frames still wait a few milliseconds for it.</p>
+
+<figure>
+<svg viewBox="0 0 760 210" role="img" aria-label="Two timelines: the main thread runs input, physics, process and draw each frame; the worker thread runs the due scans starting at frame_pre_draw; join points are marked at frame_post_draw if finished, at process_frame otherwise, and at input, routing sweep and nozzle grab.">
+  <defs><marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+  <text x="10" y="50" class="svgt">main</text>
+  <text x="10" y="130" class="svgt">worker</text>
+  <g>
+    <rect x="70" y="34" width="70" height="26" class="box"/><text x="105" y="51" class="svgs" text-anchor="middle">input</text>
+    <rect x="140" y="34" width="90" height="26" class="box"/><text x="185" y="51" class="svgs" text-anchor="middle">physics: count</text>
+    <rect x="230" y="34" width="90" height="26" class="box"/><text x="275" y="51" class="svgs" text-anchor="middle">_process</text>
+    <rect x="320" y="34" width="160" height="26" class="box"/><text x="400" y="51" class="svgs" text-anchor="middle">draw (submit)</text>
+    <rect x="480" y="34" width="70" height="26" class="box"/><text x="515" y="51" class="svgs" text-anchor="middle">input</text>
+    <rect x="550" y="34" width="90" height="26" class="box"/><text x="595" y="51" class="svgs" text-anchor="middle">physics</text>
+    <rect x="640" y="34" width="110" height="26" class="box"/><text x="695" y="51" class="svgs" text-anchor="middle">_process …</text>
+  </g>
+  <rect x="320" y="114" width="230" height="26" class="boxa"/><text x="435" y="131" class="svgs" text-anchor="middle">sim.tick() × scans due (≤ 3)</text>
+  <line x1="320" y1="60" x2="320" y2="114" class="lna" marker-end="url(#ar5)"/>
+  <text x="326" y="92" class="svgs">frame_pre_draw: start</text>
+  <line x1="480" y1="60" x2="480" y2="100" class="ln dash"/>
+  <text x="484" y="92" class="svgs">frame_post_draw: join if done</text>
+  <line x1="640" y1="114" x2="640" y2="60" class="lna" marker-end="url(#ar5)"/>
+  <text x="560" y="160" class="svgs">process_frame: join (blocking),</text>
+  <text x="560" y="176" class="svgs">before any node's _process</text>
+  <text x="70" y="176" class="svgs">Other barriers: any key or button; before a routing sweep; during a nozzle grab.</text>
+  <text x="70" y="194" class="svgs">Headless or FLOWSTATE_SYNC_SCAN=1: the scan runs inside the physics step.</text>
+</svg>
+<figcaption><b>Figure 5.</b> The threaded scan. The worker runs inside the draw window; if the draw is shorter than the scan, the scan runs on into the next frame and is collected before the first <code>_process</code>. Nothing that reads the sim runs inside the window.</figcaption>
+</figure>
+
+<h3><span class="n">9.3</span>Draw calls, merging and finish</h3>
+<p>Views are built from primitives, and the showcase once held 10,269 visual instances and 10–12 fps on every graphics preset. <code>MeshMerge</code> bakes a view's forgotten primitives into one mesh per look under the nearest held node. Its rule is reachability: anything a script member refers to (a node, a material, a mesh, or an array or dictionary of them, to depth four) is dynamic and left alone; everything else is merged, except subtrees under a port-fitting or <code>no_merge</code> meta, a mesh with children, and single survivors. A part a view will move, hide, retint or replace later must therefore live in a member variable. The merge indexes every source first, because <code>SurfaceTool.append_from</code> draws only indexed vertices once the tool holds any index array, and a non-indexed swept elbow appended after an indexed primitive vanished silently ("many pipe bends are now gone"); a triangle-count guard now pushes an error if the merged count is not the sum of its sources. Merged parts smaller than 0.35 m cast no shadow. A run's flanges are baked into its body, so a run is two draws. After the pass the showcase reads 1,792 visual instances and about 770 draws from the pad; <code>DrawCensus</code> counts instances by owner and materials against distinct looks (202 looks over 1,549 material objects, the unshared remainder being materials views mutate after asking for them).</p>
+<p>Finish is inferred from colour. <code>ViewUtil.flat(color)</code> reads a low-saturation light grey as brushed stainless (metallic, anisotropic, with a generated triplanar brush-line normal map built once from smooth noise), a low-saturation dark grey as painted or cast steel, anything with colour as enamel under a clearcoat, and anything with alpha as glass; concrete and painted walls ask for <code>matte()</code> by name. Cylinder tessellation follows radius (12–48 sides). Floating text is hidden by default and revealed only for the equipment under the crosshair; engraved plates always show.</p>
+
+<h3><span class="n">9.4</span>Persistence and undo</h3>
+<p>A save (version 5; versions 3 and 4 still load) is one dictionary: components with their type, state, constructor parameters, position, rotation and mount; wires with waypoints, locks, the <code>fixed</code> flag, service, fitting style, resistance and bore; cabinets with modules and member states; junction boxes, stations, runs with their multicore circuits, and structures. Restore frees everything and rebuilds in a strict order (cabinets, enclosures, runs, structures, unmounted components, then mounted components after their hosts, then wires) on a fresh simulation and a fresh historian, re-deriving elevations from saved positions. Undo is a stack of fifty such snapshots as JSON strings: every mutating entry point opens with <code>checkpoint()</code>, at most once per frame and never when the snapshot equals the top of the stack; a gesture (a carry, a drag, a cut) is one step however many frames it lasts and leaves none if it changed nothing. A snapshot carries sim state, so an undo puts levels back; on a small site it costs about 30 ms, in the showcase seconds, and it discards history.</p>
+
+<h3><span class="n">9.5</span>Interaction model</h3>
+<p>The build controller is a four-mode state machine (normal, place, connect, edit) over a ray that sees different collision layers per mode (world and structure 1, port fittings 2, interact volumes 4, wire-run colliders 8, gizmo handles 16). A second ray that sees only fittings is asked first whenever fittings are admitted, because a fitting lies inside its equipment's interaction volume and a single ray stops at the volume. The placement ghost is the asset's real geometry from a scratch simulation that is never ticked, tinted by validity; the route preview is real translucent pipe from the same segment builders the committed run uses, and asks the plant for the route the lay would actually take when a legal target is under the crosshair. The selection model is click to select, click again to deselect, double click for properties, right-hold to carry, wheel under the right button to turn, right click only ever cancels; editing is in first person, a handle dragged by aiming at it and looking. Drag mathematics are static functions so that the headless smoke can check them without a camera.</p>
+
+<h2 id="s10"><span class="n">10</span>Routing of runs</h2>
+<p>A player connects two nozzles; the plant lays a three-dimensional run between them that leaves each fitting along its axis, avoids solid geometry, does not lie inside earlier runs, bridges the runs it must cross, is supported every three metres, and then becomes the player's to edit corner by corner. The subsystem is the most rule-dense part of the platform and the one whose rules were set almost entirely by the director's walkdowns; every constant carries a dated note. This section describes it as a pipeline (Figure 6).</p>
+
+<figure>
+<svg viewBox="0 0 760 150" role="img" aria-label="A funnel of decreasing freedom: waypoints go through the avoidance search to corners, through the lane pass to a base path, through bridges to the drawn path, through the deferred sweep, and are baked back into waypoints, after which the line never routes again.">
+  <defs><marker id="ar6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+  <g>
+    <rect x="10" y="40" width="100" height="44" rx="3" class="box"/><text x="60" y="58" class="svgt" text-anchor="middle">waypoints</text><text x="60" y="74" class="svgs" text-anchor="middle">the player's</text>
+    <rect x="140" y="40" width="110" height="44" rx="3" class="boxa"/><text x="195" y="58" class="svgt" text-anchor="middle">1 search</text><text x="195" y="74" class="svgs" text-anchor="middle">→ corners</text>
+    <rect x="280" y="40" width="110" height="44" rx="3" class="boxa"/><text x="335" y="58" class="svgt" text-anchor="middle">2 lanes</text><text x="335" y="74" class="svgs" text-anchor="middle">→ base_path</text>
+    <rect x="420" y="40" width="110" height="44" rx="3" class="boxa"/><text x="475" y="58" class="svgt" text-anchor="middle">3 bridges</text><text x="475" y="74" class="svgs" text-anchor="middle">→ path</text>
+    <rect x="560" y="40" width="90" height="44" rx="3" class="box"/><text x="605" y="58" class="svgt" text-anchor="middle">sweep</text><text x="605" y="74" class="svgs" text-anchor="middle">≤ 6 rounds</text>
+    <rect x="680" y="40" width="70" height="44" rx="3" class="box"/><text x="715" y="58" class="svgt" text-anchor="middle">bake</text><text x="715" y="74" class="svgs" text-anchor="middle">fixed</text>
+    <line x1="110" y1="62" x2="140" y2="62" class="ln" marker-end="url(#ar6)"/>
+    <line x1="250" y1="62" x2="280" y2="62" class="ln" marker-end="url(#ar6)"/>
+    <line x1="390" y1="62" x2="420" y2="62" class="ln" marker-end="url(#ar6)"/>
+    <line x1="530" y1="62" x2="560" y2="62" class="ln" marker-end="url(#ar6)"/>
+    <line x1="650" y1="62" x2="680" y2="62" class="ln" marker-end="url(#ar6)"/>
+  </g>
+  <path d="M715 84 V118 H60 V84" class="ln dash" marker-end="url(#ar6)"/>
+  <text x="380" y="134" class="svgs" text-anchor="middle">the drawn corners become the waypoints; from then on the line is laid plainly through them and never routes again</text>
+</svg>
+<figcaption><b>Figure 6.</b> A funnel of decreasing freedom. Each pass consumes the previous one's output, and the bake closes the loop: the router's output becomes the player's input. The three routing passes run only while a line is new.</figcaption>
+</figure>
+
+<h3><span class="n">10.1</span>Data model, order and the bake</h3>
+<p>Two things are routed. A <b>wire</b> is one kernel wire between two fittings and is fully routed; a <b>placed run</b> (a tray, a rack pipe, a multicore cable) is laid plainly through its points and is never laned or bridged. A wire's visual record holds the player's own sparse <code>waypoints</code>, the <code>corners</code> the avoidance search derived, the lane-shifted <code>base_path</code>, the drawn <code>path</code>, an <code>own_path</code> (lane 0 through the player's waypoints, what the edit handles stand on), the chosen <code>lane</code>, a nominal bore <code>dn</code>, service colour, label and fitting style, pinned <code>locks</code>, and two things that organise everything else: an <b>order</b>, the wire's place in the laying sequence from a monotonic serial, and a <b>fixed</b> flag.</p>
+<p>The order rule was set on 12 September 2026 after two runs that both shifted to avoid each other still met: <em>one stays, only the other moves</em>. Every pass, the search's busy cells, the lane cost, the crossing test, the bridge rule and the sweep, looks only at runs laid before the one in hand. A run is laid round the runs before it and never reacts to the ones after, so a sweep in laying order settles in one pass. The one exception is a later run's first and last 0.45 m, which cannot move, so a crossing there is the earlier run's to fix.</p>
+<p>The fixed flag is the <b>bake</b>, set on 19 September 2026 under the director's model that "waypoints should never differ from actual points on the pipe" and "existing pipes should not be recalculated". When the deferred sweep settles, every new line's drawn path, minus the two fittings and their stub ends, which follow the equipment, becomes its waypoints, every sidestep, bridge, detour and square leg included; from then on it is laid plainly through them with no search, lane or bridge, the sweep skips it, an equipment move only stretches its end legs, and every edit gesture re-bakes it so a leg the lay added during a drag becomes its own corner. A cut's pieces and a save's fixed lines are laid fixed from the first; a save from before the rule routes once on load and bakes. The consequence for editing is that a line's own route is its drawn path exactly, so every handle is a real point of the pipe and every match between a handle and a waypoint is exact to a centimetre, never by proximity, a rule the director set after a day of distance-matched handles that "swallowed a corner planted beside another".</p>
+
+<h3><span class="n">10.2</span>The direct-line leg and the fold rule</h3>
+<p>A leg between two points is one horizontal straight at whatever bearing and one vertical, with the trade's convention for which comes first: a rising leg runs level and comes up at the far end; a falling leg drops first. A level leg is one straight; a plumb leg is one vertical. This replaced an axis-aligned orthogonal lay on 13 September 2026 after the auto-route between two hand-placed tanks "favoured the world axes". A run leaves each fitting straight along its axis for a stub of five bores (0.35 m at DN50, 4 cm at DN6, floored at 3 cm; a cable keeps 0.35 m), and where a tube meets a larger nozzle the nozzle's bore sets the stub so the reducer has room. <b>No angle between two straights may be sharper than 45°</b>: a corner whose change of direction exceeds 135° is split with a 0.45 m leg square to the way in, placed on the longer of its two legs so a stub stays straight, and a turn off a jog under 0.3 m is left alone. The square leg goes in <em>before</em> the search, not after it, because splitting a fold after the search once moved a leg 0.45 m back through the pump the search had gone round with nothing checking it.</p>
+
+<h3><span class="n">10.3</span>The avoidance search</h3>
+<p>Each leg between the player's waypoints is first laid plain and sampled every 0.15 m against the clearance oracle (Section 10.4); only a leg that passes through something solid is searched. The search is A* [5] on a half-metre grid anchored at the leg's own start, so the found path leaves it with no jog, over six moves (±x, ±z, ±y), with a bounding box fourteen cells beyond the leg's extent, a budget of 3,000 expansions, and an open set bucketed by integer f-score rather than a heap because that stays cheap in GDScript. The first step never folds against the way in; a cell below grade is refused; a vertical step also probes halfway, since a deck is thinner than the gap between cells. Costs are integral (Table 5) and the heuristic is three per cell against a straight step of two, a weighted A* of factor 1.5 [6], deliberately inadmissible because an orthogonal grid has countless equal-length routes and exploring them all is what made it slow. Identical legs (twenty feeds down one trunk) are searched once through a cache keyed on endpoints, ends and way in.</p>
+
+<div class="tablewrap"><table>
+<caption><b>Table 5.</b> Step costs in the grid search (<code>PipeRoute._search</code>). "Ceiling" and "floor" are the leg's own two heights; the low-road terms encode the trade's convention of running low before rising.</caption>
+<tr><th>Term</th><th class="num">Cost</th><th>Rationale</th></tr>
+<tr><td>Level step</td><td class="num">2</td><td>base</td></tr>
+<tr><td>Vertical step</td><td class="num">3</td><td>a riser costs more than a straight</td></tr>
+<tr><td>Cell an earlier run from another source occupies</td><td class="num">+5</td><td>a detour lands in a free corridor; not a wall</td></tr>
+<tr><td>Change of direction</td><td class="num">+2</td><td>fewer bends</td></tr>
+<tr><td>Above the leg's higher end</td><td class="num">+6</td><td>overhead, with nothing to carry it</td></tr>
+<tr><td>Below the leg's lower end</td><td class="num">+2</td><td>a dip needs a way back up</td></tr>
+<tr><td>More than one cell above the lower end</td><td class="num">+1</td><td>drop first, run low before rising</td></tr>
+<tr><td>Heuristic</td><td class="num">3 × Manhattan</td><td>1.5 × the straight-step cost</td></tr>
+</table></div>
+
+<p>The grid path is a staircase, so it is <b>pulled straight</b>: from each corner, the farthest later corner whose direct leg is clear replaces the staircase between them, ending the last straight on the target exactly, under three guards: the straight must not fold against the way in, must be clear of solids, and may not lie through more of other runs' cells than the staircase it replaces plus one, since the search side-stepped a neighbouring run at a cost and a straight that grazes it the whole way would throw that away (a shallow diagonal grazing a neighbour for nine metres was the first find). A run's own two pieces of equipment are open to it only on a vertical (a drop down a vessel's flank) and within the stub clearance of 1.2 m of its fittings; a level leg must go round its own tank.</p>
+
+<h3><span class="n">10.4</span>The clearance oracle</h3>
+<p><code>RunClearance</code> is the one answer to "may a run pass here?", written on 18 September 2026 under the director's instruction that the fix for runs through equipment must not "spiral into spaghetti code" of special cases; it replaced six earlier implementations. Its rule has four parts. (1) Solid is world geometry, placed structure and equipment volumes; other runs are never solid, and lanes and bridges see to them. (2) A run's own two pieces of equipment, a shell-mounted instrument counting as its vessel and the vessel as the instrument's, are open to it within a <em>reach</em> of each fitting (the stub clearance plus half the footprint, since a bottom outlet's line runs out from under its vessel) and anywhere along a vertical leg; a context may name further records open, such as a bridge standing at the crossed run's own fitting. (3) A run resting on what carries it is not passing through it: a surface within 0.1 m below the run, facing up (normal above 0.7), does not block, that thing's own surface for a placed thing, any carrying surface for world geometry since the floor and the slab on it are coplanar bodies. (4) The probe is a sphere of the run's radius plus 3 cm at the run's own height, cached by tenth-metre cell and centimetre of radius until the plant changes. The questions are <code>blocked_by(p, ctx, vertical)</code>, <code>hits(path, ctx)</code> (every 0.15 m, one entry per owner), <code>leg_clear(a, b, ctx)</code> and <code>busy(p, sources, order)</code>; the router's plain legs and search, the pull-straight, the lanes' room, the risers' slides, the bridges' decks and ramps, the square-turn legs, the lane cost and the intersection report all ask it and nothing else probes for solids. An impossible route is the player's: while routing, the preview turns red and names what the line would pass through, and the click is refused with that reason and the routing kept to fix, rather than the line threaded through.</p>
+
+<h3><span class="n">10.5</span>Lanes</h3>
+<p>Two runs laid along the same corridor would lie inside each other. A <b>lane</b> moves a route sideways and up: lane 0 is the searched route itself, and lanes 1–32 are a side (two), a tier (four, a run's width plus 2 cm apart, the way cables stack) and a step count (four, each \(2r + 3\) cm; further out a riser leaves its column's reach), tried tier-last so that every step out on the ground is taken before the first lift, since a lifted drop beside a column leaves the floor's reach (Figure 7). The offset is applied <em>leg by leg</em>: each horizontal leg takes the offset on its side that the room beside it allows, probed at the tier's own height once per side and tier per lay; a corner between two horizontal legs takes the intersection of the two offset lines at whatever angle; a corner at a stub end sidesteps square to the stub, so a lone line is stub, sidestep, straight, riser, stub and never a diagonal jog off a nozzle; a riser keeps plumb, taking the shift of the longer of its two legs, and slides along that leg by up to 0.3 m with three halving retries. A whole-path shift was the first version and it walked bundles into rack columns and drains. A run with no corner on its horizontal is given one at the middle of its longest level leg, added to its corners never replacing them, so that a lane can bend it there.</p>
+
+<figure>
+<svg viewBox="0 0 760 240" role="img" aria-label="Left: a plan view of a base route with offset lanes on each side at four step counts. Right: an elevation view with four tiers stacked above the base. Text notes the try order: tier last.">
+  <text x="20" y="24" class="svgt" font-weight="600">Plan: side × step (k = 1…4)</text>
+  <line x1="40" y1="130" x2="340" y2="130" class="lna"/>
+  <text x="345" y="134" class="svgs">lane 0</text>
+  <line x1="40" y1="110" x2="340" y2="110" class="ln dash"/><text x="345" y="114" class="svgs">k=1</text>
+  <line x1="40" y1="90" x2="340" y2="90" class="ln dash"/><text x="345" y="94" class="svgs">k=2</text>
+  <line x1="40" y1="70" x2="340" y2="70" class="ln dash"/><text x="345" y="74" class="svgs">k=3</text>
+  <line x1="40" y1="50" x2="340" y2="50" class="ln dash"/><text x="345" y="54" class="svgs">k=4</text>
+  <line x1="40" y1="150" x2="340" y2="150" class="ln dash"/><text x="345" y="154" class="svgs">k=1</text>
+  <line x1="40" y1="170" x2="340" y2="170" class="ln dash"/><text x="345" y="174" class="svgs">k=2</text>
+  <line x1="40" y1="190" x2="340" y2="190" class="ln dash"/><text x="345" y="194" class="svgs">k=3</text>
+  <line x1="40" y1="210" x2="340" y2="210" class="ln dash"/><text x="345" y="214" class="svgs">k=4</text>
+  <text x="40" y="232" class="svgs">step = 2r + 0.03 m; room probed per leg, per side, at the tier's height</text>
+  <text x="430" y="24" class="svgt" font-weight="600">Elevation: tier (0…3)</text>
+  <line x1="450" y1="190" x2="740" y2="190" class="ln" />
+  <text x="450" y="206" class="svgs">floor</text>
+  <circle cx="595" cy="170" r="7" fill="var(--accent)"/><text x="612" y="174" class="svgs">tier 0 (base)</text>
+  <circle cx="595" cy="150" r="7" class="free"/><text x="612" y="154" class="svgs">tier 1  lift = step + 0.02</text>
+  <circle cx="595" cy="130" r="7" class="free"/><text x="612" y="134" class="svgs">tier 2</text>
+  <circle cx="595" cy="110" r="7" class="free"/><text x="612" y="114" class="svgs">tier 3</text>
+  <text x="450" y="60" class="svgs">Try order: every step out on a tier</text>
+  <text x="450" y="76" class="svgs">before the first lift (rank = tier·100 + k·10 + side).</text>
+  <text x="450" y="92" class="svgs">A lifted lane rises out of a floor's support reach.</text>
+</svg>
+<figcaption><b>Figure 7.</b> The lane space: two sides, four steps, four tiers, 33 lanes including the unshifted route. A lane is scored, not taken: the cheapest of the lanes tried wins, with lane 0 always tried and a re-laid run trying its old lane first.</figcaption>
+</figure>
+
+<p>Each candidate lane is scored (Table 6) and the cheapest wins, lane 0 always tried, ties to the lowest lane, a re-laid run trying its old lane first so that a run the sweep keeps in its lane moves nothing else. The two physics-backed checks (support, clearance) are paid only by a would-be winner. Two runs from one source may share 1.5 m anywhere (the fan where a trunk feeds part), and two runs with an end on the same machine may share 1.5 m within 2.5 m of it (a pump's suction and its power arrive side by side); everywhere else 0.5 m of shared corridor is an overlap.</p>
+
+<div class="tablewrap"><table>
+<caption><b>Table 6.</b> Lane cost terms (<code>Plant._lay_route</code>). The weights encode a hierarchy: passing through solid ≫ overlapping an earlier run &gt; failing the support rule &gt; crossing another run, because a crossing is bridgeable and an unsupported span is a rule broken.</caption>
+<tr><th>Term</th><th class="num">Cost</th><th>Measured how</th></tr>
+<tr><td>Corridor shared with an earlier run beyond the allowance</td><td class="num">1000 + metres</td><td>longest stretch within the two radii, at any angle, box broad phase</td></tr>
+<tr><td>Each crossing a bridge would have to fix</td><td class="num">4</td><td>segment-to-segment distance under the radii + 3 cm, not parallel (within 8.6°), not in the first or last 0.4 m</td></tr>
+<tr><td>Support rule refused</td><td class="num">50</td><td><code>SupportCheck.evaluate</code> on the candidate</td></tr>
+<tr><td>Each solid the candidate passes through</td><td class="num">200</td><td><code>RunClearance.hits</code></td></tr>
+</table></div>
+
+<h3><span class="n">10.6</span>Bridges</h3>
+<p>After the lane, every place the run would still pass through an earlier run is lifted clear by an orthogonal bridge: up, across, down, reaching 0.3 m either side of the crossing, with 8 cm of air between the two surfaces. A crossing is found per segment against every earlier target (bundle-mates from one source never hop each other; trays are never hopped, a conduit lands on them); crossings on one segment merge into spans, and a merged span shorter than 0.2 m is refused. A span with any horizontal in it goes over or under; a span that is a riser or a row of them is jogged round sideways, smaller jog first, and a span with both is passed over the deck and beside the ramp at once. The direction is the trade's convention: the thinner run dips under (a conduit under a pipe) and the thicker goes over; the deck is raised, up to three times, above anything else already crossing under the same spot (another run's bridge). A bridge is accepted only if its four points are clear of solids under a context that opens the crossed run's own fittings (a bridge in front of a nozzle cluster is not inside the machine) and if, extended half a metre each way, it crosses no other run; a jog round a riser must not come down on the line that riser feeds. Where nothing is accepted the crossing stays and the report names it.</p>
+
+<h3><span class="n">10.7</span>The deferred sweep</h3>
+<p>Physics knows a body only the frame after it is added, so three frames after any change a sweep walks the non-fixed runs in laying order and re-lays each one whose corners would now search differently, whose lane geometry or bridges would come out differently, that an earlier run has since moved onto, or that its lane left unsupported. A run yields only to earlier runs, so one sweep should settle it; two brakes stand behind that: a run re-laid twice since the plant last changed is left where it is (a knot of short cables at one cabinet traded lanes for ever), and rounds are capped at six, with the report naming what the cap skipped. A run whose re-lay changed nothing is marked so that a crossing nothing of its own can fix does not re-lay it every round. Caches (clearance cells, the search's leg cache) clear once per schedule, not per round, which saved 1.3 s a round with nothing moved. When a round re-lays nothing, every new line is baked, supports are applied, pumps standing above the floor get pedestals rayed down to the floor beneath them, and open ends find the open vessel under them. The sweep prints where a lay's time goes by phase; in the showcase's headless run the first round re-laid 46 runs in 6.2 s, of which the lane loop was 6.1 s, and the third round two runs.</p>
+
+<h3><span class="n">10.8</span>The support rule and stands</h3>
+<p>The kernel knows the height of every boundary and inline device but nothing of the shape of a run between them, so the rule that a pipe must be held up is engine-side. A routed run may not span more than 3 m unsupported. A run is sampled every 0.5 m; a sample counts as supported when world geometry, placed structure (layer 1) or equipment bulk (interact volumes, layer 4) lies within a sphere of 0.65 m, excluding the run's own colliders; wire runs sit on layer 8 precisely so that pipe never supports pipe, while trays and rack pipe sit on layer 1 so they carry what is routed along them. The first and last metre are free, the nozzle and its stub fitting carrying them. Clamp brackets are proposed every 2.2 m of supported run, anchored to the nearest surface, down first, then sideways, then overhead. Since 19 September 2026 a level stretch that would fail the rule is stood on <b>pipe stands</b> wherever a floor, slab or deck (layer 1, never equipment) lies within 6 m below: stands at fixed fractions of the level straight, evenly spaced at most 2.2 m apart, because stands spaced from the start of the stretch wandered as a line rose and the director "saw one appear and vanish between notches"; one more goes at an end where the riser before or after would overrun the span. A riser is never stood; a run higher than a stand reaches still needs a rack; the support exercise checks an 8 m span 2 m up stands on stands, the same span 8 m up fails, a braced span uses none, and a conduit over a tray is carried by the tray. Structure has its own bearing rules: a column, wall or slab needs bearing below, a beam needs it at both ends, a deck at two of four corners, tested by a small box query rather than a hairline ray because real seats have width.</p>
+
+<h3><span class="n">10.9</span>Line sizes, reducers and inline placement</h3>
+<p>Every wire carries a nominal bore from twelve sizes, 1 to 150 mm, drawn at radius \(0.07\,\text{DN}/50\) with resistance \(k = k_{\text{base}}\,(50/\text{DN})^5\), a square law in a rough pipe; a DN1 line at 4 bar passes about half a millilitre a second and the range spans a factor of 3 × 10⁸ in resistance. A nozzle is a DN50 bore, so a line of another size meets it through a concentric reducer tapering over about a diameter and a half of the larger bore within the end spool. Inline fittings (valves, tees, gauges, caps, the small-bore family) wear their own flanges and are built at the bore of the biggest material line on them, or at their own configured size for a tee or valve bought at a size, and their fittings are flush so a line meets that face. An inline type placed on an existing line cuts itself in: the ghost snaps onto the pipe axis within 0.75 m, turns so its inlet faces upstream, refuses a riser, a straight with no room for its half plus flange plus stub, a spot too close to a fitting, or a line too low for its nozzles, and the click splits the line's corners about the spot, places the device, and connects two fixed pieces carrying the service over, as one undo step. An inline element carried by a right-hold slides only along its axis between the corners either side, its two fixed pieces stretching without a re-route. A right-hold pulled across a line cuts it, standing a cap 0.45 m either side and re-laying both pieces fixed; a line from one cap to anything takes the blind off.</p>
+
+<h3><span class="n">10.10</span>Editing lines</h3>
+<p>A click on one straight selects that leg and shows a cube at every corner of the whole line except the two fittings and their stub ends. The editing operations obey one invariant, set on 19 September 2026 after a drag sent every derived corner back as a waypoint and "a spaghetti pile rapidly emerged": <b>only the player's waypoints are kept</b>. A dragged corner moves if it is one of them or is inserted at its place along the route if the router derived it, so a line gains exactly one waypoint per corner touched; a riser's other end (the same plan position at another height) follows sideways, and a riser moved by one end whose other end is the router's makes that end a corner so the riser travels with it. A click on the selected line plants a corner at once; Ctrl at the press duplicates one, the copy taking its side from the first pull; a right press deletes a corner and routes the leg between its neighbours afresh; a middle press locks a corner in place; Ctrl and the wheel raise a held cube, or the whole selected level straight with both ends moved in one pass against the path as it was, since two single-point edits in one tick once ordered the far corner ahead of the near one and the line looped back at three times its length. A straight raise refuses when either end is locked, and a sleeved riser refuses to raise, because raising its two ends folded it into more legs every notch.</p>
+
+<h3><span class="n">10.11</span>Reports and current standings</h3>
+<p>Four reports read the stored path of every run, never a recomputation, so the report, the support check and what is rendered agree; every headless smoke prints them twenty frames after startup, once the sweep has settled. Table 7 gives their definitions and the showcase's standings from the run of 21 September 2026. The twenty runs through solid geometry are hand-laid layout debt of the showcase rather than router work (two conduits through the MCC room's door, since the model has no wall penetrations; nozzles and switch cables on the Unit 400 tower that face railings or rise through a deck; trays touching the columns they hang from), and the nine crossings are all cable-at-a-fitting cases where neither over nor under has room; the director's method is to perfect routing on simple configurations examined one at a time, never on the showcase.</p>
+
+<div class="tablewrap"><table>
+<caption><b>Table 7.</b> The walkdown reports and the showcase's standings on 21 September 2026 (headless, after the deferred sweep). The router made 28 searches, of which one failed and fell back to the plain leg, expanding 4,875 cells in 367 ms.</caption>
+<tr><th>Report</th><th>Measures</th><th class="num">Showcase</th></tr>
+<tr><td><code>overlap_report</code></td><td>pairs of runs sharing a corridor within their two radii for longer than the allowance, worst first</td><td class="num">0</td></tr>
+<tr><td><code>unsupported_report</code></td><td>runs whose longest unsupported span exceeds 3 m, with where it begins</td><td class="num">0</td></tr>
+<tr><td><code>crossing_report</code></td><td>places two runs still pass through each other, as rendered, deduplicated by quarter-metre voxel</td><td class="num">9</td></tr>
+<tr><td><code>intersection_report</code></td><td>runs through solid geometry by the one clearance rule, one line per run and owner</td><td class="num">20</td></tr>
+<tr><td><code>fanout_report</code></td><td>ports carrying more than one kernel wire</td><td class="num">5 (taps)</td></tr>
+</table></div>
+
+<h2 id="s11"><span class="n">11</span>Verification</h2>
+<p>Three layers of verification exist, and the working agreement fixes their cadence: the Python suite and the headless smoke per change, the windowed probes once per batch. The <b>pytest suite</b> (274 cases, 217 s on 21 September 2026) runs against the reference kernel. Its doctrine follows from the pressure model: a test can no longer name a flow rate, since flow is solved. To test a rate, a test builds a network and checks the balance against the meters (a source's and a drain's totals) rather than a number it chose; to test a unit's equations on the bench, it stands material at a nozzle the way the hydraulic pass leaves it (a signed rate plus the composition at the node) and reads the discharge back through <code>supplied_stream</code>. Commands are wired through <code>Duty</code> and <code>Contact</code>, never poked. The library test fails if any real port lacks an authored meaning.</p>
+<p>The <b>headless gauntlet</b> runs six self-checks inside the engine on every smoke of a home-loop world, simulating ten minutes of plant in about eight seconds: the kernel loop (a fill loop cycles within its switch band, nothing overflows, the relay cycles between one and fourteen times, and mass closes to the millilitre; the run of 21 September reported 4 cycles and a balance within 0.000 L); hydraulics (a tee splits by resistance and conserves; a pump makes rated flow, dead-heads, and two in parallel do not double; a raised tank drains into a low one with no pump; gravity does not run uphill; header to tank to drain closes; a valve half open passes more than half, because flow follows the square root of the drop; two headers blend); control (a PID level loop holds 15.0 kPa and a ladder seal-in latches and drops); streams (mixing conserves, a vessel blends, and composition survives a save round trip, "the part save/load can quietly break"); the build API (place, connect, mis-wire, remove, mount, configure, move, a cabinet built module by module with a dead rack until its PSU is fed, and a save/load round trip that preserves waypoints and the PLC program); and support (spans, bearings and tray-as-support, in phases because physics sees nothing during <code>_ready</code>). The smoke then prints the alarm scan (the showcase's dead-headed P-402 is the standing example), the four walkdown reports, the draw census and the main-loop cost. A per-change check is an import to catch parse errors followed by one smoke.</p>
+<p>The <b>windowed probes</b> exercise what headless runs cannot: the showcase probe walks every stair flight with real input and prints where the player ends up, soaks Unit 300 for twenty simulated minutes one tick at a time so that the worst Newton residual and every scan that hit the iteration cap are on record, reports the unit balance (100.0 % closed with the boiler's makeup counted as fed), photographs every HMI page for reading against the printed state, and presses the local control station's STOP and START. The HUD probe is the performance instrument: each graphics preset photographed with its frame rate after the pipelines compile, a bisection of the Low preset with each part of the world hidden and each node group's processing switched off at quarter scale, the scan-join wait, and the frame-length spread; the headless loop profile cannot measure any of this because without a GPU every label's text is rasterised again each frame it changes. Two runs on the director's laptop can differ by a quarter.</p>
+
+<h2 id="s12"><span class="n">12</span>Discussion and limitations</h2>
+<h3><span class="n">12.1</span>What the model does not do</h3>
+<p>The simple-insides rule is a commitment, and its costs are stated on every library page. The steam generator does not conserve mass: its drum is a pressure boundary that hands out whatever is drawn and makes up the difference from nowhere, so its pressure sags with feedwater rather than with demand, and in the showcase a 700 kPa drum pushes about 1.2 kg/s through an exchanger shell from 0.43 kg/s of feedwater. Closing it means a real drum inventory and a decision about the boiler's dynamics that is the director's. The centrifuge, dryer, still, vacuum lock and vial filler impose their discharges from last scan's split and cannot be blocked in; a line downstream of them always accepts. Temperature mixes by flow rather than by heat capacity. Cavitation is a suction taper because there is no vapour pressure. The regulator has no relief. The reactor has no heat of reaction; the crystalliser has no size distribution and its slurry flows exactly like the liquid it came from; the exchanger has no fouling and nothing checks that steam was piped to its shell. The composition pass moves one node per scan, so a long line's composition front travels at one node per 50 ms regardless of velocity, which is the price of closing recycle loops without a simultaneous solve. Height enters only through the elevation each record carries: a run's own profile is invisible, which is right for flow in a full pipe but means a pump sees the same static suction wherever the line dips or rises between its supply and its own nozzle. The one instrument still reading piezometric rather than static pressure is the pressure gauge tap, whose face shows the node value regardless of its own height.</p>
+
+<h3><span class="n">12.2</span>Two kernels</h3>
+<p>The port diverges from the reference in known ways: all GDScript port values are floats with discrete as 0/1 and material in separate typed fields, so that the kernel stays statically typed; validation happens in <code>connect_ports</code> rather than the wire; the PLC validator returns a string; the historian decimates to 1 Hz over a rolling window and silently restarts a retired tag's series; the composition pass is reordered and de-allocated; the Newton system is banded; and alarms, balance accounting, the trend screen record, save/undo and the whole cabinet layer are GDScript-only. The Python kernel has no whole-simulation serialiser. The self-checks of Section 11 mirror the pytest suite so that the two kernels are held to the same behaviours, but there is no automated numerical comparison between them on one plant; that would be the natural next verification step.</p>
+
+<h3><span class="n">12.3</span>Drift between authored text and code</h3>
+<p>Because equations and assumptions are prose under editorial control while port tables are read off live records, the prose can lag. The survey for this article found five instances worth correcting: the steam generator's spec states a feed-pump head of 25 m while the code uses 110 m; the block valve's assumptions still say "no limit switches" while the same spec documents, and the code implements, ZSO and ZSC; the crystalliser's spec says growth is slowed twentyfold without agitation while the code's factor is tenfold (the reactor's 0.05 is the twentyfold one); the pump's spec writes \(Q_{\max} = 1.35 \times\) rated while in code the maximum is the rating and 1.35 is only the runout cap; and the tank's filling override of the uncover law is absent from its equation list. The cap and the air cascade have no spec at all. In the PLC, a code comment says memory holds across a power loss (battery-backed) while the spec's assumptions say there is no retentive memory across a power cycle.</p>
+
+<h3><span class="n">12.4</span>Routing</h3>
+<p>The routing pipeline's weakest point is cost at scale. Every deferred sweep costs about a second even when nothing moves, felt three frames after each placement, and the showcase's startup pays about five seconds of sweeps; the levers named in the code are to probe room only up to the lane a run actually takes and to keep the crossing targets across a sweep. The seed bucket of the grid search uses a heuristic weight of 2 while every later expansion uses 3, a harmless inconsistency. Two runs steering round each other never settle, which is why a searched run is invisible to the busy test and why the total order exists; the cost is that a later run cannot make an earlier one move, so a poor early lay is permanent until the player edits it, which the bake and the corner tools now make cheap. Acute-angle avoidance is a 45° floor rather than a right-angle rule, by the director's call. The five reports are the standard against which the subsystem is judged, and the director's method of examining one simple configuration at a time is what moves them.</p>
+
+<h3><span class="n">12.5</span>Performance</h3>
+<p>The showcase reads 54–73 fps on the Low preset on the director's integrated-GPU laptop, up from 10–12 before the draw-call pass, against a stated goal of 60; Medium reads 31–41 with a 2–5 ms frame spread. What holds it is now the CPU: Godot's per-instance work on about 1,800 instances, the draw submission, and the scan's join. The next levers are the solver's transient (about five Newton iterations against two at steady state), the signal pass, and startup merging in a thread.</p>
+
+<h3><span class="n">12.6</span>Summary</h3>
+<p>The platform's claim is that a process plant can be simulated for play with a single physical principle, pressure driving flow, carried consistently through a kernel small enough to read, and that the consequences a player traces ("why is my flow low?") fall out of that principle rather than being scripted. The solver section records what that principle costs in numerical care, and the routing section records what it costs to make a plant look laid by hand. Both records are in the code as dated rules, which is the working method the platform was built by.</p>
+
+</div>
+
+<hr>
+<h2 id="refs" style="margin-top:0">References</h2>
+<ol class="refs">
+<li>Cross, H. (1936). Analysis of flow in networks of conduits or conductors. <i>University of Illinois Engineering Experiment Station Bulletin</i> 286.</li>
+<li>Todini, E. and Pilati, S. (1988). A gradient algorithm for the analysis of pipe networks. In <i>Computer Applications in Water Supply</i>, Vol. 1, Research Studies Press, 1–20.</li>
+<li>Rossman, L. A. (2000). <i>EPANET 2 Users Manual</i>. US Environmental Protection Agency, EPA/600/R-00/057.</li>
+<li>Cuthill, E. and McKee, J. (1969). Reducing the bandwidth of sparse symmetric matrices. <i>Proceedings of the 24th ACM National Conference</i>, 157–172.</li>
+<li>Hart, P. E., Nilsson, N. J. and Raphael, B. (1968). A formal basis for the heuristic determination of minimum cost paths. <i>IEEE Transactions on Systems Science and Cybernetics</i> 4(2), 100–107.</li>
+<li>Pohl, I. (1970). Heuristic search viewed as path finding in a graph. <i>Artificial Intelligence</i> 1(3–4), 193–204.</li>
+<li>Åström, K. J. and Hägglund, T. (2006). <i>Advanced PID Control</i>. ISA, Research Triangle Park.</li>
+<li>IEC 61131-3:2013. <i>Programmable controllers — Part 3: Programming languages</i>. International Electrotechnical Commission.</li>
+<li>ASME A13.1-2020. <i>Scheme for the Identification of Piping Systems</i>. American Society of Mechanical Engineers.</li>
+<li>ISA-5.1-2009. <i>Instrumentation Symbols and Identification</i>. International Society of Automation.</li>
+<li>Godot Engine 4.7 documentation: <i>SurfaceTool</i>, <i>RenderingServer</i>, <i>PhysicsDirectSpaceState3D</i>. Godot Foundation.</li>
+</ol>
+<p class="small">Source files cited in the text: <code>sim/core.py</code>, <code>sim/hydraulics.py</code>, <code>sim/stream.py</code>, <code>sim/species.py</code>, <code>sim/components.py</code>, <code>sim/process.py</code>, <code>sim/separation.py</code>, <code>sim/small_bore.py</code>, <code>sim/control.py</code>, <code>sim/historian.py</code>, <code>sim/library.py</code>; <code>game/sim/simulation.gd</code>, <code>game/sim/sim_network.gd</code>, <code>game/sim/sim_branch.gd</code>, <code>game/sim/sim_historian.gd</code>, <code>game/sim/sim_alarms.gd</code>, <code>game/sim/sim_balance.gd</code>; <code>game/world/plant.gd</code>, <code>game/world/run_clearance.gd</code>, <code>game/world/world_base.gd</code>; <code>game/components/pipe_route.gd</code>, <code>game/components/support_check.gd</code>, <code>game/components/pipe_view.gd</code>, <code>game/components/mesh_merge.gd</code>, <code>game/components/view_util.gd</code>, <code>game/components/plant_factory.gd</code>, <code>game/components/structure_factory.gd</code>; <code>game/player/build_controller.gd</code>; <code>game/ui/unit_hmi_panel.gd</code>, <code>game/ui/graphics_settings.gd</code>; <code>tools/demo_gui.py</code>, <code>tools/generate_audio.py</code>; <code>tests/conftest.py</code>.</p>
+</article>
