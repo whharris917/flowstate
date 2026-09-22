@@ -55,10 +55,14 @@ func is_conducting_at(pa: float, pb: float) -> bool:
 	return opening > 1e-4 and (not one_way or pa > pb)
 
 
-func crack_target(node: int, pa: float, pb: float, push: float) -> float:
+func is_wall() -> bool:
+	return one_way
+
+
+func crack_target(node: int, pa: float, pb: float, push: float, passing: bool = true) -> float:
 	if not one_way or opening <= 1e-4 or pa > pb:
 		return NAN
-	var drop := SimHydraulics.drop_for(push, _k_now())
+	var drop := SimHydraulics.drop_for(push, _k_now()) if passing else 0.0
 	if node == node_a and push < 0.0:
 		return SimHydraulics.MIN_PRESSURE_PA    # a sewer supplies nothing: the suction runs out
 	if node == node_a and push > 0.0:

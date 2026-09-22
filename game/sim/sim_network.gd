@@ -68,6 +68,13 @@ var _adjacency: Array = []           # node -> Array of neighbour nodes (conduct
 var _order_n: int = -1
 var _perm: PackedInt32Array = PackedInt32Array()   # free slot -> banded row
 var _band: int = 0
+var _order_free: PackedInt32Array = PackedInt32Array()
+var _order_branches: int = -1
+var _blocks: Array = []                       # block -> PackedInt32Array of slots
+var _block_of: PackedInt32Array = PackedInt32Array()   # slot -> block
+var _block_branches: Array = []               # block -> PackedInt32Array of branch indices
+var _scratch: PackedFloat64Array = PackedFloat64Array()
+var _loose: PackedByteArray = PackedByteArray()   # rows that lost a wall's slope
 
 
 func add_node(pressure_pa: float = SimHydraulics.ATMOSPHERIC_PA, fixed_: bool = false) -> int:
@@ -88,6 +95,44 @@ func add_branch(branch: SimBranch) -> SimBranch:
 
 func node_count() -> int:
 	return pressures.size()
+
+
+## The network exactly as it stands -- every node's pressure and whether
+## it is fixed, every branch with its kind and live parameters -- for
+## replaying a solve in the Python reference kernel
+## (tools/replay_network.py). Taken before a solve, it reproduces that
+## solve: the way to study a failure offline rather than through prints
+## in a running plant (2026-09-22).
+func to_dict() -> Dictionary:
+	var out_branches: Array = []
+	for branch in branches:
+		var entry := {"a": branch.node_a, "b": branch.node_b, "name": branch.branch_name}
+		if branch is SimRegulatorResistance:
+			var reg := branch as SimRegulatorResistance
+			entry.merge({"kind": "regulator", "cv_lps": reg.cv_lps, "set_pa": reg.set_pa,
+				"band_pa": reg.band_pa})
+		elif branch is SimControlResistance:
+			var cv := branch as SimControlResistance
+			entry.merge({"kind": "control", "cv_lps": cv.cv_lps, "opening": cv.opening,
+				"one_way": cv.one_way})
+		elif branch is SimNozzleResistance:
+			var nz := branch as SimNozzleResistance
+			entry.merge({"kind": "nozzle", "cv_lps": nz.cv_lps, "submergence": nz.submergence})
+		elif branch is SimCheckResistance:
+			entry.merge({"kind": "check", "k": (branch as SimCheckResistance).k})
+		elif branch is SimResistance:
+			entry.merge({"kind": "resistance", "k": (branch as SimResistance).k})
+		elif branch is SimPumpCurve:
+			var pc := branch as SimPumpCurve
+			entry.merge({"kind": "pump", "head_pa": pc.head_pa, "max_lps": pc.max_lps,
+				"running": pc.running, "exponent": pc.exponent, "datum_pa": pc.datum_pa})
+		elif branch is SimFixedFlow:
+			entry.merge({"kind": "fixed_flow", "lps": (branch as SimFixedFlow).lps})
+		else:
+			entry.merge({"kind": "unknown"})
+		out_branches.append(entry)
+	return {"pressures": Array(pressures), "fixed": fixed.duplicate(), "solved_once": _solved_once,
+		"branches": out_branches}
 
 
 ## Half-bandwidth of the ordered Jacobian: how far apart the rows of a
@@ -139,7 +184,7 @@ func solve() -> void:
 				pressures[node] = seed
 		_solved_once = true
 
-	_ensure_ordering(index_of, n)
+	_ensure_ordering(index_of, n, free)
 	var band := _band
 	var w := 2 * band + 1
 	var matrix := PackedFloat64Array()
@@ -148,128 +193,66 @@ func solve() -> void:
 	rhs.resize(n)
 	var saved := PackedFloat64Array()
 	saved.resize(n)
+	_scratch.resize(n)
 	_evaluate_all()
-	var crossed := false
+	# The plant is many independent problems, one per block of free nodes
+	# joined by branches, divided by the vessels and headers that fix
+	# pressures between them; each block gets its own step length, judged
+	# on its own imbalance, and a block that stalls stops alone
+	# (2026-09-22: one step length for the whole plant, judged on the
+	# whole plant, let the boiler's steam line swing across the drum
+	# pressure while Unit 400 improved enough to carry it, and when Unit
+	# 400 found no step that helped, the solve stopped with the steam line
+	# unsettled too).
+	var block_count := _blocks.size()
+	var stalled := PackedByteArray()
+	stalled.resize(block_count)
+	stalled.fill(0)
+	var crossed := PackedByteArray()
+	crossed.resize(block_count)
+	crossed.fill(0)
+	# Failed steps in a row: a block stops after two. One failure is often
+	# a wall or a regulator that has just changed state, and the next
+	# linearisation, from the nudge the failure leaves, is what it needs
+	# (2026-09-22: the drip line's regulator cracked open on the step that
+	# failed, and a block stopped at the first failure ended the cold solve
+	# 82 mL/s out); a trickle that no step can help still stops at the
+	# second, rather than grind out the cap.
+	var failures := PackedInt32Array()
+	failures.resize(block_count)
+	failures.fill(0)
 	for _iteration in MAX_ITERATIONS:
 		iterations += 1
-		# What is actually connected decides two things at once: which
-		# nodes have an equation to satisfy, and therefore which
-		# imbalances are worth converging on. A node adrift from every
-		# fixed pressure has neither -- and counting its residual anyway
-		# means the loop never breaks early and burns the full iteration
-		# cap every scan for the rest of the run.
+		# What is actually connected decides which nodes have an equation
+		# to satisfy fully; every node counts for convergence (see
+		# _drop_dead).
 		var reachable := _reachable_from_fixed(index_of, n)
 		var residual := _residuals(index_of, n)
 		if _within_tolerance(reachable, residual, n):
 			converged = true
 			break
-
-		_assemble(matrix, rhs, residual, index_of, n)
-
-		# Nodes with no conductive path back to a fixed pressure have no
-		# equation to satisfy. That covers a dead-ended nozzle, but also
-		# a whole island cut off by a shut valve at one end and a blocked
-		# check valve at the other. Such an island makes the matrix
-		# singular, and a solver that gives up on the whole system
-		# because one corner of it is adrift will leave real flows
-		# uncorrected everywhere else. So find what is actually
-		# connected, and let the rest equalise with its neighbours the
-		# way a dead leg does.
-		_drop_dead(matrix, rhs, reachable, n)
-
-		if not _solve_banded(matrix, rhs, n, band):
+		var active: Array[int] = []
+		for b in block_count:
+			if stalled[b] == 0 and not _block_within(b, residual):
+				active.append(b)
+		if active.is_empty():
 			break
-
-		# Damped step. An undamped Newton step on a square law will
-		# happily leap clean over the answer and land the same distance
-		# the other side, then leap back, forever -- which is exactly
-		# what a dead-ended drain does at zero flow. Try the full step,
-		# and keep halving until the imbalance actually improves.
-		var before := _norm(residual)
-		var biggest := 0.0
-		for i in n:
-			biggest = maxf(biggest, absf(rhs[i]))
-		if biggest < 1e-9:
+		_assemble(matrix, rhs, residual, index_of, n, true)
+		_drop_dead(matrix, rhs, reachable, n)
+		if not _solve_banded(matrix, rhs, n, band):
 			break
 		for slot in n:
 			saved[slot] = pressures[free[slot]]
-		var scale := 1.0
-		var shortest := 1.0
-		var improved := false
-		for _attempt in MAX_HALVINGS:
-			shortest = scale
-			for slot in n:
-				var move := clampf(rhs[_perm[slot]] * scale, -MAX_STEP_PA, MAX_STEP_PA)
-				pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
-			_evaluate_all()
-			if _improves(_norm(_residuals(index_of, n)), before, scale):
-				improved = true
-				break
-			scale *= 0.5
-		if not improved:
-			# No shorter step helps. Before giving up, try a longer one:
-			# a node on a plateau -- liquid arriving at a dry nozzle or a
-			# shut check, whose flow is flat until the pressure reaches
-			# the crack point -- gets a step sized by the open side's
-			# slope, and that step reaches the crack only when the flow
-			# to push is large against the gap (2026-09-22: a Cv-sized
-			# nozzle fell 300 Pa short where the old fixed stub cleared
-			# it, and the solve stopped with 1.6 L/s unbalanced). The
-			# ladder climbs by 1.5 and 2 in turn, since the window of
-			# scales that improves the norm opens at the crack and closes
-			# where the open side overshoots, and doubling alone stepped
-			# over it. Each rung costs one evaluation of the branches.
-			for scale_up: float in LENGTHENINGS:
-				if biggest * scale_up > 2.0 * MAX_STEP_PA:
-					break
-				for slot in n:
-					var move := clampf(rhs[_perm[slot]] * scale_up, -MAX_STEP_PA, MAX_STEP_PA)
-					pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
-				_evaluate_all()
-				if _improves(_norm(_residuals(index_of, n)), before, scale_up):
-					improved = true
-					break
-		# A node stranded below a closed one-way wall with flow pushing at
-		# it: step it to the wall's crack, and keep that instead when it
-		# leaves less imbalance than Newton's step (2026-09-22). Newton's
-		# own step can keep improving a little and run out the iteration
-		# cap crawling up the gap.
-		var newton_at := PackedFloat64Array()
-		newton_at.resize(n)
-		for slot in n:
-			newton_at[slot] = pressures[free[slot]]
-		var newton_norm := _norm(_residuals(index_of, n)) if improved else before
-		if _plateau_step(free, index_of, n, residual, reachable, saved, newton_norm):
-			improved = true
-		elif not improved and not crossed 				and _plateau_step(free, index_of, n, residual, reachable, saved, INF, true):
-			# Newton's own step failed and a wall stands in the way: cross
-			# it anyway, once a solve. Judged where it lands, the step looks
-			# worse -- the node rose, so what feeds it pushes harder for a
-			# moment -- but from the open side the next iteration settles
-			# (2026-09-22: a tank's drain line started 38 kPa under the
-			# sewer and sat four scans).
-			crossed = true
-			improved = true
-		else:
-			for slot in n:
-				pressures[free[slot]] = newton_at[slot]
-			_evaluate_all()
-		if not improved:
-			# No scale of this step helps, so re-linearising will not
-			# either: a trickle into a shut check valve, whose crack
-			# point is tens of kPa away and whose slope says otherwise.
-			# The imbalance is below anything the plant can see; stop
-			# rather than grind out the cap every scan -- at the shortest
-			# step tried, not back at the start: that nudge is what lets
-			# the next scan leave a plateau whose slope reads zero (a
-			# regulator shut a hair above its setpoint, 2026-09-22:
-			# restored exactly, the drip demo never reopened it).
-			for slot in n:
-				var move := clampf(rhs[_perm[slot]] * shortest, -MAX_STEP_PA, MAX_STEP_PA)
-				pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
-			_evaluate_all()
-			break
+		for b in active:
+			if _block_step(b, free, index_of, n, rhs, saved, residual, reachable, crossed):
+				failures[b] = 0
+			else:
+				failures[b] += 1
+				if failures[b] >= 2:
+					stalled[b] = 1
 
+	if converged and iterations > 1:
+		_polish(free, index_of, n, matrix, rhs)
 	if not converged:
 		# The loop left without checking: at the cap, or on a step that
 		# helped nothing. Judge where it stopped.
@@ -288,8 +271,11 @@ func solve() -> void:
 ## together: reverse Cuthill-McKee over the topological graph (every
 ## branch, conducting or not, so one ordering serves every iteration).
 ## The bandwidth that falls out is what the banded solve works within.
-func _ensure_ordering(index_of: PackedInt32Array, n: int) -> void:
-	if _order_n == n:
+func _ensure_ordering(index_of: PackedInt32Array, n: int, free: PackedInt32Array) -> void:
+	# Keyed on the free set itself, not its size: a node that turns fixed
+	# as another turns free (a boiler's drum as it fires) leaves the size
+	# alone and the old ordering wrong (2026-09-22).
+	if _order_n == n and _order_free == free and _order_branches == branches.size():
 		return
 	var adjacency: Array = []
 	for _i in n:
@@ -338,7 +324,56 @@ func _ensure_ordering(index_of: PackedInt32Array, n: int) -> void:
 		var ib := index_of[branch.node_b]
 		if ia >= 0 and ib >= 0:
 			_band = maxi(_band, absi(_perm[ia] - _perm[ib]))
+	# The blocks: free nodes joined by branches with both ends free, each
+	# with the branches that touch it (see solve).
+	var parent := PackedInt32Array()
+	parent.resize(n)
+	for i in n:
+		parent[i] = i
+	for branch in branches:
+		var ia := index_of[branch.node_a]
+		var ib := index_of[branch.node_b]
+		if ia >= 0 and ib >= 0:
+			var ra := _root(parent, ia)
+			var rb := _root(parent, ib)
+			if ra != rb:
+				parent[ra] = rb
+	var block_of_root := {}
+	_blocks = []
+	_block_of = PackedInt32Array()
+	_block_of.resize(n)
+	for slot in n:
+		var r := _root(parent, slot)
+		if not block_of_root.has(r):
+			block_of_root[r] = _blocks.size()
+			_blocks.append(PackedInt32Array())
+		var b: int = block_of_root[r]
+		_block_of[slot] = b
+		var members: PackedInt32Array = _blocks[b]
+		members.append(slot)
+		_blocks[b] = members   # a packed array out of an Array is a copy
+	_block_branches = []
+	for _b in _blocks.size():
+		_block_branches.append(PackedInt32Array())
+	for i in branches.size():
+		var branch := branches[i]
+		var ia := index_of[branch.node_a]
+		var ib := index_of[branch.node_b]
+		var b := _block_of[ia] if ia >= 0 else (_block_of[ib] if ib >= 0 else -1)
+		if b >= 0:
+			var list: PackedInt32Array = _block_branches[b]
+			list.append(i)
+			_block_branches[b] = list
 	_order_n = n
+	_order_free = free.duplicate()
+	_order_branches = branches.size()
+
+
+static func _root(parent: PackedInt32Array, x: int) -> int:
+	while parent[x] != x:
+		parent[x] = parent[parent[x]]
+		x = parent[x]
+	return x
 
 
 ## Anything cut off from every fixed pressure settles to one common
@@ -459,28 +494,68 @@ func _residuals(index_of: PackedInt32Array, n: int) -> PackedFloat64Array:
 ## The Jacobian at the branches' last evaluation, straight into the band
 ## in permuted order (dQ/dP of every branch lands on both its end
 ## nodes), and the right-hand side, minus each node's imbalance.
+##
+## A closed wall (a shut check, a dry nozzle, a one-way valve shut
+## backwards) reports the open side's slope so Newton knows a crack is
+## near when flow pushes at it -- the check-valve lesson. Pulled away
+## from, it passes nothing whatever the pressure and anchors nothing,
+## and its slope -- enormous near the crack -- told Newton otherwise: a
+## line at rest between two dry nozzles sat with each end pinned at its
+## own nozzle's crack and a valve between them passing a litre a second
+## that could go nowhere (2026-09-22). So with `walls` set, a closed
+## wall's slope is dropped from a node's row while that node's imbalance
+## drives it away from the crack (closed by more than the linear stretch
+## at the crack, where the law is smooth on purpose); the row may then
+## lose its only anchor, and _drop_dead ties it as it ties an island.
+## Mirrors Network._jacobian.
 func _assemble(matrix: PackedFloat64Array, rhs: PackedFloat64Array, residual: PackedFloat64Array,
-		index_of: PackedInt32Array, n: int) -> void:
+		index_of: PackedInt32Array, n: int, walls: bool = false) -> void:
 	var band := _band
 	var w := 2 * band + 1
 	matrix.fill(0.0)
+	_loose.resize(n)
+	_loose.fill(0)
 	for branch in branches:
 		var g := branch.g
 		var gb := branch.gb if branch.two_sided else g
 		var ia := index_of[branch.node_a]
 		var ib := index_of[branch.node_b]
+		var pa_p := pressures[branch.node_a]
+		var pb_p := pressures[branch.node_b]
+		var closed := walls and not branch.conducting and branch.is_wall() \
+			and absf(pa_p - pb_p) > SimHydraulics.DP_FLOOR_PA
 		if ia >= 0:
-			var pa := _perm[ia]
-			matrix[pa * w + band] -= g
-			if ib >= 0:
-				matrix[pa * w + (_perm[ib] - pa + band)] += gb
+			if closed and _pulled_away(branch, branch.node_a, pa_p, pb_p, residual[ia]):
+				_loose[ia] = 1
+			else:
+				var pa := _perm[ia]
+				matrix[pa * w + band] -= g
+				if ib >= 0:
+					matrix[pa * w + (_perm[ib] - pa + band)] += gb
 		if ib >= 0:
-			var pb := _perm[ib]
-			matrix[pb * w + band] -= gb
-			if ia >= 0:
-				matrix[pb * w + (_perm[ia] - pb + band)] += g
+			if closed and _pulled_away(branch, branch.node_b, pa_p, pb_p, residual[ib]):
+				_loose[ib] = 1
+			else:
+				var pb := _perm[ib]
+				matrix[pb * w + band] -= gb
+				if ia >= 0:
+					matrix[pb * w + (_perm[ia] - pb + band)] += g
 	for i in n:
 		rhs[_perm[i]] = -residual[i]
+
+
+## Whether `push` drives a node away from a closed wall's crack: the
+## crack lies the other way. With no push, or a push toward the crack,
+## the wall's slope stands (a line whose flow has not arrived yet still
+## has its outlet).
+static func _pulled_away(branch: SimBranch, node: int, pa: float, pb: float, push: float) -> bool:
+	if push == 0.0:
+		return false
+	var toward := branch.crack_target(node, pa, pb, push)
+	if not is_nan(toward) and toward > SimHydraulics.MIN_PRESSURE_PA:
+		return false
+	var other := branch.crack_target(node, pa, pb, -push)
+	return not is_nan(other) and other > SimHydraulics.MIN_PRESSURE_PA
 
 
 ## A node with no slope at all has no equation: its row and column
@@ -502,7 +577,8 @@ func _drop_dead(matrix: PackedFloat64Array, rhs: PackedFloat64Array, reachable: 
 	var w := 2 * band + 1
 	for i in n:
 		var pi := _perm[i]
-		if reachable[i] == 0 and absf(matrix[pi * w + band]) >= 1e-12:
+		if (reachable[i] == 0 or (_loose.size() == n and _loose[i] == 1)) \
+				and absf(matrix[pi * w + band]) >= 1e-12:
 			matrix[pi * w + band] -= SimHydraulics.ISLAND_TIE * absf(matrix[pi * w + band])
 			continue
 		if absf(matrix[pi * w + band]) < 1e-12:
@@ -530,25 +606,91 @@ func _drop_dead(matrix: PackedFloat64Array, rhs: PackedFloat64Array, reachable: 
 ## the gap over twenty scans with the valve's whole flow unbalanced.
 func _plateau_step(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 		residual: PackedFloat64Array, reachable: PackedByteArray, saved: PackedFloat64Array,
-		before: float, cracks_only: bool = false) -> bool:
-	for slot in n:
+		before: float, cracks_only: bool, b: int) -> bool:
+	var block: PackedInt32Array = _blocks[b]
+	var own: PackedInt32Array = _block_branches[b]
+	for slot in block:
 		pressures[free[slot]] = saved[slot]
-	# Back at the start of the step: the branches, and the throughput the
-	# tolerance reads, as they were there.
-	_evaluate_all()
-	residual = _residuals(index_of, n)
+	# Where the block's stranded nodes would land, found from its own
+	# branches before anything costly: the residual and the throughput
+	# the tolerance reads are the iteration's, taken at these pressures
+	# (every block asking the whole plant for this at every iteration cost
+	# the showcase five times its solve).
+	var variants: Array = []
+	for passing: bool in [true, false]:
+		var found := _crack_targets(index_of, residual, cracks_only, passing, b)
+		if not found.is_empty():
+			variants.append(found)
+	_evaluate_list(own)
+	if variants.is_empty():
+		return false
+	# Two honest landings at a wall: the crack with the flow pushing at it
+	# passing (a sustained feed, XV-401 into T-402), and the crack at rest
+	# (flow that is only the network settling: a cold boiler's line, drum
+	# and sewer both at zero, whose trickle into a one-way drain died as
+	# the line came up and left the passing landing always a trickle
+	# short, 2026-09-22). Both are tried and the better kept.
+	var band := _band
+	var w := 2 * band + 1
+	var matrix0 := PackedFloat64Array()
+	matrix0.resize(n * w)
+	var rhs0 := PackedFloat64Array()
+	rhs0.resize(n)
+	_assemble(matrix0, rhs0, residual, index_of, n, true)
+	_drop_dead(matrix0, rhs0, reachable, n)
+	var best_norm := INF
+	var best := PackedFloat64Array()
+	for targets: Dictionary in variants:
+		# Its own arrays: the banded solve answers in place, and the
+		# caller's right-hand side still holds Newton's step.
+		var matrix := matrix0.duplicate()
+		var rhs := rhs0.duplicate()
+		for slot: int in targets:
+			var pi := _perm[slot]
+			for k in w:
+				matrix[pi * w + k] = 0.0
+			matrix[pi * w + band] = 1.0
+			rhs[pi] = float(targets[slot]) - pressures[free[slot]]
+		if not _solve_banded(matrix, rhs, n, band):
+			continue
+		for slot in block:
+			var move := clampf(rhs[_perm[slot]], -MAX_STEP_PA, MAX_STEP_PA)
+			pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
+		_evaluate_list(own)
+		var landed := _block_norm(b, index_of)
+		if landed < best_norm:
+			best_norm = landed
+			best.resize(block.size())
+			for i in block.size():
+				best[i] = pressures[free[block[i]]]
+		for slot in block:
+			pressures[free[slot]] = saved[slot]
+	if best.is_empty():
+		_evaluate_list(own)
+		return false
+	for i in block.size():
+		pressures[free[block[i]]] = best[i]
+	_evaluate_list(own)
+	return _improves(best_norm, before)
+
+
+## Each stranded node's landing at the nearest wall it is pushed toward
+## (see _plateau_step). Mirrors Network._crack_targets.
+func _crack_targets(index_of: PackedInt32Array, residual: PackedFloat64Array, cracks_only: bool,
+		passing: bool, b: int) -> Dictionary:
 	var targets := {}
-	for branch in branches:
+	for i: int in _block_branches[b]:
+		var branch := branches[i]
 		var pa := pressures[branch.node_a]
 		var pb := pressures[branch.node_b]
 		for node: int in [branch.node_a, branch.node_b]:
 			var slot := index_of[node]
-			if slot < 0:
+			if slot < 0 or _block_of[slot] != b:
 				continue
 			var push := residual[slot]
 			if absf(push) < _tolerance_at(slot):
 				continue
-			var target := branch.crack_target(node, pa, pb, push)
+			var target := branch.crack_target(node, pa, pb, push, passing)
 			if is_nan(target):
 				continue
 			# Forced, only a real crack: the vacuum floor suits a pump
@@ -563,31 +705,170 @@ func _plateau_step(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 				targets[slot] = minf(float(targets[slot]), target)
 			else:
 				targets[slot] = maxf(float(targets[slot]), target)
-	if targets.is_empty():
-		return false
-	# Its own arrays: the banded solve answers in place, and the caller's
-	# right-hand side still holds Newton's step.
-	var band := _band
-	var w := 2 * band + 1
-	var matrix := PackedFloat64Array()
-	matrix.resize(n * w)
-	var rhs := PackedFloat64Array()
-	rhs.resize(n)
-	_assemble(matrix, rhs, residual, index_of, n)
+	return targets
+
+
+## One more full Newton step after the solve has landed, kept only if
+## it improves the balance. Converged means every node within its
+## tolerance, up to a tenth of a millilitre a second, and at a node
+## inside a machine that passes material through, what is left is
+## material made or lost -- a third of a litre an hour at worst; near the
+## answer Newton converges quadratically, so one step takes it to
+## rounding (2026-09-22: an exchanger's shell passed 1.15941 L/s in and
+## 1.15945 out, converged). Mirrors Network._polish.
+func _polish(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
+		matrix: PackedFloat64Array, rhs: PackedFloat64Array) -> void:
+	var residual := _residuals(index_of, n)
+	var before := _norm(residual)
+	if before == 0.0:
+		return
+	var reachable := _reachable_from_fixed(index_of, n)
+	_assemble(matrix, rhs, residual, index_of, n, true)
 	_drop_dead(matrix, rhs, reachable, n)
-	for slot: int in targets:
-		var pi := _perm[slot]
-		for k in w:
-			matrix[pi * w + k] = 0.0
-		matrix[pi * w + band] = 1.0
-		rhs[pi] = float(targets[slot]) - pressures[free[slot]]
-	if not _solve_banded(matrix, rhs, n, band):
-		return false
+	if not _solve_banded(matrix, rhs, n, _band):
+		return
+	var saved := PackedFloat64Array()
+	saved.resize(n)
 	for slot in n:
+		saved[slot] = pressures[free[slot]]
 		var move := clampf(rhs[_perm[slot]], -MAX_STEP_PA, MAX_STEP_PA)
 		pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
 	_evaluate_all()
-	return _improves(_norm(_residuals(index_of, n)), before)
+	if _norm(_residuals(index_of, n)) >= before:
+		for slot in n:
+			pressures[free[slot]] = saved[slot]
+		_evaluate_all()
+
+
+## One block's damped Newton step, judged on the block's own imbalance:
+## the full step, then halvings, then lengthenings, then the plateau step
+## (forced once a solve where Newton failed). False when no scale helps:
+## the block is left at the shortest step tried and stops for this solve.
+## Mirrors Network._block_step.
+##
+## An undamped Newton step on a square law leaps clean over the answer
+## and lands the same distance the other side, then leaps back, forever
+## -- which is what a dead-ended drain does at zero flow -- so the step
+## is halved until the imbalance improves. A node on a plateau (liquid
+## arriving at a dry nozzle or a shut check, whose flow is flat until the
+## crack) gets a step sized by the open side's slope, which reaches the
+## crack only when the flow to push is large against the gap, so a
+## longer step is tried before the plateau step (2026-09-22: a Cv-sized
+## nozzle fell 300 Pa short); the ladder climbs by 1.5 and 2 in turn
+## because the window of scales that improves the norm opens at the
+## crack and closes where the open side overshoots.
+func _block_step(b: int, free: PackedInt32Array, index_of: PackedInt32Array, n: int,
+		step: PackedFloat64Array, saved: PackedFloat64Array, residual: PackedFloat64Array,
+		reachable: PackedByteArray, crossed: PackedByteArray) -> bool:
+	var block: PackedInt32Array = _blocks[b]
+	var own: PackedInt32Array = _block_branches[b]
+	var before := 0.0
+	var biggest := 0.0
+	for slot in block:
+		before += residual[slot] * residual[slot]
+		biggest = maxf(biggest, absf(step[_perm[slot]]))
+	before = sqrt(before)
+	if biggest < 1e-9:
+		return false
+	var scale := 1.0
+	var shortest := 1.0
+	var improved := false
+	for _attempt in MAX_HALVINGS:
+		shortest = scale
+		_place(block, free, step, saved, scale)
+		_evaluate_list(own)
+		if _improves(_block_norm(b, index_of), before, scale):
+			improved = true
+			break
+		scale *= 0.5
+	if not improved:
+		for scale_up: float in LENGTHENINGS:
+			if biggest * scale_up > 2.0 * MAX_STEP_PA:
+				break
+			_place(block, free, step, saved, scale_up)
+			_evaluate_list(own)
+			if _improves(_block_norm(b, index_of), before, scale_up):
+				improved = true
+				break
+	# A node stranded below a closed one-way wall with flow pushing at it:
+	# step it to the wall's crack, and keep that instead when it leaves
+	# less imbalance than Newton's step (2026-09-22). Newton's own step can
+	# keep improving a little and run out the iteration cap crawling up
+	# the gap.
+	var newton_at := PackedFloat64Array()
+	newton_at.resize(block.size())
+	for i in block.size():
+		newton_at[i] = pressures[free[block[i]]]
+	var newton_norm := _block_norm(b, index_of) if improved else before
+	if _plateau_step(free, index_of, n, residual, reachable, saved, newton_norm, false, b):
+		return true
+	if not improved and crossed[b] == 0 \
+			and _plateau_step(free, index_of, n, residual, reachable, saved, INF, true, b):
+		# Newton's own step failed and a wall stands in the way: cross it
+		# anyway, once a solve. Judged where it lands, the step looks worse
+		# -- the node rose, so what feeds it pushes harder for a moment --
+		# but from the open side the next iteration settles (2026-09-22: a
+		# tank's drain line started 38 kPa under the sewer and sat four
+		# scans).
+		crossed[b] = 1
+		return true
+	for i in block.size():
+		pressures[free[block[i]]] = newton_at[i]
+	_evaluate_list(own)
+	if improved:
+		return true
+	# No scale of this step helps, so re-linearising will not either: a
+	# trickle into a shut check valve, whose crack point is tens of kPa
+	# away and whose slope says otherwise. The block stops -- at the
+	# shortest step tried, not back at the start: that nudge is what lets
+	# the next scan leave a plateau whose slope reads zero (a regulator
+	# shut a hair above its setpoint, 2026-09-22: restored exactly, the
+	# drip demo never reopened it).
+	_place(block, free, step, saved, shortest)
+	_evaluate_list(own)
+	return false
+
+
+## Move a block's nodes from where they were saved by a scale of the step.
+func _place(block: PackedInt32Array, free: PackedInt32Array, step: PackedFloat64Array,
+		saved: PackedFloat64Array, scale: float) -> void:
+	for slot in block:
+		var move := clampf(step[_perm[slot]] * scale, -MAX_STEP_PA, MAX_STEP_PA)
+		pressures[free[slot]] = maxf(saved[slot] + move, SimHydraulics.MIN_PRESSURE_PA)
+
+
+## Ask a list of branches (by index) their answers at the current pressures.
+func _evaluate_list(list: PackedInt32Array) -> void:
+	for i in list:
+		var branch := branches[i]
+		branch.evaluate(pressures[branch.node_a], pressures[branch.node_b])
+
+
+## A block's imbalance, from its own branches' last evaluation.
+func _block_norm(b: int, index_of: PackedInt32Array) -> float:
+	var block: PackedInt32Array = _blocks[b]
+	for slot in block:
+		_scratch[slot] = 0.0
+	for i: int in _block_branches[b]:
+		var branch := branches[i]
+		var ia := index_of[branch.node_a]
+		var ib := index_of[branch.node_b]
+		if ia >= 0:
+			_scratch[ia] -= branch.q
+		if ib >= 0:
+			_scratch[ib] += branch.q
+	var total := 0.0
+	for slot in block:
+		total += _scratch[slot] * _scratch[slot]
+	return sqrt(total)
+
+
+## Whether every node of a block is within its tolerance.
+func _block_within(b: int, residual: PackedFloat64Array) -> bool:
+	for slot: int in _blocks[b]:
+		if absf(residual[slot]) >= _tolerance_at(slot):
+			return false
+	return true
 
 
 ## Every node counts, cut off or not (2026-09-22; see _drop_dead).

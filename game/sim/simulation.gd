@@ -185,6 +185,14 @@ func _solve_hydraulics() -> void:
 		if not component.material_ports().is_empty():
 			component.update_hydraulics(net, component.node_map)
 	var started := Time.get_ticks_usec()
+	if OS.has_environment("FLOWSTATE_NET_DUMP") 			and absf(time - float(OS.get_environment("FLOWSTATE_NET_DUMP"))) < 0.001:
+		# The network as this solve starts, for tools/replay_network.py.
+		var path := "user://net_dump_%.2f.json" % time
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file != null:
+			file.store_string(JSON.stringify(net.to_dict()))
+			file.close()
+			print("[flowstate] network dumped before the solve at t=%.2f s to %s" % [time, path])
 	net.solve()
 	newton_ms = (Time.get_ticks_usec() - started) / 1000.0
 	if not net.converged:

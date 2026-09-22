@@ -73,10 +73,14 @@ func is_conducting(dp: float) -> bool:
 ## pulled on (a pump drawing from a vessel gone dry) can get nothing from
 ## it and falls to where whatever pulls runs out of suction, the
 ## hard-vacuum floor.
-func crack_target(node: int, pa: float, pb: float, push: float) -> float:
+func is_wall() -> bool:
+	return true
+
+
+func crack_target(node: int, pa: float, pb: float, push: float, passing: bool = true) -> float:
 	if node == node_b and pb < pa and submergence <= 1e-4:
 		if push > 0.0:
-			return pa + SimHydraulics.drop_for(push, k)
+			return pa + (SimHydraulics.drop_for(push, k) if passing else 0.0)
 		return SimHydraulics.MIN_PRESSURE_PA
 	return NAN
 

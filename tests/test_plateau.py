@@ -8,9 +8,9 @@ from __future__ import annotations
 import pytest
 
 from conftest import open_drain, wire_power
-from sim.components import Pump, Tank
+from sim.components import Drain, MainsFeed, Pump, Source, Tank, Tee
 from sim.core import Simulation
-from sim.process import VialFiller
+from sim.process import HeatExchanger, SteamGen, VacuumLock, VialFiller
 from sim.small_bore import BallValve
 
 
@@ -74,3 +74,35 @@ class TestPlateau:
         _run_counting(sim, 10.0)
         assert out.total_l == pytest.approx(0.0, abs=1e-6)
         assert sim.unconverged_scans <= 2
+
+    def test_a_cold_boiler_line_at_the_sewer_pressure_comes_to_rest(self) -> None:
+        # The showcase's boiler start: a cold drum at exactly the sewer's
+        # pressure feeds an exchanger's shell whose condensate and a
+        # vacuum lock's drain meet in a tee to a one-way drain. The answer
+        # is every node at zero with nothing flowing; the landing at the
+        # drain's crack with the arriving trickle passing was always a
+        # trickle short, and the solve crept by a quarter an iteration.
+        # The landing at rest is tried too (2026-09-22).
+        sim = Simulation(dt=0.05)
+        bfw = sim.add(Source("bfw", "water"))
+        sg = sim.add(SteamGen("sg", rated_kgps=0.5))
+        hx = sim.add(HeatExchanger("hx", max_duty_kw=1200.0))
+        proc = sim.add(Source("proc", "water"))
+        out = sim.add(Drain("out", rate_lps=3.0))
+        vl = sim.add(VacuumLock("vl"))
+        tee = sim.add(Tee("tee", "mix"))
+        du = sim.add(Drain("du", rate_lps=1.5))
+        mains = sim.add(MainsFeed("m", ways=4))
+        sim.connect(mains, "way1", sg, "power")
+        sim.connect(mains, "way2", vl, "power")
+        sim.connect(bfw, "outlet", sg, "inlet")
+        sim.connect(sg, "steam", hx, "steam_in")
+        sim.connect(proc, "outlet", hx, "cold_in")
+        sim.connect(hx, "cold_out", out, "inlet")
+        sim.connect(hx, "condensate", tee, "a")
+        sim.connect(vl, "drain_flow", tee, "b")
+        sim.connect(tee, "out", du, "inlet")
+        sg.is_on = True
+        vl.is_on = True
+        _run_counting(sim, 10.0)
+        assert sim.unconverged_scans == 0

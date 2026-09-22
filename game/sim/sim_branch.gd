@@ -84,9 +84,17 @@ func is_conducting_at(pa: float, pb: float) -> bool:
 ## shut check or a dry nozzle nothing flows until the crack, so Newton's
 ## local slope climbs a 10 kPa gap in steps of a few hundred pascals
 ## while the flow arriving stays unbalanced. Mirrors crack_target in
-## sim/hydraulics.py.
-func crack_target(_node: int, _pa: float, _pb: float, _push: float) -> float:
+## sim/hydraulics.py. With `passing` false, the crack itself: the wall
+## reached at rest, for flow that will not last.
+func crack_target(_node: int, _pa: float, _pb: float, _push: float, _passing: bool = true) -> float:
 	return NAN
+
+
+## A branch that can stand closed as a one-way wall -- a check, a vessel
+## nozzle, a one-way valve -- and report the open side's slope while it
+## does (see SimNetwork._assemble). Mirrors Branch.wall.
+func is_wall() -> bool:
+	return false
 
 
 ## All three answers in one call. Subclasses override this inline.

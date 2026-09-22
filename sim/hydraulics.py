@@ -107,6 +107,10 @@ class Branch:
     #: side, and the Jacobian must know or Newton steps the inlet as if
     #: it were the outlet and never lands (2026-09-20).
     two_sided = False
+    #: A branch that can stand closed as a one-way wall -- a check, a
+    #: vessel nozzle, a one-way valve -- and report the open side's slope
+    #: while it does (see Network._jacobian).
+    wall = False
 
     def __init__(self, node_a: int, node_b: int, name: str = "") -> None:
         self.node_a = node_a
@@ -154,11 +158,12 @@ class Branch:
         return self.is_conducting(pa - pb)
 
     def crack_target(self, node: int, pa: float, pb: float,
-                     push: float) -> float | None:
+                     push: float, passing: bool = True) -> float | None:
         """Where ``node`` must stand for this branch, a one-way wall shut
         against it, to pass ``push`` L/s (positive: net inflow, so the
         node must rise; negative: it must fall), or None when the branch
-        is not such a wall. The solver's way off a plateau (2026-09-22):
+        is not such a wall. With ``passing`` False, the crack itself: the
+        wall reached at rest, for flow that will not last. The solver's way off a plateau (2026-09-22):
         between a node and a shut check or a dry nozzle nothing flows
         until the crack, so Newton's local slope climbs a 10 kPa gap in
         steps of a few hundred pascals while the flow arriving stays
@@ -235,11 +240,15 @@ class ControlResistance(Resistance):
             return False
         return super().is_conducting(dp)
 
+    @property
+    def wall(self) -> bool:
+        return self.one_way
+
     def crack_target(self, node: int, pa: float, pb: float,
-                     push: float) -> float | None:
+                     push: float, passing: bool = True) -> float | None:
         if not self.one_way or self.opening <= 1e-4 or pa > pb:
             return None
-        drop = _drop_for(push, self._k_now())
+        drop = _drop_for(push, self._k_now()) if passing else 0.0
         if node == self.node_a and push < 0.0:
             return MIN_PRESSURE_PA    # a sewer supplies nothing: the suction runs out
         if node == self.node_a and push > 0.0:
@@ -280,11 +289,13 @@ class CheckResistance(Resistance):
     def is_conducting(self, dp: float) -> bool:
         return dp > 0.0 and super().is_conducting(dp)
 
+    wall = True
+
     def crack_target(self, node: int, pa: float, pb: float,
-                     push: float) -> float | None:
+                     push: float, passing: bool = True) -> float | None:
         if pa > pb:
             return None
-        drop = _drop_for(push, self.k)
+        drop = _drop_for(push, self.k) if passing else 0.0
         if node == self.node_a and push > 0.0:
             return pb + drop
         if node == self.node_b and push < 0.0:
@@ -349,8 +360,10 @@ class NozzleResistance(Resistance):
             return self.submergence > 1e-4
         return True
 
+    wall = True
+
     def crack_target(self, node: int, pa: float, pb: float,
-                     push: float) -> float | None:
+                     push: float, passing: bool = True) -> float | None:
         # Dry, nothing leaves the vessel: a line node standing below the
         # vessel side with liquid arriving must rise past it to pass it in;
         # one pulled on (a pump drawing from a vessel gone dry) can get
@@ -358,7 +371,7 @@ class NozzleResistance(Resistance):
         # suction, the hard-vacuum floor.
         if node == self.node_b and pb < pa and self.submergence <= 1e-4:
             if push > 0.0:
-                return pa + _drop_for(push, self.k)
+                return pa + (_drop_for(push, self.k) if passing else 0.0)
             return MIN_PRESSURE_PA
         return None
 
@@ -607,7 +620,12 @@ class Network:
         #: short records flows that do not balance, and inside a machine
         #: that passes material through that is material made or lost.
         self.converged = True
+        #: An observer for studying a solve (tools/replay_network.py):
+        #: called as trace(event, **fields) at each iteration and step
+        #: decision. None in the running plant.
+        self.trace = None
         self._solved_once = False
+        self._loose: set[int] = set()
         self._islanded: set[int] = set()
 
     def add_node(self, pressure_pa: float = ATMOSPHERIC_PA,
@@ -656,137 +674,64 @@ class Network:
                     self.pressures[node] = seed
             self._solved_once = True
 
-        crossed = False
+        # The plant is many independent problems, one per block of free
+        # nodes joined by branches, divided by the vessels and headers
+        # that fix pressures between them; each block gets its own step
+        # length, judged on its own imbalance, and a block that stalls
+        # stops alone (2026-09-22: one step length for the whole plant,
+        # judged on the whole plant, let the boiler's steam line swing
+        # across the drum pressure while Unit 400 improved enough to
+        # carry it, and when Unit 400 found no step that helped, the
+        # solve stopped with the steam line unsettled too).
+        blocks = self._blocks(free, index_of)
+        stalled = [False] * len(blocks)
+        # Failed steps in a row: a block stops after two. One failure is
+        # often a wall or a regulator that has just changed state, and the
+        # next linearisation, from the nudge the failure leaves, is what
+        # it needs (2026-09-22: the drip line's regulator cracked open on
+        # the step that failed, and a block stopped at the first failure
+        # ended the cold solve 82 mL/s out); a trickle that no step can
+        # help still stops at the second, rather than grind out the cap.
+        failures = [0] * len(blocks)
+        crossed = [False] * len(blocks)
         for _ in range(self.MAX_ITERATIONS):
             self.iterations += 1
-            # What is actually connected decides two things at once:
-            # which nodes have an equation to satisfy, and therefore
-            # which imbalances are worth converging on. A node adrift
-            # from every fixed pressure has neither -- and counting its
-            # residual anyway means the loop never breaks early and
-            # burns the full iteration cap every scan for the rest of
-            # the run, however correct the answer already is.
+            # What is actually connected decides which nodes have an
+            # equation to satisfy fully; every node counts for
+            # convergence (see _drop_dead).
             reachable, conducting = self._reachable_from_fixed(index_of)
             residual = self._residuals(index_of, n)
             throughput = self._throughput(index_of, n)
-            if all(abs(r) < self._tolerance_at(throughput[i])
-                   for i, r in enumerate(residual)):
+            if self.trace is not None:
+                self.trace("iteration", iteration=self.iterations, residual=residual,
+                           free=free, pressures=list(self.pressures))
+            within = [abs(r) < self._tolerance_at(throughput[i])
+                      for i, r in enumerate(residual)]
+            if all(within):
                 self.converged = True
                 break
+            active = [b for b, block in enumerate(blocks)
+                      if not stalled[b] and not all(within[slot] for slot in block)]
+            if not active:
+                break
 
-            jacobian = self._jacobian(index_of, n)
-
-            # Nodes with no conductive path back to a fixed pressure
-            # have no equation to satisfy. That covers a dead-ended
-            # nozzle, but also — and this is the one that bites — a
-            # whole island cut off by a shut valve at one end and a
-            # blocked check valve at the other. Such an island makes the
-            # matrix singular, and a solver that gives up on the whole
-            # system because one corner of it is adrift will leave real
-            # flows uncorrected everywhere else.
-            #
-            # So find what is actually connected, and let the rest
-            # equalise with its neighbours the way a dead leg does.
-            # (``reachable`` was worked out at the top of the iteration,
-            # because the convergence test needs it too.)
+            jacobian = self._jacobian(index_of, n, residual)
             rhs = [-r for r in residual]
-            self._drop_dead(jacobian, rhs, reachable)
-
+            self._drop_dead(jacobian, rhs, reachable, self._loose)
             step = _solve_dense(jacobian, rhs)
             if step is None:
                 break
-
-            # Damped step. An undamped Newton step on a square law will
-            # happily leap clean over the answer and land the same
-            # distance the other side, then leap back, forever -- which
-            # is exactly what a dead-ended drain does at zero flow. Try
-            # the full step, and keep halving until the imbalance
-            # actually improves.
-            before = _norm(residual)
-            if max(abs(v) for v in step) < 1e-9:
-                break
             saved = [self.pressures[node] for node in free]
-            scale = 1.0
-            improved = False
-            shortest = scale
-            for _attempt in range(self.MAX_HALVINGS):
-                shortest = scale
-                for slot, node in enumerate(free):
-                    move = step[slot] * scale
-                    move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
-                    self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
-                if _improves(_norm(self._residuals(index_of, n)), before, scale):
-                    improved = True
-                    break
-                scale *= 0.5
-            if not improved:
-                # No shorter step helps. Before giving up, try a longer
-                # one: a node on a plateau -- liquid arriving at a dry
-                # nozzle or a shut check, whose flow is flat until the
-                # pressure reaches the crack point -- gets a step sized
-                # by the open side's slope, and that step reaches the
-                # crack only when the flow to push is large against the
-                # gap (2026-09-22: a Cv-sized nozzle fell 300 Pa short
-                # where the old fixed stub cleared it, and the solve
-                # stopped with 1.6 L/s unbalanced). Every scale between
-                # here and MAX_STEP_PA costs one residual evaluation.
-                # The ladder climbs by 1.5 and 2 in turn: the window of
-                # scales that improves the norm past a plateau opens at
-                # the crack and closes where the open side overshoots,
-                # and doubling alone stepped clean over it (the case
-                # above wanted 1.1 to 1.9).
-                longest = max(abs(v) for v in step)
-                for scale in self.LENGTHENINGS:
-                    if longest * scale > 2.0 * self.MAX_STEP_PA:
-                        break
-                    for slot, node in enumerate(free):
-                        move = step[slot] * scale
-                        move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
-                        self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
-                    if _improves(_norm(self._residuals(index_of, n)), before, scale):
-                        improved = True
-                        break
-            # A node stranded below a closed one-way wall with flow
-            # pushing at it: step it to the wall's crack, and keep that
-            # instead when it leaves less imbalance than Newton's step
-            # (2026-09-22). Newton's own step can keep improving a little
-            # and run out the iteration cap crawling up the gap.
-            newton_at = [self.pressures[node] for node in free]
-            newton_norm = _norm(self._residuals(index_of, n)) if improved else before
-            if self._plateau_step(free, index_of, n, residual, reachable,
-                                  throughput, saved, newton_norm):
-                improved = True
-            elif (not improved and not crossed
-                  and self._plateau_step(free, index_of, n, residual, reachable,
-                                         throughput, saved, math.inf, cracks_only=True)):
-                # Newton's own step failed and a wall stands in the way:
-                # cross it anyway, once a solve. Judged where it lands,
-                # the step looks worse -- the node rose, so what feeds it
-                # pushes harder for a moment -- but from the open side the
-                # next iteration settles (2026-09-22: a tank's drain line
-                # started 38 kPa under the sewer and sat four scans).
-                crossed = True
-                improved = True
-            else:
-                for slot, node in enumerate(free):
-                    self.pressures[node] = newton_at[slot]
-            if not improved:
-                # No scale of this step helps, so re-linearising will
-                # not either: a trickle into a shut check valve, whose
-                # crack point is tens of kPa away and whose slope says
-                # otherwise. The imbalance is below anything the plant
-                # can see; stop rather than grind out the cap every scan
-                # -- at the shortest step tried, not back at the start:
-                # that nudge is what lets the next scan leave a plateau
-                # whose slope reads zero (a regulator shut a hair above
-                # its setpoint, 2026-09-22: restored exactly, the drip
-                # demo never reopened it).
-                for slot, node in enumerate(free):
-                    move = step[slot] * shortest
-                    move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, move))
-                    self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
-                break
+            for b in active:
+                if self._block_step(blocks[b], step, saved, residual, reachable,
+                                    throughput, free, index_of, n, crossed, b):
+                    failures[b] = 0
+                else:
+                    failures[b] += 1
+                    stalled[b] = failures[b] >= 2
 
+        if self.converged and self.iterations > 1:
+            self._polish(free, index_of, n)
         if not self.converged:
             # The loop left without checking: at the cap, or on a step
             # that helped nothing. Judge where it stopped.
@@ -897,30 +842,60 @@ class Network:
                 through[index_of[b]] += q
         return through
 
-    def _jacobian(self, index_of: dict[int, int], n: int) -> list[list[float]]:
+    def _jacobian(self, index_of: dict[int, int], n: int,
+                  residual: list[float] | None = None) -> list[list[float]]:
         """dQ/dP at the current pressures: every branch's slope lands on
-        both its end nodes."""
+        both its end nodes.
+
+        A closed wall (a shut check, a dry nozzle, a one-way valve shut
+        backwards) reports the open side's slope so Newton knows a crack
+        is near when flow pushes at it -- the check-valve lesson. Pulled
+        away from, it passes nothing whatever the pressure and anchors
+        nothing, and its slope -- enormous near the crack -- told Newton
+        otherwise: a line at rest between two dry nozzles sat with each
+        end pinned at its own nozzle's crack and a valve between them
+        passing a litre a second that could go nowhere (2026-09-22). So
+        given the imbalances, a closed wall's slope is dropped from a
+        node's row while that node's imbalance drives it away from the
+        crack; the row may then lose its only anchor, and _drop_dead ties
+        it as it ties an island."""
         jacobian = [[0.0] * n for _ in range(n)]
+        # Rows that lost a wall's slope may have lost their only anchor;
+        # _drop_dead ties them as it ties an island.
+        self._loose = set()
         for branch in self.branches:
             a, b = branch.node_a, branch.node_b
-            g = branch.conductance_at(self.pressures[a], self.pressures[b])
-            gb = (branch.conductance_b_at(self.pressures[a], self.pressures[b])
-                  if branch.two_sided else g)
+            pa, pb = self.pressures[a], self.pressures[b]
+            g = branch.conductance_at(pa, pb)
+            gb = branch.conductance_b_at(pa, pb) if branch.two_sided else g
+            # Closed by more than the linear stretch at the crack: within
+            # a pascal of it the law is smooth on purpose, and dropping
+            # the slope there as the imbalance flips sign each iteration
+            # left a trickle converging by a quarter an iteration.
+            closed = (residual is not None and branch.wall
+                      and not branch.is_conducting_at(pa, pb)
+                      and abs(pa - pb) > _DP_FLOOR_PA)
             if a in index_of:
                 ia = index_of[a]
-                jacobian[ia][ia] -= g
-                if b in index_of:
-                    jacobian[ia][index_of[b]] += gb
+                if not closed or not _pulled_away(branch, a, pa, pb, residual[ia]):
+                    jacobian[ia][ia] -= g
+                    if b in index_of:
+                        jacobian[ia][index_of[b]] += gb
+                else:
+                    self._loose.add(ia)
             if b in index_of:
                 ib = index_of[b]
-                jacobian[ib][ib] -= gb
-                if a in index_of:
-                    jacobian[ib][index_of[a]] += g
+                if not closed or not _pulled_away(branch, b, pa, pb, residual[ib]):
+                    jacobian[ib][ib] -= gb
+                    if a in index_of:
+                        jacobian[ib][index_of[a]] += g
+                else:
+                    self._loose.add(ib)
         return jacobian
 
     @staticmethod
     def _drop_dead(jacobian: list[list[float]], rhs: list[float],
-                   reachable: list[bool]) -> None:
+                   reachable: list[bool], loose: set[int] | frozenset = frozenset()) -> None:
         """A node with no slope at all has no equation: its row and column
         become a bare -1.
 
@@ -942,13 +917,155 @@ class Network:
                     jacobian[j][i] = 0.0
                 jacobian[i][i] = -1.0
                 rhs[i] = 0.0
-            elif not reachable[i]:
+            elif not reachable[i] or i in loose:
                 jacobian[i][i] -= ISLAND_TIE * abs(jacobian[i][i])
+
+    def _polish(self, free: list[int], index_of: dict[int, int], n: int) -> None:
+        """One more full Newton step after the solve has landed, kept
+        only if it improves the balance. Converged means every node within
+        its tolerance, up to a tenth of a millilitre a second, and at a
+        node inside a machine that passes material through, what is left
+        is material made or lost -- a third of a litre an hour at worst;
+        near the answer Newton converges quadratically, so one step takes
+        it to rounding (2026-09-22: an exchanger's shell passed 1.15941
+        L/s in and 1.15945 out, converged)."""
+        residual = self._residuals(index_of, n)
+        before = _norm(residual)
+        if before == 0.0:
+            return
+        reachable, _ = self._reachable_from_fixed(index_of)
+        jacobian = self._jacobian(index_of, n, residual)
+        rhs = [-r for r in residual]
+        self._drop_dead(jacobian, rhs, reachable, self._loose)
+        step = _solve_dense(jacobian, rhs)
+        if step is None:
+            return
+        saved = [self.pressures[node] for node in free]
+        for slot, node in enumerate(free):
+            move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, step[slot]))
+            self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
+        if _norm(self._residuals(index_of, n)) >= before:
+            for slot, node in enumerate(free):
+                self.pressures[node] = saved[slot]
+
+    def _blocks(self, free: list[int], index_of: dict[int, int]) -> list[list[int]]:
+        """The free nodes in independent blocks: joined by any branch with
+        both ends free, divided wherever a fixed pressure stands between.
+        Each is a problem of its own (slots, in order)."""
+        parent = list(range(len(free)))
+
+        def root(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        for branch in self.branches:
+            ia = index_of.get(branch.node_a)
+            ib = index_of.get(branch.node_b)
+            if ia is not None and ib is not None:
+                ra, rb = root(ia), root(ib)
+                if ra != rb:
+                    parent[ra] = rb
+        groups: dict[int, list[int]] = {}
+        for slot in range(len(free)):
+            groups.setdefault(root(slot), []).append(slot)
+        return list(groups.values())
+
+    def _block_step(self, block: list[int], step: list[float], saved: list[float],
+                    residual: list[float], reachable: list[bool], throughput: list[float],
+                    free: list[int], index_of: dict[int, int], n: int,
+                    crossed: list[bool], b: int) -> bool:
+        """One block's damped Newton step, judged on the block's own
+        imbalance: the full step, then halvings, then lengthenings, then
+        the plateau step (forced once a solve where Newton failed). False
+        when no scale helps: the block is left at the shortest step tried
+        and stops for this solve.
+
+        An undamped Newton step on a square law leaps clean over the
+        answer and lands the same distance the other side, then leaps
+        back, forever -- which is what a dead-ended drain does at zero
+        flow -- so the step is halved until the imbalance improves. A
+        node on a plateau (liquid arriving at a dry nozzle or a shut
+        check, whose flow is flat until the crack) gets a step sized by
+        the open side's slope, which reaches the crack only when the flow
+        to push is large against the gap, so a longer step is tried
+        before the plateau step (2026-09-22: a Cv-sized nozzle fell 300
+        Pa short); the ladder climbs by 1.5 and 2 in turn because the
+        window of scales that improves the norm opens at the crack and
+        closes where the open side overshoots."""
+        before = _norm([residual[slot] for slot in block])
+        if max(abs(step[slot]) for slot in block) < 1e-9:
+            return False
+
+        def place(scale: float) -> None:
+            for slot in block:
+                move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, step[slot] * scale))
+                self.pressures[free[slot]] = max(saved[slot] + move, MIN_PRESSURE_PA)
+
+        def block_norm() -> float:
+            r = self._residuals(index_of, n)
+            return _norm([r[slot] for slot in block])
+
+        scale = 1.0
+        shortest = scale
+        improved = False
+        for _attempt in range(self.MAX_HALVINGS):
+            shortest = scale
+            place(scale)
+            if _improves(block_norm(), before, scale):
+                improved = True
+                break
+            scale *= 0.5
+        if not improved:
+            longest = max(abs(step[slot]) for slot in block)
+            for scale in self.LENGTHENINGS:
+                if longest * scale > 2.0 * self.MAX_STEP_PA:
+                    break
+                place(scale)
+                if _improves(block_norm(), before, scale):
+                    improved = True
+                    break
+        # A node stranded below a closed one-way wall with flow pushing
+        # at it: step it to the wall's crack, and keep that instead when
+        # it leaves less imbalance than Newton's step (2026-09-22).
+        # Newton's own step can keep improving a little and run out the
+        # iteration cap crawling up the gap.
+        newton_at = [self.pressures[free[slot]] for slot in block]
+        newton_norm = block_norm() if improved else before
+        if self._plateau_step(free, index_of, n, residual, reachable, throughput,
+                              saved, newton_norm, block=block):
+            return True
+        if (not improved and not crossed[b]
+                and self._plateau_step(free, index_of, n, residual, reachable, throughput,
+                                       saved, math.inf, cracks_only=True, block=block)):
+            # Newton's own step failed and a wall stands in the way: cross
+            # it anyway, once a solve. Judged where it lands, the step
+            # looks worse -- the node rose, so what feeds it pushes harder
+            # for a moment -- but from the open side the next iteration
+            # settles (2026-09-22: a tank's drain line started 38 kPa
+            # under the sewer and sat four scans).
+            crossed[b] = True
+            return True
+        for i, slot in enumerate(block):
+            self.pressures[free[slot]] = newton_at[i]
+        if improved:
+            return True
+        # No scale of this step helps, so re-linearising will not either:
+        # a trickle into a shut check valve, whose crack point is tens of
+        # kPa away and whose slope says otherwise. The block stops -- at
+        # the shortest step tried, not back at the start: that nudge is
+        # what lets the next scan leave a plateau whose slope reads zero
+        # (a regulator shut a hair above its setpoint, 2026-09-22:
+        # restored exactly, the drip demo never reopened it).
+        place(shortest)
+        return False
 
     def _plateau_step(self, free: list[int], index_of: dict[int, int], n: int,
                       residual: list[float], reachable: list[bool],
                       throughput: list[float], saved: list[float],
-                      before: float, cracks_only: bool = False) -> bool:
+                      before: float, cracks_only: bool = False,
+                      block: list[int] | None = None) -> bool:
         """Step every node stranded below a closed one-way wall -- a dry
         nozzle, a shut check, a one-way drain -- with flow pushing at it
         to the pressure at which the wall passes that flow, and let the
@@ -961,20 +1078,67 @@ class Network:
         slope sizes Newton's step at a few hundred pascals, and the line
         crawled up the gap over twenty scans with the valve's whole flow
         unbalanced."""
-        for slot, node in enumerate(free):
-            self.pressures[node] = saved[slot]
+        slots = block if block is not None else list(range(n))
+        in_block = set(slots)
+        for slot in slots:
+            self.pressures[free[slot]] = saved[slot]
+        # Two honest landings at a wall: the crack with the flow pushing
+        # at it passing (a sustained feed, XV-401 into T-402), and the
+        # crack at rest (flow that is only the network settling: a cold
+        # boiler's line, drum and sewer both at zero, whose trickle into a
+        # one-way drain died as the line came up and left the passing
+        # landing always a trickle short, 2026-09-22). Both are tried and
+        # the better kept.
+        jacobian0 = self._jacobian(index_of, n, residual)
+        rhs0 = [-r for r in residual]
+        self._drop_dead(jacobian0, rhs0, reachable, self._loose)
+        best: tuple[float, list[float]] | None = None
+        for passing in (True, False):
+            targets = self._crack_targets(index_of, residual, throughput, in_block,
+                                          cracks_only, passing)
+            if not targets:
+                continue
+            jacobian = [row[:] for row in jacobian0]
+            rhs = rhs0[:]
+            for slot, target in targets.items():
+                jacobian[slot] = [0.0] * n
+                jacobian[slot][slot] = 1.0
+                rhs[slot] = target - self.pressures[free[slot]]
+            step = _solve_dense(jacobian, rhs)
+            if step is None:
+                continue
+            for slot in slots:
+                move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, step[slot]))
+                self.pressures[free[slot]] = max(saved[slot] + move, MIN_PRESSURE_PA)
+            after = self._residuals(index_of, n)
+            landed = _norm([after[slot] for slot in slots])
+            if best is None or landed < best[0]:
+                best = (landed, [self.pressures[free[slot]] for slot in slots])
+            for slot in slots:
+                self.pressures[free[slot]] = saved[slot]
+        if best is None:
+            return False
+        for i, slot in enumerate(slots):
+            self.pressures[free[slot]] = best[1][i]
+        return _improves(best[0], before)
+
+    def _crack_targets(self, index_of: dict[int, int], residual: list[float],
+                       throughput: list[float], in_block: set[int], cracks_only: bool,
+                       passing: bool) -> dict[int, float]:
+        """Each stranded node's landing at the nearest wall it is pushed
+        toward (see _plateau_step)."""
         targets: dict[int, float] = {}
         for branch in self.branches:
             pa = self.pressures[branch.node_a]
             pb = self.pressures[branch.node_b]
             for node in (branch.node_a, branch.node_b):
                 slot = index_of.get(node)
-                if slot is None:
+                if slot is None or slot not in in_block:
                     continue
                 push = residual[slot]
                 if abs(push) < self._tolerance_at(throughput[slot]):
                     continue
-                target = branch.crack_target(node, pa, pb, push)
+                target = branch.crack_target(node, pa, pb, push, passing)
                 if target is None:
                     continue
                 # Forced, only a real crack: the vacuum floor suits a pump
@@ -989,22 +1153,7 @@ class Network:
                     targets[slot] = min(targets[slot], target)
                 else:
                     targets[slot] = max(targets[slot], target)
-        if not targets:
-            return False
-        jacobian = self._jacobian(index_of, n)
-        rhs = [-r for r in residual]
-        self._drop_dead(jacobian, rhs, reachable)
-        for slot, target in targets.items():
-            jacobian[slot] = [0.0] * n
-            jacobian[slot][slot] = 1.0
-            rhs[slot] = target - self.pressures[free[slot]]
-        step = _solve_dense(jacobian, rhs)
-        if step is None:
-            return False
-        for slot, node in enumerate(free):
-            move = max(-self.MAX_STEP_PA, min(self.MAX_STEP_PA, step[slot]))
-            self.pressures[node] = max(saved[slot] + move, MIN_PRESSURE_PA)
-        return _improves(_norm(self._residuals(index_of, n)), before)
+        return targets
 
     def _residuals(self, index_of: dict[int, int], n: int) -> list[float]:
         """Net flow into each free node. Zero everywhere is the answer."""
@@ -1043,6 +1192,20 @@ class Network:
 
 def _norm(values: list[float]) -> float:
     return math.sqrt(sum(v * v for v in values))
+
+
+def _pulled_away(branch: Branch, node: int, pa: float, pb: float, push: float) -> bool:
+    """Whether ``push`` drives the node away from a closed wall's crack:
+    the crack lies the other way. With no push, or a push toward the
+    crack, the wall's slope stands (a line whose flow has not arrived yet
+    still has its outlet)."""
+    if push == 0.0:
+        return False
+    toward = branch.crack_target(node, pa, pb, push)
+    if toward is not None and toward > MIN_PRESSURE_PA:
+        return False
+    other = branch.crack_target(node, pa, pb, -push)
+    return other is not None and other > MIN_PRESSURE_PA
 
 
 def _improves(after: float, before: float, scale: float = 1.0) -> bool:
