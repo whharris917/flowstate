@@ -436,7 +436,7 @@ func _exercise_build_api() -> void:
 			problems.append("cascade ordering wrong: %s" % str(p))
 		var pdi := sim.get_component("pdi_iso") as SimGauge
 		if absf(pdi.reading - (float(p["iso"]) - float(p["core"]))) > 0.5:
-			problems.append("dp gauge disagrees with cascade")
+			problems.append("dp gauge disagrees with cascade: reads %.2f, iso - core is %.2f (iso %.2f, core %.2f)" % [pdi.reading, float(p["iso"]) - float(p["core"]), float(p["iso"]), float(p["core"])])
 		cascade.set_door("gown_al2", true)
 		cascade.set_door("al2_core", true)
 		for _i in 600:
@@ -1984,7 +1984,14 @@ func connect_equipment(src_name: String, src_port: String,
 		# own separated connection points. A tap does not count as a
 		# line on what it reads. Hidden wires — mounts, cabinet internals,
 		# multicore circuits — are the plant's own bookkeeping.
-		var to_tap := dst.tap_ports().has(dst_port)
+		# A pressure or level port is an instrument tap by nature: what
+		# leaves it is an impulse line, and a room with a gauge on each of
+		# two walls has two (2026-09-22: PDI-ISO's low side was refused
+		# because PDI-CORE already read the core room, and it read the
+		# isolator's pressure alone).
+		var to_tap := dst.tap_ports().has(dst_port) \
+			or out_port.kind == SimTypes.PortKind.PROCESS_PRESSURE \
+			or out_port.kind == SimTypes.PortKind.PROCESS_LEVEL
 		if not to_tap and visible_wire_count(src_name, src_port) > 0:
 			return "%s already has a line — split it with a tee, or use another way" % out_port.path()
 		if visible_wire_count(dst_name, dst_port) > 0:
