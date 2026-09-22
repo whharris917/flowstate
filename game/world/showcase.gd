@@ -671,28 +671,34 @@ static func _unit_400(plant: Plant) -> void:
 	plant.connect_equipment("xv_404", "outlet", "tee_403m", "c",
 		_local(plant, [Vector3(-0.2, 0.35, 15.0), Vector3(-0.2, 0.35, 13.0)]))
 	# Line sizing, for about 20 L/s everywhere so each stage moves its
-	# 300 L in fifteen seconds or so. The pump lines are sized so the
-	# lift lands near P-401's rating; the gravity lines have two metres
-	# of head to work with; the sewer line has only the sump's own depth
-	# behind it, half a metre at most, so it is the fattest of all; the
-	# makeup line is throttled so the fill takes about as long as the
-	# lift.
-	plant.set_pipe_resistance("t_403", "outlet", "tee_403a", "in", 2.0)
-	plant.set_pipe_resistance("tee_403a", "a", "p_401", "inlet", 40.0)
-	plant.set_pipe_resistance("tee_403a", "c", "p_402", "inlet", 40.0)
-	plant.set_pipe_resistance("p_401", "outlet", "fi_401", "inlet", 40.0)
-	plant.set_pipe_resistance("fi_401", "outlet", "tee_401m", "b", 20.0)
-	plant.set_pipe_resistance("tee_401m", "out", "t_401", "inlet", 20.0)
-	plant.set_pipe_resistance("p_402", "outlet", "tee_401m", "c", 40.0)
-	plant.set_pipe_resistance("t_401", "outlet", "xv_401", "inlet", 8.0)
-	plant.set_pipe_resistance("xv_401", "outlet", "t_402", "inlet", 8.0)
-	plant.set_pipe_resistance("t_402", "outlet", "xv_402", "inlet", 8.0)
-	plant.set_pipe_resistance("xv_402", "outlet", "tee_403m", "a", 6.0)
-	plant.set_pipe_resistance("tee_403m", "out", "t_403", "inlet", 2.0)
-	plant.set_pipe_resistance("tee_403a", "b", "xv_403", "inlet", 3.5)
-	plant.set_pipe_resistance("xv_403", "outlet", "du_401", "inlet", 3.5)
-	plant.set_pipe_resistance("supply_401", "outlet", "xv_404", "inlet", 375.0)
-	plant.set_pipe_resistance("xv_404", "outlet", "tee_403m", "c", 375.0)
+	# 300 L in fifteen seconds or so. A line's resistance is its length
+	# at its size (director, 2026-09-22), so sizing is choosing the bore:
+	# the sump's outlet and inlet the fattest, DN150, since the sewer and
+	# the gravity drains have only a metre or two of head behind them;
+	# the gravity drains and the sewer line DN100; the pump lines DN80,
+	# so the lift lands near P-401's rating; the makeup DN50, which
+	# throttles the fill to take about as long as the lift. (These were
+	# hand-set resistances until the rule, each a line size in disguise.)
+	for line: Array in [
+			["t_403", "outlet", "tee_403a", "in", 150],
+			["tee_403m", "out", "t_403", "inlet", 150],
+			["tee_403a", "a", "p_401", "inlet", 80],
+			["tee_403a", "c", "p_402", "inlet", 80],
+			["p_401", "outlet", "fi_401", "inlet", 80],
+			["fi_401", "outlet", "tee_401m", "b", 80],
+			["tee_401m", "out", "t_401", "inlet", 80],
+			["p_402", "outlet", "tee_401m", "c", 80],
+			["t_401", "outlet", "xv_401", "inlet", 100],
+			["xv_401", "outlet", "t_402", "inlet", 100],
+			["t_402", "outlet", "xv_402", "inlet", 100],
+			["xv_402", "outlet", "tee_403m", "a", 100],
+			["tee_403a", "b", "xv_403", "inlet", 100],
+			["xv_403", "outlet", "du_401", "inlet", 100]]:
+		var view := plant.line_between(str(line[0]), str(line[1]), str(line[2]), str(line[3]))
+		if view == null:
+			push_error("unit 400: no line %s.%s -> %s.%s" % [line[0], line[1], line[2], line[3]])
+		else:
+			plant.set_run_size(view, int(line[4]))
 
 	# ---- the sequence: a PLC in its own cabinet ----------------------
 	# The cabinet stands north of the platform with its door to the

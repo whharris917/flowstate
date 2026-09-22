@@ -118,23 +118,24 @@ static func _drip_demo(plant: Plant) -> void:
 
 
 ## Exercise 3: a water header at 400 kPa feeding a drain sixteen metres
-## east through one DN50 line sized as a long run (k 20,000), and three
+## east through one DN25 line, whose length and size make it cost the
+## header's pressure a good part of the way (2026-09-22), and three
 ## line pressure gauges cut into its level stretch at a quarter, a half
 ## and three quarters, through Plant.place_inline as a click does. The
 ## pressure falls along the line; the three dials read it falling, and
 ## the line passes what it would with no gauges on it.
 const GAUGE_Z := 16.0
-const GAUGE_LINE_K := 20000.0
+const GAUGE_LINE_DN := 25
 
 
 static func _line_gauges(plant: Plant) -> void:
 	plant.place("source", "supply_3", {"pressure_kpa": 400.0}, Vector3(-4.0, 0.0, GAUGE_Z), 0.0, false)
 	plant.place("drain", "drain_3", {}, Vector3(12.0, 0.0, GAUGE_Z), PI, false)
+	plant.next_line_size(GAUGE_LINE_DN)
 	var why := plant.connect_equipment("supply_3", "outlet", "drain_3", "inlet")
 	if why != "":
 		push_error("line gauges: " + why)
 		return
-	plant.set_pipe_resistance("supply_3", "outlet", "drain_3", "inlet", GAUGE_LINE_K)
 	var view := _line_from(plant, "supply_3")
 	if view == null:
 		return
@@ -243,20 +244,6 @@ static func report(plant: Plant) -> PackedStringArray:
 			parts.append("%s %.1f kPa at %.2f m" % [g.comp_name, g.reading, g.elevation_m])
 		out.append("[flowstate] line gauges: header 400 kPa · %s · drain %s" % [
 			" · ".join(parts), SimTypes.flow_text(drain.inlet.flow_lps)])
-		# The pieces are the line: cutting three gauges in must leave its
-		# resistance as it was (2026-09-22: each piece used to take all of it).
-		var k_sum := 0.0
-		var pieces := 0
-		for w in plant.sim.wires:
-			if not w.is_material():
-				continue
-			var ends := [w.src.owner_name, w.dst.owner_name]
-			if ends.has("supply_3") or ends.has("drain_3") 					or (plant.sim.get_component(w.src.owner_name) is SimGauge and plant.sim.get_component(w.dst.owner_name) is SimGauge):
-				k_sum += w.k_pa_per_lps2
-				pieces += 1
-		var ok := absf(k_sum - GAUGE_LINE_K) < 1.0
-		out.append("[flowstate] line gauges: %d pieces, resistance %.0f of the line's %.0f — %s" % [
-			pieces, k_sum, GAUGE_LINE_K, "OK" if ok else "FAILED: a cut changed the line's resistance"])
 	return out
 
 

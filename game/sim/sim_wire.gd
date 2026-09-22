@@ -7,9 +7,10 @@ class_name SimWire
 ## thin run genuinely costs pressure. The kernel stays geometry-free —
 ## whoever builds the run works out the number and hands it over.
 
-## Pa per (L/s)^2 for a short, generously sized run: about 45 kPa at
-## 3 L/s, which is what a sensibly sized line costs. Too small a number
-## here and nothing in the plant limits anything.
+## Pa per (L/s)^2 until whoever made the wire prices it. In the game every
+## drawn line is priced by its length and size as soon as it is laid
+## (Plant._sync_line_resistance, SimHydraulics.pipe_k); this default is
+## what the kernel's own self-checks, built in code with no geometry, use.
 const DEFAULT_K := 5000.0
 
 var src: SimOutputPort

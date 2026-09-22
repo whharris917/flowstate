@@ -151,6 +151,10 @@ func _headless_reports() -> void:
 	print("[flowstate] runs through solid geometry: %s" % ("none" if through.is_empty() else str(through.size())))
 	for line in through:
 		print("    " + line)
+	var priced := plant.resistance_report()
+	print("[flowstate] lines priced by their length and size: %s" % ("all" if priced.is_empty() else "%d are NOT" % priced.size()))
+	for line in priced:
+		print("    " + line)
 	var fanouts := plant.fanout_report()
 	print("[flowstate] ports with more than one wire: %d" % fanouts.size())
 	for line in fanouts:

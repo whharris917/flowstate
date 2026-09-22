@@ -1294,6 +1294,68 @@ func _refresh_visual(visual: Dictionary) -> void:
 		pipe.apply_service(Color.html(str(visual["color"])), str(visual.get("label", "")))
 	if str(visual.get("fitting", "")) != "":
 		pipe.set_fitting(str(visual["fitting"]))
+	_sync_line_resistance(visual)
+
+
+## A line's resistance follows its length and size (director,
+## 2026-09-22), by one rule applied wherever a line is laid — placed,
+## re-laid, stretched by a move, slid, cut, resized or loaded: the
+## pipe as drawn, face to face, its length and the right angles it
+## turns through, through SimHydraulics.pipe_k at its bore. Nothing
+## sets a line's resistance by hand; a line that must pass more is a
+## bigger line. (Before, every line was 5000 Pa per (L/s)^2 at DN50
+## whatever its length, so a device cut in doubled it and a line laid
+## the long way round cost nothing more.)
+func _sync_line_resistance(visual: Dictionary) -> void:
+	if visual["node"] == null:
+		return
+	var wire := sim.find_wire(sim.get_component(str(visual["a"])), str(visual["a_port"]),
+		sim.get_component(str(visual["b"])), str(visual["b_port"]))
+	if wire == null or not wire.is_material():
+		return
+	var geometry := line_geometry(_visual_path(visual))
+	sim.set_wire_resistance(wire, SimHydraulics.pipe_k(float(geometry["length"]),
+		int(visual.get("dn", 50)), float(geometry["bends"])))
+
+
+## A drawn path's length in metres and the right angles it turns
+## through in all (a 45-degree corner is half of one).
+static func line_geometry(path: Array[Vector3]) -> Dictionary:
+	var length := 0.0
+	var turned := 0.0
+	var last := Vector3.ZERO
+	for i in range(1, path.size()):
+		var seg := path[i] - path[i - 1]
+		var l := seg.length()
+		if l < 1e-4:
+			continue
+		length += l
+		var dir := seg / l
+		if last != Vector3.ZERO:
+			turned += last.angle_to(dir)
+		last = dir
+	return {"length": length, "bends": turned / (PI / 2.0)}
+
+
+## Lines whose kernel resistance is not what their drawn length and
+## size make it: the check that the rule above holds everywhere, for
+## the headless smoke. Empty is right.
+func resistance_report() -> PackedStringArray:
+	var out := PackedStringArray()
+	for visual in _wire_visuals:
+		if visual["node"] == null:
+			continue
+		var wire := sim.find_wire(sim.get_component(str(visual["a"])), str(visual["a_port"]),
+			sim.get_component(str(visual["b"])), str(visual["b_port"]))
+		if wire == null or not wire.is_material():
+			continue
+		var geometry := line_geometry(_visual_path(visual))
+		var want := SimHydraulics.pipe_k(float(geometry["length"]), int(visual.get("dn", 50)), float(geometry["bends"]))
+		if absf(wire.k_pa_per_lps2 - want) > 1e-6 * maxf(want, 1.0):
+			out.append("%s.%s -> %s.%s: k %.4g, its %.2f m at DN%d make it %.4g" % [visual["a"], visual["a_port"],
+				visual["b"], visual["b_port"], wire.k_pa_per_lps2, float(geometry["length"]),
+				int(visual.get("dn", 50)), want])
+	return out
 
 
 ## Where two runs would pass through each other — crossings, not the
@@ -1863,14 +1925,13 @@ func _line_through(name_: String) -> Dictionary:
 	corners.append_array(down["waypoints"] as Array)
 	return {"a": up["a"], "a_port": up["a_port"], "b": down["b"], "b_port": down["b_port"],
 		"corners": corners, "dn": int(up.get("dn", 50)),
-		"k": float(up.get("k_base", SimWire.DEFAULT_K)) + float(down.get("k_base", SimWire.DEFAULT_K)),
 		"color": str(up.get("color", "")), "label": str(up.get("label", "")),
 		"fitting": str(up.get("fitting", ""))}
 
 
 ## Lay the line a removed tapping was cut into back as one (director,
 ## 2026-09-22): the pipe it was, through the pieces' corners, at its
-## size, service and resistance.
+## size and service; its resistance follows from what is laid.
 func _rejoin_line(line: Dictionary) -> void:
 	var a := str(line["a"])
 	var a_port := str(line["a_port"])
@@ -1890,7 +1951,6 @@ func _rejoin_line(line: Dictionary) -> void:
 			if str(line["color"]) != "":
 				set_run_service(view, Color.html(str(line["color"])), str(line["label"]), str(line["fitting"]))
 			break
-	set_pipe_resistance(a, a_port, b, b_port, float(line["k"]))
 
 
 ## Connect two ports (by record/port name), optionally routed through
@@ -1973,25 +2033,14 @@ func free_way(mains_name: String) -> String:
 	return ""
 
 
-## Size a routed pipe run, in Pa per (L/s)^2: a short generous line is
-## 5000, a long thin one tens of thousands. Saved with the wire.
-## A line's base resistance, before its size scales it: sizing a line
-## (the Unit 400 gravity lines) sets the base; the size multiplies it.
-func set_pipe_resistance(src_name: String, src_port: String, dst_name: String,
-		dst_port: String, k_pa_per_lps2: float) -> bool:
-	checkpoint()
-	var wire := sim.find_wire(sim.get_component(src_name), src_port,
-		sim.get_component(dst_name), dst_port)
-	if wire == null or not wire.is_material():
-		return false
-	var dn := 50
+## The drawn line between two ports, or null.
+func line_between(src_name: String, src_port: String, dst_name: String, dst_port: String) -> PipeView:
 	for visual in _wire_visuals:
 		if str(visual["a"]) == src_name and str(visual["a_port"]) == src_port \
-				and str(visual["b"]) == dst_name and str(visual["b_port"]) == dst_port:
-			visual["k_base"] = k_pa_per_lps2
-			dn = int(visual.get("dn", 50))
-	sim.set_wire_resistance(wire, k_pa_per_lps2 * line_k_scale(dn))
-	return true
+				and str(visual["b"]) == dst_name and str(visual["b_port"]) == dst_port \
+				and visual["node"] is PipeView:
+			return visual["node"] as PipeView
+	return null
 
 
 ## A line's size (director, 2026-09-20: "changing pipe diameters"): its
@@ -2005,11 +2054,7 @@ func set_run_size(view: PipeView, dn: int) -> PipeView:
 		if visual["node"] != view:
 			continue
 		visual["dn"] = dn
-		var wire := sim.find_wire(sim.get_component(str(visual["a"])), str(visual["a_port"]),
-			sim.get_component(str(visual["b"])), str(visual["b_port"]))
-		if wire != null and wire.is_material():
-			sim.set_wire_resistance(wire, float(visual.get("k_base", SimWire.DEFAULT_K)) * line_k_scale(dn))
-		_refresh_visual(visual)
+		_refresh_visual(visual)   # which sizes its resistance
 		_sync_bores([str(visual["a"]), str(visual["b"])])
 		_schedule_revalidate()
 		return visual["node"] as PipeView
@@ -2583,8 +2628,6 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 	var label_ := str(visual.get("label", ""))
 	var fitting := str(visual.get("fitting", ""))
 	var dn := int(visual.get("dn", 50))
-	var k_base := float(visual.get("k_base", SimWire.DEFAULT_K))
-	var total_arc := maxf(float(_nearest_on_path(path, point)["total"]), 1e-6)
 	remove_run(view)
 	# The device on the pipe axis, its inlet toward the upstream piece.
 	var rot: float = spot["rot"]
@@ -2614,24 +2657,11 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 					piece = set_run_size(piece, dn)   # the pieces keep the size of the line
 				if color != "":
 					set_run_service(piece, Color.html(color), label_, fitting)
-	# The two pieces are the line: they share its resistance by length,
-	# so cutting a device in changes nothing but the device itself
-	# (director, 2026-09-22: each piece had taken the whole line's
-	# resistance, so every cut-in doubled it). A tapping then reads the
-	# pressure at the point it stands.
-	_split_resistance(a_name, a_port, record.comp_name, in_port, record.comp_name, out_port,
-		b_name, b_port, k_base, arc / total_arc)
+	# The two pieces are priced by their own lengths, as every line is,
+	# so together they are the line less the length the device took
+	# (director, 2026-09-22: each piece used to take the whole line's
+	# resistance, so every cut-in doubled it).
 	return ""
-
-
-## Share a line's base resistance between the two pieces it was cut
-## into, `f` of it to the upstream piece.
-func _split_resistance(a_name: String, a_port: String, up_name: String, up_port: String,
-		down_name: String, down_port: String, b_name: String, b_port: String,
-		k_base: float, f: float) -> void:
-	f = clampf(f, 0.01, 0.99)
-	set_pipe_resistance(a_name, a_port, up_name, up_port, k_base * f)
-	set_pipe_resistance(down_name, down_port, b_name, b_port, k_base * (1.0 - f))
 
 
 func cut_wire(view: PipeView, at_global: Vector3) -> String:
@@ -2675,7 +2705,6 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 	var label_ := str(visual.get("label", ""))
 	var fitting := str(visual.get("fitting", ""))
 	var dn := int(visual.get("dn", 50))
-	var k_base := float(visual.get("k_base", SimWire.DEFAULT_K))
 	remove_run(view)
 	# Two caps, a hand apart either side of the cut, their spools along
 	# the line: the first takes the upstream piece on its a-nozzle, the
@@ -2704,8 +2733,6 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 					piece = set_run_size(piece, dn)   # the pieces keep the size of the line
 				if color != "":
 					set_run_service(piece, Color.html(color), label_, fitting)
-	_split_resistance(a_name, a_port, names[0], "a", names[1], "b", b_name, b_port, k_base,
-		best_arc / maxf(arc, 1e-6))
 	return ""
 
 
@@ -3261,10 +3288,6 @@ func _wire_visual(src_name: String, src_port: String,
 		_sync_bores([src_name, dst_name])
 		_pending_dn = {}
 	var pipe := _build_pipe(src_name, src_port, dst_name, dst_port, waypoints, -1, 0, order, fixed, dn)
-	if dn != 50:
-		var wire := sim.find_wire(sim.get_component(src_name), src_port, sim.get_component(dst_name), dst_port)
-		if wire != null and wire.is_material():
-			sim.set_wire_resistance(wire, SimWire.DEFAULT_K * line_k_scale(dn))
 	_wire_visuals.append({
 		"node": pipe, "a": src_name, "a_port": src_port,
 		"b": dst_name, "b_port": dst_port, "waypoints": waypoints,
@@ -3272,6 +3295,7 @@ func _wire_visual(src_name: String, src_port: String,
 		"lane": int(pipe.get_meta("lane", 0)), "path": pipe.get_meta("path", []),
 		"corners": pipe.get_meta("corners", []), "base_path": pipe.get_meta("base_path", []),
 	})
+	_sync_line_resistance(_wire_visuals[_wire_visuals.size() - 1])
 	_schedule_revalidate()
 
 
@@ -3734,21 +3758,19 @@ func _sync_bores(names: Array) -> void:
 
 
 ## Line sizes: nominal bores, DN50 the size every line had before
-## 2026-09-20 (drawn at radius 0.07), the rest scaled with it; the
-## resistance scales as (50 / DN)^5, a square law in a rough pipe.
+## 2026-09-20 (drawn at radius 0.07), the rest scaled with it; a
+## line's resistance is its length and bends at its bore
+## (SimHydraulics.pipe_k), so it falls as the fifth power of the bore.
 ## Down to a millimetre (director, 2026-09-20: "somewhat multiscale ...
-## micro-fluidic like things with very small pipes"): the resistance
-## law makes a DN1 line pass about half a millilitre a second at 4 bar.
+## micro-fluidic like things with very small pipes"): a metre of DN1
+## passes about 5 mL/s at 4 bar (turbulent friction; a real capillary
+## is laminar and passes less).
 const LINE_SIZES: Array[int] = [1, 2, 3, 6, 10, 15, 25, 40, 50, 80, 100, 150]
 const LINE_RADIUS_DN50 := 0.07
 
 
 static func line_radius(dn: int) -> float:
 	return LINE_RADIUS_DN50 * float(dn) / 50.0
-
-
-static func line_k_scale(dn: int) -> float:
-	return pow(50.0 / float(dn), 5.0)
 
 
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
@@ -4863,8 +4885,6 @@ func snapshot() -> Dictionary:
 		}
 		var wire := sim.find_wire(sim.get_component(str(visual["a"])), str(visual["a_port"]),
 			sim.get_component(str(visual["b"])), str(visual["b_port"]))
-		if visual.has("k_base"):
-			wire_entry["k"] = float(visual["k_base"])
 		if int(visual.get("dn", 50)) != 50:
 			wire_entry["dn"] = int(visual["dn"])
 		wire_list.append(wire_entry)
@@ -5197,9 +5217,8 @@ func restore(payload: Dictionary) -> bool:
 			set_run_service((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
 				Color.html(str(wire_entry["color"])), str(wire_entry.get("label", "")),
 				str(wire_entry.get("fitting", "")))
-		if error == "" and wire_entry.has("k"):
-			set_pipe_resistance(wire_entry["src"], wire_entry["src_port"],
-				wire_entry["dst"], wire_entry["dst_port"], float(wire_entry["k"]))
+		# An older save's hand-set "k" is ignored: the line's length and
+		# size make its resistance (director, 2026-09-22).
 		if error == "" and wire_entry.has("dn"):
 			set_run_size((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
 				int(wire_entry["dn"]))

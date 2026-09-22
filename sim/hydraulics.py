@@ -855,3 +855,24 @@ def _solve_dense(matrix: list[list[float]], rhs: list[float]) -> list[float] | N
 def static_head_pa(depth_m: float) -> float:
     """Pressure at the bottom of a column of liquid this deep."""
     return HEAD_PA_PER_M * max(depth_m, 0.0)
+
+
+#: Darcy friction factor for clean commercial pipe in turbulent flow.
+FRICTION_FACTOR = 0.02
+#: Loss coefficient of one long-radius 90-degree bend.
+BEND_K = 0.3
+
+
+def pipe_k(length_m: float, dn: int, bend_quarters: float = 0.0) -> float:
+    """A pipe's resistance follows its length and size (director,
+    2026-09-22): Darcy-Weisbach with one friction factor, plus a loss
+    coefficient per quarter-turn of bend,
+    dP = (f*L/D + K*bends) * rho*v^2/2, in Pa per (L/s)^2. The bore is
+    the nominal size in millimetres. The kernel stays geometry-free:
+    whoever lays the run measures it and asks this."""
+    d = dn / 1000.0
+    area = math.pi * d * d / 4.0
+    v_per_lps = 0.001 / area
+    dynamic = RHO_KG_PER_M3 / 2.0 * v_per_lps * v_per_lps
+    k = (FRICTION_FACTOR * max(length_m, 0.0) / d + BEND_K * max(bend_quarters, 0.0)) * dynamic
+    return max(k, 1e-6)

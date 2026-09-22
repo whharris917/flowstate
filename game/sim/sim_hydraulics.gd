@@ -38,6 +38,27 @@ static func static_head_pa(depth_m: float) -> float:
 	return HEAD_PA_PER_M * maxf(depth_m, 0.0)
 
 
+## A pipe's resistance follows its length and size (director,
+## 2026-09-22): Darcy-Weisbach with one friction factor, plus a loss
+## coefficient per quarter-turn of bend, dP = (f*L/D + K*bends) * rho*v^2/2.
+## The bore is the nominal size, DN millimetres. The kernel stays
+## geometry-free: whoever lays the run measures it and asks this.
+## Mirrors sim/hydraulics.py pipe_k.
+const FRICTION_FACTOR := 0.02     # clean commercial pipe, turbulent
+const BEND_K := 0.3               # one long-radius 90-degree bend
+
+
+## Pa per (L/s)^2 for a run `length_m` long at `dn`, turning through
+## `bend_quarters` right angles in all.
+static func pipe_k(length_m: float, dn: int, bend_quarters: float = 0.0) -> float:
+	var d := float(dn) / 1000.0
+	var area := PI * d * d / 4.0
+	var v_per_lps := 0.001 / area                     # m/s for each L/s
+	var dynamic := RHO_KG_PER_M3 / 2.0 * v_per_lps * v_per_lps
+	var k := (FRICTION_FACTOR * maxf(length_m, 0.0) / d + BEND_K * maxf(bend_quarters, 0.0)) * dynamic
+	return maxf(k, 1e-6)
+
+
 ## Q for a square-law element, linearised through zero.
 ##
 ## Below the floor the square law is replaced by the straight line that
