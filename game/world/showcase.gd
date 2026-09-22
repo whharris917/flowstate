@@ -571,26 +571,34 @@ static func _unit_400(plant: Plant) -> void:
 		Vector3(-1.4, 6.025, 11.4), 0.0, false)
 	# Two pumps that look alike and are not: P-401 is rated to lift
 	# 35 m, P-402 only 5 m, and the top tank's inlet is 7.5 m up.
-	plant.place("pump", "p_401", {"rated_lps": 20.0, "head_m": 35.0}, Vector3(-5.8, 0.0, 9.6), 0.0, false)
-	plant.place("pump", "p_402", {"rated_lps": 20.0, "head_m": 5.0}, Vector3(-5.8, 0.0, 12.4), 0.0, false)
-	plant.place("relay", "k_401", {}, Vector3(-7.6, 0.0, 11.0), 0.0, false)
+	# The pump skid, laid for the real line sizes (2026-09-22): the sump's
+	# suction tee sends one leg each way -- north to P-401, west to
+	# P-402, south to the sewer -- so no suction line meets another, and
+	# the two discharges join north of the tower, P-401's straight up its
+	# own line through FI-401, P-402's round the skid's west edge, before
+	# one riser beside the north-west column climbs to the top tank. At
+	# DN50 the old skid's lines passed between each other; at DN150 and
+	# DN80 they ran into each other and the starter's cables.
+	plant.place("pump", "p_401", {"rated_lps": 20.0, "head_m": 35.0}, Vector3(-3.4, 0.0, 9.9), PI / 2.0, false)
+	plant.place("pump", "p_402", {"rated_lps": 20.0, "head_m": 5.0}, Vector3(-5.0, 0.0, 11.0), PI, false)
+	plant.place("relay", "k_401", {}, Vector3(-2.2, 0.0, 9.5), 0.0, false)
 	# FI-401 sits in P-401's discharge line: an inline element the whole
 	# flow runs through, not a tapping, sized to its line (40 kPa at
 	# 20 L/s; the default element would cost more head than the lift).
-	plant.place("gauge_flow", "fi_401", {"meter_k": 100.0}, Vector3(-4.6, 0.0, 9.6), 0.0, false)
+	plant.place("gauge_flow", "fi_401", {"meter_k": 100.0}, Vector3(-3.4, 0.0, 8.8), PI / 2.0, false)
 	# A block valve on every transfer: XV-401 on the top deck at the top
 	# tank's outlet, XV-402 at grade where the mid tank's drain comes
 	# down the north-east column, XV-403 and the sewer connection under
 	# the platform west of the sump, XV-404 on the makeup line. The
 	# sewer line has only the sump's own depth to drive it, so its
 	# valve and connection are twice the size of the others.
-	plant.place("block_valve", "xv_401", {"cv_lps": 150.0, "stroke_s": 2.0},
+	plant.place("block_valve", "xv_401", {"cv_lps": 150.0, "stroke_s": 2.0, "dn": 100},
 		Vector3(-1.4, 6.025, 9.7), PI / 2.0, false)
-	plant.place("block_valve", "xv_402", {"cv_lps": 150.0, "stroke_s": 2.0},
+	plant.place("block_valve", "xv_402", {"cv_lps": 150.0, "stroke_s": 2.0, "dn": 100},
 		Vector3(1.3, 0.0, 8.55), 0.0, false)
-	plant.place("block_valve", "xv_403", {"cv_lps": 200.0, "stroke_s": 2.0},
-		Vector3(-3.6, 0.0, 13.6), -PI / 2.0, false)
-	plant.place("drain", "du_401", {"rate_lps": 200.0}, Vector3(-3.6, 0.0, 15.6), PI / 2.0, false)
+	plant.place("block_valve", "xv_403", {"cv_lps": 200.0, "stroke_s": 2.0, "dn": 100},
+		Vector3(-3.4, 0.0, 12.5), -PI / 2.0, false)
+	plant.place("drain", "du_401", {"rate_lps": 200.0}, Vector3(-3.4, 0.0, 14.3), PI / 2.0, false)
 	# Makeup water: a header through XV-404 into the sump. This is where
 	# the rig's water comes from; it starts empty and fills from here.
 	plant.place("source", "supply_401", {"species": "water"}, Vector3(3.6, 0.0, 15.0), PI, false)
@@ -634,27 +642,32 @@ static func _unit_400(plant: Plant) -> void:
 	top.set_nozzle("outlet", 0.06, -PI / 2.0)
 
 	# ---- process path ------------------------------------------------
-	# Both pumps and the sewer line draw off the sump: a tee at its
-	# outlet nozzle.
-	plant.place("tee_split", "tee_403a", {}, Vector3(-3.5, 0.0, 11.0), PI, false)
-	plant.connect_equipment("t_403", "outlet", "tee_403a", "in")
-	plant.connect_equipment("tee_403a", "a", "p_401", "inlet",
-		_local(plant, [Vector3(-4.2, 0.2, 11.0), Vector3(-6.6, 0.2, 11.0)]))
-	plant.connect_equipment("tee_403a", "c", "p_402", "inlet",
-		_local(plant, [Vector3(-3.5, 0.15, 10.1), Vector3(-7.4, 0.15, 10.1), Vector3(-7.4, 0.15, 12.4)]))
-	plant.connect_equipment("tee_403a", "b", "xv_403", "inlet",
-		_local(plant, [Vector3(-3.6, 0.35, 12.6)]))
-	plant.connect_equipment("xv_403", "outlet", "du_401", "inlet")
-	# P-401 through the meter, then up the west column past the top-deck
-	# railing to the top tank's inlet; P-402's riser meets it there.
-	plant.connect_equipment("p_401", "outlet", "fi_401", "inlet")
-	plant.place("tee_mix", "tee_401m", {}, Vector3(-4.4, 0.0, 12.0), 0.0, false)
-	plant.connect_equipment("fi_401", "outlet", "tee_401m", "b",
-		_local(plant, [Vector3(-4.4, 0.42, 9.0)]))
-	plant.connect_equipment("p_402", "outlet", "tee_401m", "c",
-		_local(plant, [Vector3(-4.4, 0.42, 13.0)]))
-	plant.connect_equipment("tee_401m", "out", "t_401", "inlet",
-		_local(plant, [Vector3(-3.0, 0.35, 12.0), Vector3(-3.0, 7.35, 12.0), Vector3(-3.0, 7.35, 11.4)]))
+	# Both pumps and the sewer line draw off the sump: a tee at its outlet
+	# nozzle, a leg each way. Each line is laid at its size from the first
+	# (Plant.next_line_size), so the route it takes is the route a line
+	# that size needs.
+	plant.place("tee_split", "tee_403a", {"dn": 150}, Vector3(-3.4, 0.0, 11.0), PI, false)
+	_sized(plant, 150, "t_403", "outlet", "tee_403a", "in")
+	_sized(plant, 80, "tee_403a", "c", "p_401", "inlet")
+	_sized(plant, 80, "tee_403a", "a", "p_402", "inlet")
+	_sized(plant, 100, "tee_403a", "b", "xv_403", "inlet")
+	_sized(plant, 100, "xv_403", "outlet", "du_401", "inlet")
+	# P-401 straight north through the meter to the discharge tee; P-402
+	# west, then north along the skid's edge into the tee's side; one
+	# riser beside the north-west column to the top tank's inlet, over
+	# the top deck.
+	plant.place("tee_mix", "tee_401m", {"dn": 80}, Vector3(-3.4, 0.0, 7.7), PI / 2.0, false)
+	_sized(plant, 80, "p_401", "outlet", "fi_401", "inlet")
+	_sized(plant, 80, "fi_401", "outlet", "tee_401m", "a")
+	_sized(plant, 80, "p_402", "outlet", "tee_401m", "b",
+		_local(plant, [Vector3(-5.8, 0.42, 11.0), Vector3(-5.8, 0.42, 7.7)]))
+	# The riser stands off the north-west column's corner, within a
+	# bracket's reach of it; the low leg to it climbs first, so it passes
+	# over P-402's discharge rather than through it.
+	_sized(plant, 80, "tee_401m", "out", "t_401", "inlet",
+		_local(plant, [Vector3(-3.4, 0.35, 7.1), Vector3(-3.4, 1.6, 7.1), Vector3(-4.4, 1.6, 7.1),
+			Vector3(-4.4, 1.6, 8.6), Vector3(-4.4, 7.35, 8.6), Vector3(-3.4, 7.35, 8.6),
+			Vector3(-3.4, 7.35, 11.4)]))
 	# Gravity, one transfer at a time. The top tank drains north through
 	# XV-401, over the deck edge and down the north-east column to the
 	# mid tank's inlet.
@@ -666,7 +679,7 @@ static func _unit_400(plant: Plant) -> void:
 	# to XV-402 at grade, then in under the platform to the sump's inlet.
 	plant.connect_equipment("t_402", "outlet", "xv_402", "inlet",
 		_local(plant, [Vector3(-0.9, 3.28, 8.55), Vector3(0.4, 3.28, 8.55), Vector3(0.4, 0.35, 8.55)]))
-	plant.place("tee_mix", "tee_403m", {}, Vector3(-2.0, 0.0, 13.0), PI / 2.0, false)
+	plant.place("tee_mix", "tee_403m", {"dn": 150}, Vector3(-2.0, 0.0, 13.0), PI / 2.0, false)
 	plant.connect_equipment("xv_402", "outlet", "tee_403m", "a",
 		_local(plant, [Vector3(2.3, 0.35, 8.55), Vector3(2.3, 0.35, 14.2), Vector3(-2.0, 0.35, 14.2)]))
 	plant.connect_equipment("tee_403m", "out", "t_403", "inlet")
@@ -685,20 +698,11 @@ static func _unit_400(plant: Plant) -> void:
 	# throttles the fill to take about as long as the lift. (These were
 	# hand-set resistances until the rule, each a line size in disguise.)
 	for line: Array in [
-			["t_403", "outlet", "tee_403a", "in", 150],
 			["tee_403m", "out", "t_403", "inlet", 150],
-			["tee_403a", "a", "p_401", "inlet", 80],
-			["tee_403a", "c", "p_402", "inlet", 80],
-			["p_401", "outlet", "fi_401", "inlet", 80],
-			["fi_401", "outlet", "tee_401m", "b", 80],
-			["tee_401m", "out", "t_401", "inlet", 80],
-			["p_402", "outlet", "tee_401m", "c", 80],
 			["t_401", "outlet", "xv_401", "inlet", 100],
 			["xv_401", "outlet", "t_402", "inlet", 100],
 			["t_402", "outlet", "xv_402", "inlet", 100],
-			["xv_402", "outlet", "tee_403m", "a", 100],
-			["tee_403a", "b", "xv_403", "inlet", 100],
-			["xv_403", "outlet", "du_401", "inlet", 100]]:
+			["xv_402", "outlet", "tee_403m", "a", 100]]:
 		var view := plant.line_between(str(line[0]), str(line[1]), str(line[2]), str(line[3]))
 		if view == null:
 			push_error("unit 400: no line %s.%s -> %s.%s" % [line[0], line[1], line[2], line[3]])
@@ -809,7 +813,7 @@ static func _unit_400(plant: Plant) -> void:
 	# cabinet instead of ten conduits home. Every circuit is still its
 	# own kernel wire, one scan late at each terminal.
 	plant.place_junction_box("jb_401", Vector3(0.6, 0.0, 9.3), PI / 2.0, 8)
-	plant.place_junction_box("jb_402", Vector3(-4.6, 0.0, 8.6), -PI / 2.0, 4)
+	plant.place_junction_box("jb_402", Vector3(-1.6, 0.0, 8.3), -PI / 2.0, 4)
 	# Switch conduits leave each tank's east face, drop through the deck
 	# beside its edge beam, and come down beside the north-east column
 	# to the box, north of the landing.
@@ -834,12 +838,13 @@ static func _unit_400(plant: Plant) -> void:
 		_local(plant, [Vector3(1.3, 0.2, 9.3)]))
 	plant.connect_equipment("jb_401_t8", "out", "xv_404", "open",
 		_local(plant, [Vector3(1.0, 0.2, 9.0), Vector3(1.0, 0.2, 14.2), Vector3(1.6, 0.2, 14.2)]))
-	plant.connect_equipment("jb_402_t1", "out", "k_401", "coil",
-		_local(plant, [Vector3(-4.7, 0.2, 9.8), Vector3(-7.9, 0.2, 9.8), Vector3(-7.9, 0.2, 11.44)]))
-	plant.connect_equipment("k_401", "contact", "p_401", "run",
-		_local(plant, [Vector3(-7.3, 0.3, 11.6), Vector3(-7.3, 0.3, 10.3)]))
+	plant.connect_equipment("jb_402_t1", "out", "k_401", "coil")
+	plant.connect_equipment("k_401", "contact", "p_401", "run")
+	# The sewer valve's command runs down the tower's interior above the
+	# sump's suction line and comes round the valve's west side.
 	plant.connect_equipment("jb_402_t2", "out", "xv_403", "open",
-		_local(plant, [Vector3(-4.4, 0.2, 9.9), Vector3(-4.4, 0.2, 13.6), Vector3(-4.4, 0.72, 13.6)]))
+		_local(plant, [Vector3(-2.9, 1.1, 8.6), Vector3(-2.9, 1.1, 12.0), Vector3(-4.45, 1.1, 12.0),
+			Vector3(-4.45, 0.72, 12.5)]))
 	# The multicores: MC-401 carries five switches to the input strip
 	# and three valve commands back; MC-402 carries the starter and the
 	# sewer valve. One cable each, along the ground to the cabinet.
@@ -853,17 +858,18 @@ static func _unit_400(plant: Plant) -> void:
 		_local(plant, [Vector3(0.9, 0.3, 8.9), Vector3(5.8, 0.3, 8.9), Vector3(5.8, 0.3, 8.2)]))
 	plant.connect_multicore("MC-402",
 		[[do + "1", "out", "jb_402_t1", "in"], [do + "4", "out", "jb_402_t2", "in"]],
-		_local(plant, [Vector3(3.5, 0.3, 8.75), Vector3(-4.9, 0.3, 8.75), Vector3(-4.9, 0.3, 8.35)]))
+		_local(plant, [Vector3(3.5, 0.3, 8.75), Vector3(-1.2, 0.3, 8.75)]))
 
 	# ---- power: 480 V from the plant feeder, low along the ground ----
 	# Straight down off the way first, under the Unit 300 stub legs.
 	var way_drop := Vector3(-3.3, 0.3, -1.12)
 	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), "p_401", "power",
 		_local(plant, [way_drop, Vector3(-3.4, 0.3, 0.6), Vector3(-3.4, 0.3, 5.6),
-			Vector3(-3.4, 0.14, 6.0), Vector3(-5.95, 0.14, 6.0)]))
+			Vector3(-4.4, 0.14, 6.0), Vector3(-4.4, 0.14, 10.05)]))
 	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), "p_402", "power",
 		_local(plant, [way_drop, Vector3(-3.2, 0.3, 0.6), Vector3(-3.2, 0.3, 5.4),
-			Vector3(-3.2, 0.1, 5.8), Vector3(-7.4, 0.1, 5.8), Vector3(-7.4, 0.1, 11.8)]))
+			Vector3(-3.2, 0.1, 5.8), Vector3(-6.6, 0.1, 5.8), Vector3(-6.6, 0.1, 11.8),
+			Vector3(-4.85, 0.1, 11.8)]))
 	plant.connect_equipment("plant_mains", plant.free_way("plant_mains"), psu_name, "ac_in",
 		_local(plant, [way_drop, Vector3(-3.0, 0.3, 0.6), Vector3(-3.0, 0.3, 5.3), Vector3(5.6, 0.3, 5.3),
 			Vector3(5.6, 0.3, 7.6)]))
@@ -908,8 +914,18 @@ static func _unit_400(plant: Plant) -> void:
 	plant.set_sign_text("sign_u400_seq2", "3 DRAIN\nTOP-MID\n4 DRAIN\nMID-SUMP")
 	plant.place_structure("s_sign", "sign_u400_seq3", Vector3(8.2, 0.0, 8.2), 0.0)
 	plant.set_sign_text("sign_u400_seq3", "5 SUMP\nTO SEWER\nREPEAT")
-	plant.place_structure("s_sign", "sign_p402", Vector3(-7.6, 0.0, 13.7), 0.0)
+	plant.place_structure("s_sign", "sign_p402", Vector3(-6.2, 0.0, 12.3), 0.0)
 	plant.set_sign_text("sign_p402", "P-402: 5 m HEAD\nLIFT TO T-401 IS 7.5 m\nDEAD-HEADED")
+
+## A line laid at its size from the first, so its route is chosen for
+## the bore it has.
+static func _sized(plant: Plant, dn: int, a: String, a_port: String, b: String, b_port: String,
+		waypoints: Array = []) -> void:
+	plant.next_line_size(dn)
+	var why := plant.connect_equipment(a, a_port, b, b_port, waypoints)
+	if why != "":
+		push_error("%s.%s -> %s.%s: %s" % [a, a_port, b, b_port, why])
+
 
 ## World-space waypoints to plant-local, for the routed runs.
 static func _local(plant: Plant, points: Array) -> Array:
