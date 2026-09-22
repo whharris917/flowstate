@@ -509,10 +509,11 @@ class Drain(Component):
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         # The far side of the drain valve is the sewer: atmospheric, and
-        # it will take whatever it is given.
+        # it will take whatever it is given, and give nothing back: an
+        # open drain under suction draws air (2026-09-22).
         self._sewer = net.add_node(static_head_pa(self.elevation_m), fixed=True)
         self._branch = net.add_branch(ControlResistance(
-            node["inlet"], self._sewer, self.rate_lps, self.name))
+            node["inlet"], self._sewer, self.rate_lps, self.name, one_way=True))
 
     def update_hydraulics(self, net, node: dict[str, int]) -> None:
         # The sewer's height is refreshed every scan, like every other

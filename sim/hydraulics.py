@@ -174,23 +174,30 @@ class ControlResistance(Resistance):
     the number a player sizes stays the familiar one. Shut, it passes
     nothing at all rather than a very large resistance, so a closed
     valve is genuinely closed.
+
+    ``one_way`` (2026-09-22) passes from a to b only: an open drain to an
+    atmospheric sewer, which under suction draws air, never sewer water.
+    Backwards it passes nothing and joins nothing, but reports the open
+    side's slope, as ``CheckResistance`` does, so Newton knows where the
+    wall is.
     """
 
     REF_DROP_PA = 100_000.0     # 1 bar, the usual sizing basis
 
     def __init__(self, node_a: int, node_b: int, cv_lps: float,
-                 name: str = "") -> None:
+                 name: str = "", one_way: bool = False) -> None:
         # k such that Q = cv_lps at the reference drop.
         super().__init__(node_a, node_b, self.REF_DROP_PA / max(cv_lps, _EPS) ** 2, name)
         self.cv_lps = cv_lps
         self.opening = 0.0      # 0..1, set from the positioner each tick
+        self.one_way = one_way
 
     def _k_now(self) -> float:
         effective = self.cv_lps * self.opening
         return self.REF_DROP_PA / max(effective, _EPS) ** 2
 
     def flow(self, dp: float) -> float:
-        if self.opening <= 1e-4:
+        if self.opening <= 1e-4 or (self.one_way and dp <= 0.0):
             return 0.0
         return _square_law_flow(dp, self._k_now())
 
@@ -198,6 +205,11 @@ class ControlResistance(Resistance):
         if self.opening <= 1e-4:
             return 0.0
         return _square_law_slope(dp, self._k_now())
+
+    def is_conducting(self, dp: float) -> bool:
+        if self.one_way and dp <= 0.0:
+            return False
+        return super().is_conducting(dp)
 
 
 class CheckResistance(Resistance):
