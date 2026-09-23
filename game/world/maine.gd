@@ -75,6 +75,8 @@ func _after_plant() -> void:
 	# The routing exercises (director, 2026-09-19): simple configurations
 	# laid by the router alone, for the director to examine one by one.
 	RoutingExercises.build(plant)
+	# The spill yard (director, 2026-09-22), north of the exercises.
+	SpillYard.build(plant)
 	hud.toast("The Maine coast. The site is graded; the shore is a walk east or south, the lighthouse is across the cove, and a river comes down to the sea beyond it. B build · C connect · L library · O options · F5/F9 save/load")
 	var s := coast.stats
 	print("[flowstate] landscape: %d vertices, %.0f%% sea, %d trees, %d rocks, %d surf emitters, a river of %d m with %d emitters — terrain %d ms, rocks %d ms, forest %d ms, %d ms in all"
@@ -164,6 +166,8 @@ func _self_check() -> void:
 func _headless_reports() -> void:
 	super._headless_reports()
 	for line in RoutingExercises.report(plant):
+		print(line)
+	for line in SpillYard.report(plant):
 		print(line)
 	var trip := RoutingExercises.round_trip(plant)
 	print("[flowstate] drip demo save round trip: %s" % ("OK" if trip == "" else trip))

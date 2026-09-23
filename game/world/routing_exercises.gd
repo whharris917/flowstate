@@ -215,7 +215,7 @@ static func report(plant: Plant) -> PackedStringArray:
 	caps.sort()
 	for name_ in caps:
 		var cap := plant.sim.get_component(name_) as SimCap
-		if not cap.open:
+		if not cap.open or SpillYard._source_of(plant, name_) != "ro_2":
 			continue
 		var q := cap.spill_lps()
 		out.append("[flowstate] drip demo: %s open end %s (%.1f drops/s) -> %s · delivered %.3f L · spilled %.3f L" % [
@@ -259,6 +259,9 @@ static func round_trip(plant: Plant) -> String:
 	# from its cold start, as at startup.
 	for _k in 40:
 		plant.sim.tick()
+	# Where each stream lands follows its flow, looked for again four
+	# times a second in play (Plant._process); once here.
+	plant._sync_catches()
 	var after := _fingerprint(plant)
 	var problems: Array[String] = []
 	for key: String in before:
@@ -298,7 +301,7 @@ static func _fingerprint(plant: Plant) -> Dictionary:
 	for name_: String in plant.views:
 		var cap := plant.sim.get_component(name_) as SimCap
 		if cap != null and cap.open:
-			out["cap"] = "%s -> %s" % [name_, cap.catch.comp_name if cap.lands() else "ground"]
+			out["cap " + name_] = cap.catch.comp_name if cap.lands() else "ground"
 	var tubes := 0
 	var dn6 := 0
 	for visual: Dictionary in plant.get("_wire_visuals"):
