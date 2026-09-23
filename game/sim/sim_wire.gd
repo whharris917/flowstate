@@ -32,5 +32,5 @@ func is_material() -> bool:
 func propagate() -> void:
 	# Material does not propagate along a wire: the wire is a pipe, and
 	# what moves through it is whatever the network solved.
-	if not is_material():
+	if not is_material() and src.kind != SimTypes.PortKind.ITEM:
 		dst.accumulate_value(src.value)

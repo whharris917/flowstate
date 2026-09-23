@@ -375,7 +375,7 @@ func _tag_names(component: SimComponent) -> PackedStringArray:
 		var port: SimOutputPort = component.outputs[port_name]
 		if SimTypes.is_material(port.kind):
 			tags.append_array(stream_tags(port.path()))
-		else:
+		elif port.kind != SimTypes.PortKind.ITEM:   # a handoff is not a number
 			tags.append(port.path())
 	for obs_name: String in component.observables:
 		tags.append(component.comp_name + "." + obs_name)
@@ -397,7 +397,7 @@ func register_with_historian(component: SimComponent) -> void:
 				var index := i
 				historian.register(base + ".x_" + SimSpecies.key_of(index),
 					func() -> float: return port.stream.comp[index])
-		else:
+		elif port.kind != SimTypes.PortKind.ITEM:
 			historian.register(port.path(), func() -> float: return port.value)
 	for obs_name: String in component.observables:
 		var comp := component
@@ -456,6 +456,7 @@ func tick() -> void:
 			(component.inputs[port_name] as SimInputPort).reset()
 	for wire in wires:
 		wire.propagate()
+	_transfer_items()
 	var now := Time.get_ticks_usec()
 	signal_ms = (now - started) / 1000.0
 	# Then solve the hydraulics: what actually flows, and which way.
@@ -474,6 +475,21 @@ func tick() -> void:
 	if historian != null:
 		historian.sample(time)
 	historian_ms = (Time.get_ticks_usec() - started) / 1000.0
+
+
+## Move each offered vial across its item wire into a carrier with room
+## for it: at most one per wire per scan.
+func _transfer_items() -> void:
+	for wire in wires:
+		if wire.src.kind != SimTypes.PortKind.ITEM:
+			continue
+		var src: SimComponent = _by_name.get(wire.src.owner_name)
+		var dst: SimComponent = _by_name.get(wire.dst.owner_name)
+		if src == null or dst == null:
+			continue
+		var vial := src.item_offer(wire.src.port_name)
+		if vial != null and dst.item_accepts(wire.dst.port_name, vial):
+			dst.item_put(wire.dst.port_name, src.item_take(wire.src.port_name))
 
 
 func run_for(seconds: float) -> void:

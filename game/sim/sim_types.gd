@@ -22,6 +22,10 @@ enum PortKind {
 	PROCESS_LEVEL,
 	PROCESS_PRESSURE,
 	POWER,
+	# A handoff point for vials between two carriers (2026-09-22, the
+	# filling line): nothing flows or propagates along it; once a scan the
+	# simulation moves an offered vial into a carrier with room for it.
+	ITEM,
 }
 
 
@@ -67,4 +71,5 @@ static func kind_label(kind: PortKind) -> String:
 		PortKind.PROCESS_LEVEL: return "level tap, L"
 		PortKind.PROCESS_PRESSURE: return "pressure tap, Pa"
 		PortKind.POWER: return "electrical supply"
+		PortKind.ITEM: return "vial handoff"
 	return kind_name(kind)

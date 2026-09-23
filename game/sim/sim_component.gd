@@ -108,6 +108,31 @@ func supplied_stream(_port_name: String) -> SimStream:
 	return null
 
 
+## ---- items (vials) ------------------------------------------------------
+## A carrier of countable items answers four questions about its item
+## ports; the simulation moves a vial across an item wire once a scan
+## when the source offers one and the destination has room for it.
+
+## The item ready to leave through this output, or null.
+func item_offer(_port_name: String) -> SimVial:
+	return null
+
+
+## Whether this input has room for that item now.
+func item_accepts(_port_name: String, _vial: SimVial) -> bool:
+	return false
+
+
+## Hand over the offered item; it is no longer this carrier's.
+func item_take(_port_name: String) -> SimVial:
+	return null
+
+
+## Receive an item through this input.
+func item_put(_port_name: String, _vial: SimVial) -> void:
+	pass
+
+
 func tick(_dt: float) -> void:
 	push_error("SimComponent.tick is abstract")
 

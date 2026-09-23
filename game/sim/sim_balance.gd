@@ -45,7 +45,7 @@ static func unit_label(unit: int) -> String:
 static func counts(comp: SimComponent) -> bool:
 	return comp is SimSource or comp is SimDrain or comp is SimTank or comp is SimReactor \
 		or comp is SimCrystallizer or comp is SimVacuumLock or comp is SimSteamGen \
-		or comp is SimDryer or comp is SimVialFiller or comp is SimCap 		or comp is SimCentrifuge or comp is SimStill
+		or comp is SimDryer or comp is SimVialFiller or comp is SimCap 		or comp is SimCentrifuge or comp is SimStill 		or comp is SimVialCarrier or comp is SimFillNeedle or comp is SimVialTable
 
 
 ## Distinct units with at least one counted record, ascending.
@@ -113,6 +113,14 @@ static func accounts(sim: Simulation, names: Array) -> Dictionary:
 			# An open end spilling to the ground leaves the plant; what it
 			# lands in an open vessel is that vessel's, held.
 			out += (comp as SimCap).spilled_l
+		elif comp is SimVialCarrier:
+			# The liquid in the vials a track or a star wheel carries.
+			held += (comp as SimVialCarrier).held_l
+		elif comp is SimFillNeedle:
+			out += (comp as SimFillNeedle).spilled_l
+		elif comp is SimVialTable:
+			# Filled vials leave the plant at the outfeed.
+			out += (comp as SimVialTable).out_l
 	return {"fed": fed, "out": out, "held": held}
 
 
@@ -152,8 +160,12 @@ static func tags(sim: Simulation, names: Array) -> Dictionary:
 			held.append([n + ".in_flight_l", 1.0])
 		elif comp is SimVialFiller:
 			out.append([n + ".filled_l", 1.0])
-		elif comp is SimCap:
+		elif comp is SimCap or comp is SimFillNeedle:
 			out.append([n + ".spilled_l", 1.0])
+		elif comp is SimVialCarrier:
+			held.append([n + ".held_l", 1.0])
+		elif comp is SimVialTable:
+			out.append([n + ".out_l", 1.0])
 	return {"fed": fed, "out": out, "held": held}
 
 

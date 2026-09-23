@@ -35,6 +35,7 @@ KIND_LABELS: dict[PortKind, str] = {
     PortKind.PROCESS_LEVEL: "level tap, L",
     PortKind.PROCESS_PRESSURE: "pressure tap, Pa",
     PortKind.POWER: "electrical supply",
+    PortKind.ITEM: "vial handoff",
 }
 
 
@@ -200,6 +201,7 @@ def sample_components() -> list[Component]:
     from sim import process as proc
     from sim import separation as sep
     from sim import small_bore as sb
+    from sim import vials as vl
 
     return [
         sb.Orifice("orifice"),
@@ -237,4 +239,13 @@ def sample_components() -> list[Component]:
         sep.Crystallizer("crystallizer"),
         sep.Dryer("dryer"),
         sep.Still("still"),
+        vl.VialMagazine("vial_magazine"),
+        vl.VialTrack("vial_track"),
+        vl.StarWheel("star_wheel"),
+        vl.StopGate("stop_gate"),
+        vl.PhotoEye("photo_eye"),
+        vl.LoadCell("load_cell"),
+        vl.FillNeedle("fill_needle"),
+        vl.Capper("capper"),
+        vl.VialTable("vial_table"),
     ]

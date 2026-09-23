@@ -45,6 +45,12 @@ class PortKind(Enum):
     PROCESS_LEVEL = "process_level"      # liquid level, L (float) — instruments
     PROCESS_PRESSURE = "process_pressure"  # gauge pressure, Pa (float)
     POWER = "power"                      # electrical supply (1.0 = energized)
+    # A handoff point for countable items -- vials -- between two
+    # carriers (2026-09-22, the filling line). Nothing flows along an
+    # item wire and nothing propagates: once a scan the simulation asks
+    # the upstream carrier what it offers and the downstream one whether
+    # it has room, and moves the vial if so (Simulation._transfer_items).
+    ITEM = "item"
 
 
 # How multiple wires landing on one input combine, per kind. Discrete
@@ -160,7 +166,7 @@ class Wire:
     def propagate(self) -> None:
         # Material does not propagate along a wire: the wire is a pipe,
         # and what moves through it is whatever the network solved.
-        if not self.is_material:
+        if not self.is_material and self.src.kind is not PortKind.ITEM:
             self.dst.accumulate(self.src.value)
 
 
@@ -253,6 +259,27 @@ class Component:
         means "whatever the network brings me", which is right for a
         pump, a valve, or a length of pipe."""
         return None
+
+    # -- items (vials) ------------------------------------------------
+    #
+    # A carrier of countable items answers four questions about its item
+    # ports. The simulation moves a vial across an item wire once a scan
+    # when the source offers one and the destination has room for it.
+
+    def item_offer(self, port_name: str):
+        """The item ready to leave through this output, or None."""
+        return None
+
+    def item_accepts(self, port_name: str, item) -> bool:
+        """Whether this input has room for that item now."""
+        return False
+
+    def item_take(self, port_name: str):
+        """Hand over the offered item; it is no longer this carrier's."""
+        return None
+
+    def item_put(self, port_name: str, item) -> None:
+        """Receive an item through this input."""
 
     def tick(self, dt: float) -> None:
         raise NotImplementedError
@@ -516,7 +543,7 @@ class Simulation:
                     tags.append(
                         (f"{path}.x_{key}", lambda p=port, k=key: float(p.value.frac(k)))
                     )
-            else:
+            elif port.kind is not PortKind.ITEM:   # a handoff is not a number
                 tags.append((port.path, lambda p=port: float(p.value)))
         for obs_name, attr in component.observables.items():
             tags.append(
@@ -553,6 +580,7 @@ class Simulation:
                 port.reset()
         for wire in self.wires:
             wire.propagate()
+        self._transfer_items()
         # Then solve the hydraulics: what actually flows, and which way.
         self._solve_hydraulics()
         # Then let the components act on it.
@@ -561,6 +589,21 @@ class Simulation:
         self.time += self.dt
         if self.historian is not None:
             self.historian.sample(self.time)
+
+    def _transfer_items(self) -> None:
+        """Move each offered item across its item wire into a carrier
+        with room for it: at most one per wire per scan."""
+        by_name = {c.name: c for c in self.components}
+        for wire in self.wires:
+            if wire.src.kind is not PortKind.ITEM:
+                continue
+            src = by_name.get(wire.src.owner_name)
+            dst = by_name.get(wire.dst.owner_name)
+            if src is None or dst is None:
+                continue
+            item = src.item_offer(wire.src.name)
+            if item is not None and dst.item_accepts(wire.dst.name, item):
+                dst.item_put(wire.dst.name, src.item_take(wire.src.name))
 
     def run(
         self,
