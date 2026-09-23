@@ -5,16 +5,16 @@ extends Node3D
 ## tells it which sides are wired (set_capped); a cut pipe shows its
 ## closed end, a rejoined one a plain coupling. Its anchors come from
 ## PlantFactory.cap_anchors(line_y). An open end shows its bore and
-## what leaves it — drops or a stream, off the real rate (DripStream) —
-## falling to the open vessel the plant found under it (set_landing)
-## or to the floor.
+## what leaves it (SpillJet): drops, or a stream leaving along the
+## pipe's axis at its real exit speed and falling on a parabola to the
+## open vessel the plant found it lands in, or to the floor.
 
 var cap: SimCap
 var line_y := 0.35
 var _blinds: Dictionary = {}   # port -> MeshInstance3D
 var _bores: Dictionary = {}    # port -> Node3D, the open bore shown on an open end
 var _lined: Dictionary = {"a": false, "b": false}
-var _drip: DripStream = null
+var _drip: SpillJet = null
 var _landing: SimTank = null
 var _was_open := false
 
@@ -79,7 +79,7 @@ func setup(cap_: SimCap, line_y_: float, bore_r: float = 0.07) -> void:
 		hole.rotation_degrees = Vector3(0, 0, 90)
 		bore_node.visible = false
 		_bores[port] = bore_node
-	_drip = DripStream.make(self, open_end_local())
+	_drip = SpillJet.make(self)
 	var tag := ViewUtil.label(self, cap.comp_name, Vector3(0, line_y + 0.35, 0))
 	tag.font_size = 24
 	ViewUtil.interact_body(self, Vector3(0.45, 0.35, 0.3), Vector3(0, line_y, 0))
@@ -114,8 +114,6 @@ func _refresh_ends() -> void:
 		var free: bool = not _lined[port]
 		(_blinds[port] as Node3D).visible = free and not cap.open
 		(_bores[port] as Node3D).visible = free and cap.open
-	if _drip != null:
-		_drip.position = open_end_local()
 
 
 func _process(delta: float) -> void:
@@ -125,12 +123,22 @@ func _process(delta: float) -> void:
 		_was_open = cap.open
 		_refresh_ends()
 	if _drip != null:
-		# How far it falls: to the liquid in the vessel under it, or to
-		# the floor the cap stands on.
-		var fall := line_y
+		# It leaves the open face along the pipe's axis and lands on the
+		# liquid in the vessel it falls into, or on the floor the cap
+		# stands on.
+		var side := 1.0 if open_port() == "b" else -1.0
+		var origin := to_global(Vector3(side * 0.19, line_y, 0))
+		var axis := global_basis * Vector3(side, 0, 0)
+		var landing_y := global_position.y
 		if cap.lands():
-			fall = maxf(cap.elevation_m - (cap.catch.elevation_m + cap.catch.depth_m), 0.05)
-		_drip.set_state(cap.spill_lps() if cap.open else 0.0, fall, delta)
+			landing_y = origin.y - (cap.elevation_m - (cap.catch.elevation_m + cap.catch.depth_m))
+		_drip.set_state(cap.spill_lps() if cap.open else 0.0, origin, axis, bore_diameter_m(),
+			landing_y, cap.lands(), delta)
+
+
+## The line's nominal bore in metres, from its drawn radius (0.07 is DN50).
+func bore_diameter_m() -> float:
+	return bore / 0.07 * 0.05
 
 
 func describe() -> String:
@@ -140,7 +148,7 @@ func describe() -> String:
 			free.append(port)
 	if cap.open:
 		var q := cap.spill_lps()
-		var drops := "" if q >= DripStream.STREAM_LPS or q <= 0.0 else " (%.1f drops a second)" % (q * 1000.0 / DripStream.DROP_ML)
+		var drops := "" if q >= SpillJet.STREAM_LPS or q <= 0.0 else " (%.1f drops a second)" % (q * 1000.0 / SpillJet.DROP_ML)
 		if cap.lands():
 			return "%s — OPEN END over %s: %s%s falling in, %.2f L delivered · E caps it" % [
 				cap.comp_name, cap.catch.comp_name, SimTypes.flow_text(q), drops, cap.delivered_l]

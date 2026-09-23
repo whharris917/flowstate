@@ -219,7 +219,7 @@ static func report(plant: Plant) -> PackedStringArray:
 			continue
 		var q := cap.spill_lps()
 		out.append("[flowstate] drip demo: %s open end %s (%.1f drops/s) -> %s · delivered %.3f L · spilled %.3f L" % [
-			name_, SimTypes.flow_text(q), q * 1000.0 / DripStream.DROP_ML,
+			name_, SimTypes.flow_text(q), q * 1000.0 / SpillJet.DROP_ML,
 			cap.catch.comp_name if cap.lands() else "the ground", cap.delivered_l, cap.spilled_l])
 	var pr := plant.sim.get_component("pr_2") as SimRegulator
 	var nv := plant.sim.get_component("nv_2") as SimNeedleValve

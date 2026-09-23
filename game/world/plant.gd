@@ -571,6 +571,19 @@ func _exercise_build_api() -> void:
 		push_warning("[flowstate] build-api exercise FAILED: " + "; ".join(problems))
 
 
+## An open end's stream carries further as its flow rises, so the vessel
+## it lands in is looked for again four times a second. Safe here: the
+## scan thread is collected before any node's _process.
+var _catch_t := 0.0
+
+
+func _process(delta: float) -> void:
+	_catch_t -= delta
+	if _catch_t <= 0.0:
+		_catch_t = 0.25
+		_sync_catches()
+
+
 func _physics_process(delta: float) -> void:
 	_accumulator += delta
 	while _accumulator >= SIM_DT:
@@ -2954,17 +2967,23 @@ func _sync_catches() -> void:
 		var cap_view := views[name_] as CapView
 		if cap_view == null:
 			continue
-		cap.catch = _vessel_under(cap_view.open_end_local(), name_)
+		cap.catch = _vessel_under(cap_view, cap)
 		cap_view.set_landing(cap.catch, to_local(cap_view.to_global(cap_view.open_end_local())).y)
 
 
-## The open-topped vessel whose rim, in plan, holds the point, with
-## its top below it. Plant-local point.
-func _vessel_under(cap_local: Vector3, cap_name: String) -> SimTank:
-	var cap_view: Node3D = views.get(cap_name)
-	if cap_view == null:
-		return null
-	var p := to_local(cap_view.to_global(cap_local))
+## The open-topped vessel the stream from an open end falls into: the
+## highest whose rim holds the point where the stream comes down through
+## the rim's height. The stream leaves along the pipe's axis at its real
+## exit speed (SpillJet), so a trickle falls straight into a tank under
+## the end and a strong jet can carry over it; with nothing flowing it is
+## the vessel straight below. Kept honest because the kernel counts what
+## lands in a vessel as delivered and the rest as spilled.
+func _vessel_under(cap_view: CapView, cap: SimCap) -> SimTank:
+	var side := 1.0 if cap_view.open_port() == "b" else -1.0
+	var origin := cap_view.to_global(Vector3(side * 0.19, cap_view.line_y, 0))
+	var axis := (cap_view.global_basis * Vector3(side, 0, 0)).normalized()
+	var q := cap.spill_lps() if cap.open else 0.0
+	var v0 := axis * SpillJet.exit_speed(q, cap_view.bore_diameter_m())
 	var best: SimTank = null
 	var best_top := -INF
 	for name_: String in views:
@@ -2972,11 +2991,13 @@ func _vessel_under(cap_local: Vector3, cap_name: String) -> SimTank:
 		if tank_rec == null or not tank_rec.open_top:
 			continue
 		var tank_view := views[name_] as Node3D
-		var base := tank_view.position
+		var base := tank_view.global_position
 		var top := base.y + tank_rec.height_m
-		if top > p.y:
+		var t := SpillJet.time_to(origin, v0, top)
+		if t < 0.0 or origin.y < top:
 			continue
-		if Vector2(p.x - base.x, p.z - base.z).length() > tank_rec.diameter_m / 2.0:
+		var hit := SpillJet.point_at(origin, v0, t)
+		if Vector2(hit.x - base.x, hit.z - base.z).length() > tank_rec.diameter_m / 2.0:
 			continue
 		if top > best_top:
 			best_top = top

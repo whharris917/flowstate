@@ -34,12 +34,16 @@ var _alarm_t: float = 0.0
 ## An open-topped vessel shows its liquid: a disc at the real level,
 ## held here since it rides the level (the merge rule).
 var _surface: MeshInstance3D = null
+## Liquid running over the top and down the shell while the vessel
+## overflows, off its own overflowed_l (held: it survives a rebuild).
+var _overflow: OverflowSheet = null
 
 
 func setup(tank_: SimTank, switch_: SimFloatSwitch = null) -> void:
 	tank = tank_
 	switch = switch_
 	rebuild()
+	_overflow = OverflowSheet.make(self)
 
 
 func rebuild() -> void:
@@ -335,6 +339,8 @@ func _process(delta: float) -> void:
 		liquid.position = dir * (r + 0.025) + Vector3(0, 0.15 + column / 2.0, 0)
 	if _surface != null:
 		_surface.position.y = clampf(tank.depth_m, 0.02, h - 0.01)
+	if _overflow != null:
+		_overflow.update(tank.overflowed_l, h, r, delta)
 	# Local high-level annunciator: repeats while the real level sits
 	# above 92% of capacity.
 	if frac > 0.92:
@@ -366,7 +372,10 @@ func describe() -> String:
 	if not faces.is_empty():
 		lines.append(" · ".join(faces))
 	if tank.overflowed_l > 0.0:
-		lines.append("overflowed %.1f L" % tank.overflowed_l)
+		if _overflow != null and _overflow.lps > 0.0:
+			lines.append("OVERFLOWING %s · %.1f L over" % [SimTypes.flow_text(_overflow.lps), tank.overflowed_l])
+		else:
+			lines.append("overflowed %.1f L" % tank.overflowed_l)
 	return "\n".join(lines)
 
 
