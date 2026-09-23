@@ -1164,4 +1164,183 @@ const PAGES := {
 			"No float bounce, and nothing readable below a tenth of scale.",
 		],
 	},
+	# ---- the filling line (2026-09-22): drafts for the director's review ----
+	"vial_magazine": {
+		"title": "Vial Magazine",
+		"tier": "utility",
+		"summary": "A tray of empty vials tilted toward the line. Its escapement lets one onto the track whenever the track has room, and never faster than its rate. This is where vials enter the plant, the way a supply header is where liquid does. It needs no power: gravity and a spring do the work. E stops and starts it. Its vial size sets the size of everything downstream: rails, pockets, pans.",
+		"ports": {
+			"outfeed": "Where each empty vial leaves for the track standing at its lip.",
+		},
+		"equations": [
+			["interval = 60 / rate", "At most one vial every interval, in seconds."],
+		],
+		"params": [
+			["vial_ml", "mL", "10", "The vial size it holds: 2, 10, 20 or 50 mL. Each is a standard tubular vial with a real diameter, height, brimful volume and glass weight."],
+			["rate_per_min", "vials/min", "60", "The escapement's fastest rate."],
+		],
+		"assumptions": [
+			"It never runs out of vials.",
+			"Every vial is clean, whole and empty.",
+		],
+	},
+	"vial_track": {
+		"title": "Vial Track",
+		"tier": "utility",
+		"summary": "A slat-top chain belt between guide rails, on a stainless frame at bench height. Every vial rides the belt at its speed until something holds it: the vial ahead (vials queue nose to tail), a stop gate's pin, or the end of the track while nothing downstream takes it. A held vial stands still while the belt slides under it, as on a real accumulation conveyor. The track takes vials from whatever stands at its infeed end and hands them to whatever stands at its outfeed end. The plant makes both links from where the parts stand.",
+		"ports": {
+			"infeed": "Where vials arrive: a magazine, a star wheel or another track standing at this end.",
+			"outfeed": "Where vials leave, at the far end, the drive end.",
+			"run": "Runs the belt while on. With nothing wired to it, E starts and stops the belt.",
+			"power": "24 V DC for the gear motor.",
+		},
+		"equations": [
+			["s' = min(s + v dt, limit)", "Each vial moves forward at belt speed until it reaches the nearest thing holding it."],
+			["limit = s_ahead - (d_ahead + d)/2", "Vials queue nose to tail."],
+			["limit = g - d/2", "A vial wholly behind a closed stop gate stops with its nose at the pin."],
+		],
+		"params": [
+			["length_m", "m", "2.0", "The track's length."],
+			["speed_mps", "m/s", "0.1", "The belt's speed."],
+		],
+		"assumptions": [
+			"Vials never tip, jam or slip, and every moving vial moves at belt speed.",
+			"The belt starts and stops at once.",
+		],
+	},
+	"star_wheel": {
+		"title": "Star Wheel",
+		"tier": "utility",
+		"summary": "An indexing rotary transfer: a star-shaped plate with a pocket for each vial, turned one pocket at a time on a pulse. A vial arriving at the infeed station drops into the pocket there. A pocket reaching the outfeed station offers its vial to whatever stands there. The stations between are where a fill needle or a capper can work, and they see the pocket only while the wheel is at rest. With nothing wired to its index input, E turns it one pocket.",
+		"ports": {
+			"infeed": "The infeed station's pocket, at station 0.",
+			"outfeed": "The outfeed station's pocket.",
+			"index": "A rising edge turns the wheel one pocket. With nothing wired to it, E does.",
+			"power": "24 V DC for the indexer.",
+			"home": "On while the wheel is at rest.",
+		},
+		"equations": [
+			["station = (pocket + offset) mod N", "Where each pocket stands after the indexes completed so far."],
+		],
+		"params": [
+			["pockets", "", "6", "Pockets round the rim."],
+			["pitch_radius_m", "m", "0.12", "Radius of the pocket circle."],
+			["index_s", "s", "0.4", "Time for one index."],
+			["out_station", "", "3", "The station the outfeed stands at; half a turn by default."],
+		],
+		"assumptions": [
+			"A vial is taken in or handed on only while the wheel is at rest.",
+			"An index never misses and never overshoots.",
+		],
+	},
+	"stop_gate": {
+		"title": "Stop Gate",
+		"tier": "control",
+		"summary": "A spring-extended pin across the track. It holds every vial that reaches it until its coil is energized, which pulls the pin clear. De-energized, the spring holds the pin across, so a lost signal is a held line. It stands over the track at the point where it holds, and the plant finds that point from where it stands.",
+		"ports": {
+			"release": "24 V discrete. Energized, the pin retracts and vials pass.",
+		},
+		"equations": [
+			["x -> 100 in stroke_s energized, -> 0 not", "The pin's travel, percent clear."],
+			["holding while x < 50", "The pin holds while more than half across."],
+		],
+		"params": [
+			["stroke_s", "s", "0.1", "The pin's travel time."],
+		],
+		"assumptions": [
+			"A pin coming down onto a vial drops behind it and holds the next one.",
+		],
+	},
+	"photo_eye": {
+		"title": "Photo-Eye",
+		"tier": "control",
+		"summary": "A through-beam across the track at half a vial's height: an emitter on one side, a reflector on the other. Its contact makes while a vial breaks the beam.",
+		"ports": {
+			"present": "24 V discrete. On while a vial is in the beam.",
+		},
+		"equations": [
+			["present = |s_vial - s| < d/2", "The beam sees the vial's body."],
+		],
+		"params": [],
+		"assumptions": [
+			"Its supply wiring is not modelled.",
+			"It sees clear glass as surely as amber.",
+		],
+	},
+	"load_cell": {
+		"title": "Load Cell",
+		"tier": "control",
+		"summary": "A weighing pan let into the belt where a held vial stands, with its indicator beside the track. The indicator tares each vial as it settles, so it reads the net fill. Its analog output is that weight in grams. Its setpoint contact makes when the fill reaches the target, which is how a line fills by weight without the controller needing to compare numbers.",
+		"ports": {
+			"weight": "4-20 mA analog: the net fill, in grams.",
+			"at_target": "24 V discrete: the setpoint contact, on once the fill reaches the target.",
+		},
+		"equations": [
+			["net = 1000 * V", "Grams of fill, on the game's 1 kg per litre basis."],
+			["at_target = on pan and net >= target", "The setpoint contact."],
+		],
+		"params": [
+			["range_g", "g", "100", "The pan's range; readings above it read full scale."],
+			["target_g", "g", "10", "Where the setpoint contact makes."],
+		],
+		"assumptions": [
+			"The tare is exact and instant.",
+			"No settling time, no vibration, no drift.",
+		],
+	},
+	"fill_needle": {
+		"title": "Fill Needle",
+		"tier": "utility",
+		"summary": "An open end pointing straight down: a filling needle on its stand. Its line vents to the air at the tip's height, one way. What leaves it falls into the vial under the tip. With no vial there, or with the vial brimful, it falls onto the belt and is counted as spilled. Standing over no track, it fills an open vessel under it as an open pipe end does. The needle only has a bore: the dose is set by the valve upstream and whatever opens and shuts it.",
+		"ports": {
+			"inlet": "The dosing line, from a solenoid or metering valve.",
+		},
+		"equations": [
+			["Q = Cv * sqrt(dP / 100 kPa)", "Out to the air at the tip's height, one way."],
+			["caught while |s_vial - s| <= d/4", "The stream falls into a vial's mouth only: its neck is about half its width."],
+		],
+		"params": [
+			["cv_lps", "L/s at 1 bar", "0.05", "The needle bore's flow at the reference drop."],
+			["elevation_m", "m", "(from where it stands)", "The tip's height above grade, which sets the air pressure it vents to."],
+		],
+		"assumptions": [
+			"No drip after the valve shuts: the flow stops when the pressure does.",
+			"No splash back and no foaming.",
+		],
+	},
+	"capper": {
+		"title": "Capper",
+		"tier": "utility",
+		"summary": "A capping head over one spot on a track or a star-wheel station. While its command is on and an uncapped vial stands under it, it takes a cap from its chute and crimps it on. Its contact makes while the vial under it is capped.",
+		"ports": {
+			"cap": "24 V discrete. Caps the vial under the head while on.",
+			"power": "24 V DC for the head.",
+			"capped": "24 V discrete. On while the vial under the head is capped.",
+		},
+		"equations": [
+			["capped after cap_s of command", "One crimp per vial. A vial that leaves mid-crimp starts over at the next."],
+		],
+		"params": [
+			["cap_s", "s", "0.8", "Time to cap a vial."],
+		],
+		"assumptions": [
+			"It never runs out of caps.",
+			"Every crimp seals.",
+		],
+	},
+	"vial_table": {
+		"title": "Outfeed Table",
+		"tier": "utility",
+		"summary": "The outfeed turntable. It gathers finished vials, turning a step as each arrives. This is where vials leave the plant, and it keeps the batch record: how many, how full on average and at the extremes, how much product was in them, and how many went out without a cap.",
+		"ports": {
+			"infeed": "Where vials arrive from the track or wheel standing at its edge.",
+		},
+		"equations": [
+			["mean = sum(V) / n", "The batch's mean fill."],
+		],
+		"params": [],
+		"assumptions": [
+			"It never fills up.",
+		],
+	},
 }

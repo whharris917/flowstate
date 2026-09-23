@@ -68,7 +68,9 @@ const LADDER: Array[Dictionary] = [
 		"requires": [
 			{"kind": "reactor_product", "temp": 60.0, "frac": 0.10, "target": 200.0, "label": "held at 60 °C with 10 % product", "unit": "L"},
 		],
-		"unlocks": ["centrifuge", "dryer", "still", "column", "vaclock", "vialfill", "gauge_conc"],
+		"unlocks": ["centrifuge", "dryer", "still", "column", "vaclock", "vialfill", "gauge_conc",
+			"vial_magazine", "vial_track", "star_wheel", "stop_gate", "photo_eye", "load_cell",
+			"fill_needle", "capper", "vial_table"],
 	},
 	{
 		"id": "batch_record", "tier": "TIER 5 — FILL-FINISH", "title": "Batch record",

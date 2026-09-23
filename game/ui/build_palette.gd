@@ -8,7 +8,7 @@ extends Control
 ## with callbacks; the BuildController owns the state and the input.
 
 const PAGE_NAMES: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
-	"ROUTING", "CONTROL", "UTILITIES", "SMALL BORE"]
+	"ROUTING", "CONTROL", "UTILITIES", "SMALL BORE", "FILLING LINE"]
 const SLOTS := 9
 
 var on_page: Callable = Callable()   # (page: int)

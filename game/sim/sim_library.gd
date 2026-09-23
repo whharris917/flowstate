@@ -32,7 +32,8 @@ static func type_ids() -> Array[String]:
 	for group: Array[Dictionary] in [
 			PlantFactory.CATALOG, PlantFactory.CATALOG_SEPARATION,
 			PlantFactory.CATALOG_INSTRUMENTS, PlantFactory.CATALOG_CONTROL,
-			PlantFactory.CATALOG_UTILITIES, PlantFactory.CATALOG_SMALL_BORE]:
+			PlantFactory.CATALOG_UTILITIES, PlantFactory.CATALOG_SMALL_BORE,
+			PlantFactory.CATALOG_FILLING]:
 		for entry: Dictionary in group:
 			var type_id := str(entry["type"])
 			var tier := tier_of(type_id)
@@ -52,7 +53,8 @@ static func label_of(type_id: String) -> String:
 	for group: Array[Dictionary] in [
 			PlantFactory.CATALOG, PlantFactory.CATALOG_SEPARATION,
 			PlantFactory.CATALOG_INSTRUMENTS, PlantFactory.CATALOG_CONTROL,
-			PlantFactory.CATALOG_UTILITIES, PlantFactory.CATALOG_SMALL_BORE]:
+			PlantFactory.CATALOG_UTILITIES, PlantFactory.CATALOG_SMALL_BORE,
+			PlantFactory.CATALOG_FILLING]:
 		for entry: Dictionary in group:
 			if str(entry["type"]) == type_id:
 				return str(entry["label"])

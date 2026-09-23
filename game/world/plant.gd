@@ -577,7 +577,15 @@ func _exercise_build_api() -> void:
 var _catch_t := 0.0
 
 
+## The filling line is derived again once a frame after any change to
+## it (VialLine): links, seats and vial sizes follow where parts stand.
+var _vial_line_dirty := false
+
+
 func _process(delta: float) -> void:
+	if _vial_line_dirty:
+		_vial_line_dirty = false
+		VialLine.sync(self)
 	_catch_t -= delta
 	if _catch_t <= 0.0:
 		_catch_t = 0.25
@@ -671,6 +679,8 @@ const NOZZLE_ELEVATION_TYPES: Array[String] = ["pump", "metering_pump", "valve",
 func _elevation_for(type_id: String, view: Node3D, base_y: float) -> float:
 	if type_id == "cap" and view is CapView:
 		return base_y + (view as CapView).line_y
+	if type_id == "fill_needle":
+		return base_y + FillNeedleView.TIP_Y   # it vents at its tip
 	if type_id in NOZZLE_ELEVATION_TYPES:
 		var anchor: Variant = PlantFactory.PORT_ANCHORS.get(type_id, {}).get("inlet")
 		if anchor is Dictionary:
@@ -772,6 +782,9 @@ func place(type_id: String, name_: String, params: Dictionary,
 			(view as StillView).setup(record as SimStill)
 		"air_cascade":
 			(view as AsepticSuite).setup(record as SimAirCascade)
+	if view is VialPartView:
+		(view as VialPartView).setup_record(record)
+		_vial_line_dirty = true
 	# Where it stands is where it reckons its pressures: the one
 	# elevation rule, for every record that has one.
 	_apply_elevation(record, type_id, view, to_local(world_pos).y, params)
@@ -784,6 +797,9 @@ func place(type_id: String, name_: String, params: Dictionary,
 	elif type_id == "cap":
 		PlantFactory.attach_port_markers(view, record, type_id,
 			PlantFactory.cap_anchors((view as CapView).line_y))
+	elif type_id == "vial_track":   # its drive, and so its fittings, at its outfeed end
+		PlantFactory.attach_port_markers(view, record, type_id,
+			VialTrackView.anchors((record as SimVialTrack).length_m))
 	elif type_id != "tank":  # a tank's nozzles are its own
 		PlantFactory.attach_port_markers(view, record, type_id)
 	views[record.comp_name] = view
@@ -1789,6 +1805,8 @@ func move_equipment(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 	for inst_name: String in mounted.keys():
 		if str((mounted[inst_name] as Dictionary)["host"]) == name_:
 			refresh_wires_of(inst_name)
+	if view is VialPartView:
+		_vial_line_dirty = true
 	return true
 
 
@@ -1884,6 +1902,19 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 				(record as SimSource).set_species(str(values[key]))
 			elif record is SimGauge:
 				(record as SimGauge).species_index = SimSpecies.index_of(str(values[key]))
+	if record is SimVialMagazine:
+		var magazine := record as SimVialMagazine
+		magazine.vial_ml = SimVial.size_of(magazine.vial_ml)
+	var line_view := views.get(name_) as VialPartView
+	if line_view != null:
+		line_view.rebuild()
+		MeshMerge.merge_view(line_view)
+		if record is SimVialTrack:
+			_free_markers(line_view)
+			PlantFactory.attach_port_markers(line_view, record, "vial_track",
+				VialTrackView.anchors((record as SimVialTrack).length_m))
+			refresh_wires_of(name_)
+		_vial_line_dirty = true
 	sim.invalidate_network()
 	return ""
 
@@ -1911,6 +1942,8 @@ func remove_equipment(name_: String) -> bool:
 		else:
 			keep.append(visual)
 	_wire_visuals = keep
+	if views[name_] is VialPartView:
+		_vial_line_dirty = true
 	(views[name_] as Node).queue_free()
 	views.erase(name_)
 	equip_types.erase(name_)
@@ -2961,6 +2994,23 @@ func unique_name(prefix: String) -> String:
 ## whenever the plant changes.
 func _sync_catches() -> void:
 	for name_: String in views:
+		# A fill needle not over a line fills the open vessel under its tip.
+		var needle := sim.get_component(name_) as SimFillNeedle
+		if needle != null:
+			needle.catch = null
+			if needle.host == "":
+				var tip := (views[name_] as Node3D).global_position + Vector3(0, FillNeedleView.TIP_Y, 0)
+				var best_top := -INF
+				for tank_name: String in views:
+					var tank_rec := sim.get_component(tank_name) as SimTank
+					if tank_rec == null or not tank_rec.open_top:
+						continue
+					var base := (views[tank_name] as Node3D).global_position
+					var top := base.y + tank_rec.height_m
+					if top < tip.y and top > best_top 							and Vector2(tip.x - base.x, tip.z - base.z).length() <= tank_rec.diameter_m / 2.0:
+						best_top = top
+						needle.catch = tank_rec
+			continue
 		var cap := sim.get_component(name_) as SimCap
 		if cap == null:
 			continue
@@ -5031,6 +5081,25 @@ func _params_for(record: SimComponent) -> Dictionary:
 		return {"set_kpa": pr.set_kpa, "cv_lps": pr.cv_lps}
 	if record is SimRotameter:
 		return {"range_lps": (record as SimRotameter).range_lps}
+	if record is SimVialMagazine:
+		var vm := record as SimVialMagazine
+		return {"vial_ml": vm.vial_ml, "rate_per_min": vm.rate_per_min}
+	if record is SimVialTrack:
+		var vt := record as SimVialTrack
+		return {"length_m": vt.length_m, "speed_mps": vt.speed_mps}
+	if record is SimStarWheel:
+		var sw := record as SimStarWheel
+		return {"pockets": sw.pockets, "pitch_radius_m": sw.pitch_radius_m, "index_s": sw.index_s,
+			"out_station": sw.out_station}
+	if record is SimStopGate:
+		return {"stroke_s": (record as SimStopGate).stroke_s}
+	if record is SimLoadCell:
+		var lc := record as SimLoadCell
+		return {"range_g": lc.range_g, "target_g": lc.target_g}
+	if record is SimFillNeedle:
+		return {"cv_lps": (record as SimFillNeedle).cv_lps}
+	if record is SimCapper:
+		return {"cap_s": (record as SimCapper).cap_s}
 	if record is SimPump:
 		var pump_rec := record as SimPump
 		return {"rated_lps": pump_rec.rated_lps, "head_m": pump_rec.head_m}
@@ -5110,6 +5179,7 @@ func load_game() -> bool:
 ## and no checkpoint is taken while it runs.
 func restore(payload: Dictionary) -> bool:
 	_restoring = true
+	_vial_line_dirty = true
 	if campaign != null and payload.has("campaign"):
 		campaign.apply_state(payload["campaign"])
 

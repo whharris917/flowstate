@@ -43,6 +43,23 @@ const CATALOG_SMALL_BORE: Array[Dictionary] = [
 	{"type": "rotameter", "label": "Rotameter"},
 ]
 
+# The filling line (director, 2026-09-22: "build a vial filler from
+# individual parts"): vials as countable things, and the parts that
+# move, fill, weigh and cap them. The plant links a part's outfeed to
+# the infeed standing where it ends, and seats a device on the track it
+# stands over (VialLine).
+const CATALOG_FILLING: Array[Dictionary] = [
+	{"type": "vial_magazine", "label": "Vial magazine"},
+	{"type": "vial_track", "label": "Vial track"},
+	{"type": "star_wheel", "label": "Star wheel"},
+	{"type": "stop_gate", "label": "Stop gate"},
+	{"type": "photo_eye", "label": "Photo-eye"},
+	{"type": "load_cell", "label": "Load cell"},
+	{"type": "fill_needle", "label": "Fill needle"},
+	{"type": "capper", "label": "Capper"},
+	{"type": "vial_table", "label": "Outfeed table"},
+]
+
 const CATALOG_INSTRUMENTS: Array[Dictionary] = [
 	{"type": "float_switch", "label": "Level switch"},
 	{"type": "gauge_level", "label": "Level gauge"},
@@ -112,6 +129,15 @@ const FOOTPRINTS := {
 	"metering_pump": Vector3(0.65, 0.6, 0.4),
 	"regulator": Vector3(0.45, 0.85, 0.3),
 	"rotameter": Vector3(0.5, 1.0, 0.3),
+	"vial_magazine": Vector3(0.7, 1.1, 0.45),
+	"vial_track": Vector3(2.0, 1.0, 0.25),
+	"star_wheel": Vector3(0.45, 1.0, 0.45),
+	"stop_gate": Vector3(0.12, 1.0, 0.36),
+	"photo_eye": Vector3(0.12, 1.0, 0.36),
+	"load_cell": Vector3(0.16, 1.2, 0.7),
+	"fill_needle": Vector3(0.1, 1.2, 0.56),
+	"capper": Vector3(0.14, 1.3, 0.56),
+	"vial_table": Vector3(0.9, 1.0, 0.9),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5, "hmi_trend": 1.6,
@@ -127,6 +153,8 @@ const Y_OFFSETS := {
 	"crystallizer": 0.0, "dryer": 0.0, "still": 0.0,
 	"orifice": 0.0, "needle_valve": 0.0, "ball_valve": 0.0, "solenoid_valve": 0.0,
 	"metering_pump": 0.0, "regulator": 0.0, "rotameter": 0.0,
+	"vial_magazine": 0.0, "vial_track": 0.0, "star_wheel": 0.0, "stop_gate": 0.0, "photo_eye": 0.0,
+	"load_cell": 0.0, "fill_needle": 0.0, "capper": 0.0, "vial_table": 0.0,
 }
 
 # Where each port's fitting sits in the view's local space, flush with
@@ -289,6 +317,27 @@ const PORT_ANCHORS := {
 	"rotameter": {
 		"inlet": {"pos": Vector3(-0.22, 0.32, 0), "dir": Vector3.LEFT},
 		"outlet": {"pos": Vector3(0.22, 0.32, 0), "dir": Vector3.RIGHT}},
+	# The filling line: each device's fittings on its own post (the
+	# views' anchors); a track's move with its length (Plant.place).
+	# Where each part's view builds the fitting's box: all on the part's
+	# +z side, the side a line's controls stand.
+	"star_wheel": {
+		"index": {"pos": Vector3(0.10, 0.55, 0.16), "dir": Vector3.BACK},
+		"power": {"pos": Vector3(-0.10, 0.55, 0.16), "dir": Vector3.BACK},
+		"home": {"pos": Vector3(0.0, 0.55, 0.16), "dir": Vector3.BACK}},
+	"stop_gate": {"release": {"pos": Vector3(0, 0.62, 0.17), "dir": Vector3.BACK}},
+	"photo_eye": {"present": {"pos": Vector3(-0.07, 0.62, 0.17), "dir": Vector3.BACK}},
+	"load_cell": {
+		"weight": {"pos": Vector3(0.13, 1.02, 0.43), "dir": Vector3.BACK},
+		"at_target": {"pos": Vector3(0.07, 1.02, 0.43), "dir": Vector3.BACK}},
+	"fill_needle": {"inlet": {"pos": Vector3(0, 1.18, 0.28), "dir": Vector3.BACK}},
+	"capper": {
+		"cap": {"pos": Vector3(0.03, 0.62, 0.26), "dir": Vector3.BACK},
+		"power": {"pos": Vector3(-0.03, 0.62, 0.26), "dir": Vector3.BACK},
+		"capped": {"pos": Vector3(0.0, 0.52, 0.26), "dir": Vector3.BACK}},
+	"vial_track": {
+		"run": {"pos": Vector3(0.92, 0.62, 0.13), "dir": Vector3.BACK},
+		"power": {"pos": Vector3(0.80, 0.62, 0.13), "dir": Vector3.BACK}},
 	# Pressure taps sit on the suite's walls, near the ceiling.
 	"air_cascade": {
 		"p_al1": Vector3(-23.5, 2.5, -4.35),
@@ -467,6 +516,30 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 				params.get("cv_lps", 0.5)))
 		"rotameter":
 			return sim.add(SimRotameter.new(name_, params.get("range_lps", 0.01)))
+		"vial_magazine":
+			return sim.add(SimVialMagazine.new(name_, params.get("vial_ml", 10.0),
+				params.get("rate_per_min", 60.0)))
+		"vial_track":
+			return sim.add(SimVialTrack.new(name_, params.get("length_m", 2.0),
+				params.get("speed_mps", 0.1)))
+		"star_wheel":
+			return sim.add(SimStarWheel.new(name_, int(params.get("pockets", 6)),
+				params.get("pitch_radius_m", 0.12), params.get("index_s", 0.4),
+				int(params.get("out_station", 3))))
+		"stop_gate":
+			return sim.add(SimStopGate.new(name_, params.get("stroke_s", 0.1)))
+		"photo_eye":
+			return sim.add(SimPhotoEye.new(name_))
+		"load_cell":
+			return sim.add(SimLoadCell.new(name_, params.get("range_g", 100.0),
+				params.get("target_g", 10.0)))
+		"fill_needle":
+			return sim.add(SimFillNeedle.new(name_, params.get("cv_lps", 0.05),
+				params.get("elevation_m", 1.0)))
+		"capper":
+			return sim.add(SimCapper.new(name_, params.get("cap_s", 0.8)))
+		"vial_table":
+			return sim.add(SimVialTable.new(name_))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -542,6 +615,24 @@ static func make_view(type_id: String, record: SimComponent,
 			view = RegulatorView.new()
 		"rotameter":
 			view = RotameterView.new()
+		"vial_magazine":
+			view = VialMagazineView.new()
+		"vial_track":
+			view = VialTrackView.new()
+		"star_wheel":
+			view = StarWheelView.new()
+		"stop_gate":
+			view = StopGateView.new()
+		"photo_eye":
+			view = PhotoEyeView.new()
+		"load_cell":
+			view = LoadCellView.new()
+		"fill_needle":
+			view = FillNeedleView.new()
+		"capper":
+			view = CapperView.new()
+		"vial_table":
+			view = VialTableView.new()
 	if view == null:
 		push_error("unknown equipment type '%s'" % type_id)
 		return null
@@ -574,7 +665,7 @@ static func mains_anchors(ways: int) -> Dictionary:
 ## The build-menu label of a type, for the journal and toasts.
 static func label_for(type_id: String) -> String:
 	for catalog: Array in [CATALOG, CATALOG_SEPARATION, CATALOG_INSTRUMENTS,
-			CATALOG_CONTROL, CATALOG_UTILITIES, CATALOG_SMALL_BORE]:
+			CATALOG_CONTROL, CATALOG_UTILITIES, CATALOG_SMALL_BORE, CATALOG_FILLING]:
 		for entry: Dictionary in catalog:
 			if str(entry["type"]) == type_id:
 				return str(entry["label"])
@@ -599,6 +690,10 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 	for port_name: String in record.inputs:
 		if hidden.has(port_name) or skip.has(port_name):
 			continue
+		# A vial handoff has no fitting: the plant links it by where the
+		# parts stand (VialLine).
+		if (record.inputs[port_name] as SimInputPort).kind == SimTypes.PortKind.ITEM:
+			continue
 		var kind: SimTypes.PortKind = (record.inputs[port_name] as SimInputPort).kind
 		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
@@ -607,6 +702,8 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 				_anchor_pos(raw), true, _anchor_dir(raw), float(bores.get(port_name, bore_r)), flush)
 	for port_name: String in record.outputs:
 		if hidden.has(port_name) or skip.has(port_name):
+			continue
+		if (record.outputs[port_name] as SimOutputPort).kind == SimTypes.PortKind.ITEM:
 			continue
 		var raw: Variant = anchors_override.get(port_name,
 			anchors.get(port_name, Vector3(0, 0.8, 0)))
@@ -796,6 +893,30 @@ const CONFIG := {
 		{"key": "rated_lps", "label": "Full stroke", "unit": "L/s", "min": 0.000001, "max": 10.0, "step": 0.0001},
 		{"key": "max_head_m", "label": "Maximum head", "unit": "m", "min": 1.0, "max": 1000.0, "step": 1.0},
 		{"key": "stroke_pct", "label": "Stroke knob", "unit": "%", "min": 0.0, "max": 100.0, "step": 1.0},
+	],
+	"vial_magazine": [
+		{"key": "vial_ml", "label": "Vial size", "unit": "mL (2, 10, 20 or 50)", "min": 2.0, "max": 50.0, "step": 1.0},
+		{"key": "rate_per_min", "label": "Fastest rate", "unit": "vials/min", "min": 1.0, "max": 300.0, "step": 1.0},
+	],
+	"vial_track": [
+		{"key": "length_m", "label": "Length", "unit": "m", "min": 0.3, "max": 12.0, "step": 0.1},
+		{"key": "speed_mps", "label": "Belt speed", "unit": "m/s", "min": 0.01, "max": 1.0, "step": 0.01},
+	],
+	"star_wheel": [
+		{"key": "index_s", "label": "Index time", "unit": "s", "min": 0.1, "max": 5.0, "step": 0.05},
+	],
+	"stop_gate": [
+		{"key": "stroke_s", "label": "Pin stroke", "unit": "s", "min": 0.02, "max": 2.0, "step": 0.01},
+	],
+	"load_cell": [
+		{"key": "target_g", "label": "Setpoint", "unit": "g net", "min": 0.0, "max": 1000.0, "step": 0.1},
+		{"key": "range_g", "label": "Range", "unit": "g", "min": 1.0, "max": 5000.0, "step": 1.0},
+	],
+	"fill_needle": [
+		{"key": "cv_lps", "label": "Bore", "unit": "L/s at 1 bar", "min": 0.00001, "max": 1.0, "step": 0.0001},
+	],
+	"capper": [
+		{"key": "cap_s", "label": "Time to cap", "unit": "s", "min": 0.1, "max": 5.0, "step": 0.05},
 	],
 	"regulator": [
 		{"key": "set_kpa", "label": "Setting", "unit": "kPa", "min": 1.0, "max": 2000.0, "step": 1.0},

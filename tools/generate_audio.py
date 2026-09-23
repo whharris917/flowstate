@@ -801,6 +801,25 @@ def make_dosing() -> None:
     write_wav(OUT_DIR / "dosing_loop.wav", [out], normalize_to=0.34)
 
 
+def make_clink() -> None:
+    """A vial set down on steel (2026-09-22, the filling line): a glass
+    tap, a handful of inharmonic partials ringing out at their own rates
+    over a click. Pure sines, no RNG, so no other file moves."""
+    duration = 0.4
+    n = int(duration * SR)
+    buf = [0.0] * n
+    partials = [(2630.0, 1.0, 22.0), (4180.0, 0.6, 30.0), (5870.0, 0.45, 38.0),
+                (7340.0, 0.3, 46.0), (1190.0, 0.25, 60.0)]
+    for i in range(n):
+        t = i / SR
+        v = 0.0
+        for f, a_, d in partials:
+            v += a_ * math.sin(2.0 * math.pi * f * t) * math.exp(-t * d)
+        v += math.sin(2.0 * math.pi * 900.0 * t) * math.exp(-t * 400.0) * 0.6
+        buf[i] = v
+    write_wav(OUT_DIR / "clink.wav", [buf], normalize_to=0.30)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -830,6 +849,7 @@ def main() -> None:
     make_drips()
     make_pour()
     make_dosing()
+    make_clink()
     print("done")
 
 

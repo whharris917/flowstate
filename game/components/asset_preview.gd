@@ -102,6 +102,8 @@ static func build(type_id: String) -> Node3D:
 				(node as RegulatorView).setup(record as SimRegulator)
 			"rotameter":
 				(node as RotameterView).setup(record as SimRotameter)
+		if node is VialPartView:
+			(node as VialPartView).setup_record(record)
 		node.set_meta("scratch_sim", scratch)
 	if node == null:
 		return null

@@ -115,7 +115,7 @@ func setup(player_: Player, plant_: Plant, hud_: Hud) -> void:
 			+ PlantFactory.CATALOG_INSTRUMENTS \
 			+ StructureFactory.CATALOG + StructureFactory.CATALOG_ROUTING \
 			+ PlantFactory.CATALOG_CONTROL + PlantFactory.CATALOG_UTILITIES \
-			+ PlantFactory.CATALOG_SMALL_BORE:
+			+ PlantFactory.CATALOG_SMALL_BORE + PlantFactory.CATALOG_FILLING:
 		all_types.append(entry["type"])
 	icons.landed.connect(func(_type_id: String) -> void: _refresh_palette())
 	icons.generate(all_types)  # fire and forget; cards fill in as renders land
@@ -277,7 +277,7 @@ func _pick_index(index: int) -> void:
 ## How many build pages there are: the palette rail has one icon each,
 ## and adding a page means touching _page_catalog, _is_equipment_page,
 ## page_names and this.
-const PAGES := 8
+const PAGES := 9
 
 
 ## A hotbar slot: its type, wherever it lives in the pages.
@@ -424,7 +424,7 @@ func _update_hud() -> void:
 				% [_edit_name, handles])
 		Mode.PLACE:
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
-				"ROUTING · FLOOR · SIGNS", "CONTROL", "UTILITIES", "SMALL BORE"]
+				"ROUTING · FLOOR · SIGNS", "CONTROL", "UTILITIES", "SMALL BORE", "FILLING LINE"]
 			var entries := _catalog()
 			catalog_index = mini(catalog_index, maxi(entries.size() - 1, 0))
 			var heading := page_names[page]
@@ -757,6 +757,8 @@ func _update_ghost() -> void:
 	if _is_mountable():
 		_update_mount_ghost()
 		return
+	if _update_vial_ghost():
+		return
 	if _update_inline_ghost():
 		return
 	var space := player.camera.get_world_3d().direct_space_state
@@ -837,6 +839,41 @@ func _update_inline_ghost() -> bool:
 
 
 var _inline_why := ""
+
+
+## A filling-line part aimed near the line (2026-09-22): a device
+## stands over the nearest track or star-wheel station, a track, wheel or
+## table takes its vials from the nearest outfeed nothing else takes
+## (VialLine.snap). True when the ghost was placed here.
+var _vial_snap: Dictionary = {}
+
+
+func _update_vial_ghost() -> bool:
+	_vial_snap = {}
+	var type_id := _current_type()
+	if not VialLine.is_line_type(type_id) or not player.ray.is_colliding():
+		return false
+	var snap := VialLine.snap(plant, type_id, player.ray.get_collision_point())
+	if snap.is_empty():
+		return false
+	(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
+	if snap.has("why"):
+		_ghost_pos = player.ray.get_collision_point()
+		_ghost.global_position = _ghost_pos + Vector3(0, AssetPreview.base_offset(type_id), 0)
+		_ghost.rotation.y = rot_y
+		_ghost.visible = true
+		_ghost_valid = false
+		_inline_why = str(snap["why"])
+		_ghost_mat.albedo_color = Color(0.9, 0.25, 0.2, 0.45)
+		return true
+	_ghost_pos = snap["pos"] as Vector3
+	_ghost.global_position = _ghost_pos + Vector3(0, AssetPreview.base_offset(type_id), 0)
+	_ghost.rotation.y = float(snap["rot"])
+	_ghost.visible = true
+	_ghost_valid = true
+	_vial_snap = snap
+	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45)
+	return true
 
 
 ## A level instrument goes on a vessel: the ghost sticks to the shell
@@ -994,12 +1031,13 @@ func _page_catalog() -> Array[Dictionary]:
 		4: return StructureFactory.CATALOG_ROUTING
 		6: return PlantFactory.CATALOG_UTILITIES
 		7: return PlantFactory.CATALOG_SMALL_BORE
+		8: return PlantFactory.CATALOG_FILLING
 	return PlantFactory.CATALOG_CONTROL
 
 
-## Pages 0, 1, 2, 5, 6 and 7 place sim equipment; 3 and 4 place structure.
+## Pages 0, 1, 2, 5, 6, 7 and 8 place sim equipment; 3 and 4 place structure.
 func _is_equipment_page() -> bool:
-	return page in [0, 1, 2, 5, 6, 7]
+	return page in [0, 1, 2, 5, 6, 7, 8]
 
 
 func _current_type() -> String:
@@ -1035,6 +1073,12 @@ func _try_place() -> void:
 		var inst := plant.mount_new(_current_type(), _mount_host, _mount_frac, _mount_angle)
 		if inst != null:
 			hud.toast("mounted %s on %s" % [inst.comp_name, _mount_host])
+		return
+	if not _vial_snap.is_empty() and _ghost_valid:
+		var placed := plant.place_new(_current_type(), _vial_snap["pos"] as Vector3, float(_vial_snap["rot"]))
+		if placed != null:
+			hud.toast("placed %s %s" % [placed.comp_name, str(_vial_snap["note"])])
+		_vial_snap = {}
 		return
 	if not _inline.is_empty() and _ghost_valid:
 		var why := plant.place_inline(_current_type(), _inline["view"] as PipeView, _inline["at"] as Vector3)
