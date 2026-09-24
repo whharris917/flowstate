@@ -157,6 +157,7 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 
 - GDScript: static typing, snake_case, one class per file, `class_name` on sim classes.
 - Python: 3.11, type hints, pytest, no heavy dependencies.
+- Comments describe the code as it is now: what it does and, where not obvious, why, as a present-tense rule. No dates, attributions, prior behaviour or how a bug was found; that goes in the commit message and `docs/history.md`.
 - Pressure-kernel tests never name a flow rate. Check balances against meters (`Source.total_l`, `Drain.total_l`) with the `tests/conftest.py` helpers (`wire_power`, `wire_supply`, `open_drain`; `feed` and `supplied_stream` for a unit on the bench). Commands are wired (`Duty`, `Contact`), never poked. A PLC needs a feeder and a power supply.
 - Ladder lessons: a sequence step's exit switch is single-point; a TON's done bit updates at the end of the scan.
 - Commit small and often. Never commit `.venv/`, `game/.godot/` or `docs/design_guidelines.docx` (the director's file). Ask before pushing.
