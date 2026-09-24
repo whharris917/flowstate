@@ -1487,7 +1487,7 @@ func is_editing() -> bool:
 func reset_mode() -> void:
 	if not _nozzle_grab.is_empty():
 		_toggle_nozzle_grab()
-	_carry_name = ""
+	_drop_carried()
 	_cut = {}
 	_cut_done = false
 	_drag = ""
@@ -1498,7 +1498,7 @@ func _end_edit() -> void:
 	_edit_name = ""
 	_drag = ""
 	_right_down = false
-	_carry_name = ""
+	_drop_carried()
 	_edit_run = null
 	_edit_leg = -1
 	if _gizmo != null:
@@ -1644,6 +1644,8 @@ func _begin_carry() -> void:
 		return
 	plant.begin_gesture()   # one undo step for the whole carry
 	_carry_name = name_
+	# Not solid while carried, so it cannot shove the player carrying it.
+	plant.solids.set_carried(plant.views[name_] as Node3D, true)
 	_carry_offset = base - hit
 	_carry_moved = false
 	_carry_axis = _inline_slide(name_)
@@ -1749,9 +1751,17 @@ func _turn_carried(angle: float) -> void:
 
 func _end_carry() -> void:
 	_carry_axis = {}
-	_carry_name = ""
+	_drop_carried()
 	if _gizmo != null:
 		_gizmo.set_blocked(false)
+
+
+## Let go of the carried equipment: it is solid again.
+func _drop_carried() -> void:
+	var view: Variant = plant.views.get(_carry_name)
+	if is_instance_valid(view) and view is Node3D:
+		plant.solids.set_carried(view as Node3D, false)
+	_carry_name = ""
 
 
 ## The placement point of a record's view, in world space.

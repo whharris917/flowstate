@@ -56,6 +56,8 @@ var _jump_wanted: float = 0.0   # seconds a jump press stays pending
 
 func _ready() -> void:
 	ray.add_exception(self)
+	# The ground and structures (1) and the plant's equipment and lines.
+	collision_mask = 1 | PlantSolids.SOLID_LAYER
 	# World (1) + interact volumes (4) + routed runs (8); connect mode
 	# adds port markers (2).
 	ray.collision_mask = 1 | 4 | 8
@@ -172,7 +174,7 @@ func _update_camera(delta: float) -> void:
 	var head := to_global(EYE)
 	var target := to_global(_zoom_point(_zoom_now))
 	var space := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(head, target, 1)
+	var query := PhysicsRayQueryParameters3D.create(head, target, 1 | PlantSolids.SOLID_LAYER)
 	query.exclude = [get_rid()]
 	var hit := space.intersect_ray(query)
 	if not hit.is_empty():

@@ -231,6 +231,7 @@ func is_unlocked(type_id: String) -> bool:
 
 ## Milliseconds each startup phase took, for the world's startup line.
 var startup_ms: Dictionary = {}
+var solids: PlantSolids   # what the player bumps into
 
 
 func _ready() -> void:
@@ -248,10 +249,32 @@ func _ready() -> void:
 		_build_initial_plant()
 	_build_hmi()
 	startup_ms["home loop"] = Time.get_ticks_msec() - t0
+	solids = PlantSolids.new()
+	solids.plant = self
+	add_child(solids)
 	if DisplayServer.get_name() == "headless" and build_home:
 		_exercise_build_api()
 		_support_exercise_phase = 1
 		_support_exercise_wait = 4
+
+
+## Everything the plant draws that the player can bump into:
+## equipment, cabinets, junction boxes, stations, lines, cables and
+## laid runs. Structures carry their own colliders.
+func solid_roots() -> Array[Node3D]:
+	var seen: Dictionary = {}
+	for view: Variant in views.values():
+		seen[view] = true
+	for table: Dictionary in [cabinets, junction_boxes, control_stations, runs]:
+		for entry: Dictionary in table.values():
+			seen[entry.get("node")] = true
+	for visual in _wire_visuals:
+		seen[visual.get("node")] = true
+	var out: Array[Node3D] = []
+	for node: Variant in seen:
+		if node is Node3D and is_instance_valid(node) and not node is StructureView:
+			out.append(node as Node3D)
+	return out
 
 
 ## Headless smoke runs can't press B/C/X, so exercise the build API

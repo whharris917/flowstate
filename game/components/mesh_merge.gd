@@ -196,6 +196,9 @@ static func _build(groups: Dictionary, out: Array) -> int:
 		if maxf(extent.x, maxf(extent.y, extent.z)) < 0.35:
 			inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		inst.set_meta("merged", true)
+		# The pieces it was made of, each [mesh, transform]: the player
+		# collides with each piece's own hull (PlantSolids).
+		inst.set_meta("sources", group["items"])
 		var parent := group["parent"] as Node3D
 		parent.add_child(inst)
 		for node in nodes:
