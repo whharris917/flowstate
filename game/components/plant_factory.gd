@@ -468,6 +468,8 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimCap.new(name_))
 		"psu":
 			return sim.add(SimPowerSupply.new(name_))
+		"power_dist":
+			return sim.add(SimPowerDistribution.new(name_, int(params.get("ways", 8))))
 		"source":
 			return sim.add(SimSource.new(name_,
 				params.get("species", "water"), params.get("temp_c", 20.0),

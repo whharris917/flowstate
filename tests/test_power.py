@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from sim.components import MainsFeed, PowerSupply, Pump
+from sim.components import MainsFeed, PowerDistribution, PowerSupply, Pump
 from sim.control import PLC
 from sim.core import Simulation
 
@@ -23,6 +23,30 @@ class TestPower:
         sim.connect(mains, "way1", pump, "power")
         sim.run(1.0)
         assert pump.running
+
+    def test_distribution_strip_feeds_each_way_from_one_supply(self) -> None:
+        sim = Simulation(dt=0.05)
+        mains = sim.add(MainsFeed("mains"))
+        psu = sim.add(PowerSupply("psu"))
+        strip = sim.add(PowerDistribution("pd", ways=3))
+        plcs = [sim.add(PLC(f"plc{i}")) for i in range(3)]
+        sim.connect(mains, "way1", psu, "ac_in")
+        sim.connect(psu, "dc_out", strip, "in")
+        for i, plc in enumerate(plcs):
+            sim.connect(strip, f"way{i + 1}", plc, "power")
+        sim.run(1.0)
+        assert all(plc.scans > 0 for plc in plcs)
+        # The supply lost: every way goes dead.
+        sim.disconnect(mains, "way1", psu, "ac_in")
+        sim.run(1.0)
+        assert all(port.value == 0.0 for port in strip.way_ports)
+
+    def test_distribution_strip_is_24v_only(self) -> None:
+        sim = Simulation(dt=0.05)
+        mains = sim.add(MainsFeed("mains"))
+        strip = sim.add(PowerDistribution("pd"))
+        with pytest.raises(ValueError, match="voltage mismatch"):
+            sim.connect(mains, "way1", strip, "in")
 
     def test_voltage_mismatch_refused(self) -> None:
         sim = Simulation(dt=0.05)

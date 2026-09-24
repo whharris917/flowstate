@@ -154,6 +154,14 @@ func set_layout(modules: Array, wire_specs: Array) -> void:
 				ViewUtil.box(_contents, Vector3(0.02, 0.13, 0.05),
 					center + Vector3(-size.x / 2.0 + (i + 0.5) * size.x / blocks, 0.01, 0.04),
 					ViewUtil.flat(Color(0.25, 0.35, 0.65) if type_id == "tb4a" else Color(0.78, 0.79, 0.80)))
+		elif type_id == "pd8":
+			# Eight fuse terminals: a grey body, a black fuse carrier on each.
+			for i in range(8):
+				var x := -size.x / 2.0 + (i + 0.5) * size.x / 8.0
+				ViewUtil.box(_contents, Vector3(0.02, 0.13, 0.05), center + Vector3(x, 0.01, 0.04),
+					ViewUtil.flat(Color(0.62, 0.63, 0.66)))
+				ViewUtil.box(_contents, Vector3(0.016, 0.05, 0.03), center + Vector3(x, 0.03, 0.075),
+					ViewUtil.flat(Color(0.08, 0.08, 0.09)))
 		elif type_id == "plc":
 			ViewUtil.box(_contents, Vector3(size.x - 0.03, 0.05, 0.01),
 				center + Vector3(0, 0.05, size.z / 2.0), ViewUtil.glow(Color(0.2, 0.7, 0.4), 0.6))

@@ -10,15 +10,19 @@ const BEND := 0.25         # how far either side of a corner its bend reaches
 
 ## The points the curve passes through: the terminal, the gland's end,
 ## where the cable touches down, its corners, where it lifts off, the
-## far gland and terminal. `facing` drops each end out the way its
+## far gland and terminal. `straight_a` and `straight_b` are how far
+## each end runs straight before it may bend: a gland's length at a
+## terminal, longer out of a conduit's mouth. `facing` drops each end
+## out the way its
 ## terminal faces; without it, toward the next point. `floor_a` and
 ## `floor_b` are the floor's
 ## height under each end, NAN where it is not known: that end then
 ## runs level from its gland.
 static func skeleton(from: Vector3, dir_a: Vector3, to: Vector3, dir_b: Vector3, corners: Array,
-		floor_a: float, floor_b: float, radius: float, facing: bool = true) -> Array[Vector3]:
-	var sa := from + dir_a * GLAND
-	var sb := to + dir_b * GLAND
+		floor_a: float, floor_b: float, radius: float, facing: bool = true,
+		straight_a: float = GLAND, straight_b: float = GLAND) -> Array[Vector3]:
+	var sa := from + dir_a * straight_a
+	var sb := to + dir_b * straight_b
 	var first: Vector3 = corners[0] if not corners.is_empty() else sb
 	var last: Vector3 = corners[corners.size() - 1] if not corners.is_empty() else sa
 	var out: Array[Vector3] = [from, sa]

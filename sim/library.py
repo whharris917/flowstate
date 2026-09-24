@@ -226,6 +226,7 @@ def sample_components() -> list[Component]:
         comp.SplitTee("tee_split"),
         comp.MixTee("tee_mix"),
         comp.PowerSupply("psu"),
+        comp.PowerDistribution("power_dist"),
         comp.Terminal("terminal"),
         comp.Pushbutton("pushbutton"),
         comp.PilotLight("pilot_light"),

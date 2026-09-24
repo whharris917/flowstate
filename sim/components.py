@@ -692,6 +692,27 @@ class PowerSupply(Component):
         self.dc_out.value = 1.0 if float(self.ac_in.value) > 0.5 else 0.0
 
 
+class PowerDistribution(Component):
+    """A fused 24 V distribution strip: one supply in, a numbered fused
+    way per load out. A terminal takes one cable, so a supply that serves
+    N loads does it through N ways of one of these.
+    """
+
+    def __init__(self, name: str, ways: int = 8) -> None:
+        super().__init__(name)
+        if ways < 1:
+            raise ValueError("ways must be at least 1")
+        self.ways = ways
+        self.dc_in = self.add_input("in", PortKind.POWER, "24VDC")
+        self.way_ports = [self.add_output(f"way{i + 1}", PortKind.POWER, "24VDC")
+                          for i in range(ways)]
+
+    def tick(self, dt: float) -> None:
+        live = 1.0 if float(self.dc_in.value) > 0.5 else 0.0
+        for port in self.way_ports:
+            port.value = live
+
+
 class ControlValve(Component):
     """Air-actuated control valve: a 0-100 % command through a
     first-order positioner onto a trim that follows the valve equation.
@@ -1931,6 +1952,29 @@ PowerSupply.SPEC = EquipmentSpec(
                                                "does not."),
     ),
     assumptions=("No current rating, no ride-through, no inrush.",),
+)
+
+PowerDistribution.SPEC = EquipmentSpec(
+    key="power_distribution",
+    title="24 V Distribution Strip",
+    tier="utility",
+    summary=(
+        "A row of fused terminals on the cabinet rail: the cabinet's 24 V "
+        "supply comes in once and leaves on a numbered way per field load, "
+        "so one supply powers the whole line."
+    ),
+    ports={"in": "24 V from a power supply.",
+           **{f"way{i}": f"Way {i}: 24 V to one field load." for i in range(1, 9)}},
+    equations=(
+        Equation("way_n = in", "Every way is live while the supply is."),
+    ),
+    params=(
+        Param("ways", "-", "How many loads it can feed."),
+    ),
+    assumptions=(
+        "No fuse ratings: a way never blows, and the supply has no current "
+        "limit.",
+    ),
 )
 
 Pushbutton.SPEC = EquipmentSpec(

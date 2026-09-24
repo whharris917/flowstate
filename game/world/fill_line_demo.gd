@@ -5,7 +5,7 @@ class_name FillLineDemo
 ## record, every link the plant's own rule (VialLine), and the PLC's
 ## program is the whole of the machine's intelligence.
 ##
-## A filling room of 16 m by 16 m, a seamless floor, walled, with an open bay in the
+## A filling room of 16 m by 8 m, a seamless floor, walled, with an open bay in the
 ## north wall. The line runs along the south side:
 ##
 ##   VM-601  magazine of 10 mL vials, forty a minute
@@ -26,15 +26,17 @@ class_name FillLineDemo
 ## way, or with a timing screw.
 ##
 ## The product comes from a header through a tee to the two valves on DN6
-## tubing. The power (a feeder, a 24 V supply per load) and the cabinet
-## with the PLC stand along the north wall, nine metres from the line;
-## the 24 V leads run in a cable tray, and the field cables together
-## in one clear sleeve.
+## tubing. The cabinet with the PLC and its feeder stand along the north
+## wall, three metres from the line. The cabinet's own 24 V supply feeds
+## a fused distribution strip on its rail, one way per load; those leads
+## run in a cable tray, and the field cables together in one clear
+## sleeve.
 
 const Z := -20.0              # the line
-const CONTROLS_Z := -10.6     # the power and control equipment
+const CONTROLS_Z := -16.9     # the cabinet and its feeder, along the north wall
+const CABINET_X := 8.0
 const FLOOR := 0.06           # the top of the slab
-const ROOM := Rect2(-2.0, -24.0, 16.0, 16.0)   # x, z, width, depth
+const ROOM := Rect2(-2.0, -24.0, 16.0, 8.0)   # x, z, width, depth
 const TUBE_DN := 6
 const PRODUCT := Color(0.13, 0.55, 0.28)   # ASME green, as the drip demo's water
 ## Each setpoint sits below what it is for by what is still falling when
@@ -85,45 +87,16 @@ static func build(plant: Plant) -> void:
 	_tube(plant, "sv_601a", "outlet", "fn_601a", "inlet")
 	_tube(plant, "sv_601b", "outlet", "fn_601b", "inlet")
 
-	# ---- power along the north wall: a feeder, a 24 V supply per load ----
-	# Each supply turned to face the line, its output toward its load.
-	plant.place("mains", "mains_601", {"ways": 8}, Vector3(6.4, y, CONTROLS_Z), 0.0, false)
-	var loads := {"vt_601": 7.6, "sw_601": 8.5, "cp_601": 9.4, "vt_602": 10.3}
-	var n := 1
-	for load: String in loads:
-		var psu := "psu_60%d" % n
-		plant.place("psu", psu, {}, Vector3(float(loads[load]), y, CONTROLS_Z), PI / 2.0, false)
-		_cable(plant, "mains_601", plant.free_way("mains_601"), psu, "ac_in")
-		n += 1
-	# Each supply's cable to its load, in one 150 mm cable tray, CT-601, on
-	# stands a little off the floor: along the supplies, down the room
-	# and along the line, each cable climbing out at its load.
-	var west := INF
-	for load: String in loads:
-		west = minf(west, plant._marker_pos(load, "power").x)
-	var tray_y := FLOOR + 0.35
-	plant.place_run("run_tray_150", "ct_601", [plant.to_local(Vector3(10.7, tray_y, CONTROLS_Z - 0.9)),
-		plant.to_local(Vector3(7.0, tray_y, CONTROLS_Z - 0.9)),
-		plant.to_local(Vector3(7.0, tray_y, Z + 1.4)),
-		plant.to_local(Vector3(west - 0.3, tray_y, Z + 1.4))])
-	n = 1
-	for load: String in loads:
-		var psu := "psu_60%d" % n
-		_cable(plant, psu, "dc_out", load, "power")
-		var why := plant.thread_cable(plant.line_between(psu, "dc_out", load, "power"), "ct_601")
-		if why != "":
-			push_error("fill line, tray: %s: %s" % [psu, why])
-		n += 1
-
 	# ---- the cabinet, its PLC and its program ----------------------------
 	var cab := "cab_601"
-	plant.place_cabinet(cab, Vector3(1.0, y, CONTROLS_Z), PI)
+	plant.place_cabinet(cab, Vector3(CABINET_X, y, CONTROLS_Z), PI)
 	plant.cabinet_add_module(cab, "psu", 0, 0)
 	plant.cabinet_add_module(cab, "plc", 0, 4)
 	plant.cabinet_add_module(cab, "card_di", 0, 8)
 	plant.cabinet_add_module(cab, "card_do", 0, 10)
 	plant.cabinet_add_module(cab, "tb8d", 1, 0)
 	plant.cabinet_add_module(cab, "tb8d", 2, 0)
+	plant.cabinet_add_module(cab, "pd8", 1, 4)
 	var plc_name := plant.cabinet_plc(cab)
 	var plc := plant.sim.get_component(plc_name) as SimPLC
 	var cab_psu := ""
@@ -132,11 +105,39 @@ static func build(plant: Plant) -> void:
 			cab_psu = record_name
 	var di := "%s_m5_t" % cab
 	var do := "%s_m6_t" % cab
-	plant.connect_equipment(cab_psu, "dc_out", plc_name, "power", [], false)
+	var strip := ""
+	for record_name in plant.cabinet_all_records(cab):
+		if plant.equip_types.get(record_name) == "power_dist":
+			strip = record_name
+	# The supply feeds the strip; the PLC rides on its last way.
+	plant.connect_equipment(cab_psu, "dc_out", strip, "in", [], false)
+	plant.connect_equipment(strip, "way8", plc_name, "power", [], false)
 	for i in 6:
 		plant.connect_equipment(di + str(i + 1), "out", plc_name, "di_%d" % i, [], false)
 		plant.connect_equipment(plc_name, "do_%d" % i, do + str(i + 1), "in", [], false)
+	# 480 V from a feeder beside the cabinet to its supply: the one
+	# feeder the line needs.
+	plant.place("mains", "mains_601", {"ways": 2}, Vector3(CABINET_X + 2.4, y, CONTROLS_Z), 0.0, false)
 	_cable(plant, "mains_601", plant.free_way("mains_601"), cab_psu, "ac_in")
+	# 24 V to each load from its own fused way of the strip, in one 150 mm
+	# cable tray, CT-601, on stands a little off the floor: from the
+	# cabinet's field-out flank down the room and along the line, each
+	# cable climbing out at its load.
+	var loads: Array[String] = ["vt_601", "sw_601", "cp_601", "vt_602"]
+	var west := INF
+	for load in loads:
+		west = minf(west, plant._marker_pos(load, "power").x)
+	var tray_y := FLOOR + 0.35
+	var tray_x := CABINET_X - 1.0
+	plant.place_run("run_tray_150", "ct_601", [plant.to_local(Vector3(tray_x, tray_y, CONTROLS_Z - 0.2)),
+		plant.to_local(Vector3(tray_x, tray_y, Z + 1.4)),
+		plant.to_local(Vector3(west - 0.3, tray_y, Z + 1.4))])
+	for i in loads.size():
+		var way := "way%d" % (i + 1)
+		_cable(plant, strip, way, loads[i], "power")
+		var why := plant.thread_cable(plant.line_between(strip, way, loads[i], "power"), "ct_601")
+		if why != "":
+			push_error("fill line, tray: %s: %s" % [loads[i], why])
 	# The terminal strips in the order the cables arrive, so none crosses
 	# another: each input or output is named once here and the ladder is
 	# written against the names. Laid in this order.
@@ -164,9 +165,9 @@ static func build(plant: Plant) -> void:
 	for point: Array in inputs + outputs:
 		line_x += plant._marker_pos(str(point[0]), str(point[1])).x
 	line_x /= float((inputs + outputs).size())
-	var sleeve_z := CONTROLS_Z - 1.2
-	plant.place_run("run_sleeve", "sl_601", [plant.to_local(Vector3(line_x, FLOOR, Z + 1.6)),
-		plant.to_local(Vector3(line_x, FLOOR, sleeve_z)), plant.to_local(Vector3(1.0, FLOOR, sleeve_z))])
+	var sleeve_z := CONTROLS_Z - 0.8
+	plant.place_run("run_sleeve", "sl_601", [plant.to_local(Vector3(line_x, FLOOR, Z + 1.3)),
+		plant.to_local(Vector3(line_x, FLOOR, sleeve_z)), plant.to_local(Vector3(CABINET_X, FLOOR, sleeve_z))])
 	# Clear, so the circuits can be watched inside it.
 	plant.set_sleeve_look("sl_601", true, "SL-601")
 	for ends: Array in field:

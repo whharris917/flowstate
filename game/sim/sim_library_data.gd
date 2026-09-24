@@ -620,6 +620,32 @@ const PAGES := {
 			"No current rating, no ride-through, no inrush.",
 		],
 	},
+	# DRAFT for the director's review.
+	"power_dist": {
+		"title": "24 V Distribution Strip",
+		"tier": "utility",
+		"summary": "A row of fused terminals on the cabinet rail. The cabinet's 24 V supply comes in once and leaves on a numbered way for each field load, so one supply powers a whole line.",
+		"ports": {
+			"in": "24 V from a power supply.",
+			"way1": "Way 1: 24 V to one field load.",
+			"way2": "Way 2: 24 V to one field load.",
+			"way3": "Way 3: 24 V to one field load.",
+			"way4": "Way 4: 24 V to one field load.",
+			"way5": "Way 5: 24 V to one field load.",
+			"way6": "Way 6: 24 V to one field load.",
+			"way7": "Way 7: 24 V to one field load.",
+			"way8": "Way 8: 24 V to one field load.",
+		},
+		"equations": [
+			["way_n = in", "Every way is live while the supply is."],
+		],
+		"params": [
+			["ways", "-", "8", "How many loads it can feed."],
+		],
+		"assumptions": [
+			"No fuse ratings: a way never blows, and the supply has no current limit.",
+		],
+	},
 	"terminal": {
 		"title": "Terminal Block",
 		"tier": "control",

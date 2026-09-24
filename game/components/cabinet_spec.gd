@@ -24,6 +24,7 @@ const MODULES := {
 	"relay": {"label": "Relay", "units": 1, "color": Color(0.85, 0.55, 0.15)},
 	"tb8d": {"label": "TB x8 discrete", "units": 4, "color": Color(0.62, 0.63, 0.66)},
 	"tb4a": {"label": "TB x4 analog", "units": 3, "color": Color(0.30, 0.40, 0.68)},
+	"pd8": {"label": "24V fused x8", "units": 4, "color": Color(0.30, 0.31, 0.34)},
 }
 
 # How many channels each card backs on the PLC, per family.

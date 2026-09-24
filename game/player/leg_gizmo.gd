@@ -129,9 +129,9 @@ func _make_handle(name_: String, at: Vector3, size: float, color: Color) -> void
 ## the two fittings and their stub ends (a stub follows its fitting,
 ## and a corner near it is planted by clicking the straight).
 func movable_corner(index: int) -> bool:
-	if pipe != null and pipe.has_meta("sleeve"):
-		# A sleeve's own points: all of them, or its ends while a tray
-		# holds its middle.
+	if pipe != null and pipe.has_meta("editable_run"):
+		# A laid run's own points: all of a tray's or a conduit's, all of a
+		# sleeve's, or its ends while a tray holds its middle.
 		return BuildController.match_waypoint(waypoints, path[index]) >= 0
 	if pipe != null and pipe.style() == "cable":
 		# A cable's own corners, and where it touches the floor; not its
