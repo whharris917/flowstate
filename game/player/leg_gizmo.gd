@@ -129,6 +129,13 @@ func _make_handle(name_: String, at: Vector3, size: float, color: Color) -> void
 ## the two fittings and their stub ends (a stub follows its fitting,
 ## and a corner near it is planted by clicking the straight).
 func movable_corner(index: int) -> bool:
+	if pipe != null and pipe.has_meta("sleeve"):
+		return true   # every point of a sleeve is the player's
+	if pipe != null and pipe.style() == "cable":
+		# A cable's own corners, and where it touches the floor; not its
+		# glands, nor the stretch it runs inside a sleeve.
+		return BuildController.match_waypoint(waypoints, path[index]) >= 0 \
+			or (index == 2 or index == path.size() - 3) and index >= 2 and index <= path.size() - 3
 	return index >= 2 and index <= path.size() - 3
 
 

@@ -1443,8 +1443,9 @@ func _click_select() -> bool:
 
 
 ## Select one straight of a line: the sleeve and a handle at each end
-## that is a corner of the player's to move. Only a line between two
-## fittings (a wire) is selectable; standalone runs are laid by hand.
+## that is a corner of the player's to move. A line between two
+## fittings (a wire) or a cable sleeve is selectable; other standalone
+## runs are laid by hand.
 func _select_leg(pipe: PipeView, leg: int) -> bool:
 	var drawn := plant.wire_path(pipe)
 	var path := plant.wire_own_path(pipe)
@@ -2099,16 +2100,13 @@ func _delete_corner(index: int) -> void:
 	if index < 0 or index >= _leg_gizmo.path.size():
 		return
 	var point: Vector3 = _leg_gizmo.path[index]
-	_edit_ends = plant.wire_ends(_edit_run)
+	var key := plant.edit_key(_edit_run)
 	var why := plant.delete_wire_corner(_edit_run, point)
 	if why != "":
 		hud.toast(why)
 		return
 	# The line is a new node: found again by its two fittings.
-	var relaid: PipeView = null
-	for visual in plant._wire_visuals:
-		if visual["node"] != null and _same_ends(visual):
-			relaid = visual["node"] as PipeView
+	var relaid := plant.line_again(key)
 	if relaid == null:
 		_set_mode(Mode.NORMAL)
 		return
@@ -2119,14 +2117,6 @@ func _delete_corner(index: int) -> void:
 	_leg_gizmo.leg = _edit_leg
 	_refresh_leg_gizmo()
 	hud.toast("corner deleted")
-
-
-var _edit_ends: Array = []   # the selected line's two fittings, to find it again as a new node
-
-
-func _same_ends(visual: Dictionary) -> bool:
-	return _edit_ends.size() == 4 and str(visual["a"]) == str(_edit_ends[0]) and str(visual["a_port"]) == str(_edit_ends[1]) \
-		and str(visual["b"]) == str(_edit_ends[2]) and str(visual["b_port"]) == str(_edit_ends[3])
 
 
 ## The handles again, after a gesture baked what the lay added.
