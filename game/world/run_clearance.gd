@@ -28,6 +28,7 @@ extends RefCounted
 
 const MARGIN := 0.03
 const CABLE_MARGIN := 0.005   # a cable may lie against what it passes
+const CABLE_STEP := 0.05      # a cable is thin enough to slip past a railing between samples
 const STEP := 0.15          # sample spacing along a leg
 const REST := 0.1           # how far under a run a carrying surface may be
 
@@ -133,7 +134,7 @@ func hits(path: Array, ctx: Dictionary) -> Array[Dictionary]:
 		if length < 0.005:
 			continue
 		var vertical := absf(b.y - a.y) > maxf(absf(b.x - a.x), absf(b.z - a.z))
-		var steps := maxi(1, ceili(length / STEP))
+		var steps := maxi(1, ceili(length / (CABLE_STEP if float(ctx["radius"]) < 0.01 else STEP)))
 		for s in range(steps + 1):
 			var p := a.lerp(b, float(s) / steps)
 			var owner: Variant = blocked_by(p, ctx, vertical)

@@ -1179,7 +1179,7 @@ func _finish_run() -> void:
 func _toggle_sleeve() -> void:
 	var aimed := player.aimed_collider()
 	if aimed == null or not aimed.has_meta("run"):
-		hud.toast("aim at a cable to put it in a sleeve, tray or conduit, or take it out")
+		hud.toast("aim at a cable or a sleeve to put it in a sleeve, tray or conduit, or take it out")
 		return
 	var done := plant.toggle_sleeve(aimed.get_meta("run") as PipeView)
 	if str(done["error"]) != "":

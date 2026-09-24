@@ -808,26 +808,25 @@ static func _unit_400(plant: Plant) -> void:
 	# own kernel wire, one scan late at each terminal.
 	plant.place_junction_box("jb_401", Vector3(0.6, 0.0, 9.3), PI / 2.0, 8)
 	plant.place_junction_box("jb_402", Vector3(-1.6, 0.0, 8.3), -PI / 2.0, 4)
-	# Switch conduits leave each tank's east face, drop through the deck
-	# beside its edge beam, and come down beside the north-east column
-	# to the box, north of the landing.
-	plant.connect_equipment("lsl_401", "contact", "jb_401_t1", "in",
-		_local(plant, [Vector3(-0.6, 6.4, 11.6), Vector3(-0.6, 5.3, 11.6), Vector3(-0.6, 5.3, 10.5),
-			Vector3(0.45, 5.3, 10.5), Vector3(0.45, 1.7, 10.5)]))
-	plant.connect_equipment("lsh_401", "contact", "jb_401_t2", "in",
-		_local(plant, [Vector3(-0.6, 7.1, 11.4), Vector3(-0.6, 5.3, 11.4), Vector3(-0.6, 5.3, 10.8),
-			Vector3(0.45, 5.3, 10.8), Vector3(0.45, 1.8, 10.8)]))
-	plant.connect_equipment("lsl_402", "contact", "jb_401_t3", "in",
-		_local(plant, [Vector3(-0.2, 3.35, 9.9), Vector3(-0.2, 2.3, 9.9), Vector3(0.45, 2.3, 9.9),
-			Vector3(0.45, 1.6, 9.9)]))
+	# The circuits between floors run in a 150 mm cable tray standing
+	# beside the tower's north-east corner, open side out, from the box's
+	# field side to the top deck: each cable comes over the railing and
+	# round the tray's side rail at its own level, and out at the box.
+	plant.connect_equipment("lsl_401", "contact", "jb_401_t1", "in")
+	plant.connect_equipment("lsh_401", "contact", "jb_401_t2", "in")
+	plant.connect_equipment("lsl_402", "contact", "jb_401_t3", "in")
 	plant.connect_equipment("lsl_403", "contact", "jb_401_t4", "in",
 		_local(plant, [Vector3(-0.8, 0.12, 11.3), Vector3(0.6, 0.12, 11.3), Vector3(0.6, 0.12, 9.95)]))
 	plant.connect_equipment("lsh_403", "contact", "jb_401_t5", "in",
 		_local(plant, [Vector3(-0.8, 0.12, 11.0), Vector3(0.75, 0.12, 11.0), Vector3(0.75, 0.12, 9.95)]))
 	# Outputs leave the boxes to the valves and the starter.
-	plant.connect_equipment("jb_401_t6", "out", "xv_401", "open",
-		_local(plant, [Vector3(0.45, 1.9, 9.5), Vector3(0.45, 5.3, 9.5), Vector3(-0.6, 5.3, 9.5),
-			Vector3(-0.6, 5.3, 9.7), Vector3(-0.6, 6.75, 9.7)]))
+	plant.connect_equipment("jb_401_t6", "out", "xv_401", "open")
+	plant.place_run("run_tray_150", "ct_401", _local(plant, [Vector3(0.45, 1.0, 9.75), Vector3(0.45, 7.3, 9.75)]))
+	for ends: Array in [["lsl_401", "contact", "jb_401_t1", "in"], ["lsh_401", "contact", "jb_401_t2", "in"],
+			["lsl_402", "contact", "jb_401_t3", "in"], ["jb_401_t6", "out", "xv_401", "open"]]:
+		var why := plant.thread_cable(plant.line_between(ends[0], ends[1], ends[2], ends[3]), "ct_401")
+		if why != "":
+			push_error("unit 400, tray: %s.%s: %s" % [ends[0], ends[1], why])
 	plant.connect_equipment("jb_401_t7", "out", "xv_402", "open",
 		_local(plant, [Vector3(1.3, 0.2, 9.3)]))
 	plant.connect_equipment("jb_401_t8", "out", "xv_404", "open",
