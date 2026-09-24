@@ -25,6 +25,7 @@ var _line: LineEdit
 var _fitting: OptionButton
 var _size: OptionButton
 var _size_row: HBoxContainer
+var _clear: CheckBox
 
 
 func _ready() -> void:
@@ -105,6 +106,11 @@ func _ready() -> void:
 		_size.add_item("DN%d" % dn, dn)
 	_size_row.add_child(_size)
 
+	# A sleeve's braid: black, or clear so the cables show through it.
+	_clear = CheckBox.new()
+	_clear.text = "clear sleeve: see the cables inside"
+	column.add_child(_clear)
+
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 12)
@@ -139,6 +145,7 @@ func open_for_run(current: Color, label_text: String, apply: Callable, fitting: 
 	_picked = current
 	_title.text = "Run service — pick a color, name the line"
 	_grid.visible = true
+	_clear.visible = false
 	_fitting.get_parent().set("visible", true)
 	_fitting.select({"clamp": 1, "tube": 2}.get(fitting, 0))
 	_size_row.visible = dn > 0
@@ -153,9 +160,23 @@ func open_for_sign(text: String, apply: Callable) -> void:
 	_apply = apply
 	_title.text = "Sign text"
 	_grid.visible = false
+	_clear.visible = false
 	_fitting.get_parent().set("visible", false)
 	_size_row.visible = false
 	_line.text = text
+	_open()
+
+
+## A cable sleeve: clear or black, and its label.
+func open_for_sleeve(clear: bool, label_text: String, apply: Callable) -> void:
+	_apply = apply
+	_title.text = "Cable sleeve"
+	_grid.visible = false
+	_fitting.get_parent().set("visible", false)
+	_size_row.visible = false
+	_clear.visible = true
+	_clear.button_pressed = clear
+	_line.text = label_text
 	_open()
 
 
@@ -167,7 +188,9 @@ func _open() -> void:
 
 func _ok() -> void:
 	if _apply.is_valid():
-		if _grid.visible:
+		if _clear.visible:
+			_apply.call(_clear.button_pressed, _line.text)
+		elif _grid.visible:
 			var dn := _size.get_item_id(_size.selected) if _size_row.visible else 0
 			_apply.call(_picked, _line.text, ["flange", "clamp", "tube"][_fitting.selected], dn)
 		else:

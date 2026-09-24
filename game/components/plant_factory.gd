@@ -698,7 +698,8 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 			anchors.get(port_name, Vector3(0, 0.5, 0)))
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name, kind,
-				_anchor_pos(raw), true, _anchor_dir(raw), float(bores.get(port_name, bore_r)), flush)
+				_anchor_pos(raw), true, _anchor_dir(raw),
+				_marker_bore(record.inputs[port_name] as SimPort, float(bores.get(port_name, bore_r))), flush)
 	for port_name: String in record.outputs:
 		if hidden.has(port_name) or skip.has(port_name):
 			continue
@@ -709,9 +710,19 @@ static func attach_port_markers(view: Node3D, record: SimComponent, type_id: Str
 		markers["%s:%s" % [record.comp_name, port_name]] = \
 			make_marker(view, record.comp_name, port_name,
 				(record.outputs[port_name] as SimOutputPort).kind,
-				_anchor_pos(raw), false, _anchor_dir(raw), float(bores.get(port_name, bore_r)), flush)
+				_anchor_pos(raw), false, _anchor_dir(raw),
+				_marker_bore(record.outputs[port_name] as SimPort, float(bores.get(port_name, bore_r))), flush)
 	view.set_meta("port_markers", markers)
 	MeshMerge.merge_markers(view)
+
+
+## The bore a fitting is built at: a process port's line, or the
+## cable a signal or power terminal takes (Plant.run_radius).
+static func _marker_bore(port: SimPort, pipe_bore: float) -> float:
+	if SimTypes.is_material(port.kind) or port.kind == SimTypes.PortKind.PROCESS_LEVEL \
+			or port.kind == SimTypes.PortKind.PROCESS_PRESSURE:
+		return pipe_bore
+	return Plant.run_radius(port)
 
 
 static func _anchor_pos(raw: Variant) -> Vector3:
@@ -777,22 +788,25 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	body.basis = Basis(dir, z_axis.cross(dir), z_axis)
 	# A capsule the length of the fitting, along its axis: the same
 	# target from any side.
-	var shape := CollisionShape3D.new()
-	var capsule := CapsuleShape3D.new()
-	capsule.radius = maxf(0.11, bore_r * 1.5)
-	capsule.height = 0.4
-	shape.shape = capsule
-	shape.rotation_degrees = Vector3(0, 0, 90)
-	shape.position = Vector3(0.08, 0, 0)
-	body.add_child(shape)
-
-	var steel := ViewUtil.flat(Color(0.45, 0.47, 0.50))
 	var is_pipe := SimTypes.is_material(kind) \
 		or kind == SimTypes.PortKind.PROCESS_LEVEL \
 		or kind == SimTypes.PortKind.PROCESS_PRESSURE
+	# A cable gland's radius: an M20 gland for a 24 V or signal cable,
+	# a conduit fitting for a 480 V feeder.
+	var gland_r := maxf(bore_r * 1.6, 0.011)
+	var shape := CollisionShape3D.new()
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = maxf(0.11, bore_r * 1.5) if is_pipe else maxf(0.045, gland_r * 1.5)
+	capsule.height = 0.4 if is_pipe else 0.16
+	shape.shape = capsule
+	shape.rotation_degrees = Vector3(0, 0, 90)
+	shape.position = Vector3(0.08 if is_pipe else 0.03, 0, 0)
+	body.add_child(shape)
+
+	var steel := ViewUtil.flat(Color(0.45, 0.47, 0.50))
 	# Where a line meets it: the gasket face of a pipe fitting, the
 	# gland's end of a cable one (Plant.marker_face).
-	body.set_meta("face", (0.0 if flush else 0.175) if is_pipe else 0.145)
+	body.set_meta("face", (0.0 if flush else 0.175) if is_pipe else 0.011 + gland_r * 2.5)
 	# The bore a line meets here (Plant._end_bore): a nozzle is built at
 	# the size of the line on it.
 	body.set_meta("bore", bore_r)
@@ -819,14 +833,19 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 			Vector3(0.165, 0, 0), ViewUtil.glow(color, 0.8))
 		face.rotation_degrees = Vector3(0, 0, 90)
 	else:
-		ViewUtil.box(body, Vector3(0.05, 0.13, 0.13), Vector3(-0.015, 0, 0), steel)
-		ViewUtil.box(body, Vector3(0.09, 0.10, 0.10), Vector3(0.05, 0, 0),
-			ViewUtil.flat(Color(0.28, 0.29, 0.32)))
-		var gland := ViewUtil.cylinder(body, 0.022, 0.06, Vector3(0.115, 0, 0), steel)
-		gland.rotation_degrees = Vector3(0, 0, 90)
-		var collar := ViewUtil.cylinder(body, 0.036 if is_input else 0.03, 0.02,
-			Vector3(0.10, 0, 0), ViewUtil.glow(color, 0.9))
-		collar.rotation_degrees = Vector3(0, 0, 90)
+		# A cable gland screwed into the enclosure: a square boss, the hex
+		# body, a thin band in the circuit's colour (wider on an input),
+		# and the domed cap the cable leaves through.
+		var g := gland_r
+		ViewUtil.box(body, Vector3(0.012, g * 3.0, g * 3.0), Vector3(0.0, 0, 0), steel)
+		var hex := ViewUtil.cylinder(body, g, g * 1.6, Vector3(0.006 + g * 0.8, 0, 0), steel)
+		(hex.mesh as CylinderMesh).radial_segments = 6
+		hex.rotation_degrees = Vector3(0, 0, 90)
+		var band := ViewUtil.cylinder(body, g * (1.06 if is_input else 0.96), 0.005,
+			Vector3(0.006 + g * 1.6 + 0.0025, 0, 0), ViewUtil.glow(color, 0.5))
+		band.rotation_degrees = Vector3(0, 0, 90)
+		var cap := ViewUtil.cylinder(body, g * 0.8, g * 0.9, Vector3(0.011 + g * 1.6 + g * 0.45, 0, 0), steel)
+		cap.rotation_degrees = Vector3(0, 0, 90)
 
 	var tag := Label3D.new()
 	tag.text = port_name

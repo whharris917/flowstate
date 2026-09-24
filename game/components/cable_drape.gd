@@ -10,24 +10,26 @@ const BEND := 0.25         # how far either side of a corner its bend reaches
 
 ## The points the curve passes through: the terminal, the gland's end,
 ## where the cable touches down, its corners, where it lifts off, the
-## far gland and terminal. `floor_a` and `floor_b` are the floor's
+## far gland and terminal. `facing` drops each end out the way its
+## terminal faces; without it, toward the next point. `floor_a` and
+## `floor_b` are the floor's
 ## height under each end, NAN where it is not known: that end then
 ## runs level from its gland.
 static func skeleton(from: Vector3, dir_a: Vector3, to: Vector3, dir_b: Vector3, corners: Array,
-		floor_a: float, floor_b: float, radius: float) -> Array[Vector3]:
+		floor_a: float, floor_b: float, radius: float, facing: bool = true) -> Array[Vector3]:
 	var sa := from + dir_a * GLAND
 	var sb := to + dir_b * GLAND
 	var first: Vector3 = corners[0] if not corners.is_empty() else sb
 	var last: Vector3 = corners[corners.size() - 1] if not corners.is_empty() else sa
 	var out: Array[Vector3] = [from, sa]
 	if not is_nan(floor_a):
-		var down := _touchdown(sa, first, floor_a + radius, dir_a)
+		var down := _touchdown(sa, first, floor_a + radius, dir_a if facing else Vector3.ZERO)
 		if down != sa:
 			out.append(down)
 	for corner: Vector3 in corners:
 		out.append(corner)
 	if not is_nan(floor_b):
-		var up := _touchdown(sb, last, floor_b + radius, dir_b)
+		var up := _touchdown(sb, last, floor_b + radius, dir_b if facing else Vector3.ZERO)
 		if up != sb:
 			out.append(up)
 	out.append(sb)
@@ -36,19 +38,23 @@ static func skeleton(from: Vector3, dir_a: Vector3, to: Vector3, dir_b: Vector3,
 
 
 ## Where a cable leaving a gland at `gland` meets the floor at height
-## `y`: out toward the next point by about half its drop, so it hangs
-## in a curve rather than falling plumb. The gland itself when the
-## terminal is at the floor already.
+## `y`: out by about half its drop, so it hangs in a curve rather than
+## falling plumb, and never past half the way to the next point. The
+## gland itself when the terminal is at the floor already.
 static func _touchdown(gland: Vector3, toward: Vector3, y: float, dir: Vector3) -> Vector3:
 	var drop := gland.y - y
 	if drop < 0.03:
 		return gland
-	var across := Vector3(toward.x - gland.x, 0.0, toward.z - gland.z)
+	# Out the way the terminal faces, when it faces sideways, so the
+	# cable clears the body it leaves; toward the next point when the
+	# terminal faces up or down.
+	var toward_next := Vector3(toward.x - gland.x, 0.0, toward.z - gland.z)
+	var across := Vector3(dir.x, 0.0, dir.z)
+	if across.length() < 0.3:
+		across = toward_next
 	var reach := clampf(drop * 0.6, 0.08, 0.6)
-	if across.length() > 0.01:
-		reach = minf(reach, across.length() * 0.45)
-	else:
-		across = Vector3(dir.x, 0.0, dir.z)
+	if toward_next.length() > 0.01:
+		reach = minf(reach, toward_next.length() * 0.45)
 	if across.length() < 0.01:
 		return Vector3(gland.x, y, gland.z)
 	return Vector3(gland.x, y, gland.z) + across.normalized() * reach

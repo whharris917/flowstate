@@ -28,8 +28,8 @@ class_name FillLineDemo
 ## The product comes from a header through a tee to the two valves on DN6
 ## tubing. The power (a feeder, a 24 V supply per load) and the cabinet
 ## with the PLC stand along the north wall, nine metres from the line;
-## the 24 V leads lie loose on the floor, and the field cables run
-## together in one sleeve.
+## the 24 V leads run in a cable tray, and the field cables together
+## in one clear sleeve.
 
 const Z := -20.0              # the line
 const CONTROLS_Z := -10.6     # the power and control equipment
@@ -95,16 +95,24 @@ static func build(plant: Plant) -> void:
 		plant.place("psu", psu, {}, Vector3(float(loads[load]), y, CONTROLS_Z), PI / 2.0, false)
 		_cable(plant, "mains_601", plant.free_way("mains_601"), psu, "ac_in")
 		n += 1
-	# Each supply's cable back from its load, along a lane of its own on
-	# the floor south of the signal lanes: the westmost load on the
-	# northmost lane, so the runs nest instead of crossing.
+	# Each supply's cable to its load, in one 150 mm cable tray, CT-601, on
+	# stands a little off the floor: along the supplies, down the room
+	# and along the line, each cable climbing out at its load.
+	var west := INF
+	for load: String in loads:
+		west = minf(west, plant._marker_pos(load, "power").x)
+	var tray_y := FLOOR + 0.35
+	plant.place_run("run_tray_150", "ct_601", [plant.to_local(Vector3(10.7, tray_y, CONTROLS_Z - 0.9)),
+		plant.to_local(Vector3(7.0, tray_y, CONTROLS_Z - 0.9)),
+		plant.to_local(Vector3(7.0, tray_y, Z + 1.4)),
+		plant.to_local(Vector3(west - 0.3, tray_y, Z + 1.4))])
 	n = 1
 	for load: String in loads:
-		var at := plant._marker_pos(load, "power")
-		var lane := CONTROLS_Z - 3.4 - 0.3 * (n - 1)
-		var from := plant._marker_pos("psu_60%d" % n, "dc_out")
-		_cable(plant, "psu_60%d" % n, "dc_out", load, "power", [Vector3(from.x, 0.3, lane),
-			Vector3(at.x, 0.3, lane), Vector3(at.x, 0.3, Z + 1.0)])
+		var psu := "psu_60%d" % n
+		_cable(plant, psu, "dc_out", load, "power")
+		var why := plant.thread_cable(plant.line_between(psu, "dc_out", load, "power"), "ct_601")
+		if why != "":
+			push_error("fill line, tray: %s: %s" % [psu, why])
 		n += 1
 
 	# ---- the cabinet, its PLC and its program ----------------------------
@@ -159,6 +167,8 @@ static func build(plant: Plant) -> void:
 	var sleeve_z := CONTROLS_Z - 1.2
 	plant.place_run("run_sleeve", "sl_601", [plant.to_local(Vector3(line_x, FLOOR, Z + 1.6)),
 		plant.to_local(Vector3(line_x, FLOOR, sleeve_z)), plant.to_local(Vector3(1.0, FLOOR, sleeve_z))])
+	# Clear, so the circuits can be watched inside it.
+	plant.set_sleeve_look("sl_601", true, "SL-601")
 	for ends: Array in field:
 		var view := plant.line_between(str(ends[0]), str(ends[1]), str(ends[2]), str(ends[3]))
 		var why := "no line" if view == null else plant.thread_cable(view, "sl_601")

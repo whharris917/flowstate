@@ -1737,11 +1737,22 @@ func intersection_report() -> PackedStringArray:
 		var run_view := entry["node"] as PipeView
 		var laid: Array[Vector3] = run_view.path() if run_view.style() == "cable" \
 			else PipeRoute.lay(entry["points"])
+		# A multicore lands on its junction box and its cabinet: every
+		# record of those two is open to it.
+		var open: Array = []
+		var circuits: Array = entry.get("circuits", [])
+		if not circuits.is_empty():
+			var groups := [_approach_group(str((circuits[0] as Array)[0])),
+				_approach_group(str((circuits[0] as Array)[2]))]
+			for record_name: String in views:
+				if groups.has(_approach_group(record_name)):
+					open.append(record_name)
 		if laid.size() >= 2:
-			checks.append([laid, run_view.radius(), name_, []])
+			checks.append([laid, run_view.radius(), name_, [], open])
 	for item: Array in checks:
 		var path: Array[Vector3] = item[0]
-		var ctx := clearance.context(item[3], path[0], path[path.size() - 1], float(item[1]))
+		var ctx := clearance.context(item[3], path[0], path[path.size() - 1], float(item[1]),
+			item[4] if item.size() > 4 else [])
 		for hit: Dictionary in clearance.hits(path, ctx):
 			var p: Vector3 = hit["at"]
 			lines.append("%s through %s at (%.1f, %.2f, %.1f)" % [item[2], str(hit["owner"]), p.x, p.y, p.z])
@@ -2341,7 +2352,13 @@ func _build_run_view(name_: String) -> void:
 	if entry["kind"] == "run_sleeve":
 		var radius := _sleeve_radius(name_)
 		view.set_meta("sleeve", name_)
-		view.setup(CableDrape.curve(_sleeve_skeleton(name_)), live, spec["color"], radius, name_, "cable", 8)
+		var clear := bool(entry.get("clear", false))
+		view.setup(CableDrape.curve(_sleeve_skeleton(name_)), live,
+			SLEEVE_CLEAR if clear else spec["color"], radius, name_, "cable", 8)
+		view.config_cb = _configure_run
+		entry["node"] = view
+		view.service_label = str(entry.get("label", ""))
+		return
 	else:
 		view.setup(PipeRoute.lay(entry["points"]), live,
 			spec["color"], spec["radius"], name_, spec["style"], 1)
@@ -2354,6 +2371,12 @@ func _build_run_view(name_: String) -> void:
 ## E on a run: open the color/label editor and store what it applies.
 func _configure_run(view: PipeView) -> void:
 	if config_panel == null:
+		return
+	var sleeve := _sleeve_of_view(view)
+	if sleeve != "":
+		var entry: Dictionary = runs[sleeve]
+		config_panel.open_for_sleeve(bool(entry.get("clear", false)), str(entry.get("label", "")),
+			func(clear: bool, label_: String) -> void: set_sleeve_look(sleeve, clear, label_))
 		return
 	var is_wire := false
 	for visual in _wire_visuals:
@@ -3203,7 +3226,7 @@ func _revalidate_supports() -> void:
 			continue
 		var sleeve := str(_cable_carriers.get(_cable_key(visual), ""))
 		if sleeve != "" and runs.has(sleeve):
-			if bool(visual.get("fixed", false)):
+			if bool(visual.get("fixed", false)) or _is_tray(sleeve):
 				continue
 			# A sleeved cable's tails not yet baked: found again once
 			# physics knows the floor under them.
@@ -3550,6 +3573,8 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 	if _is_cable_run(src_name, src_port):
 		var sleeve := str(_cable_carriers.get("%s.%s>%s.%s" % [src_name, src_port, dst_name, dst_port], ""))
 		if sleeve != "" and runs.has(sleeve):
+			if _is_tray(sleeve):
+				return _trayed_route(src_name, src_port, dst_name, dst_port, radius, sleeve)
 			return _sleeved_route(src_name, src_port, dst_name, dst_port, radius, sleeve, waypoints, fixed)
 		return _cable_route(src_name, src_port, dst_name, dst_port, waypoints, radius, fixed)
 	if fixed:
@@ -4007,7 +4032,7 @@ func _cable_route(src_name: String, src_port: String, dst_name: String, dst_port
 		if is_nan(floor_a) or is_nan(floor_b) or absf(floor_a - floor_b) >= 0.3:
 			floor_a = NAN   # two floors, or not known yet: no drop to either
 			floor_b = NAN
-	var skeleton := CableDrape.skeleton(from, from_dir, to, to_dir, corners, floor_a, floor_b, radius)
+	var skeleton := _clear_drape(from, from_dir, to, to_dir, corners, floor_a, floor_b, radius, [src_name, dst_name])
 	return {"lane": 0, "path": CableDrape.curve(skeleton), "corners": corners, "searched": false,
 		"base_path": skeleton, "own_path": skeleton}
 
@@ -4057,6 +4082,21 @@ func _floor_corners(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vecto
 				continue
 		corners.append(laid[i])
 	return corners
+
+
+## A cable's drape that clears what is beside its terminals: dropping
+## out the way each terminal faces, unless that passes through
+## something, then toward its next point.
+func _clear_drape(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector3, corners: Array,
+		floor_a: float, floor_b: float, radius: float, own: Array) -> Array[Vector3]:
+	var facing := CableDrape.skeleton(from, from_dir, to, to_dir, corners, floor_a, floor_b, radius)
+	var ctx := clearance.context(own, from, to, radius)
+	if clearance.hits(CableDrape.curve(facing), ctx).is_empty():
+		return facing
+	var toward := CableDrape.skeleton(from, from_dir, to, to_dir, corners, floor_a, floor_b, radius, false)
+	if clearance.hits(CableDrape.curve(toward), ctx).size() < clearance.hits(CableDrape.curve(facing), ctx).size():
+		return toward
+	return facing
 
 
 ## The height of the floor, deck or ground under a plant-local point
@@ -4127,6 +4167,21 @@ func _sleeve_skeleton(name_: String) -> Array[Vector3]:
 	return out
 
 
+## A sleeve clear or black, and its label.
+func set_sleeve_look(name_: String, clear: bool, label_: String) -> void:
+	if not runs.has(name_):
+		return
+	checkpoint()
+	var entry: Dictionary = runs[name_]
+	entry["clear"] = clear
+	entry["label"] = label_
+	_build_run_view(name_)
+
+
+## A clear sleeve's braid: tinted glass, the cables inside seen through it.
+const SLEEVE_CLEAR := Color(0.80, 0.86, 0.90, 0.22)
+
+
 ## The sleeve a view draws, or "".
 func _sleeve_of_view(view: PipeView) -> String:
 	if view == null or not view.has_meta("sleeve"):
@@ -4140,7 +4195,8 @@ func _sleeve_of_view(view: PipeView) -> String:
 func _resize_sleeve(name_: String) -> void:
 	if not runs.has(name_):
 		return
-	_build_run_view(name_)
+	if (runs[name_] as Dictionary)["kind"] == "run_sleeve":
+		_build_run_view(name_)
 	for key: String in _cable_carriers:
 		if str(_cable_carriers[key]) == name_:
 			var visual := _visual_by_key(key)
@@ -4182,10 +4238,12 @@ func _sleeved_route(src_name: String, src_port: String, dst_name: String, dst_po
 		else _floor_y(from + from_dir * CableDrape.GLAND)
 	var floor_b := (corners_b[corners_b.size() - 1] as Vector3).y - radius if not corners_b.is_empty() \
 		else _floor_y(to + to_dir * CableDrape.GLAND)
-	var skeleton := CableDrape.skeleton(from, from_dir, end_a, out_a, corners_a, floor_a, end_a.y - sleeve_r, radius)
+	var skeleton := _clear_drape(from, from_dir, end_a, out_a, corners_a, floor_a, end_a.y - sleeve_r, radius,
+		[src_name, ""])
 	for i in range(1, centre.size() - 1):
 		skeleton.append(centre[i])
-	skeleton.append_array(CableDrape.skeleton(end_b, out_b, to, to_dir, corners_b, end_b.y - sleeve_r, floor_b, radius))
+	skeleton.append_array(_clear_drape(end_b, out_b, to, to_dir, corners_b, end_b.y - sleeve_r, floor_b, radius,
+		["", dst_name]))
 	return {"lane": 0, "path": CableDrape.curve(skeleton), "corners": corners_a + corners_b, "searched": false,
 		"base_path": skeleton, "own_path": skeleton}
 
@@ -4265,30 +4323,121 @@ func toggle_sleeve(view: PipeView) -> Dictionary:
 	var best_reach := INF
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
-		if entry["kind"] != "run_sleeve":
-			continue
-		var pts: Array = entry["points"]
-		var e0: Vector3 = pts[0]
-		var e1: Vector3 = pts[pts.size() - 1]
-		var reach := minf(maxf(_plan_distance(from, e0), _plan_distance(to, e1)),
-			maxf(_plan_distance(from, e1), _plan_distance(to, e0)))
+		var reach := INF
+		if entry["kind"] == "run_sleeve":
+			var pts: Array = entry["points"]
+			var e0: Vector3 = pts[0]
+			var e1: Vector3 = pts[pts.size() - 1]
+			reach = minf(maxf(_plan_distance(from, e0), _plan_distance(to, e1)),
+				maxf(_plan_distance(from, e1), _plan_distance(to, e0)))
+		elif _is_tray(name_):
+			# A tray is joined anywhere along it.
+			var tray := PipeRoute.lay(entry["points"])
+			reach = maxf(from.distance_to(_on_path(tray, from)["point"]), to.distance_to(_on_path(tray, to)["point"]))
 		if reach < best_reach:
 			best_reach = reach
 			best = name_
 	if best == "":
-		return {"error": "no sleeve laid: lay one from the routing page"}
+		return {"error": "no sleeve or tray laid: lay one from the routing page"}
 	if best_reach > SLEEVE_REACH:
-		return {"error": "no sleeve has an end within %.0f m of each terminal" % SLEEVE_REACH}
+		return {"error": "no sleeve or tray within %.0f m of both terminals" % SLEEVE_REACH}
 	return {"error": thread_cable(view, best), "sleeve": best, "into": true}
 
 
 const SLEEVE_REACH := 8.0
 
 
+## ---- cables in a tray ----------------------------------------------------------
+## A tray (`run_tray`) keeps the pipe rules: laid on its supports, never
+## through anything. A cable threaded into it climbs in at the point of
+## the tray nearest its source terminal, lies on the tray's floor in a
+## place of its own across the width, and climbs out at the point
+## nearest its destination. Its tails hang straight between terminal
+## and tray.
+
+const TRAY_PITCH := 0.03      # cable to cable across the tray
+const TRAY_OVER := 0.14       # how far over the tray's floor a cable crosses its rail
+
+
+func _is_tray(name_: String) -> bool:
+	return runs.has(name_) and str(StructureFactory.RUNS[(runs[name_] as Dictionary)["kind"]]["style"]) == "tray"
+
+
+## The nearest point of a laid path to p: {point, seg, along}, `along`
+## the metres from the path's start.
+static func _on_path(path: Array[Vector3], p: Vector3) -> Dictionary:
+	var best := {"point": path[0], "seg": 0, "along": 0.0}
+	var best_d := INF
+	var walked := 0.0
+	for i in path.size() - 1:
+		var q := Geometry3D.get_closest_point_to_segment(p, path[i], path[i + 1])
+		var d := q.distance_to(p)
+		if d < best_d:
+			best_d = d
+			best = {"point": q, "seg": i, "along": walked + path[i].distance_to(q)}
+		walked += path[i].distance_to(path[i + 1])
+	return best
+
+
+## A cable's place across a tray: its turn among the tray's cables,
+## centred on the tray.
+func _tray_offset(tray: String, key: String, width: float) -> float:
+	var keys: Array = []
+	for k: String in _cable_carriers:
+		if str(_cable_carriers[k]) == tray:
+			keys.append(k)
+	keys.sort()
+	var slot := keys.find(key)
+	var across := (keys.size() - 1) * TRAY_PITCH
+	return clampf(-across / 2.0 + slot * TRAY_PITCH, -width / 2.0 + 0.04, width / 2.0 - 0.04)
+
+
+func _trayed_route(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		radius: float, tray: String) -> Dictionary:
+	var entry: Dictionary = runs[tray]
+	var line := PipeRoute.lay(entry["points"])
+	var tray_r: float = StructureFactory.RUNS[entry["kind"]]["radius"]
+	var width := tray_r * 2.0
+	var offset := _tray_offset(tray, "%s.%s>%s.%s" % [src_name, src_port, dst_name, dst_port], width)
+	var from := _marker_pos(src_name, src_port)
+	var to := _marker_pos(dst_name, dst_port)
+	var from_dir := _marker_dir(src_name, src_port)
+	var to_dir := _marker_dir(dst_name, dst_port)
+	var enter := _on_path(line, from)
+	var leave := _on_path(line, to)
+	# The tray's own points between the two, in the cable's direction.
+	var inside: Array[Vector3] = [enter["point"]]
+	if float(enter["along"]) <= float(leave["along"]):
+		for i in range(int(enter["seg"]) + 1, int(leave["seg"]) + 1):
+			inside.append(line[i])
+	else:
+		for i in range(int(enter["seg"]), int(leave["seg"]), -1):
+			inside.append(line[i])
+	inside.append(leave["point"])
+	# Laid on the floor of the tray, beside the others.
+	var laid: Array[Vector3] = []
+	for i in inside.size():
+		var ahead := inside[mini(i + 1, inside.size() - 1)] - inside[maxi(i - 1, 0)]
+		var across := Vector3(-ahead.z, 0.0, ahead.x).normalized() if Vector2(ahead.x, ahead.z).length() > 0.001 			else Vector3.ZERO
+		var at := inside[i] + across * offset + Vector3.UP * (PipeView.tray_floor(tray_r) + radius)
+		if laid.is_empty() or laid[laid.size() - 1].distance_to(at) > 0.01:
+			laid.append(at)
+	var sa := from + from_dir * CableDrape.GLAND
+	var sb := to + to_dir * CableDrape.GLAND
+	var skeleton: Array[Vector3] = [from, sa]
+	skeleton.append(laid[0] + Vector3.UP * TRAY_OVER)
+	skeleton.append_array(laid)
+	skeleton.append(laid[laid.size() - 1] + Vector3.UP * TRAY_OVER)
+	skeleton.append(sb)
+	skeleton.append(to)
+	return {"lane": 0, "path": CableDrape.curve(skeleton), "corners": [], "searched": false,
+		"base_path": skeleton, "own_path": skeleton}
+
+
 ## Thread a loose cable through a sleeve. "" or why not.
 func thread_cable(view: PipeView, sleeve: String) -> String:
-	if not runs.has(sleeve) or (runs[sleeve] as Dictionary)["kind"] != "run_sleeve":
-		return "no sleeve %s" % sleeve
+	if not runs.has(sleeve) or not ((runs[sleeve] as Dictionary)["kind"] == "run_sleeve" or _is_tray(sleeve)):
+		return "no sleeve or tray %s" % sleeve
 	for visual in _wire_visuals:
 		if visual["node"] == view:
 			if view.style() != "cable":
@@ -4345,7 +4494,7 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	pipe.end_radius_a = _end_bore(src_name, src_port) if is_process else radius
 	pipe.end_radius_b = _end_bore(dst_name, dst_port) if is_process else radius
 	var sleeve := str(_cable_carriers.get("%s.%s>%s.%s" % [src_name, src_port, dst_name, dst_port], ""))
-	if sleeve != "" and runs.has(sleeve):
+	if sleeve != "" and runs.has(sleeve) and (runs[sleeve] as Dictionary)["kind"] == "run_sleeve":
 		# Inside its sleeve a cable is not clickable: a click there is on
 		# the sleeve. Only its tails are the cable's.
 		var centre := ((runs[sleeve] as Dictionary)["node"] as PipeView).path()
@@ -5447,7 +5596,8 @@ func snapshot() -> Dictionary:
 			pts.append([point.x, point.y, point.z])
 		run_list.append({"kind": entry["kind"], "name": name_, "points": pts,
 			"color": entry.get("color", ""), "label": entry.get("label", ""),
-			"fitting": entry.get("fitting", ""), "circuits": entry.get("circuits", [])})
+			"fitting": entry.get("fitting", ""), "circuits": entry.get("circuits", []),
+			"clear": entry.get("clear", false)})
 	var cab_list: Array = []
 	for name_: String in cabinets:
 		var entry: Dictionary = cabinets[name_]
@@ -5733,6 +5883,8 @@ func restore(payload: Dictionary) -> bool:
 			_multicore_getter(circuits.duplicate(true)) if not circuits.is_empty() else Callable())
 		if not circuits.is_empty():
 			(runs[entry["name"]] as Dictionary)["circuits"] = circuits.duplicate(true)
+		if bool(entry.get("clear", false)):
+			set_sleeve_look(entry["name"], true, str(entry.get("label", "")))
 		if str(entry.get("color", "")) != "":
 			set_run_service((runs[entry["name"]] as Dictionary)["node"] as PipeView,
 				Color.html(str(entry["color"])), str(entry.get("label", "")), str(entry.get("fitting", "")))

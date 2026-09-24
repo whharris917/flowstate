@@ -176,8 +176,8 @@ func _build_body() -> void:
 	_merge_fittings()
 
 
-## A loose cable: one tube along its curve, and a gland at each
-## terminal.
+## A loose cable: one tube along its curve. A sleeve has an end cap at
+## each end.
 func _build_cable() -> void:
 	var tube := CableDrape.tube_mesh(_path, _radius)
 	if tube == null:
@@ -187,6 +187,8 @@ func _build_cable() -> void:
 	inst.material_override = _cold
 	add_child(inst)
 	_meshes.append(inst)
+	if not has_meta("sleeve"):
+		return   # a cable's gland is its terminal's
 	var gland_mat := ViewUtil.flat(Color(0.16, 0.16, 0.18))
 	var n := _path.size()
 	for end: Array in [[_path[0], _path[1]], [_path[n - 1], _path[n - 2]]]:
@@ -395,20 +397,24 @@ static func segment_node(from: Vector3, to: Vector3, radius: float,
 	root.position = (from + to) / 2.0
 	root.basis = _segment_basis(direction)
 	if style == "tray":
+		# The floor and two side rails, in proportion to the width.
 		var width := radius * 2.0
+		var floor_t := tray_floor(radius) * 2.0
+		var rail_t := minf(0.04, width * 0.12)
+		var rail_h := clampf(width * 0.4, 0.06, 0.11)
 		var base := MeshInstance3D.new()
 		var base_mesh := BoxMesh.new()
-		base_mesh.size = Vector3(width, 0.05, length)
+		base_mesh.size = Vector3(width, floor_t, length)
 		base.mesh = base_mesh
 		base.material_override = mat
 		root.add_child(base)
 		for side: float in [-1.0, 1.0]:
 			var rail := MeshInstance3D.new()
 			var rail_mesh := BoxMesh.new()
-			rail_mesh.size = Vector3(0.04, 0.11, length)
+			rail_mesh.size = Vector3(rail_t, rail_h, length)
 			rail.mesh = rail_mesh
 			rail.material_override = mat
-			rail.position = Vector3(side * (width / 2.0 - 0.02), 0.05, 0)
+			rail.position = Vector3(side * (width / 2.0 - rail_t / 2.0), rail_h / 2.0 - floor_t * 0.1, 0)
 			root.add_child(rail)
 	else:
 		var inst := MeshInstance3D.new()
@@ -425,6 +431,12 @@ static func segment_node(from: Vector3, to: Vector3, radius: float,
 		inst.basis = Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
 		root.add_child(inst)
 	return root
+
+
+## How far a tray's floor stands above its centreline: half its
+## thickness.
+static func tray_floor(radius: float) -> float:
+	return clampf(radius * 0.125, 0.008, 0.025)
 
 
 func _collected(node: Node3D) -> Node3D:
@@ -711,7 +723,7 @@ func describe() -> String:
 	# The support rule only speaks up when it fails.
 	var tag := "" if service_label == "" else " · %s" % service_label
 	var alarm := "\nUNSUPPORTED SPAN — add structure" if _unsupported else ""
-	var keys := "E color/label · T sleeve · X removes" if _style == "cable" else "E color/label · X removes"
+	var keys := "E color/label · T sleeve or tray · X removes" if _style == "cable" else "E color/label · X removes"
 	return "%s%s%s\n(%s)" % [_desc, tag, alarm, keys]
 
 

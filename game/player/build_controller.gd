@@ -1179,7 +1179,7 @@ func _finish_run() -> void:
 func _toggle_sleeve() -> void:
 	var aimed := player.aimed_collider()
 	if aimed == null or not aimed.has_meta("run"):
-		hud.toast("aim at a cable to put it in a sleeve or take it out")
+		hud.toast("aim at a cable to put it in a sleeve or a tray, or take it out")
 		return
 	var done := plant.toggle_sleeve(aimed.get_meta("run") as PipeView)
 	if str(done["error"]) != "":
@@ -2039,12 +2039,15 @@ func _grab_point() -> Vector3:
 	var path := _leg_gizmo.path
 	var hit_point := plant.to_local(player.ray.get_collision_point())
 	var leg := _own_leg_near(path, hit_point)
-	if leg < 1 or leg > path.size() - 3:
+	# A sleeve has no fittings: every straight of it takes a corner. A
+	# cable lies on a floor that need not be level.
+	var sleeve := _edit_run.has_meta("sleeve")
+	if leg < (0 if sleeve else 1) or leg > path.size() - (2 if sleeve else 3):
 		return Vector3.INF
 	_grab_leg = leg
 	var a: Vector3 = path[leg]
 	var b: Vector3 = path[leg + 1]
-	if absf(a.y - b.y) > 0.001:
+	if _edit_run.style() != "cable" and absf(a.y - b.y) > 0.001:
 		return Vector3.INF
 	if _handle_under_crosshair() != null:
 		return Vector3.INF

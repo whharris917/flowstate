@@ -21,11 +21,13 @@ extends RefCounted
 ##   3. A run resting on what carries it — a cable on the floor, a tray
 ##      on its beam — is not passing through it: a surface just under
 ##      the run, facing up, does not block.
-##   4. The probe is a sphere of the run's radius plus a margin, at the
+##   4. The probe is a sphere of the run's radius plus a margin (less for a
+##      cable, which may lie against what it passes), at the
 ##      run's own height. What it finds is cached by tenth-metre cell
 ##      and radius until the plant changes.
 
 const MARGIN := 0.03
+const CABLE_MARGIN := 0.005   # a cable may lie against what it passes
 const STEP := 0.15          # sample spacing along a leg
 const REST := 0.1           # how far under a run a carrying surface may be
 
@@ -202,7 +204,7 @@ func _shape(radius: float) -> SphereShape3D:
 	var key := roundi(radius * 100.0)
 	if not _shapes.has(key):
 		var shape := SphereShape3D.new()
-		shape.radius = radius + MARGIN
+		shape.radius = radius + (CABLE_MARGIN if radius < 0.01 else MARGIN)
 		_shapes[key] = shape
 	return _shapes[key]
 

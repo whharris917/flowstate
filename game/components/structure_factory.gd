@@ -19,7 +19,8 @@ const CATALOG: Array[Dictionary] = [
 const CATALOG_ROUTING: Array[Dictionary] = [
 	{"type": "run_pipe", "label": "Pipe run"},
 	{"type": "run_conduit", "label": "Conduit run"},
-	{"type": "run_tray", "label": "Cable tray"},
+	{"type": "run_tray", "label": "Cable tray 400 mm"},
+	{"type": "run_tray_150", "label": "Cable tray 150 mm"},
 	{"type": "run_sleeve", "label": "Cable sleeve"},
 	{"type": "s_sign", "label": "Sign — E edits"},
 	{"type": "s_slab", "label": "Floor slab 4 m (tile)"},
@@ -33,6 +34,7 @@ const RUNS := {
 	"run_pipe": {"radius": 0.07, "style": "pipe", "color": Color(0.65, 0.67, 0.70)},
 	"run_conduit": {"radius": 0.025, "style": "pipe", "color": Color(0.72, 0.72, 0.75)},
 	"run_tray": {"radius": 0.20, "style": "tray", "color": Color(0.55, 0.57, 0.60)},
+	"run_tray_150": {"radius": 0.075, "style": "tray", "color": Color(0.55, 0.57, 0.60)},
 	# A multicore cable: many circuits in one sheath, from a junction
 	# box to a cabinet. Placed by Plant.connect_multicore, not by hand.
 	"run_cable": {"radius": 0.04, "style": "pipe", "color": Color(0.14, 0.14, 0.16)},
