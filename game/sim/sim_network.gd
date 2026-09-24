@@ -770,7 +770,7 @@ func _block_step(b: int, free: PackedInt32Array, index_of: PackedInt32Array, n: 
 		shortest = scale
 		_place(block, free, step, saved, scale)
 		_evaluate_list(own)
-		if _improves(_block_norm(b, index_of), before, scale):
+		if _accepts(b, index_of, residual, before, scale):
 			improved = true
 			break
 		scale *= 0.5
@@ -780,7 +780,7 @@ func _block_step(b: int, free: PackedInt32Array, index_of: PackedInt32Array, n: 
 				break
 			_place(block, free, step, saved, scale_up)
 			_evaluate_list(own)
-			if _improves(_block_norm(b, index_of), before, scale_up):
+			if _accepts(b, index_of, residual, before, scale_up):
 				improved = true
 				break
 	# A node stranded below a closed one-way wall with flow pushing at it:
@@ -818,6 +818,25 @@ func _block_step(b: int, free: PackedInt32Array, index_of: PackedInt32Array, n: 
 	_place(block, free, step, saved, shortest)
 	_evaluate_list(own)
 	return false
+
+
+## Whether a block's step lands: its imbalance falls by Armijo's margin,
+## and no node swings to the other side of its balance without at least
+## halving -- a square law's mirror image. A node at the end of a dead leg
+## behind a throttled valve lands near the mirror of where it stood; the
+## block's norm can still fall a little (the pipe beyond the valve is not
+## quite symmetric, or another corner of the block improves), and the leg
+## flips for ever. Reads the new imbalances _block_norm leaves in _scratch.
+func _accepts(b: int, index_of: PackedInt32Array, residual: PackedFloat64Array,
+		before: float, scale: float) -> bool:
+	if not _improves(_block_norm(b, index_of), before, scale):
+		return false
+	for slot: int in _blocks[b]:
+		var old := residual[slot]
+		var now := _scratch[slot]
+		if old * now < 0.0 and absf(old) > _tolerance_at(slot) and absf(now) > 0.5 * absf(old):
+			return false
+	return true
 
 
 ## Move a block's nodes from where they were saved by a scale of the step.
@@ -982,12 +1001,10 @@ static func _solve_banded(matrix: PackedFloat64Array, rhs: PackedFloat64Array,
 
 ## The cold-start pressure of every node that has none of its own: the
 ## mean of the plant's fixed pressures. A node a rebuild carried over
-## (warm) keeps the answer it had. Local seeds are worse: the mean of the
-## fixed pressures a block touches can start a transient in which a dead
-## leg flips across its square law for the rest of the solve (a latent
-## weakness, recorded with its network in tests/data), and a
-## unit-conductance linear solve can start a node fed through a tight
-## orifice below a one-way drain's crack.
+## (warm) keeps the answer it had. Local seeds do no better: the mean of
+## the fixed pressures a block touches takes more iterations on the Maine
+## site's first solve, and a unit-conductance linear solve can start a
+## node fed through a tight orifice below a one-way drain's crack.
 func _seed_blocks(free: PackedInt32Array, count: int) -> void:
 	var plant_total := 0.0
 	var known := 0

@@ -106,7 +106,7 @@ flowstate/
 
 Each of these cost real time; the stories are in `docs/history.md`. They hold in both kernels.
 
-- Damp Newton steps: halve until the residual improves by Armijo's margin (`_improves`), or a square law's mirror image is accepted.
+- Damp Newton steps: halve until the block's residual improves by Armijo's margin (`_improves`) and no node swings to the other side of its balance without at least halving (`accepts` / `_accepts`). Either alone lets a square law's mirror image through: a dead leg behind a throttled valve flips for ever.
 - `_square_law_flow` and `_square_law_slope` regularise consistently.
 - "Does it conduct?" (`is_conducting`) and "what is its slope?" (`conductance`) are separate. A shut check or dry nozzle reports the open side's slope while flow pushes toward its crack, and nothing while flow is pulled away (`_pulled_away`); connectivity treats it as a wall. A `FixedFlow` has zero slope and is not a wall.
 - An internal node with one branch carries no flow: join it to a nozzle node or make it a fixed boundary.
@@ -175,9 +175,8 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 **Showcase routing counts:** 4 crossings, 0 overlaps, 0 unsupported, 20 through solids (layout debt). Maine: 4 crossings at the filling line's cabinet, otherwise 0.
 
 **First things next session:**
-1. **The solver's dead-leg flip.** `tests/data/showcase_xv403_dead_leg.json` is a strict xfail in `tests/test_replayed_networks.py` (remove the marker when it passes). The dead leg between Unit 400's barely-open XV-403 and its shut drain flips across the valve's square law each iteration, because a step is judged on the whole block and gains elsewhere let the mirror image pass. Replay: `PYTHONPATH=. .venv/Scripts/python.exe tools/replay_network.py tests/data/showcase_xv403_dead_leg.json` (nodes 101–103). The fix must be general, in both kernels, keep every world at no unconverged solves, and keep the showcase's solve time. Then retry a per-block cold-start seed.
-2. **Filling line, open for the director:** the look at bench scale beside full-size conduits and four free-standing 24 V supplies, the four crossings at the cabinet, nine library page drafts, the campaign rung.
-3. **Standing review items:** the drip demo with tube-sized nozzles; the small-bore views (first drafts; coil and cable anchors sit where a DN50 body would put them); the two documents in `docs/` and their list of five spec-prose drifts; the walk report on the merged showcase and hover-only labels; the showcase's startup time.
+1. **Filling line, open for the director:** the look at bench scale beside full-size conduits and four free-standing 24 V supplies, the four crossings at the cabinet, nine library page drafts, the campaign rung.
+2. **Standing review items:** the drip demo with tube-sized nozzles; the small-bore views (first drafts; coil and cable anchors sit where a DN50 body would put them); the two documents in `docs/` and their list of five spec-prose drifts; the walk report on the merged showcase and hover-only labels; the showcase's startup time.
 
 **Known gaps:**
 - Mass does not close across the steam generator: its drum is a fixed-pressure boundary that makes up whatever is drawn. Closing it needs a real drum inventory and changes the boiler's dynamics; the director's call.

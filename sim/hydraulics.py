@@ -745,12 +745,11 @@ class Network:
     def _seed_blocks(self, blocks: list[list[int]], free: list[int]) -> None:
         """The cold-start pressure of every node that has none of its own:
         the mean of the plant's fixed pressures. A node a rebuild carried
-        over (``warm``) keeps the answer it had. Local seeds do worse: the
-        mean of the fixed pressures a block touches can start a dead leg
-        behind a barely-open valve flipping across its square law for the
-        rest of the solve (a latent weakness, recorded with its network in
-        tests/data), and a unit-conductance linear solve can start a node
-        fed through a tight orifice below a one-way drain's crack."""
+        over (``warm``) keeps the answer it had. Local seeds do no better:
+        the mean of the fixed pressures a block touches takes more
+        iterations on the Maine site's first solve, and a unit-conductance
+        linear solve can start a node fed through a tight orifice below a
+        one-way drain's crack."""
         known = [self.pressures[i] for i, f in enumerate(self.fixed) if f]
         plant_mean = sum(known) / len(known) if known else 0.0
         for block in blocks:
@@ -1013,13 +1012,32 @@ class Network:
             r = self._residuals(index_of, n)
             return _norm([r[slot] for slot in block])
 
+        tolerance = [self._tolerance_at(throughput[slot]) for slot in block]
+
+        def accepts(scale: float) -> bool:
+            # The block's imbalance must fall by Armijo's margin, and no
+            # node may swing to the other side of its balance without at
+            # least halving: a square law's mirror image. A node at the end
+            # of a dead leg behind a throttled valve lands near the mirror
+            # of where it stood; the block's norm can still fall a little
+            # (the pipe beyond the valve is not quite symmetric, or another
+            # corner of the block improves), and the leg flips for ever.
+            r = self._residuals(index_of, n)
+            if not _improves(_norm([r[slot] for slot in block]), before, scale):
+                return False
+            for i, slot in enumerate(block):
+                old, new = residual[slot], r[slot]
+                if old * new < 0.0 and abs(old) > tolerance[i] and abs(new) > 0.5 * abs(old):
+                    return False
+            return True
+
         scale = 1.0
         shortest = scale
         improved = False
         for _attempt in range(self.MAX_HALVINGS):
             shortest = scale
             place(scale)
-            if _improves(block_norm(), before, scale):
+            if accepts(scale):
                 improved = True
                 break
             scale *= 0.5
@@ -1029,7 +1047,7 @@ class Network:
                 if longest * scale > 2.0 * self.MAX_STEP_PA:
                     break
                 place(scale)
-                if _improves(block_norm(), before, scale):
+                if accepts(scale):
                     improved = True
                     break
         # A node stranded below a closed one-way wall with flow pushing

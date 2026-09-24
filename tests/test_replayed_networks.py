@@ -16,16 +16,13 @@ land.
     so a block that stops at its first failure ends the solve 82 mL/s
     out.
 
-One is known to fail still, and is kept so the fix has a target:
-
-  * showcase_xv403_dead_leg: a warm solve of the showcase on
-    a transient reached from a different cold seed. The short dead leg
+  * showcase_xv403_dead_leg: a warm solve of the showcase on a
+    transient reached from a different cold seed. The short dead leg
     between Unit 400's sewer valve XV-403 (a few percent open) and its
     shut one-way drain carries a flow back through the valve; Newton's
-    step on the valve's square law lands on its mirror image, and the
-    halving that would cure it is never taken, because the step is
-    judged on the whole Unit 400 block, whose small gains elsewhere let
-    the mirror pass iteration after iteration.
+    step on the valve's square law lands near its mirror image, which
+    the block's norm alone would accept. A step that swings a node to
+    the other side of its balance without halving it is refused.
 """
 from __future__ import annotations
 
@@ -41,17 +38,10 @@ from replay_network import build  # noqa: E402
 DATA = Path(__file__).resolve().parent / "data"
 
 
-@pytest.mark.parametrize("name", ["showcase_rebuild_124_30", "maine_cold_start"])
+@pytest.mark.parametrize("name", ["showcase_rebuild_124_30", "maine_cold_start",
+                                  "showcase_xv403_dead_leg"])
 def test_a_network_the_solver_once_failed_now_lands(name: str) -> None:
     net = build(json.loads((DATA / (name + ".json")).read_text(encoding="utf-8")))
     net.solve()
     assert net.converged
     assert net.residual_lps < 1e-4
-
-
-@pytest.mark.xfail(reason="a square-law mirror inside a block that improves elsewhere: not yet fixed",
-                   strict=True)
-def test_a_dead_leg_behind_a_barely_open_valve_lands() -> None:
-    net = build(json.loads((DATA / "showcase_xv403_dead_leg.json").read_text(encoding="utf-8")))
-    net.solve()
-    assert net.converged
