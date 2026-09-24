@@ -1460,8 +1460,8 @@ func _crossing_targets(skip: Dictionary, ignore: Array, order: int) -> Array:
 				[str(visual["a"]), str(visual["b"])], later])
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
-		if (entry["node"] as PipeView).style() == "tray":
-			continue  # a conduit lands on a tray, it does not hop it
+		if (entry["node"] as PipeView).style() in ["tray", "cable"]:
+			continue  # a conduit lands on a tray, it does not hop it; a sleeve is on the floor
 		var run_path := PipeRoute.lay(entry["points"])
 		if run_path.size() >= 2:
 			others.append([run_path, (entry["node"] as PipeView).radius(), _path_box(run_path), name_, [], false])
@@ -1734,9 +1734,11 @@ func intersection_report() -> PackedStringArray:
 			[str(visual["a"]), str(visual["b"])]])
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
-		var laid: Array[Vector3] = PipeRoute.lay(entry["points"])
+		var run_view := entry["node"] as PipeView
+		var laid: Array[Vector3] = run_view.path() if run_view.style() == "cable" \
+			else PipeRoute.lay(entry["points"])
 		if laid.size() >= 2:
-			checks.append([laid, (entry["node"] as PipeView).radius(), name_, []])
+			checks.append([laid, run_view.radius(), name_, []])
 	for item: Array in checks:
 		var path: Array[Vector3] = item[0]
 		var ctx := clearance.context(item[3], path[0], path[path.size() - 1], float(item[1]))
@@ -2310,17 +2312,42 @@ func place_run(kind: String, name_: String, sparse_local: Array, getter: Callabl
 	checkpoint()
 	if runs.has(name_) or not StructureFactory.RUNS.has(kind):
 		return false
-	var spec: Dictionary = StructureFactory.RUNS[kind]
-	var view := PipeView.new()
-	add_child(view)
-	var live := getter if getter.is_valid() else func() -> float: return 0.0
-	view.setup(PipeRoute.lay(sparse_local), live,
-		spec["color"], spec["radius"], name_, spec["style"], 1)
-	view.config_cb = _configure_run
-	runs[name_] = {"kind": kind, "node": view, "points": sparse_local,
-		"color": "", "label": ""}
+	var points := sparse_local
+	if kind == "run_sleeve":
+		# A sleeve lies on the floor under the points it was laid by.
+		points = []
+		for p: Vector3 in sparse_local:
+			var y := _floor_y(p)
+			points.append(Vector3(p.x, y, p.z) if not is_nan(y) else p)
+	runs[name_] = {"kind": kind, "node": null, "points": points, "color": "", "label": "",
+		"getter": getter}
+	_build_run_view(name_)
 	_schedule_revalidate()
 	return true
+
+
+## A standalone run's view, from its entry. A sleeve is drawn like a
+## loose cable at the size of what it carries, on the runs' layer, not
+## the structure's: it carries nothing and the player walks over it.
+func _build_run_view(name_: String) -> void:
+	var entry: Dictionary = runs[name_]
+	var spec: Dictionary = StructureFactory.RUNS[entry["kind"]]
+	if entry["node"] != null:
+		(entry["node"] as Node).queue_free()
+	var view := PipeView.new()
+	add_child(view)
+	var getter: Callable = entry.get("getter", Callable())
+	var live := getter if getter.is_valid() else func() -> float: return 0.0
+	if entry["kind"] == "run_sleeve":
+		var radius := _sleeve_radius(name_)
+		view.setup(CableDrape.curve(_sleeve_skeleton(name_)), live, spec["color"], radius, name_, "cable", 8)
+	else:
+		view.setup(PipeRoute.lay(entry["points"]), live,
+			spec["color"], spec["radius"], name_, spec["style"], 1)
+	view.config_cb = _configure_run
+	entry["node"] = view
+	if str(entry.get("color", "")) != "":
+		view.apply_service(Color.html(str(entry["color"])), str(entry.get("label", "")))
 
 
 ## E on a run: open the color/label editor and store what it applies.
@@ -2385,6 +2412,14 @@ func remove_placed_run(view: PipeView) -> bool:
 	checkpoint()
 	for name_: String in runs:
 		if (runs[name_] as Dictionary)["node"] == view:
+			for key: String in _cable_carriers.keys():
+				if str(_cable_carriers[key]) == name_:
+					_cable_carriers.erase(key)
+					var visual := _visual_by_key(key)
+					if not visual.is_empty():
+						visual["fixed"] = false
+						visual["waypoints"] = []
+						_refresh_visual(visual)
 			view.queue_free()
 			runs.erase(name_)
 			_schedule_revalidate()  # whatever it carried re-checks
@@ -2401,6 +2436,10 @@ func remove_run(view: PipeView) -> bool:
 			_disconnect_visual(visual)
 			(visual["node"] as Node).queue_free()
 			_wire_visuals.erase(visual)
+			var sleeve := str(_cable_carriers.get(_cable_key(visual), ""))
+			if sleeve != "":
+				_cable_carriers.erase(_cable_key(visual))
+				_resize_sleeve(sleeve)
 			_sync_caps([str(visual["a"]), str(visual["b"])])
 			_sync_bores([str(visual["a"]), str(visual["b"])])
 			return true
@@ -3070,6 +3109,7 @@ func _revalidate_supports() -> void:
 	if _relay_round == 0:
 		clearance.clear()
 		PipeRoute.clear_cache()
+		_settle_sleeves()
 	# Runs laid before physics knew the bodies round them: re-lay any
 	# whose avoiding route now differs.
 	# In laying order, each run out of place is re-laid before the next
@@ -3081,6 +3121,16 @@ func _revalidate_supports() -> void:
 	var t1 := Time.get_ticks_msec()
 	for visual in _wire_visuals:
 		if visual["node"] == null:
+			continue
+		var sleeve := str(_cable_carriers.get(_cable_key(visual), ""))
+		if sleeve != "" and runs.has(sleeve):
+			# A sleeved cable's tails are laid afresh from the sleeve's
+			# ends: again once physics knows the floor under them.
+			var fresh: Array = _sleeved_route(str(visual["a"]), str(visual["a_port"]), str(visual["b"]),
+				str(visual["b_port"]), (visual["node"] as PipeView).radius(), sleeve)["path"]
+			if not _same_path(fresh, visual.get("path", [])) and int(visual.get("relays", 0)) < 2:
+				_refresh_visual(visual)
+				relaid += 1
 			continue
 		if bool(visual.get("fixed", false)):
 			continue   # a fixed line never routes again: only a new line moves
@@ -3159,6 +3209,8 @@ func _revalidate_supports() -> void:
 	_sync_catches()
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
+		if (entry["node"] as PipeView).style() == "cable":
+			continue  # a sleeve lies on the floor
 		_apply_support(entry["node"] as PipeView, entry["points"], space)
 	if DisplayServer.get_name() == "headless":
 		print("[flowstate] revalidate: corners %d ms, re-lay %d ms (%d runs%s; %s ms), supports %d ms"
@@ -3189,7 +3241,7 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
 		var view := entry["node"] as PipeView
-		if view.style() == "tray":
+		if view.style() == "tray" or view.style() == "cable":
 			continue
 		paths.append({"name": name_, "path": PipeRoute.lay(entry["points"]), "r": view.radius(),
 			"from": "", "to": ""})
@@ -3415,6 +3467,9 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 		waypoints: Array, lane: int, preferred: int, order: int, radius: float,
 		fixed: bool = false) -> Dictionary:
 	if _is_cable_run(src_name, src_port):
+		var sleeve := str(_cable_carriers.get("%s.%s>%s.%s" % [src_name, src_port, dst_name, dst_port], ""))
+		if sleeve != "" and runs.has(sleeve):
+			return _sleeved_route(src_name, src_port, dst_name, dst_port, radius, sleeve)
 		return _cable_route(src_name, src_port, dst_name, dst_port, waypoints, radius, fixed)
 	if fixed:
 		# A fixed line: its waypoints are its
@@ -3884,13 +3939,18 @@ func _cable_route(src_name: String, src_port: String, dst_name: String, dst_port
 ## under it) keeps the router's route as it is, off the floor.
 func _cable_corners(src_name: String, src_port: String, dst_name: String, dst_port: String,
 		waypoints: Array, radius: float) -> Array:
-	var from := _marker_pos(src_name, src_port)
-	var to := _marker_pos(dst_name, dst_port)
-	var from_dir := _marker_dir(src_name, src_port)
-	var to_dir := _marker_dir(dst_name, dst_port)
+	return _floor_corners(_marker_pos(src_name, src_port), _marker_dir(src_name, src_port),
+		_marker_pos(dst_name, dst_port), _marker_dir(dst_name, dst_port), [src_name, dst_name],
+		waypoints, radius)
+
+
+## The same between two points and the way out of each: `own` names
+## the records at the two ends ("" for a sleeve's end).
+func _floor_corners(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector3, own: Array,
+		waypoints: Array, radius: float) -> Array:
 	var gland := CableDrape.GLAND
 	var full := PipeRoute.routed_avoiding(from, from_dir, to, to_dir, waypoints,
-		clearance.router_blocked.bind(clearance.context([src_name, dst_name], from, to, radius)),
+		clearance.router_blocked.bind(clearance.context(own, from, to, radius)),
 		Callable(), gland, gland)
 	var sa := from + from_dir * gland
 	var sb := to + to_dir * gland
@@ -3932,6 +3992,192 @@ func _floor_y(p: Vector3) -> float:
 
 static func _plan_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
+## ---- sleeves -----------------------------------------------------------------
+## A sleeve is a standalone run (`run_sleeve`) laid on the floor: a
+## flexible braided sleeve that loose cables are threaded through. A
+## cable in a sleeve runs from its terminal to the nearer end of the
+## sleeve, through it, and out of the other end to its far terminal,
+## its two tails laid on the floor like any loose cable; inside, it
+## lies along the sleeve's own centre, hidden. The sleeve's size
+## follows how many cables it carries.
+
+var _cable_carriers: Dictionary = {}   # "src.port>dst.port" -> the sleeve a cable runs through
+
+
+func _cable_key(visual: Dictionary) -> String:
+	return "%s.%s>%s.%s" % [visual["a"], visual["a_port"], visual["b"], visual["b_port"]]
+
+
+func _visual_by_key(key: String) -> Dictionary:
+	for visual in _wire_visuals:
+		if visual["node"] != null and _cable_key(visual) == key:
+			return visual
+	return {}
+
+
+## The sleeve a cable runs through, or "".
+func cable_sleeve(view: PipeView) -> String:
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			return str(_cable_carriers.get(_cable_key(visual), ""))
+	return ""
+
+
+## A braided sleeve over n cables of 8 mm: the bundle packs at about
+## seven tenths, and the braid adds a little.
+func _sleeve_radius(name_: String) -> float:
+	var count := 0
+	for key: String in _cable_carriers:
+		if str(_cable_carriers[key]) == name_:
+			count += 1
+	return maxf(StructureFactory.RUNS["run_sleeve"]["radius"],
+		CABLE_RADIUS * sqrt(count / 0.7) + 0.002)
+
+
+## The points a sleeve's centre passes through: its floor points,
+## raised by its radius.
+func _sleeve_skeleton(name_: String) -> Array[Vector3]:
+	var radius := _sleeve_radius(name_)
+	var out: Array[Vector3] = []
+	for p: Vector3 in (runs[name_] as Dictionary)["points"]:
+		out.append(p + Vector3.UP * radius)
+	return out
+
+
+## A sleeve's size changed: it is drawn again, and every cable through
+## it laid again along its new centre.
+func _resize_sleeve(name_: String) -> void:
+	if not runs.has(name_):
+		return
+	_build_run_view(name_)
+	for key: String in _cable_carriers:
+		if str(_cable_carriers[key]) == name_:
+			var visual := _visual_by_key(key)
+			if not visual.is_empty():
+				_refresh_visual(visual)
+
+
+## A cable through a sleeve: a tail from its source to the nearer end,
+## the sleeve's centre, a tail from the other end to its destination.
+func _sleeved_route(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		radius: float, sleeve: String) -> Dictionary:
+	var centre := _sleeve_skeleton(sleeve)
+	var from := _marker_pos(src_name, src_port)
+	var to := _marker_pos(dst_name, dst_port)
+	if _plan_distance(from, centre[centre.size() - 1]) + _plan_distance(to, centre[0]) \
+			< _plan_distance(from, centre[0]) + _plan_distance(to, centre[centre.size() - 1]):
+		centre.reverse()
+	var sleeve_r := _sleeve_radius(sleeve)
+	var end_a := centre[0]
+	var end_b := centre[centre.size() - 1]
+	var out_a := _plan_dir(centre[1], end_a)
+	var out_b := _plan_dir(centre[centre.size() - 2], end_b)
+	var from_dir := _marker_dir(src_name, src_port)
+	var to_dir := _marker_dir(dst_name, dst_port)
+	var corners_a := _floor_corners(from, from_dir, end_a, out_a, [src_name, ""], [], radius)
+	var corners_b := _floor_corners(end_b, out_b, to, to_dir, ["", dst_name], [], radius)
+	var floor_a := (corners_a[0] as Vector3).y - radius if not corners_a.is_empty() \
+		else _floor_y(from + from_dir * CableDrape.GLAND)
+	var floor_b := (corners_b[corners_b.size() - 1] as Vector3).y - radius if not corners_b.is_empty() \
+		else _floor_y(to + to_dir * CableDrape.GLAND)
+	var skeleton := CableDrape.skeleton(from, from_dir, end_a, out_a, corners_a, floor_a, end_a.y - sleeve_r, radius)
+	for i in range(1, centre.size() - 1):
+		skeleton.append(centre[i])
+	skeleton.append_array(CableDrape.skeleton(end_b, out_b, to, to_dir, corners_b, end_b.y - sleeve_r, floor_b, radius))
+	return {"lane": 0, "path": CableDrape.curve(skeleton), "corners": [], "searched": false,
+		"base_path": skeleton, "own_path": skeleton}
+
+
+## Every sleeve's points on the floor under them, as physics now knows
+## it: a sleeve laid in the same frame as the slab it is on found the
+## ground below.
+func _settle_sleeves() -> void:
+	for name_: String in runs:
+		var entry: Dictionary = runs[name_]
+		if entry["kind"] != "run_sleeve":
+			continue
+		var settled: Array = []
+		var moved := false
+		for p: Vector3 in entry["points"]:
+			var y := _floor_y(p)
+			var at := Vector3(p.x, y, p.z) if not is_nan(y) else p
+			moved = moved or at.distance_to(p) > 0.001
+			settled.append(at)
+		if moved:
+			entry["points"] = settled
+			_resize_sleeve(name_)
+
+
+## The level direction from a to b, or none.
+static func _plan_dir(a: Vector3, b: Vector3) -> Vector3:
+	var d := Vector3(b.x - a.x, 0.0, b.z - a.z)
+	return d.normalized() if d.length() > 0.001 else Vector3.ZERO
+
+
+## T on a loose cable: into the sleeve whose ends lie nearest its two
+## terminals, or out of the one it is in. {error, sleeve, into}.
+func toggle_sleeve(view: PipeView) -> Dictionary:
+	var visual: Dictionary = {}
+	for candidate in _wire_visuals:
+		if candidate["node"] == view:
+			visual = candidate
+	if visual.is_empty() or view.style() != "cable":
+		return {"error": "only a loose cable goes in a sleeve"}
+	var key := _cable_key(visual)
+	if _cable_carriers.has(key):
+		var old := str(_cable_carriers[key])
+		checkpoint()
+		_cable_carriers.erase(key)
+		visual["fixed"] = false
+		visual["waypoints"] = []
+		_refresh_visual(visual)
+		_resize_sleeve(old)
+		_schedule_revalidate()
+		return {"error": "", "sleeve": old, "into": false}
+	var from := _marker_pos(str(visual["a"]), str(visual["a_port"]))
+	var to := _marker_pos(str(visual["b"]), str(visual["b_port"]))
+	var best := ""
+	var best_reach := INF
+	for name_: String in runs:
+		var entry: Dictionary = runs[name_]
+		if entry["kind"] != "run_sleeve":
+			continue
+		var pts: Array = entry["points"]
+		var e0: Vector3 = pts[0]
+		var e1: Vector3 = pts[pts.size() - 1]
+		var reach := minf(maxf(_plan_distance(from, e0), _plan_distance(to, e1)),
+			maxf(_plan_distance(from, e1), _plan_distance(to, e0)))
+		if reach < best_reach:
+			best_reach = reach
+			best = name_
+	if best == "":
+		return {"error": "no sleeve laid: lay one from the routing page"}
+	if best_reach > SLEEVE_REACH:
+		return {"error": "no sleeve has an end within %.0f m of each terminal" % SLEEVE_REACH}
+	return {"error": thread_cable(view, best), "sleeve": best, "into": true}
+
+
+const SLEEVE_REACH := 8.0
+
+
+## Thread a loose cable through a sleeve. "" or why not.
+func thread_cable(view: PipeView, sleeve: String) -> String:
+	if not runs.has(sleeve) or (runs[sleeve] as Dictionary)["kind"] != "run_sleeve":
+		return "no sleeve %s" % sleeve
+	for visual in _wire_visuals:
+		if visual["node"] == view:
+			if view.style() != "cable":
+				return "only a loose cable goes in a sleeve"
+			checkpoint()
+			_cable_carriers[_cable_key(visual)] = sleeve
+			visual["fixed"] = true   # a sleeved cable's way is the sleeve's
+			visual["waypoints"] = []
+			_resize_sleeve(sleeve)
+			_schedule_revalidate()
+			return ""
+	return "not a line"
 
 
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
@@ -4399,7 +4645,7 @@ func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: Str
 	for name_: String in runs:
 		var entry: Dictionary = runs[name_]
 		var other := entry["node"] as PipeView
-		if other.style() == "tray":
+		if other.style() == "tray" or other.style() == "cable":
 			continue
 		if not entry.has("laid"):
 			entry["laid"] = PipeRoute.lay(entry["points"])   # a placed run's points never change
@@ -5041,6 +5287,8 @@ func snapshot() -> Dictionary:
 			"fitting": visual.get("fitting", ""),
 			"hidden": visual.get("hidden", false),
 		}
+		if visual["node"] != null and _cable_carriers.has(_cable_key(visual)):
+			wire_entry["sleeve"] = _cable_carriers[_cable_key(visual)]
 		var wire := sim.find_wire(sim.get_component(str(visual["a"])), str(visual["a_port"]),
 			sim.get_component(str(visual["b"])), str(visual["b_port"]))
 		if int(visual.get("dn", 50)) != 50:
@@ -5295,6 +5543,7 @@ func restore(payload: Dictionary) -> bool:
 	member_of.clear()
 	mounted.clear()
 	_wire_visuals.clear()
+	_cable_carriers.clear()
 	_new_graph()
 
 	for entry: Dictionary in payload.get("cabinets", []):
@@ -5333,6 +5582,12 @@ func restore(payload: Dictionary) -> bool:
 			if record != null:
 				record.apply_state(station_states[record_name])
 
+	# Which cables run through which sleeve, before either is laid: a
+	# sleeve is drawn at the size of what it carries.
+	for wire_entry: Dictionary in payload["wires"]:
+		if str(wire_entry.get("sleeve", "")) != "":
+			_cable_carriers["%s.%s>%s.%s" % [wire_entry["src"], wire_entry["src_port"], wire_entry["dst"],
+				wire_entry["dst_port"]]] = str(wire_entry["sleeve"])
 	for entry: Dictionary in payload.get("runs", []):
 		var pts: Array = []
 		for point: Array in entry["points"]:

@@ -5,7 +5,7 @@ class_name FillLineDemo
 ## record, every link the plant's own rule (VialLine), and the PLC's
 ## program is the whole of the machine's intelligence.
 ##
-## A filling room of 16 m by 16 m, tiled, walled, with an open bay in the
+## A filling room of 16 m by 16 m, a seamless floor, walled, with an open bay in the
 ## north wall. The line runs along the south side:
 ##
 ##   VM-601  magazine of 10 mL vials, forty a minute
@@ -27,8 +27,9 @@ class_name FillLineDemo
 ##
 ## The product comes from a header through a tee to the two valves on DN6
 ## tubing. The power (a feeder, a 24 V supply per load) and the cabinet
-## with the PLC stand along the north wall, nine metres from the line,
-## their cables across the floor.
+## with the PLC stand along the north wall, nine metres from the line;
+## the 24 V leads lie loose on the floor, and the field cables run
+## together in one sleeve.
 
 const Z := -20.0              # the line
 const CONTROLS_Z := -10.6     # the power and control equipment
@@ -135,33 +136,34 @@ static func build(plant: Plant) -> void:
 		["wt_601a", "at_target"], ["ze_601a", "present"]]
 	var outputs := [["sv_601a", "coil"], ["xg_601a", "release"], ["sv_601b", "coil"],
 		["sw_601", "index"], ["cp_601", "cap"], ["xg_601b", "release"]]
-	# Every field cable runs straight back from its device, along a lane
-	# of its own on the floor parallel to the north wall, and into the
-	# cabinet: the eastmost device on the lane nearest the controls, so
-	# the runs nest instead of crossing.
-	var field: Array = []
-	for point: Array in inputs + outputs:
-		field.append(plant._marker_pos(str(point[0]), str(point[1])).x)
-	field.sort()
-	field.reverse()
-	var lane_of := func(x: float) -> float:
-		return CONTROLS_Z - 1.2 - 0.25 * float(field.find(x))
+	# Every field cable runs through one sleeve, SL-601, laid on the
+	# floor from in front of the line to in front of the cabinet: each
+	# cable's tails fan out from its ends to the device and the terminal.
 	var di_of := {}
+	var field: Array = []
 	for i in inputs.size():
 		var point: Array = inputs[i]
-		var at := plant._marker_pos(str(point[0]), str(point[1]))
-		var lane: float = lane_of.call(at.x)
-		_cable(plant, str(point[0]), str(point[1]), di + str(i + 1), "in",
-			[Vector3(at.x, 0.3, Z + 1.0), Vector3(at.x, 0.3, lane)])
+		_cable(plant, str(point[0]), str(point[1]), di + str(i + 1), "in")
 		di_of[str(point[0])] = "di_%d" % i
+		field.append([str(point[0]), str(point[1]), di + str(i + 1), "in"])
 	var do_of := {}
 	for i in outputs.size():
 		var point: Array = outputs[i]
-		var at := plant._marker_pos(str(point[0]), str(point[1]))
-		var lane: float = lane_of.call(at.x)
-		_cable(plant, do + str(i + 1), "out", str(point[0]), str(point[1]),
-			[Vector3(at.x, 0.3, lane), Vector3(at.x, 0.3, Z + 1.0)])
+		_cable(plant, do + str(i + 1), "out", str(point[0]), str(point[1]))
 		do_of[str(point[0]) + "." + str(point[1])] = "do_%d" % i
+		field.append([do + str(i + 1), "out", str(point[0]), str(point[1])])
+	var line_x := 0.0
+	for point: Array in inputs + outputs:
+		line_x += plant._marker_pos(str(point[0]), str(point[1])).x
+	line_x /= float((inputs + outputs).size())
+	var sleeve_z := CONTROLS_Z - 1.2
+	plant.place_run("run_sleeve", "sl_601", [plant.to_local(Vector3(line_x, FLOOR, Z + 1.6)),
+		plant.to_local(Vector3(line_x, FLOOR, sleeve_z)), plant.to_local(Vector3(1.0, FLOOR, sleeve_z))])
+	for ends: Array in field:
+		var view := plant.line_between(str(ends[0]), str(ends[1]), str(ends[2]), str(ends[3]))
+		var why := "no line" if view == null else plant.thread_cable(view, "sl_601")
+		if why != "":
+			push_error("fill line, sleeve: %s.%s: %s" % [ends[0], ends[1], why])
 	var program: Array = []
 	program.append_array(_station_rungs(di_of["ze_601a"], di_of["wt_601a"], "t_0", "m_0",
 		do_of["sv_601a.coil"], do_of["xg_601a.release"]))
@@ -211,7 +213,7 @@ static func _station_rungs(eye: String, at: String, settle: String, filled: Stri
 	]
 
 
-## The filling room: a tiled floor of 4 m slabs and walls of 4 m panels
+## The filling room: a seamless floor of 4 m slabs and walls of 4 m panels
 ## round it, windows along the west, and an open bay in the north wall
 ## where the site's walkway comes in.
 static func _room(plant: Plant) -> void:
@@ -221,7 +223,7 @@ static func _room(plant: Plant) -> void:
 	var rows := int(ROOM.size.y / 4.0)
 	for i in cols:
 		for j in rows:
-			plant.place_structure("s_slab", "fl_601_%d_%d" % [i, j],
+			plant.place_structure("s_slab_seamless", "fl_601_%d_%d" % [i, j],
 				Vector3(x0 + 2.0 + 4.0 * i, 0.0, z0 + 2.0 + 4.0 * j), 0.0)
 	for i in cols:
 		var x := x0 + 2.0 + 4.0 * i
@@ -280,6 +282,13 @@ static func report(plant: Plant) -> PackedStringArray:
 	out.append("[flowstate] fill line: header %.2f mL = vials out %.2f + on the line %.2f + spilled %.2f (residual %.4f mL) · mounts %s" % [
 		src.total_l * 1000.0, vx.out_l * 1000.0, held * 1000.0, spilled * 1000.0,
 		(src.total_l - vx.out_l - held - spilled) * 1000.0, _mounts(plant)])
+	var sleeved := 0
+	for visual: Dictionary in plant.get("_wire_visuals"):
+		if visual["node"] is PipeView and plant.cable_sleeve(visual["node"] as PipeView) == "sl_601":
+			sleeved += 1
+	var sleeve: Dictionary = plant.runs.get("sl_601", {})
+	out.append("[flowstate] fill line: sleeve sl_601 carries %d cables, %d mm across" % [sleeved,
+		roundi((sleeve["node"] as PipeView).radius() * 2000.0) if not sleeve.is_empty() else 0])
 	return out
 
 

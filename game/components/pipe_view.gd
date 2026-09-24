@@ -49,6 +49,11 @@ func style() -> String:
 	return _style
 
 
+## The drawn path, local to the parent (the plant).
+func path() -> Array[Vector3]:
+	return _path
+
+
 func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 		desc: String = "", style: String = "pipe", collider_layer: int = 8) -> void:
 	_getter = getter
@@ -684,7 +689,8 @@ func describe() -> String:
 	# The support rule only speaks up when it fails.
 	var tag := "" if service_label == "" else " · %s" % service_label
 	var alarm := "\nUNSUPPORTED SPAN — add structure" if _unsupported else ""
-	return "%s%s%s\n(E color/label · X removes)" % [_desc, tag, alarm]
+	var keys := "E color/label · T sleeve · X removes" if _style == "cable" else "E color/label · X removes"
+	return "%s%s%s\n(%s)" % [_desc, tag, alarm, keys]
 
 
 ## What the run is doing: flowing, pressurised but still (a dead-headed

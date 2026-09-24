@@ -172,3 +172,6 @@ func _headless_reports() -> void:
 	print("[flowstate] drip demo save round trip: %s" % ("OK" if trip == "" else trip))
 	for line in RoutingExercises.report(plant):
 		print(line.replace("drip demo:", "drip demo after load:"))
+	for line in FillLineDemo.report(plant):
+		if line.contains("sleeve"):
+			print(line.replace("fill line:", "fill line after load:"))

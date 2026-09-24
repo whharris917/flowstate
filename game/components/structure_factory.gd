@@ -20,8 +20,10 @@ const CATALOG_ROUTING: Array[Dictionary] = [
 	{"type": "run_pipe", "label": "Pipe run"},
 	{"type": "run_conduit", "label": "Conduit run"},
 	{"type": "run_tray", "label": "Cable tray"},
+	{"type": "run_sleeve", "label": "Cable sleeve"},
 	{"type": "s_sign", "label": "Sign — E edits"},
 	{"type": "s_slab", "label": "Floor slab 4 m (tile)"},
+	{"type": "s_slab_seamless", "label": "Floor slab 4 m (seamless)"},
 ]
 
 # Standalone routed infrastructure — laid before any equipment exists,
@@ -34,6 +36,9 @@ const RUNS := {
 	# A multicore cable: many circuits in one sheath, from a junction
 	# box to a cabinet. Placed by Plant.connect_multicore, not by hand.
 	"run_cable": {"radius": 0.04, "style": "pipe", "color": Color(0.14, 0.14, 0.16)},
+	# A flexible braided sleeve bundling loose cables: it lies on the
+	# floor like one, and grows with what is threaded through it.
+	"run_sleeve": {"radius": 0.010, "style": "cable", "color": Color(0.13, 0.13, 0.14)},
 }
 
 # Two-click stretch tools: start point, end point, exact length.
@@ -54,6 +59,7 @@ const SIZES := {
 	"s_railing": Vector3(2.0, 1.1, 0.1),
 	"s_sign": Vector3(0.9, 2.2, 0.12),
 	"s_slab": Vector3(4.0, 0.06, 4.0),
+	"s_slab_seamless": Vector3(4.0, 0.06, 4.0),
 }
 
 const COL_STEEL := Color(0.16, 0.17, 0.19)
@@ -74,6 +80,9 @@ const COLORS := {
 	"s_railing": COL_STEEL,
 	"s_sign": Color(0.10, 0.32, 0.52),
 	"s_slab": Color(0.86, 0.85, 0.80),
+	# A poured epoxy floor, the finish of a clean room: one colour, no
+	# joints, so slabs laid edge to edge read as one floor.
+	"s_slab_seamless": Color(0.70, 0.72, 0.72),
 }
 
 
@@ -83,7 +92,7 @@ const COLORS := {
 static func material_for(type_id: String) -> Material:
 	if type_id == "s_slab":
 		return tile_floor()
-	if type_id in ["s_wall", "s_door", "s_window"]:
+	if type_id in ["s_wall", "s_door", "s_window", "s_slab_seamless"]:
 		return ViewUtil.matte(COLORS[type_id])
 	return ViewUtil.flat(COLORS[type_id])
 
@@ -348,7 +357,7 @@ static func placement_ok(type_id: String, base_pos: Vector3, rot_y: float,
 		space: PhysicsDirectSpaceState3D, length: float = -1.0) -> String:
 	var basis := Basis.from_euler(Vector3(0, rot_y, 0))
 	match type_id:
-		"s_column", "s_wall", "s_door", "s_window", "s_stairs", "s_sign", "s_slab":
+		"s_column", "s_wall", "s_door", "s_window", "s_stairs", "s_sign", "s_slab", "s_slab_seamless":
 			if not bears_point(base_pos, space, 0.6):
 				return "needs bearing below"
 		"s_beam", "s_railing":

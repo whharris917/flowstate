@@ -210,6 +210,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		pass  # a click on a fitting starts a line from it
 	elif event.is_action_pressed("delete_item"):
 		_try_delete()
+	elif event.is_action_pressed("sleeve_cable"):
+		_toggle_sleeve()
 	elif mode == Mode.PLACE and event.is_action_pressed("place"):
 		_try_place()
 	elif mode == Mode.CONNECT and event.is_action_pressed("place"):
@@ -1156,7 +1158,8 @@ func _finish_run() -> void:
 	var path := PipeRoute.lay(_run_points)
 	var check := SupportCheck.evaluate(path,
 		player.camera.get_world_3d().direct_space_state)
-	if not bool(check["ok"]):
+	var on_floor := str(StructureFactory.RUNS[_current_type()]["style"]) == "cable"   # a sleeve lies on the floor
+	if not on_floor and not bool(check["ok"]):
 		hud.toast("unsupported span %.1f m (max %.1f) — route along structure"
 			% [float(check["max_span"]), SupportCheck.MAX_SPAN])
 		return
@@ -1169,6 +1172,20 @@ func _finish_run() -> void:
 	_run_points.clear()
 	_clear_route()
 	_update_hud()
+
+
+## T on a loose cable: into the nearest sleeve, or out of the one it
+## is in.
+func _toggle_sleeve() -> void:
+	var aimed := player.aimed_collider()
+	if aimed == null or not aimed.has_meta("run"):
+		hud.toast("aim at a cable to put it in a sleeve or take it out")
+		return
+	var done := plant.toggle_sleeve(aimed.get_meta("run") as PipeView)
+	if str(done["error"]) != "":
+		hud.toast(str(done["error"]))
+	else:
+		hud.toast(("into %s" if bool(done["into"]) else "out of %s") % str(done["sleeve"]))
 
 
 func _try_pick_port() -> void:

@@ -135,7 +135,7 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 
 ## Routing
 
-- **Loose cables** (`Plant._cable_route`, `CableDrape`): a 24 V or signal cable drops from each terminal in a curve and lies on the floor along the router's route round solids, straight between corners with rounded bends. No lanes, bridges, supports, crossing or overlap rule; pipes do not route round cables; the player walks over them. The one rule it keeps is RunClearance's. A cable whose ends stand on different floors keeps the router's route off the floor. Its waypoints are its floor corners.
+- **Loose cables** (`Plant._cable_route`, `CableDrape`): a 24 V or signal cable drops from each terminal in a curve and lies on the floor along the router's route round solids, straight between corners with rounded bends. No lanes, bridges, supports, crossing or overlap rule; pipes do not route round cables; the player walks over them. The one rule it keeps is RunClearance's. A cable whose ends stand on different floors keeps the router's route off the floor. Its waypoints are its floor corners. A sleeved cable has none: its tails are laid afresh from the sleeve's ends whenever it is laid.
 - **A line routes once.** When laid it is routed (corners, lanes, bridges), then baked (`Plant._bake`, `visual["fixed"]`): its waypoints become its drawn corners and it is never routed again. A later line routes round earlier ones (the order rule); existing lines are not recalculated.
 - **Direct line.** Horizontally any bearing, the shortest path; elevation changes are vertical risers; drop first, run low. No turn sharper than 45° between straights; the square leg goes in before the search.
 - `world/run_clearance.gd` (`RunClearance`) is the only answer to "may a run pass here?". Nothing else probes for solids.
@@ -177,7 +177,7 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 
 **Run sizes** (`Plant.run_radius`, by the port's kind and voltage class): process lines by bore, 480 V feeders 50 mm, 24 V and signal cables 8 mm.
 
-**Cable plan** (director, 2026-09-24), in order: (1) loose cables, done; (2) sleeves: several loose cables bundled into one flexible sleeve that lies like a cable, the cables fanning out at each end (the Unit 400 multicore becomes a case of it); (3) cables and sleeves threaded into rigid conduit and tray, which keep the pipe routing, with a fill limit of about 40 % of the cross-section. Cables between floors wait for (3).
+**Cable plan** (director, 2026-09-24), in order: (1) loose cables, done; (2) sleeves, done: `run_sleeve` on the routing page, laid on the floor by clicks; T on a loose cable threads it into the sleeve whose ends are nearest its terminals (within 8 m), T again takes it out (`Plant.toggle_sleeve`, `_cable_carriers`, saved as the wire's `sleeve`); the sleeve grows with its cables; the filling room's field cables run in SL-601; the Unit 400 multicore is still its own thing; (3) cables and sleeves threaded into rigid conduit and tray, which keep the pipe routing, with a fill limit of about 40 % of the cross-section. Cables between floors wait for (3).
 
 **First things next session:**
 1. **Filling line, open for the director:** the look at bench scale beside full-size conduits and four free-standing 24 V supplies, the four crossings at the cabinet, nine library page drafts, the campaign rung.
