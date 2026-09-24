@@ -39,8 +39,9 @@ static func _one_source_one_pump(plant: Plant) -> void:
 ## CONFIGURE tab sets it exactly. Beside it the dosing line: a metering
 ## pump draws from the open tank through a solenoid valve into a second
 ## tank, the pump hand-started at its own switch on 24 V from a power
-## supply, the solenoid from the DOSE button on a control station.
-## It stands on the home pad, north of exercise 1.
+## supply, the solenoid from the DOSE button on a control station, the
+## two cables in one conduit. It stands on the home pad, north of
+## exercise 1.
 const PAD_Y := 0.08           # the top of the home pad
 const LINE_Z := 4.0
 const DOSE_Z := 2.6
@@ -109,6 +110,16 @@ static func _drip_demo(plant: Plant) -> void:
 	for e in errs:
 		if e != "":
 			push_error("drip demo, wiring: " + e)
+	# The two 24 V circuits from the controls to the dosing line in one
+	# rigid conduit on stands, CD-201.
+	var conduit_y := PAD_Y + 0.3
+	plant.place_run("run_conduit", "cd_201", [plant.to_local(Vector3(4.8, conduit_y, CONTROLS_Z + 0.7)),
+		plant.to_local(Vector3(3.4, conduit_y, CONTROLS_Z + 0.7)),
+		plant.to_local(Vector3(3.4, conduit_y, DOSE_Z - 0.7))])
+	for ends: Array in [["psu_2", "dc_out", "mp_2", "power"], ["lcs_2_dose", "contact", "sv_2", "coil"]]:
+		var threaded := plant.thread_cable(plant.line_between(ends[0], ends[1], ends[2], ends[3]), "cd_201")
+		if threaded != "":
+			push_error("drip demo, conduit: " + threaded)
 	var mp := plant.sim.get_component("mp_2") as SimMeteringPump
 	if mp != null:
 		mp.hand_on = true

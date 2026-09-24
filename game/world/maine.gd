@@ -168,6 +168,7 @@ func _headless_reports() -> void:
 		print(line)
 	for line in FillLineDemo.report(plant):
 		print(line)
+	print("[flowstate] cable carriers: %s" % ", ".join(plant.carrier_report()))
 	var trip := RoutingExercises.round_trip(plant)
 	print("[flowstate] drip demo save round trip: %s" % ("OK" if trip == "" else trip))
 	for line in RoutingExercises.report(plant):

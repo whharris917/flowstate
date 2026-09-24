@@ -723,7 +723,7 @@ func describe() -> String:
 	# The support rule only speaks up when it fails.
 	var tag := "" if service_label == "" else " · %s" % service_label
 	var alarm := "\nUNSUPPORTED SPAN — add structure" if _unsupported else ""
-	var keys := "E color/label · T sleeve or tray · X removes" if _style == "cable" else "E color/label · X removes"
+	var keys := "E color/label · T sleeve, tray or conduit · X removes" if _style == "cable" else "E color/label · X removes"
 	return "%s%s%s\n(%s)" % [_desc, tag, alarm, keys]
 
 
