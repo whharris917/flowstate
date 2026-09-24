@@ -135,6 +135,7 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 
 ## Routing
 
+- **Loose cables** (`Plant._cable_route`, `CableDrape`): a 24 V or signal cable drops from each terminal in a curve and lies on the floor along the router's route round solids, straight between corners with rounded bends. No lanes, bridges, supports, crossing or overlap rule; pipes do not route round cables; the player walks over them. The one rule it keeps is RunClearance's. A cable whose ends stand on different floors keeps the router's route off the floor. Its waypoints are its floor corners.
 - **A line routes once.** When laid it is routed (corners, lanes, bridges), then baked (`Plant._bake`, `visual["fixed"]`): its waypoints become its drawn corners and it is never routed again. A later line routes round earlier ones (the order rule); existing lines are not recalculated.
 - **Direct line.** Horizontally any bearing, the shortest path; elevation changes are vertical risers; drop first, run low. No turn sharper than 45° between straights; the square leg goes in before the search.
 - `world/run_clearance.gd` (`RunClearance`) is the only answer to "may a run pass here?". Nothing else probes for solids.
@@ -172,9 +173,11 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 
 **What exists:** both kernels on pressure with species streams; the control tier (PLC with ladder editor, PID, valves, relays, cabinets built module by module, junction boxes and multicores, stations); the process train (boiler, exchanger, reactor, crystallizer, centrifuge, dryer, still, vacuum lock, vial filler); small-bore family; filling-line parts; alarms; trend screens; the material balance screen; save/load; undo; graphics presets.
 
-**Showcase routing counts:** 7 crossings (three of them Unit 400 cabling since cables became 8 mm), 0 overlaps, 0 unsupported, 19 through solids (layout debt). Maine: 1 crossing at the filling line's cabinet, otherwise 0.
+**Showcase routing counts:** 0 crossings, 0 overlaps, 0 unsupported, about 20-22 through solids (layout debt; the pipe routes vary a little run to run). Maine: all 0.
 
 **Run sizes** (`Plant.run_radius`, by the port's kind and voltage class): process lines by bore, 480 V feeders 50 mm, 24 V and signal cables 8 mm.
+
+**Cable plan** (director, 2026-09-24), in order: (1) loose cables, done; (2) sleeves: several loose cables bundled into one flexible sleeve that lies like a cable, the cables fanning out at each end (the Unit 400 multicore becomes a case of it); (3) cables and sleeves threaded into rigid conduit and tray, which keep the pipe routing, with a fill limit of about 40 % of the cross-section. Cables between floors wait for (3).
 
 **First things next session:**
 1. **Filling line, open for the director:** the look at bench scale beside full-size conduits and four free-standing 24 V supplies, the four crossings at the cabinet, nine library page drafts, the campaign rung.

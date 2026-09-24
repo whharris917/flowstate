@@ -185,6 +185,8 @@ func owners_at(p: Vector3, radius: float) -> Dictionary:
 			continue
 		if body.has_meta("run"):
 			var run_view: Variant = body.get_meta("run")
+			if run_view is PipeView and (run_view as PipeView).style() == "cable":
+				continue   # a loose cable on the floor is in nobody's way
 			if run_view is Node and bool(run_view.get_meta("searched", false)):
 				continue
 			runs_here.append([str(run_view.get_meta("src", "")) if run_view is Node else "",
@@ -206,9 +208,11 @@ func _shape(radius: float) -> SphereShape3D:
 
 
 ## A surface just under the run, facing up, carries it. For a placed
-## thing — structure, equipment — it must be that thing's own surface;
-## for world geometry any carrying surface will do, since the floor
-## and the slab on it are coplanar bodies and a run rests on both.
+## thing — structure, equipment — it must be that thing's own surface,
+## or a structure whose top is flush with it (the next floor slab over,
+## at a joint); for world geometry any carrying surface will do, since
+## the floor and the slab on it are coplanar bodies and a run rests on
+## both.
 func _rests_on(p: Vector3, body: Object, radius: float) -> bool:
 	var from := plant.to_global(p)
 	var query := PhysicsRayQueryParameters3D.create(from, from - Vector3.UP * (radius + REST), 1 | 4)
@@ -217,7 +221,20 @@ func _rests_on(p: Vector3, body: Object, radius: float) -> bool:
 		return false
 	if hit["collider"] == body:
 		return true
+	if body is StructureView:
+		return absf(_top_of(body as StructureView) - (hit["position"] as Vector3).y) < 0.01
 	return not (owner_of(body as Node) is String)
+
+
+## The height of a structure's highest collision box, world-space.
+func _top_of(body: StructureView) -> float:
+	var top := -INF
+	for child in body.get_children():
+		var shape := child as CollisionShape3D
+		if shape == null or not (shape.shape is BoxShape3D):
+			continue
+		top = maxf(top, shape.global_position.y + (shape.shape as BoxShape3D).size.y / 2.0)
+	return top
 
 
 ## The record a collider belongs to — its view may be tagged on the

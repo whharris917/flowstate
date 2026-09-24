@@ -1,6 +1,7 @@
 class_name PipeView
-## A routed multi-segment run — process pipe, signal conduit, or cable
-## tray — rendered as oriented segments with fittings, glowing when a
+## A routed multi-segment run — process pipe, signal conduit, cable
+## tray, or a loose cable lying on the floor (style "cable", drawn as
+## one smooth tube) — rendered as oriented segments with fittings, glowing when a
 ## live wire backs it. Render only: a wire run's truth is the kernel
 ## wire it visualizes; an infrastructure run is support you laid down.
 ## Segments carry thin colliders (layer 8 for wire runs so pipe never
@@ -63,10 +64,16 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 	# gap. A corner too tight for a bend keeps a ball joint.
 	# Colliders once; the geometry in _build_body, which set_fitting
 	# runs again, since the flanges are baked into the body.
+	# A cable's curve has a point every few centimetres: one collider
+	# spans several, named by the first.
 	if collider_layer > 0:
-		for i in range(path.size() - 1):
-			if path[i].distance_to(path[i + 1]) >= 0.005:
-				_segment_collider(path[i], path[i + 1], maxf(radius * 2.5, 0.12), collider_layer, i)
+		var stride := 6 if style == "cable" else 1
+		var i := 0
+		while i < path.size() - 1:
+			var j := mini(i + stride, path.size() - 1)
+			if path[i].distance_to(path[j]) >= 0.005:
+				_segment_collider(path[i], path[j], maxf(radius * 2.5, 0.12), collider_layer, i)
+			i = j
 	_build_body()
 
 
@@ -75,6 +82,9 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 ## clamp parts.
 func _build_body() -> void:
 	var path := _path
+	if _style == "cable":
+		_build_cable()
+		return
 	# Tubing bends round a wide radius, since it is bent, not fitted.
 	var bend := _radius * (4.0 if fitting == "tube" else 1.5)
 	# A bend of any angle: each straight gives up the bend's tangent
@@ -136,6 +146,27 @@ func _build_body() -> void:
 		_end_fitting(path[0], path[1], end_radius_a)
 		_end_fitting(path[path.size() - 1], path[path.size() - 2], end_radius_b)
 	_merge_body()
+	_merge_fittings()
+
+
+## A loose cable: one tube along its curve, and a gland at each
+## terminal.
+func _build_cable() -> void:
+	var tube := CableDrape.tube_mesh(_path, _radius)
+	if tube == null:
+		return
+	var inst := MeshInstance3D.new()
+	inst.mesh = tube
+	inst.material_override = _cold
+	add_child(inst)
+	_meshes.append(inst)
+	var gland_mat := ViewUtil.flat(Color(0.16, 0.16, 0.18))
+	var n := _path.size()
+	for end: Array in [[_path[0], _path[1]], [_path[n - 1], _path[n - 2]]]:
+		var direction := ((end[1] as Vector3) - (end[0] as Vector3)).normalized()
+		var gland := _fitting_disc(_radius * 2.0, 0.03, gland_mat)
+		gland.position = (end[0] as Vector3) + direction * 0.015
+		gland.basis = _segment_basis(direction) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
 	_merge_fittings()
 
 

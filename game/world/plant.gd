@@ -1449,6 +1449,8 @@ func _crossing_targets(skip: Dictionary, ignore: Array, order: int) -> Array:
 		# all, its first and last half metre off the fitting; a crossing
 		# there is this run's to fix, and it is marked so only those count.
 		var later := int(visual.get("order", -1)) >= order
+		if (visual["node"] as PipeView).style() == "cable":
+			continue  # a loose cable on the floor: nothing crosses it
 		if not ignore.is_empty() and str(visual["a"]) == str(ignore[0]):
 			continue  # a bundle-mate: cables in one tray lie together, they do not hop each other
 		var other_path: Array = visual.get("path", [])
@@ -1694,6 +1696,8 @@ func crossing_report() -> PackedStringArray:
 			continue
 		var path: Array[Vector3] = _visual_path(visual)
 		var view := visual["node"] as PipeView
+		if view.style() == "cable":
+			continue
 		for crossing in _crossings(path, view.radius(), visual, [str(visual["a"]), str(visual["b"])]):
 			var p: Vector3 = path[crossing["seg"]] \
 				+ (path[crossing["seg"] + 1] - path[crossing["seg"]]).normalized() * float(crossing["at"])
@@ -3080,6 +3084,15 @@ func _revalidate_supports() -> void:
 			continue
 		if bool(visual.get("fixed", false)):
 			continue   # a fixed line never routes again: only a new line moves
+		if (visual["node"] as PipeView).style() == "cable":
+			# A cable laid before physics knew the floor: found again.
+			var found := _cable_corners(str(visual["a"]), str(visual["a_port"]), str(visual["b"]),
+				str(visual["b_port"]), visual["waypoints"], (visual["node"] as PipeView).radius())
+			if not _same_path(found, visual.get("corners", [])) and int(visual.get("relays", 0)) < 2 \
+					and _relay_round < RELAY_ROUNDS:
+				_refresh_visual(visual)
+				relaid += 1
+			continue
 		var order := int(visual.get("order", ORDER_ALL))
 		var t_dec := Time.get_ticks_usec()
 		var fresh := _avoided_corners(str(visual["a"]), str(visual["a_port"]),
@@ -3139,6 +3152,8 @@ func _revalidate_supports() -> void:
 	for visual in _wire_visuals:
 		if visual["node"] == null:
 			continue  # internal cabinet wire, nothing physical to carry
+		if (visual["node"] as PipeView).style() == "cable":
+			continue  # a cable lies on the floor
 		_apply_support_path(visual["node"] as PipeView, _visual_path(visual), space)
 	_pedestal_pass(space)
 	_sync_catches()
@@ -3162,7 +3177,7 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 		if visual["node"] == null:
 			continue
 		var view := visual["node"] as PipeView
-		if view.style() == "tray":
+		if view.style() == "tray" or view.style() == "cable":
 			continue
 		var shown := "%s.%s -> %s.%s [lane %d]" % [visual["a"], visual["a_port"], visual["b"],
 				visual["b_port"], int(visual.get("lane", 0))]
@@ -3343,6 +3358,13 @@ func _bake(visual: Dictionary) -> void:
 	var node := visual["node"] as PipeView
 	if node == null:
 		return
+	if node.style() == "cable":
+		# A cable's waypoints are its floor corners; the drape round
+		# them is drawn again from those wherever it is laid.
+		visual["waypoints"] = (visual.get("corners", []) as Array).duplicate()
+		visual["fixed"] = true
+		visual["lane"] = 0
+		return
 	var path: Array = visual.get("path", [])
 	if path.size() < 4:
 		return
@@ -3392,6 +3414,8 @@ func _bake(visual: Dictionary) -> void:
 func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: String,
 		waypoints: Array, lane: int, preferred: int, order: int, radius: float,
 		fixed: bool = false) -> Dictionary:
+	if _is_cable_run(src_name, src_port):
+		return _cable_route(src_name, src_port, dst_name, dst_port, waypoints, radius, fixed)
 	if fixed:
 		# A fixed line: its waypoints are its
 		# corners, laid plainly, stub to stub, no search, no lane, no
@@ -3812,6 +3836,104 @@ static func run_radius(port: SimPort) -> float:
 	return CABLE_RADIUS
 
 
+## ---- loose cables ------------------------------------------------------------
+## A 24 V or signal cable lies loose on the floor: it drops from each
+## terminal in a curve and runs along the floor round whatever is solid,
+## drawn smooth through its corners. No lanes, bridges, supports or
+## crossing rule: cables lie beside and over each other, and the player
+## walks over them. The one rule it keeps is RunClearance's.
+
+func _is_cable_run(src_name: String, src_port: String) -> bool:
+	var src := sim.get_component(src_name)
+	if src == null or not src.outputs.has(src_port):
+		return false
+	return run_radius(src.outputs[src_port] as SimPort) == CABLE_RADIUS
+
+
+## A cable's route: its corners (found on the floor, or a fixed cable's
+## waypoints as they are), the skeleton through them, and the curve.
+func _cable_route(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		waypoints: Array, radius: float, fixed: bool) -> Dictionary:
+	var corners: Array = waypoints.duplicate() if fixed \
+		else _cable_corners(src_name, src_port, dst_name, dst_port, waypoints, radius)
+	var from := _marker_pos(src_name, src_port)
+	var to := _marker_pos(dst_name, dst_port)
+	var from_dir := _marker_dir(src_name, src_port)
+	var to_dir := _marker_dir(dst_name, dst_port)
+	var floor_a := NAN
+	var floor_b := NAN
+	if not corners.is_empty():
+		floor_a = (corners[0] as Vector3).y - radius
+		floor_b = (corners[corners.size() - 1] as Vector3).y - radius
+	else:
+		floor_a = _floor_y(from + from_dir * CableDrape.GLAND)
+		floor_b = _floor_y(to + to_dir * CableDrape.GLAND)
+		if is_nan(floor_a) or is_nan(floor_b) or absf(floor_a - floor_b) >= 0.3:
+			floor_a = NAN   # two floors, or not known yet: no drop to either
+			floor_b = NAN
+	var skeleton := CableDrape.skeleton(from, from_dir, to, to_dir, corners, floor_a, floor_b, radius)
+	return {"lane": 0, "path": CableDrape.curve(skeleton), "corners": corners, "searched": false,
+		"base_path": skeleton, "own_path": skeleton}
+
+
+## The corners of a cable's way along the floor: the router's route
+## round whatever is solid, through the given waypoints, each corner
+## laid on the floor under it. The drop at each end is the drape's, so
+## a corner over a gland is dropped; so is one on a straight in plan.
+## A cable whose ends stand on different floors (a deck and the grade
+## under it) keeps the router's route as it is, off the floor.
+func _cable_corners(src_name: String, src_port: String, dst_name: String, dst_port: String,
+		waypoints: Array, radius: float) -> Array:
+	var from := _marker_pos(src_name, src_port)
+	var to := _marker_pos(dst_name, dst_port)
+	var from_dir := _marker_dir(src_name, src_port)
+	var to_dir := _marker_dir(dst_name, dst_port)
+	var gland := CableDrape.GLAND
+	var full := PipeRoute.routed_avoiding(from, from_dir, to, to_dir, waypoints,
+		clearance.router_blocked.bind(clearance.context([src_name, dst_name], from, to, radius)),
+		Callable(), gland, gland)
+	var sa := from + from_dir * gland
+	var sb := to + to_dir * gland
+	var floor_a := _floor_y(sa)
+	var floor_b := _floor_y(sb)
+	var one_floor := not is_nan(floor_a) and not is_nan(floor_b) and absf(floor_a - floor_b) < 0.3
+	var laid: Array[Vector3] = []
+	for p: Vector3 in full:
+		if _plan_distance(p, sa) < 0.15 or _plan_distance(p, sb) < 0.15:
+			continue
+		var y := _floor_y(p) if one_floor else NAN
+		var at := Vector3(p.x, y + radius, p.z) if not is_nan(y) else p
+		if not laid.is_empty() and laid[laid.size() - 1].distance_to(at) < 0.05:
+			continue
+		laid.append(at)
+	var corners: Array = []
+	for i in laid.size():
+		if i > 0 and i < laid.size() - 1:
+			var d_in := Vector2(laid[i].x - laid[i - 1].x, laid[i].z - laid[i - 1].z).normalized()
+			var d_out := Vector2(laid[i + 1].x - laid[i].x, laid[i + 1].z - laid[i].z).normalized()
+			if d_in.dot(d_out) > 0.999 and absf(laid[i].y - laid[i - 1].y) < 0.01 \
+					and absf(laid[i + 1].y - laid[i].y) < 0.01:
+				continue
+		corners.append(laid[i])
+	return corners
+
+
+## The height of the floor, deck or ground under a plant-local point
+## (equipment is not floor), or NAN where there is none, or before
+## physics knows it.
+func _floor_y(p: Vector3) -> float:
+	var query := PhysicsRayQueryParameters3D.create(to_global(p + Vector3.UP * 0.3),
+		to_global(p + Vector3.DOWN * 8.0), 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return NAN
+	return to_local(hit["position"] as Vector3).y
+
+
+static func _plan_distance(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
 		waypoints: Array, lane: int = -1, preferred: int = 0, order: int = ORDER_ALL,
 		fixed: bool = false, dn: int = 50) -> PipeView:
@@ -3854,7 +3976,8 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	pipe.end_radius_a = _end_bore(src_name, src_port) if is_process else radius
 	pipe.end_radius_b = _end_bore(dst_name, dst_port) if is_process else radius
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
-		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
+		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port],
+		"cable" if _is_cable_run(src_name, src_port) else "pipe")
 	pipe.set_meta("lane", chosen)
 	pipe.set_meta("path", path)
 	pipe.set_meta("corners", corners)
@@ -4261,7 +4384,7 @@ func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: Str
 	var worst := 0.0
 	for visual in _wire_visuals:
 		var other := visual["node"] as PipeView
-		if other == null or other.style() == "tray":
+		if other == null or other.style() == "tray" or other.style() == "cable":
 			continue
 		if int(visual.get("order", -1)) >= order:
 			continue  # laid later: it yields to this run, not the other way round
