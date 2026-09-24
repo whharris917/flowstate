@@ -677,8 +677,11 @@ static func _unit_400(plant: Plant) -> void:
 	plant.connect_equipment("t_402", "outlet", "xv_402", "inlet",
 		_local(plant, [Vector3(-0.9, 3.28, 8.55), Vector3(0.4, 3.28, 8.55), Vector3(0.4, 0.35, 8.55)]))
 	plant.place("tee_mix", "tee_403m", {"dn": 150}, Vector3(-2.0, 0.0, 13.0), PI / 2.0, false)
+	# It crosses the strip in front of the lower flight's foot overhead,
+	# at 2.5 m, so the way onto the stair stays clear.
 	plant.connect_equipment("xv_402", "outlet", "tee_403m", "a",
-		_local(plant, [Vector3(2.3, 0.35, 8.55), Vector3(2.3, 0.35, 14.2), Vector3(-2.0, 0.35, 14.2)]))
+		_local(plant, [Vector3(2.3, 0.35, 8.55), Vector3(4.7, 0.35, 9.8), Vector3(4.7, 2.5, 9.8),
+			Vector3(4.7, 2.5, 14.3), Vector3(4.7, 0.35, 14.3), Vector3(-2.0, 0.35, 14.3)]))
 	plant.connect_equipment("tee_403m", "out", "t_403", "inlet")
 	# Makeup: header, valve, and a line in under the platform to the
 	# sump's inlet, which is a tee with the mid tank's drain.
