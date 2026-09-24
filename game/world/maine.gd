@@ -74,8 +74,6 @@ func _after_plant() -> void:
 	# The routing exercises: simple configurations laid by the router
 	# alone, to be examined one by one.
 	RoutingExercises.build(plant)
-	# The spill yard, north of the exercises.
-	SpillYard.build(plant)
 	# The filling line built from parts, south of the exercises.
 	FillLineDemo.build(plant)
 	hud.toast("The Maine coast. The site is graded; the shore is a walk east or south, the lighthouse is across the cove, and a river comes down to the sea beyond it. B build · C connect · L library · O options · F5/F9 save/load")
@@ -167,8 +165,6 @@ func _self_check() -> void:
 func _headless_reports() -> void:
 	super._headless_reports()
 	for line in RoutingExercises.report(plant):
-		print(line)
-	for line in SpillYard.report(plant):
 		print(line)
 	for line in FillLineDemo.report(plant):
 		print(line)

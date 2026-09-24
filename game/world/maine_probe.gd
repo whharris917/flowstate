@@ -32,9 +32,9 @@ func _run(world: WorldBase) -> void:
 	if world is MaineMap:
 		# The drip demo: the small-bore line from its west
 		# end, the open end over the tank close up, and the dosing line.
-		await _view(player, Vector3(-4.5, 0.35, 12.0), -0.9, -0.3, 0.0, "drip_line")
-		await _view(player, Vector3(0.6, 0.35, 12.3), 0.0, -0.3, 0.0, "drip_end")
-		await _view(player, Vector3(3.2, 0.35, 11.0), 0.0, -0.35, 0.0, "dosing_line")
+		await _view(player, Vector3(-4.5, 0.43, 6.0), -0.9, -0.3, 0.0, "drip_line")
+		await _view(player, Vector3(0.6, 0.43, 6.3), 0.0, -0.3, 0.0, "drip_end")
+		await _view(player, Vector3(3.2, 0.43, 5.0), 0.0, -0.35, 0.0, "dosing_line")
 		# The line pressure gauges: the line from its west
 		# end, then the middle dial close up.
 		await _view(player, Vector3(-6.0, 0.35, 19.0), -0.9, -0.2, 0.0, "line_gauges")

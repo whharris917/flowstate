@@ -40,26 +40,29 @@ static func _one_source_one_pump(plant: Plant) -> void:
 ## pump draws from the open tank through a solenoid valve into a second
 ## tank, the pump hand-started at its own switch on 24 V from a power
 ## supply, the solenoid from the DOSE button on a control station.
-const LINE_Z := 10.0
-const DOSE_Z := 8.6
+## It stands on the home pad, north of exercise 1.
+const PAD_Y := 0.08           # the top of the home pad
+const LINE_Z := 4.0
+const DOSE_Z := 2.6
+const CONTROLS_Z := 0.0
 const TUBE_DN := 6
 const TUBE_COLOR := Color(0.13, 0.55, 0.28)   # water, ASME
 
 
 static func _drip_demo(plant: Plant) -> void:
-	# The drip line, west to east along z = 10.
+	# The drip line, west to east along z = LINE_Z.
 	# The train sits nipple to nipple, the way a fitter leaves it: a
 	# device every 0.3 m, the
 	# metering pump's longer body 0.4 m from its neighbour.
-	plant.place("source", "supply_2", {"pressure_kpa": 400.0}, Vector3(-4.0, 0.0, LINE_Z), 0.0, false)
-	plant.place("regulator", "pr_2", {"set_kpa": 150.0, "cv_lps": 0.5}, Vector3(-2.4, 0.0, LINE_Z), 0.0, false)
-	var bv := plant.place("ball_valve", "bv_2", {"cv_lps": 0.5}, Vector3(-2.1, 0.0, LINE_Z), 0.0, false) as SimBallValve
+	plant.place("source", "supply_2", {"pressure_kpa": 400.0}, Vector3(-4.0, PAD_Y, LINE_Z), 0.0, false)
+	plant.place("regulator", "pr_2", {"set_kpa": 150.0, "cv_lps": 0.5}, Vector3(-2.4, PAD_Y, LINE_Z), 0.0, false)
+	var bv := plant.place("ball_valve", "bv_2", {"cv_lps": 0.5}, Vector3(-2.1, PAD_Y, LINE_Z), 0.0, false) as SimBallValve
 	var nv := plant.place("needle_valve", "nv_2", {"cv_lps": 0.0005, "turns": 10.0},
-		Vector3(-1.8, 0.0, LINE_Z), 0.0, false) as SimNeedleValve
-	plant.place("rotameter", "fi_2", {"range_lps": 0.001}, Vector3(-1.5, 0.0, LINE_Z), 0.0, false)
-	plant.place("orifice", "ro_2", {"cv_lps": 0.0005}, Vector3(-1.2, 0.0, LINE_Z), 0.0, false)
+		Vector3(-1.8, PAD_Y, LINE_Z), 0.0, false) as SimNeedleValve
+	plant.place("rotameter", "fi_2", {"range_lps": 0.001}, Vector3(-1.5, PAD_Y, LINE_Z), 0.0, false)
+	plant.place("orifice", "ro_2", {"cv_lps": 0.0005}, Vector3(-1.2, PAD_Y, LINE_Z), 0.0, false)
 	var t2 := plant.place("tank", "t_2", {"height_m": 0.6, "diameter_m": 0.4, "open_top": true},
-		Vector3(0.6, 0.0, LINE_Z), 0.0, false) as SimTank
+		Vector3(0.6, PAD_Y, LINE_Z), 0.0, false) as SimTank
 	if bv != null:
 		bv.open = true
 		bv.position = 100.0
@@ -76,7 +79,7 @@ static func _drip_demo(plant: Plant) -> void:
 	# rise stands short of the tank so the riser is clear of it.
 	plant.next_line_size(TUBE_DN)
 	var why := plant.connect_open("ro_2", "outlet",
-		[Vector3(-0.2, 0.32, LINE_Z), Vector3(-0.2, 1.3, LINE_Z), Vector3(0.6, 1.3, LINE_Z)])
+		[Vector3(-0.2, PAD_Y + 0.32, LINE_Z), Vector3(-0.2, PAD_Y + 1.3, LINE_Z), Vector3(0.6, PAD_Y + 1.3, LINE_Z)])
 	if why != "":
 		push_error("drip demo, open end: " + why)
 	else:
@@ -85,17 +88,17 @@ static func _drip_demo(plant: Plant) -> void:
 	# The dosing line: the open tank's bottom nozzle to a metering
 	# pump, a solenoid valve, and a closed tank.
 	plant.place("metering_pump", "mp_2", {"rated_lps": 0.01, "max_head_m": 50.0},
-		Vector3(2.4, 0.0, DOSE_Z), 0.0, false)
-	plant.place("solenoid_valve", "sv_2", {"cv_lps": 0.3}, Vector3(2.8, 0.0, DOSE_Z), 0.0, false)
-	plant.place("tank", "t_3", {"height_m": 0.6, "diameter_m": 0.4}, Vector3(4.6, 0.0, DOSE_Z), 0.0, false)
+		Vector3(2.4, PAD_Y, DOSE_Z), 0.0, false)
+	plant.place("solenoid_valve", "sv_2", {"cv_lps": 0.3}, Vector3(2.8, PAD_Y, DOSE_Z), 0.0, false)
+	plant.place("tank", "t_3", {"height_m": 0.6, "diameter_m": 0.4}, Vector3(4.6, PAD_Y, DOSE_Z), 0.0, false)
 	_line(plant, "t_2", "outlet", "mp_2", "inlet")
 	_line(plant, "mp_2", "outlet", "sv_2", "inlet")
 	_line(plant, "sv_2", "outlet", "t_3", "inlet")
 	# Power and control: 480 V from a feeder into a 24 V supply for the
 	# pump; the solenoid's coil from a maintained DOSE button.
-	plant.place("mains", "mains_2", {"ways": 2}, Vector3(2.4, 0.0, 6.0), 0.0, false)
-	plant.place("psu", "psu_2", {}, Vector3(4.0, 0.0, 6.0), 0.0, false)
-	plant.place_control_station("lcs_2", Vector3(5.6, 0.0, 6.0), 0.0, [
+	plant.place("mains", "mains_2", {"ways": 2}, Vector3(2.4, PAD_Y, CONTROLS_Z), 0.0, false)
+	plant.place("psu", "psu_2", {}, Vector3(4.0, PAD_Y, CONTROLS_Z), 0.0, false)
+	plant.place_control_station("lcs_2", Vector3(5.6, PAD_Y, CONTROLS_Z), 0.0, [
 		{"kind": "button", "id": "dose", "legend": "DOSE", "color": "green", "momentary": false, "nc": false},
 		{"kind": "light", "id": "dosing", "legend": "DOSING", "color": "green"},
 	])
@@ -209,7 +212,7 @@ static func report(plant: Plant) -> PackedStringArray:
 	caps.sort()
 	for name_ in caps:
 		var cap := plant.sim.get_component(name_) as SimCap
-		if not cap.open or SpillYard._source_of(plant, name_) != "ro_2":
+		if not cap.open or _source_of(plant, name_) != "ro_2":
 			continue
 		var q := cap.spill_lps()
 		out.append("[flowstate] drip demo: %s open end %s (%.1f drops/s) -> %s · delivered %.3f L · spilled %.3f L" % [
@@ -239,6 +242,14 @@ static func report(plant: Plant) -> PackedStringArray:
 		out.append("[flowstate] line gauges: header 400 kPa · %s · drain %s" % [
 			" · ".join(parts), SimTypes.flow_text(drain.inlet.flow_lps)])
 	return out
+
+
+## The equipment a line into `cap_name` comes from.
+static func _source_of(plant: Plant, cap_name: String) -> String:
+	for visual: Dictionary in plant.get("_wire_visuals"):
+		if str(visual["b"]) == cap_name:
+			return str(visual["a"])
+	return ""
 
 
 ## The demo through a save and a load: every new type, the open tank,
