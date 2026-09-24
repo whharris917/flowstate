@@ -4344,6 +4344,17 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	# size meets it through a reducer.
 	pipe.end_radius_a = _end_bore(src_name, src_port) if is_process else radius
 	pipe.end_radius_b = _end_bore(dst_name, dst_port) if is_process else radius
+	var sleeve := str(_cable_carriers.get("%s.%s>%s.%s" % [src_name, src_port, dst_name, dst_port], ""))
+	if sleeve != "" and runs.has(sleeve):
+		# Inside its sleeve a cable is not clickable: a click there is on
+		# the sleeve. Only its tails are the cable's.
+		var centre := ((runs[sleeve] as Dictionary)["node"] as PipeView).path()
+		var inside := _sleeve_radius(sleeve) + 0.02
+		pipe.collide_where = func(p: Vector3) -> bool:
+			for i in centre.size() - 1:
+				if Geometry3D.get_closest_point_to_segment(p, centre[i], centre[i + 1]).distance_to(p) < inside:
+					return false
+			return true
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port],
 		"cable" if _is_cable_run(src_name, src_port) else "pipe")

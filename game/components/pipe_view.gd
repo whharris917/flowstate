@@ -22,6 +22,10 @@ var fitting := "flange"   # "flange", "clamp" (sanitary tri-clamp) or "tube" (co
 var end_radius_a := -1.0   # the bore of the fitting at the line's start
 var end_radius_b := -1.0   # and at its end
 var _fitting_nodes: Array[Node3D] = []
+## Set before setup to leave parts of the run unclickable: called with
+## a point, false where no collider goes (a cable inside a sleeve, so
+## a click there finds the sleeve).
+var collide_where: Callable = Callable()
 
 var _getter: Callable
 var _desc: String
@@ -69,17 +73,35 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 	# gap. A corner too tight for a bend keeps a ball joint.
 	# Colliders once; the geometry in _build_body, which set_fitting
 	# runs again, since the flanges are baked into the body.
-	# A cable's curve has a point every few centimetres: one collider
-	# spans several, named by the first.
+	# A cable's curve has a point every few centimetres round a bend:
+	# one collider spans several, named by the first.
 	if collider_layer > 0:
 		var stride := 6 if style == "cable" else 1
 		var i := 0
 		while i < path.size() - 1:
-			var j := mini(i + stride, path.size() - 1)
+			if not _clickable(path, i):
+				i += 1
+				continue
+			var j := i + 1
+			# A piece is a chord: kept short, so it stays on a bend.
+			while j < path.size() - 1 and j - i < stride and _clickable(path, j) 					and path[i].distance_to(path[j + 1]) < 0.5:
+				j += 1
 			if path[i].distance_to(path[j]) >= 0.005:
 				_segment_collider(path[i], path[j], maxf(radius * 2.5, 0.12), collider_layer, i)
 			i = j
 	_build_body()
+
+
+## Is the segment from path[i] clickable: nowhere collide_where
+## refuses along it.
+func _clickable(path: Array[Vector3], i: int) -> bool:
+	if not collide_where.is_valid():
+		return true
+	var steps := maxi(1, ceili(path[i].distance_to(path[i + 1]) / 0.1))
+	for s in range(steps + 1):
+		if not bool(collide_where.call(path[i].lerp(path[i + 1], float(s) / steps))):
+			return false
+	return true
 
 
 ## The run's geometry — straights, bends, joints, end fittings — then
