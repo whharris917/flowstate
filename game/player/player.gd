@@ -9,11 +9,16 @@ extends CharacterBody3D
 ## on the player. Ctrl+wheel is optical zoom: it narrows the field of
 ## view from wherever the camera sits, with look sensitivity scaled to
 ## match. Yaw turns the body, pitch free-looks from the vantage point.
+## Space jumps; in the air the player keeps the speed they left the
+## ground with and can steer it a little.
 
 const SPEED := 4.0
 const MOUSE_SENS := 0.0022
 const GRAVITY := 9.8
-const STEP_DISTANCE := 1.85
+const JUMP_SPEED := 3.43       # a 0.6 m rise: clears a knee-high pipe
+const AIR_STEER := 4.0         # m/s² of steering while airborne
+const JUMP_GRACE := 0.12       # s: a jump pressed just before landing, or
+                               # just after walking off an edge, still counts
 
 const EYE := Vector3(0, 1.6, 0)
 # The zoom track, eye-local: a quadratic through tip -> knee -> top,
@@ -38,12 +43,15 @@ var _fov_target: float = FOV_DEFAULT
 var _shaft_dir: Vector3 = (ZOOM_TOP - ZOOM_KNEE).normalized()
 var _shaft_speed: float = 2.0 * (ZOOM_TOP - ZOOM_KNEE).length()
 
+var figure: PlayerFigure
+
 var _step_streams: Array[AudioStream] = []
 var _land_stream: AudioStream
 var _steps: AudioStreamPlayer
-var _step_accum: float = 0.0
 var _was_on_floor: bool = true
 var _fall_speed: float = 0.0
+var _off_floor: float = 0.0     # seconds since last on the floor
+var _jump_wanted: float = 0.0   # seconds a jump press stays pending
 
 
 func _ready() -> void:
@@ -61,7 +69,8 @@ func _ready() -> void:
 	port_ray.add_exception(self)
 	camera.add_child(port_ray)
 	MouseMode.capture()
-	_build_body()
+	figure = PlayerFigure.new()
+	add_child(figure)
 	for i in range(1, 5):
 		_step_streams.append(load("res://audio/step_%d.wav" % i))
 	_land_stream = load("res://audio/land.wav")
@@ -71,23 +80,20 @@ func _ready() -> void:
 	add_child(_steps)
 
 
-## A simple suit-dark torso so looking down (or at your shadow) shows a
-## person, not a floating camera.
-func _build_body() -> void:
-	var mesh := CapsuleMesh.new()
-	mesh.radius = 0.30
-	mesh.height = 1.25
-	var body := MeshInstance3D.new()
-	body.mesh = mesh
-	body.position = Vector3(0, 0.72, 0)
-	body.material_override = ViewUtil.flat(Color(0.16, 0.18, 0.22))
-	add_child(body)
-
-
 ## Set while a full-screen panel owns the screen. The movement code
 ## polls Input directly rather than going through the event queue, so a
 ## panel cannot stop the player walking just by marking events handled.
 var input_locked: bool = false
+
+
+## Space is taken before the interface sees it, so a button left
+## focused by a click is not pressed by a jump.
+func _input(event: InputEvent) -> void:
+	if input_locked or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	if event.is_action_pressed("jump"):
+		_jump_wanted = JUMP_GRACE
+		get_viewport().set_input_as_handled()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -122,16 +128,30 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not is_on_floor():
+	var grounded := is_on_floor()
+	_off_floor = 0.0 if grounded else _off_floor + delta
+	_jump_wanted = maxf(_jump_wanted - delta, 0.0)
+	if not grounded:
 		velocity.y -= GRAVITY * delta
 		_fall_speed = -velocity.y
 	var input := Vector2.ZERO if input_locked else Input.get_vector(
 		"move_left", "move_right", "move_forward", "move_back")
 	var direction := (transform.basis * Vector3(input.x, 0, input.y)).normalized()
-	velocity.x = direction.x * SPEED
-	velocity.z = direction.z * SPEED
+	var wanted := Vector2(direction.x, direction.z) * SPEED
+	var ground := Vector2(velocity.x, velocity.z)
+	if grounded:
+		ground = wanted
+	elif input != Vector2.ZERO:
+		ground = ground.move_toward(wanted, AIR_STEER * delta)
+	velocity.x = ground.x
+	velocity.z = ground.y
+	if _jump_wanted > 0.0 and _off_floor < JUMP_GRACE:
+		velocity.y = JUMP_SPEED
+		_jump_wanted = 0.0
+		_off_floor = JUMP_GRACE
+		_play(_step_streams[randi() % _step_streams.size()], randf_range(0.78, 0.86))
 	move_and_slide()
-	_update_footsteps(delta)
+	_update_landing()
 
 
 ## The camera follows every rendered frame, not every physics step:
@@ -139,6 +159,10 @@ func _physics_process(delta: float) -> void:
 ## alternates, and a camera moved in steps looks jumpy.
 func _process(delta: float) -> void:
 	_update_camera(delta)
+	figure.show_head(camera.position.distance_to(EYE) > 0.3)
+	var moving := global_basis.inverse() * velocity
+	if figure.pose(delta, moving, is_on_floor(), camera.rotation.x):
+		_play(_step_streams[randi() % _step_streams.size()], randf_range(0.88, 1.12))
 
 
 ## Slide the camera along the zoom track, pulling it in when a wall,
@@ -207,20 +231,15 @@ func zoom_offset() -> float:
 	return camera.position.distance_to(EYE)
 
 
-func _update_footsteps(delta: float) -> void:
+## A landing from a fall or a jump: the thud, and the knees take it.
+func _update_landing() -> void:
 	var on_floor := is_on_floor()
-	if on_floor and not _was_on_floor and _fall_speed > 2.5:
-		_play(_land_stream, randf_range(0.92, 1.02))
-	elif on_floor:
-		var ground_speed := Vector2(velocity.x, velocity.z).length()
-		if ground_speed > 0.5:
-			_step_accum += ground_speed * delta
-			if _step_accum >= STEP_DISTANCE:
-				_step_accum = 0.0
-				_play(_step_streams[randi() % _step_streams.size()],
-					randf_range(0.88, 1.12))
+	if on_floor and not _was_on_floor and _fall_speed > 1.0:
+		figure.land(_fall_speed)
+		if _fall_speed > 2.5:
+			_play(_land_stream, randf_range(0.92, 1.02))
 		else:
-			_step_accum = STEP_DISTANCE * 0.6  # next step comes quickly
+			_play(_step_streams[randi() % _step_streams.size()], randf_range(0.88, 1.12))
 	_was_on_floor = on_floor
 
 
