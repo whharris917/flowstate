@@ -603,9 +603,10 @@ func _update_route_preview() -> void:
 	var kind: SimTypes.PortKind = _pending_marker.get_meta("kind")
 	# And clear of everything solid: what it would pass through is named
 	# in the hint and turns the preview red, since the lay will refuse it.
-	var is_process_kind := kind == SimTypes.PortKind.PROCESS_MATERIAL or kind == SimTypes.PortKind.PROCESS_LEVEL
+	var radius := plant._radius_of(str(_pending_marker.get_meta("record_name")),
+		str(_pending_marker.get_meta("port_name")))
 	var through := plant.route_obstacles(path, str(_pending_marker.get_meta("record_name")),
-		str(target.get_meta("record_name")) if target != null else "", 0.07 if is_process_kind else 0.025)
+		str(target.get_meta("record_name")) if target != null else "", radius)
 	var block := ", ".join(through)
 	if ok != _route_ok or absf(span - _route_span) > 0.05 or block != _route_block:
 		_route_ok = ok
@@ -616,9 +617,7 @@ func _update_route_preview() -> void:
 	_route_mat.albedo_color = Color(base_color.r, base_color.g, base_color.b, 0.6)
 	if path != _last_route:
 		_last_route = path
-		var is_process := kind == SimTypes.PortKind.PROCESS_MATERIAL \
-			or kind == SimTypes.PortKind.PROCESS_LEVEL
-		_rebuild_route(path, 0.07 if is_process else 0.025, "pipe")
+		_rebuild_route(path, radius, "pipe")
 
 
 ## Standalone run laying: the preview is the run itself, stretched to

@@ -172,7 +172,9 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 
 **What exists:** both kernels on pressure with species streams; the control tier (PLC with ladder editor, PID, valves, relays, cabinets built module by module, junction boxes and multicores, stations); the process train (boiler, exchanger, reactor, crystallizer, centrifuge, dryer, still, vacuum lock, vial filler); small-bore family; filling-line parts; alarms; trend screens; the material balance screen; save/load; undo; graphics presets.
 
-**Showcase routing counts:** 4 crossings, 0 overlaps, 0 unsupported, 20 through solids (layout debt). Maine: 4 crossings at the filling line's cabinet, otherwise 0.
+**Showcase routing counts:** 7 crossings (three of them Unit 400 cabling since cables became 8 mm), 0 overlaps, 0 unsupported, 19 through solids (layout debt). Maine: 1 crossing at the filling line's cabinet, otherwise 0.
+
+**Run sizes** (`Plant.run_radius`, by the port's kind and voltage class): process lines by bore, 480 V feeders 50 mm, 24 V and signal cables 8 mm.
 
 **First things next session:**
 1. **Filling line, open for the director:** the look at bench scale beside full-size conduits and four free-standing 24 V supplies, the four crossings at the cabinet, nine library page drafts, the campaign rung.

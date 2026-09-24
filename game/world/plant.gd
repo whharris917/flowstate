@@ -3530,9 +3530,7 @@ func preview_route(src_name: String, src_port: String, dst_name: String, dst_por
 	var dst := sim.get_component(dst_name)
 	if src == null or dst == null or not src.outputs.has(src_port) or not dst.inputs.has(dst_port):
 		return []
-	var kind: SimTypes.PortKind = (src.outputs[src_port] as SimOutputPort).kind
-	var is_process := SimTypes.is_material(kind) or kind == SimTypes.PortKind.PROCESS_LEVEL
-	var radius := 0.07 if is_process else 0.025
+	var radius := run_radius(src.outputs[src_port] as SimOutputPort)
 	var local: Array = []
 	for point: Vector3 in waypoints:
 		local.append(to_local(point))
@@ -3800,6 +3798,20 @@ static func line_radius(dn: int) -> float:
 	return LINE_RADIUS_DN50 * float(dn) / 50.0
 
 
+const FEEDER_RADIUS := 0.025   # a 480 V feeder, 50 mm across
+const CABLE_RADIUS := 0.004    # a 24 V or signal cable, 8 mm across
+
+
+## The drawn radius of a run on this port: a process line at DN50 (its
+## own bore once laid), a 480 V feeder, or a cable.
+static func run_radius(port: SimPort) -> float:
+	if SimTypes.is_material(port.kind) or port.kind == SimTypes.PortKind.PROCESS_LEVEL:
+		return LINE_RADIUS_DN50
+	if port.kind == SimTypes.PortKind.POWER and port.spec.ends_with("VAC"):
+		return FEEDER_RADIUS
+	return CABLE_RADIUS
+
+
 func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port: String,
 		waypoints: Array, lane: int = -1, preferred: int = 0, order: int = ORDER_ALL,
 		fixed: bool = false, dn: int = 50) -> PipeView:
@@ -3823,7 +3835,7 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 		getter = func() -> float: return port.value
 	var is_process := SimTypes.is_material(kind) \
 		or kind == SimTypes.PortKind.PROCESS_LEVEL
-	var radius := line_radius(dn) if is_process else 0.025
+	var radius := line_radius(dn) if is_process else run_radius(port)
 	# The lane: the first one whose route does not lie inside a run
 	# already laid. A run without
 	# waypoints has nothing to shift and takes the route as it comes.
@@ -3839,8 +3851,8 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 	# A fitting is built at the bore of its line (a nozzle its own
 	# line's, an inline fitting the biggest on it): a line of another
 	# size meets it through a reducer.
-	pipe.end_radius_a = _end_bore(src_name, src_port) if is_process else 0.025
-	pipe.end_radius_b = _end_bore(dst_name, dst_port) if is_process else 0.025
+	pipe.end_radius_a = _end_bore(src_name, src_port) if is_process else radius
+	pipe.end_radius_b = _end_bore(dst_name, dst_port) if is_process else radius
 	pipe.setup(path, getter, PlantFactory.KIND_COLORS[kind], radius,
 		"%s.%s -> %s.%s" % [src_name, src_port, dst_name, dst_port])
 	pipe.set_meta("lane", chosen)
@@ -4328,10 +4340,13 @@ func _stub_of(record_name: String, port_name: String, radius: float) -> float:
 
 func _radius_of(record_name: String, port_name: String) -> float:
 	var record := sim.get_component(record_name)
-	if record == null or not record.outputs.has(port_name):
-		return 0.07
-	var kind: SimTypes.PortKind = (record.outputs[port_name] as SimOutputPort).kind
-	return 0.07 if SimTypes.is_material(kind) or kind == SimTypes.PortKind.PROCESS_LEVEL else 0.025
+	if record == null:
+		return LINE_RADIUS_DN50
+	if record.outputs.has(port_name):
+		return run_radius(record.outputs[port_name] as SimPort)
+	if record.inputs.has(port_name):
+		return run_radius(record.inputs[port_name] as SimPort)
+	return LINE_RADIUS_DN50
 
 
 func _marker_pos(record_name: String, port_name: String) -> Vector3:
