@@ -586,6 +586,13 @@ class Network:
     """Nodes, branches, and the solve that reconciles them."""
 
     MAX_ITERATIONS = 20
+    # A cold solve starts from a seed, not from last scan's answer, so it
+    # may take longer to land: three times the budget, once, when new
+    # nodes appear (2026-09-22: whichever flat seed is used leaves some
+    # block far from its answer -- a drip line behind a shut regulator, a
+    # gravity drain started at the sewer's level -- and they landed on
+    # the 20th iteration, or the 21st).
+    COLD_ITERATIONS = 60
     #: A node is converged when its imbalance is below this, or below a
     #: thousandth of what passes through it, whichever is smaller: a
     #: drip line moving a tenth of a millilitre a second cannot be
@@ -625,6 +632,9 @@ class Network:
         #: decision. None in the running plant.
         self.trace = None
         self._solved_once = False
+        # Nodes whose pressure a rebuild carried over from the network it
+        # replaced: warm already, so the cold start leaves them alone.
+        self.warm: set[int] = set()
         self._loose: set[int] = set()
         self._islanded: set[int] = set()
 
@@ -662,18 +672,6 @@ class Network:
             return
         self.converged = False
 
-        # Cold start: put the free nodes somewhere plausible rather than
-        # at zero, which may be a long way from any pressure in the
-        # plant. Every scan after the first is warm-started from the
-        # last answer and this does not run.
-        if not self._solved_once:
-            known = [self.pressures[i] for i, f in enumerate(self.fixed) if f]
-            if known:
-                seed = sum(known) / len(known)
-                for node in free:
-                    self.pressures[node] = seed
-            self._solved_once = True
-
         # The plant is many independent problems, one per block of free
         # nodes joined by branches, divided by the vessels and headers
         # that fix pressures between them; each block gets its own step
@@ -684,6 +682,16 @@ class Network:
         # carry it, and when Unit 400 found no step that helped, the
         # solve stopped with the steam line unsettled too).
         blocks = self._blocks(free, index_of)
+        # Cold start: put the free nodes somewhere plausible rather than
+        # at zero, which may be a long way from any pressure in the
+        # plant. Every scan after the first is warm-started from the
+        # last answer and this does not run, and since 2026-09-22 a
+        # rebuild carries every existing nozzle's pressure over, so only
+        # new nodes are seeded.
+        cold = not self._solved_once
+        if cold:
+            self._seed_blocks(blocks, free)
+            self._solved_once = True
         stalled = [False] * len(blocks)
         # Failed steps in a row: a block stops after two. One failure is
         # often a wall or a regulator that has just changed state, and the
@@ -694,7 +702,7 @@ class Network:
         # help still stops at the second, rather than grind out the cap.
         failures = [0] * len(blocks)
         crossed = [False] * len(blocks)
-        for _ in range(self.MAX_ITERATIONS):
+        for _ in range(self.COLD_ITERATIONS if cold else self.MAX_ITERATIONS):
             self.iterations += 1
             # What is actually connected decides which nodes have an
             # equation to satisfy fully; every node counts for
@@ -748,6 +756,23 @@ class Network:
         self._record_flows()
         self._settle_islands(free, index_of, n)
         self.residual_lps = self._worst_imbalance(index_of, len(free))
+
+    def _seed_blocks(self, blocks: list[list[int]], free: list[int]) -> None:
+        """The cold-start pressure of every node that has none of its own:
+        the mean of the plant's fixed pressures. A node a rebuild carried
+        over (``warm``) keeps the answer it had. Two local seeds were tried
+        on 2026-09-22 and each found a case the mean does not: the mean of
+        the fixed pressures a block touches started the showcase's Unit 400
+        on a transient in which XV-403's dead leg flipped across its square
+        law for the rest of the solve (a latent weakness, recorded with its
+        network in tests/data), and a unit-conductance linear solve started
+        a node fed through a tight orifice below a one-way drain's crack."""
+        known = [self.pressures[i] for i, f in enumerate(self.fixed) if f]
+        plant_mean = sum(known) / len(known) if known else 0.0
+        for block in blocks:
+            for slot in block:
+                if free[slot] not in self.warm:
+                    self.pressures[free[slot]] = plant_mean
 
     def _settle_islands(self, free: list[int], index_of: dict[int, int],
                         n: int) -> None:

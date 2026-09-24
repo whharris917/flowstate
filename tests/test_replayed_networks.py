@@ -15,6 +15,17 @@ now land.
     answer. The drip line's regulator cracked open on a step that
     failed, and a block stopped at its first failure ended the solve
     82 mL/s out.
+
+One is known to fail still, and is kept so the fix has a target:
+
+  * showcase_xv403_dead_leg (2026-09-22): a warm solve of the showcase on
+    a transient reached from a different cold seed. The short dead leg
+    between Unit 400's sewer valve XV-403 (a few percent open) and its
+    shut one-way drain carries a flow back through the valve; Newton's
+    step on the valve's square law lands on its mirror image, and the
+    halving that would cure it is never taken, because the step is
+    judged on the whole Unit 400 block, whose small gains elsewhere let
+    the mirror pass iteration after iteration.
 """
 from __future__ import annotations
 
@@ -36,3 +47,11 @@ def test_a_network_the_solver_once_failed_now_lands(name: str) -> None:
     net.solve()
     assert net.converged
     assert net.residual_lps < 1e-4
+
+
+@pytest.mark.xfail(reason="a square-law mirror inside a block that improves elsewhere: not yet fixed",
+                   strict=True)
+def test_a_dead_leg_behind_a_barely_open_valve_lands() -> None:
+    net = build(json.loads((DATA / "showcase_xv403_dead_leg.json").read_text(encoding="utf-8")))
+    net.solve()
+    assert net.converged

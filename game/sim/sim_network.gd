@@ -21,6 +21,13 @@ extends RefCounted
 ## equations, same answer, a tenth of the arithmetic.
 
 const MAX_ITERATIONS := 20
+## A cold solve starts from a seed, not from last scan's answer, so it may
+## take longer to land: three times the budget, once, when new nodes
+## appear (2026-09-22: whichever flat seed is used leaves some block far
+## from its answer -- a drip line behind a shut regulator, a gravity drain
+## started at the sewer's level -- and they landed on the 20th iteration,
+## or the 21st).
+const COLD_ITERATIONS := 60
 ## A node is converged when its imbalance is below this, or below a
 ## thousandth of what passes through it, whichever is smaller: a drip
 ## line moving a tenth of a millilitre a second cannot be judged by an
@@ -62,6 +69,9 @@ var converged: bool = true
 var worst_node: int = -1
 
 var _solved_once: bool = false
+## Nodes whose pressure a rebuild carried over from the network it
+## replaced: warm already, so the cold start leaves them alone.
+var warm: Dictionary = {}
 var _islanded: Dictionary = {}       # node -> true
 var _adjacency: Array = []           # node -> Array of neighbour nodes (conducting)
 # The banded ordering, computed once per free-node set.
@@ -167,24 +177,16 @@ func solve() -> void:
 		return
 	converged = false
 
+	_ensure_ordering(index_of, n, free)
 	# Cold start: put the free nodes somewhere plausible rather than at
 	# zero, which may be a long way from any pressure in the plant.
 	# Every scan after the first is warm-started from the last answer
-	# and this does not run.
-	if not _solved_once:
-		var total := 0.0
-		var known := 0
-		for i in count:
-			if fixed[i]:
-				total += pressures[i]
-				known += 1
-		if known > 0:
-			var seed := total / known
-			for node in free:
-				pressures[node] = seed
+	# and this does not run, and since 2026-09-22 a rebuild carries every
+	# existing nozzle's pressure over, so only new nodes are seeded.
+	var cold := not _solved_once
+	if cold:
+		_seed_blocks(free, count)
 		_solved_once = true
-
-	_ensure_ordering(index_of, n, free)
 	var band := _band
 	var w := 2 * band + 1
 	var matrix := PackedFloat64Array()
@@ -221,7 +223,7 @@ func solve() -> void:
 	var failures := PackedInt32Array()
 	failures.resize(block_count)
 	failures.fill(0)
-	for _iteration in MAX_ITERATIONS:
+	for _iteration in (COLD_ITERATIONS if cold else MAX_ITERATIONS):
 		iterations += 1
 		# What is actually connected decides which nodes have an equation
 		# to satisfy fully; every node counts for convergence (see
@@ -988,3 +990,25 @@ static func _solve_banded(matrix: PackedFloat64Array, rhs: PackedFloat64Array,
 			total -= matrix[rrow + (k - row + b)] * rhs[k]
 		rhs[row] = total / matrix[rrow + b]
 	return true
+
+
+## The cold-start pressure of every node that has none of its own: the
+## mean of the plant's fixed pressures. A node a rebuild carried over
+## (warm) keeps the answer it had. Two local seeds were tried on
+## 2026-09-22 and each found a case the mean does not: the mean of the
+## fixed pressures a block touches started the showcase's Unit 400 on a
+## transient in which XV-403's dead leg flipped across its square law for
+## the rest of the solve (a latent weakness, recorded with its network in
+## tests/data), and a unit-conductance linear solve started a node fed
+## through a tight orifice below a one-way drain's crack.
+func _seed_blocks(free: PackedInt32Array, count: int) -> void:
+	var plant_total := 0.0
+	var known := 0
+	for i in count:
+		if fixed[i]:
+			plant_total += pressures[i]
+			known += 1
+	var plant_mean := plant_total / known if known > 0 else 0.0
+	for node in free:
+		if not warm.has(node):
+			pressures[node] = plant_mean

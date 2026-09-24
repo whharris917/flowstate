@@ -325,6 +325,18 @@ class Simulation:
         Only topology lives here. Pressures and settings are refreshed
         every scan, which is far cheaper than rebuilding.
         """
+        # What the network being replaced had solved, nozzle by nozzle: a
+        # change of topology is a change in one corner, and the rest of
+        # the plant keeps its answer rather than starting cold
+        # (2026-09-22: every rebuild re-seeded the whole plant, and a
+        # piece placed anywhere could leave a line elsewhere unsettled).
+        carried: dict[str, float] = {}
+        old = self._network
+        if old is not None:
+            for component in self.components:
+                for port in component.material_ports().values():
+                    if 0 <= port.node < len(old.pressures):
+                        carried[port.path] = old.pressures[port.node]
         net = Network()
         for component in self.components:
             shared: dict[str, int] = {}
@@ -362,6 +374,11 @@ class Simulation:
             if ports:
                 component.build_hydraulics(
                     net, {name: port.node for name, port in ports.items()})
+        for component in self.components:
+            for port in component.material_ports().values():
+                if port.path in carried:
+                    net.pressures[port.node] = carried[port.path]
+                    net.warm.add(port.node)
         self._network = net
         self._node_streams = [Stream.empty() for _ in net.pressures]
         self._network_stale = False

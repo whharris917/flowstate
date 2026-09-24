@@ -128,6 +128,24 @@ func invalidate_network() -> void:
 
 
 func _rebuild_network() -> void:
+	# What the network being replaced had solved, nozzle by nozzle: a
+	# change of topology is a change in one corner, and the rest of the
+	# plant keeps its answer rather than starting cold (2026-09-22: every
+	# rebuild re-seeded the whole plant, and a piece placed anywhere could
+	# leave a line elsewhere unsettled).
+	var carried := {}
+	var old := _network
+	if old != null:
+		for component in components:
+			var old_ports := component.material_ports()
+			for port_name: String in old_ports:
+				var port: SimPort = old_ports[port_name]
+				if port.node >= 0 and port.node < old.node_count():
+					carried[port.path()] = old.pressures[port.node]
+	# A load's saved answer outranks whatever a network built before the
+	# state arrived had seeded.
+	carried.merge(_loaded_pressures, true)
+	_loaded_pressures = {}
 	var net := SimNetwork.new()
 	for component in components:
 		var ports := component.material_ports()
@@ -168,6 +186,13 @@ func _rebuild_network() -> void:
 	for component in components:
 		if not component.material_ports().is_empty():
 			component.build_hydraulics(net, component.node_map)
+	for component in components:
+		var new_ports := component.material_ports()
+		for port_name: String in new_ports:
+			var port: SimPort = new_ports[port_name]
+			if carried.has(port.path()):
+				net.pressures[port.node] = carried[port.path()]
+				net.warm[port.node] = true
 	_network = net
 	_node_streams.clear()
 	for _i in net.node_count():
@@ -497,15 +522,44 @@ func run_for(seconds: float) -> void:
 		tick()
 
 
+## A loaded plant's nozzle pressures, waiting for the first network to
+## be built: the solver's answer is part of the plant's state, and a
+## load that forgot it started the whole plant cold (2026-09-22: the
+## build-api exercise's save round trip left the home loop's drain line
+## unsettled for a scan).
+var _loaded_pressures: Dictionary = {}
+
+
+## Every nozzle's solved pressure, by port path: the part of the solver's
+## answer a save keeps.
+func port_pressures() -> Dictionary:
+	var pressures := {}
+	if _network != null:
+		for component in components:
+			var ports := component.material_ports()
+			for port_name: String in ports:
+				var port: SimPort = ports[port_name]
+				if port.node >= 0 and port.node < _network.node_count():
+					pressures[port.path()] = _network.pressures[port.node]
+	return pressures
+
+
+## A loaded plant's nozzle pressures, taken by the next network built.
+func load_pressures(pressures: Dictionary) -> void:
+	_loaded_pressures = pressures.duplicate()
+	_network_stale = true
+
+
 func state_dict() -> Dictionary:
 	var comp_states := {}
 	for component in components:
 		comp_states[component.comp_name] = component.state_dict()
-	return {"time": time, "components": comp_states}
+	return {"time": time, "components": comp_states, "pressures": port_pressures()}
 
 
 func apply_state(state: Dictionary) -> void:
 	time = state.get("time", 0.0)
+	load_pressures(state.get("pressures", {}) as Dictionary)
 	var comp_states: Dictionary = state.get("components", {})
 	for component in components:
 		if comp_states.has(component.comp_name):

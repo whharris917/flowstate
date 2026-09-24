@@ -1,87 +1,117 @@
 class_name FillLineDemo
 ## The filling line demo on the Maine site (director, 2026-09-22: "build a
 ## vial filler from individual parts, rather than have an all-in-one
-## object"; a demo of its own, not part of the showcase). Every part is a
-## placeable record, every link the plant's own rule (VialLine), and the
-## PLC's program is the whole of the machine's intelligence:
+## object"; a demo of its own, not part of the showcase; then "floors and
+## walls, and moving the actual fill line away from the power and control
+## equipment", and "a higher vial throughput"). Every part is a placeable
+## record, every link the plant's own rule (VialLine), and the PLC's
+## program is the whole of the machine's intelligence.
 ##
-##   VM-601  magazine of 10 mL vials, twenty a minute
-##   VT-601  2.4 m track; at its fill station a stop gate XG-601, a
-##           photo-eye ZE-601, a load cell WT-601 (setpoint 10 g) and a
-##           fill needle FN-601 fed through solenoid valve SV-601 on DN6
-##           tubing from a product header at 60 kPa
-##   SW-601  six-pocket star wheel, the capper CP-601 at station 2
-##   VT-602  1.2 m track to the outfeed table VX-601, the batch record
+## A filling room of 16 m by 16 m, tiled, walled, with an open bay in the
+## north wall. The line runs along the south side:
 ##
-## Ladder (PLC in CAB-601): a vial in the beam for 0.3 s (TON t_0) opens
-## the valve until the setpoint contact makes; the setpoint latches
-## FILLED (m_0) until the vial clears the beam and releases the gate
-## meanwhile; t_1 indexes the wheel every 1.5 s; the capper caps at rest.
-## Fifteen vials a minute arrive 0.4 m apart and a fill takes under
-## three seconds, so no queue forms at the gate.
+##   VM-601  magazine of 10 mL vials, forty a minute
+##   VT-601  3.6 m track at 0.3 m/s with two fill stations, 1.2 m apart,
+##           each a stop gate, a photo-eye, a load cell and a fill needle
+##           on its own solenoid valve: station A puts in about half the
+##           dose, station B tops it up to 10 mL, so each vial spends half
+##           as long under a needle and two vials fill at once
+##   SW-601  six-pocket star wheel on a 1.2 s beat, capper CP-601 at station 2
+##   VT-602  1.6 m track to the outfeed table VX-601, the batch record
+##
+## The stations never let a queue form: forty a minute at 0.3 m/s stand the
+## vials 0.45 m apart, and a station takes about a second from a vial's
+## arrival to its release, well inside the 1.4 s the next one needs to
+## close the gap. A queue would defeat the gates: a vial following nose to
+## tail keeps the beam broken as the filled one leaves, the latch holds,
+## and it slips through unfilled (the first version, at 0.2 m/s, did so
+## once at start-up, 2026-09-22). A real line spaces its vials the same
+## way, or with a timing screw.
+##
+## The product comes from a header through a tee to the two valves on DN6
+## tubing. The power (a feeder, a 24 V supply per load) and the cabinet
+## with the PLC stand along the north wall, nine metres from the line,
+## their cables across the floor.
 
-const Z := -16.0
-## The setpoint sits below the 10 mL wanted by what is still falling when
-## the valve shuts: the contact reaches the PLC a scan late, its output
-## reaches the coil a scan later, and the plunger takes a scan to seat
-## (in-flight compensation, as every gravimetric filler has).
-const TARGET_G := 9.05
+const Z := -20.0              # the line
+const CONTROLS_Z := -10.6     # the power and control equipment
+const FLOOR := 0.06           # the top of the slab
+const ROOM := Rect2(-2.0, -24.0, 16.0, 16.0)   # x, z, width, depth
 const TUBE_DN := 6
 const PRODUCT := Color(0.13, 0.55, 0.28)   # ASME green, as the drip demo's water
+## Each setpoint sits below what it is for by what is still falling when
+## its valve shuts: the contact reaches the PLC a scan late, its output
+## reaches the coil a scan later, and the plunger takes a scan to seat
+## (in-flight compensation, as every gravimetric filler has). Station A
+## is for 5 mL, station B for 10.
+const TARGET_A_G := 1.7
+const TARGET_B_G := 6.97
+const GATE_A := 1.2           # the stations along VT-601, metres
+const GATE_B := 2.4
 
 
 static func build(plant: Plant) -> void:
-	var deck := VialPartView.DECK
+	_room(plant)
 	var d: float = SimVial.SIZES[10][0]
+	var y := FLOOR
 	# ---- the line, west to east along z = Z ------------------------------
-	plant.place("vial_magazine", "vm_601", {"vial_ml": 10, "rate_per_min": 15.0},
-		Vector3(0.0, 0.0, Z), 0.0, false)
-	var t1 := plant.place("vial_track", "vt_601", {"length_m": 2.4, "speed_mps": 0.1},
-		Vector3(0.35 + 1.2, 0.0, Z), 0.0, false) as SimVialTrack
-	var gate_s := 1.6
-	var hold_x := 0.35 + gate_s - d / 2.0
-	plant.place("stop_gate", "xg_601", {}, Vector3(0.35 + gate_s, 0.0, Z), 0.0, false)
-	plant.place("photo_eye", "ze_601", {}, Vector3(hold_x, 0.0, Z), 0.0, false)
-	plant.place("load_cell", "wt_601", {"target_g": TARGET_G}, Vector3(hold_x, 0.0, Z), 0.0, false)
-	plant.place("fill_needle", "fn_601", {"cv_lps": 0.005}, Vector3(hold_x, 0.0, Z), 0.0, false)
-	var wheel_x := 0.35 + 2.4 + 0.12
-	var wheel := plant.place("star_wheel", "sw_601", {}, Vector3(wheel_x, 0.0, Z), 0.0, false) as SimStarWheel
+	plant.place("vial_magazine", "vm_601", {"vial_ml": 10, "rate_per_min": 40.0},
+		Vector3(0.5, y, Z), 0.0, false)
+	var in_x := 0.5 + 0.35
+	var t1 := plant.place("vial_track", "vt_601", {"length_m": 3.6, "speed_mps": 0.3},
+		Vector3(in_x + 1.8, y, Z), 0.0, false) as SimVialTrack
+	_station(plant, "a", in_x + GATE_A, d, TARGET_A_G)
+	_station(plant, "b", in_x + GATE_B, d, TARGET_B_G)
+	var wheel_x := in_x + 3.6 + 0.12
+	var wheel := plant.place("star_wheel", "sw_601", {"index_s": 0.3}, Vector3(wheel_x, y, Z), 0.0, false) as SimStarWheel
 	var station := StarWheelView.station_point(wheel.pitch_radius_m, wheel.pockets, 2.0)
-	plant.place("capper", "cp_601", {"cap_s": 0.8}, Vector3(wheel_x + station.x, 0.0, Z + station.z),
+	plant.place("capper", "cp_601", {"cap_s": 0.5}, Vector3(wheel_x + station.x, y, Z + station.z),
 		atan2(station.x, station.z), false)
-	var t2 := plant.place("vial_track", "vt_602", {"length_m": 1.2, "speed_mps": 0.1},
-		Vector3(wheel_x + 0.12 + 0.6, 0.0, Z), 0.0, false) as SimVialTrack
+	var t2 := plant.place("vial_track", "vt_602", {"length_m": 1.6, "speed_mps": 0.3},
+		Vector3(wheel_x + 0.12 + 0.8, y, Z), 0.0, false) as SimVialTrack
 	plant.place("vial_table", "vx_601", {},
-		Vector3(wheel_x + 0.12 + 1.2 + VialTableView.RADIUS + 0.05, 0.0, Z), 0.0, false)
+		Vector3(wheel_x + 0.12 + 1.6 + VialTableView.RADIUS + 0.05, y, Z), 0.0, false)
 	t1.hand_on = true
 	t2.hand_on = true
 	VialLine.sync(plant)
 
-	# ---- the product to the needle ---------------------------------------
-	# Behind the fill station, on the side every part of the line keeps
-	# its fittings.
+	# ---- the product to the two needles ----------------------------------
 	plant.place("source", "supply_601", {"species": "product", "pressure_kpa": 60.0},
-		Vector3(-0.6, 0.0, Z + 0.9), 0.0, false)
-	plant.place("solenoid_valve", "sv_601", {"cv_lps": 0.3}, Vector3(0.8, 0.0, Z + 0.9), 0.0, false)
-	_tube(plant, "supply_601", "outlet", "sv_601", "inlet")
-	_tube(plant, "sv_601", "outlet", "fn_601", "inlet")
+		Vector3(-0.5, y, Z + 2.4), 0.0, false)
+	plant.place("tee_split", "tee_601", {"dn": TUBE_DN}, Vector3(0.9, y, Z + 2.4), 0.0, false)
+	plant.place("solenoid_valve", "sv_601a", {"cv_lps": 0.3}, Vector3(1.4, y, Z + 1.4), 0.0, false)
+	plant.place("solenoid_valve", "sv_601b", {"cv_lps": 0.3}, Vector3(2.6, y, Z + 2.4), 0.0, false)
+	_tube(plant, "supply_601", "outlet", "tee_601", "in")
+	_tube(plant, "tee_601", "b", "sv_601a", "inlet")
+	_tube(plant, "tee_601", "a", "sv_601b", "inlet")
+	_tube(plant, "sv_601a", "outlet", "fn_601a", "inlet")
+	_tube(plant, "sv_601b", "outlet", "fn_601b", "inlet")
 
-	# ---- power: a feeder, a 24 V supply behind each load ----------------
-	# Each supply turned to face the line, its output toward its load and
-	# its input toward the feeder behind.
-	plant.place("mains", "mains_601", {"ways": 8}, Vector3(-1.0, 0.0, Z + 3.0), 0.0, false)
-	var loads := {"vt_601": 2.35, "sw_601": 2.95, "cp_601": 3.55, "vt_602": 4.15}
+	# ---- power along the north wall: a feeder, a 24 V supply per load ----
+	# Each supply turned to face the line, its output toward its load.
+	plant.place("mains", "mains_601", {"ways": 8}, Vector3(6.4, y, CONTROLS_Z), 0.0, false)
+	var loads := {"vt_601": 7.6, "sw_601": 8.5, "cp_601": 9.4, "vt_602": 10.3}
 	var n := 1
 	for load: String in loads:
 		var psu := "psu_60%d" % n
-		plant.place("psu", psu, {}, Vector3(float(loads[load]), 0.0, Z + 1.3), PI / 2.0, false)
+		plant.place("psu", psu, {}, Vector3(float(loads[load]), y, CONTROLS_Z), PI / 2.0, false)
 		_cable(plant, "mains_601", plant.free_way("mains_601"), psu, "ac_in")
-		_cable(plant, psu, "dc_out", load, "power")
+		n += 1
+	# Each supply's cable back from its load, along a lane of its own on
+	# the floor south of the signal lanes: the westmost load on the
+	# northmost lane, so the runs nest instead of crossing.
+	n = 1
+	for load: String in loads:
+		var at := plant._marker_pos(load, "power")
+		var lane := CONTROLS_Z - 3.4 - 0.3 * (n - 1)
+		var from := plant._marker_pos("psu_60%d" % n, "dc_out")
+		_cable(plant, "psu_60%d" % n, "dc_out", load, "power", [Vector3(from.x, 0.3, lane),
+			Vector3(at.x, 0.3, lane), Vector3(at.x, 0.3, Z + 1.0)])
 		n += 1
 
 	# ---- the cabinet, its PLC and its program ----------------------------
 	var cab := "cab_601"
-	plant.place_cabinet(cab, Vector3(1.0, 0.0, Z + 2.2), PI)
+	plant.place_cabinet(cab, Vector3(1.0, y, CONTROLS_Z), PI)
 	plant.cabinet_add_module(cab, "psu", 0, 0)
 	plant.cabinet_add_module(cab, "plc", 0, 4)
 	plant.cabinet_add_module(cab, "card_di", 0, 8)
@@ -97,47 +127,115 @@ static func build(plant: Plant) -> void:
 	var di := "%s_m5_t" % cab
 	var do := "%s_m6_t" % cab
 	plant.connect_equipment(cab_psu, "dc_out", plc_name, "power", [], false)
-	for i in 4:
+	for i in 6:
 		plant.connect_equipment(di + str(i + 1), "out", plc_name, "di_%d" % i, [], false)
 		plant.connect_equipment(plc_name, "do_%d" % i, do + str(i + 1), "in", [], false)
 	_cable(plant, "mains_601", plant.free_way("mains_601"), cab_psu, "ac_in")
-	# di_0 ZE-601 vial present, di_1 WT-601 at target, di_2 SW-601 home.
-	# The wheel's cable is laid first: it comes furthest, and the eye's
-	# and the cell's, laid after it, find their way round it.
-	_cable(plant, "sw_601", "home", di + "3", "in")
-	_cable(plant, "ze_601", "present", di + "1", "in")
-	_cable(plant, "wt_601", "at_target", di + "2", "in")
-	# do_0 SV-601, do_1 XG-601, do_2 SW-601 index, do_3 CP-601.
-	_cable(plant, do + "1", "out", "sv_601", "coil")
-	_cable(plant, do + "2", "out", "xg_601", "release")
-	_cable(plant, do + "3", "out", "sw_601", "index")
-	_cable(plant, do + "4", "out", "cp_601", "cap")
-	plc.set_program([
-		# The vial has settled in the beam: 0.3 s.
-		{"coil": "t_0", "logic": [[{"ref": "di_0"}]]},
-		# m_0 FILLED: set at the setpoint, held while the vial is in the
-		# beam. Without it the valve opened again as the full vial rolled
-		# off the pan still in the beam, onto the bare belt (the first
-		# version did, 2026-09-22).
-		{"coil": "m_0", "logic": [[{"ref": "di_1"}, {"ref": "di_0"}], [{"ref": "m_0"}, {"ref": "di_0"}]]},
-		# Fill while it is settled there and not yet filled. The beam is
-		# asked again beside its own timer: a timer's done bit is updated
-		# at the end of the scan, so in the scan the vial leaves the beam
-		# t_0 still reads done while m_0 has already dropped, and without
-		# di_0 here the valve pulsed open for a scan onto the bare belt.
-		{"coil": "do_0", "logic": [[{"ref": "di_0"}, {"ref": "t_0"}, {"ref": "m_0", "nc": true},
-			{"ref": "di_1", "nc": true}]]},
-		# Filled: let it go, until it has cleared the beam.
-		{"coil": "do_1", "logic": [[{"ref": "m_0"}]]},
+	# The terminal strips in the order the cables arrive, so none crosses
+	# another: each input or output is named once here and the ladder is
+	# written against the names. Laid in this order.
+	var inputs := [["sw_601", "home"], ["ze_601b", "present"], ["wt_601b", "at_target"],
+		["wt_601a", "at_target"], ["ze_601a", "present"]]
+	var outputs := [["sv_601a", "coil"], ["xg_601a", "release"], ["sv_601b", "coil"],
+		["sw_601", "index"], ["cp_601", "cap"], ["xg_601b", "release"]]
+	# Every field cable runs straight back from its device, along a lane
+	# of its own on the floor parallel to the north wall, and into the
+	# cabinet: the eastmost device on the lane nearest the controls, so
+	# the runs nest instead of crossing.
+	var field: Array = []
+	for point: Array in inputs + outputs:
+		field.append(plant._marker_pos(str(point[0]), str(point[1])).x)
+	field.sort()
+	field.reverse()
+	var lane_of := func(x: float) -> float:
+		return CONTROLS_Z - 1.2 - 0.25 * float(field.find(x))
+	var di_of := {}
+	for i in inputs.size():
+		var point: Array = inputs[i]
+		var at := plant._marker_pos(str(point[0]), str(point[1]))
+		var lane: float = lane_of.call(at.x)
+		_cable(plant, str(point[0]), str(point[1]), di + str(i + 1), "in",
+			[Vector3(at.x, 0.3, Z + 1.0), Vector3(at.x, 0.3, lane)])
+		di_of[str(point[0])] = "di_%d" % i
+	var do_of := {}
+	for i in outputs.size():
+		var point: Array = outputs[i]
+		var at := plant._marker_pos(str(point[0]), str(point[1]))
+		var lane: float = lane_of.call(at.x)
+		_cable(plant, do + str(i + 1), "out", str(point[0]), str(point[1]),
+			[Vector3(at.x, 0.3, lane), Vector3(at.x, 0.3, Z + 1.0)])
+		do_of[str(point[0]) + "." + str(point[1])] = "do_%d" % i
+	var program: Array = []
+	program.append_array(_station_rungs(di_of["ze_601a"], di_of["wt_601a"], "t_0", "m_0",
+		do_of["sv_601a.coil"], do_of["xg_601a.release"]))
+	program.append_array(_station_rungs(di_of["ze_601b"], di_of["wt_601b"], "t_2", "m_1",
+		do_of["sv_601b.coil"], do_of["xg_601b.release"]))
+	program.append_array([
 		# The wheel's beat: t_1 restarts itself, so its done bit is a
 		# one-scan pulse every preset.
 		{"coil": "t_1", "logic": [[{"ref": "t_1", "nc": true}]]},
-		{"coil": "do_2", "logic": [[{"ref": "t_1"}]]},
+		{"coil": do_of["sw_601.index"], "logic": [[{"ref": "t_1"}]]},
 		# Cap whatever stands under the head while the wheel is at rest.
-		{"coil": "do_3", "logic": [[{"ref": "di_2"}]]},
+		{"coil": do_of["cp_601.cap"], "logic": [[{"ref": di_of["sw_601"]}]]},
 	])
-	plc.set_timer_preset(0, 0.3)
-	plc.set_timer_preset(1, 1.5)
+	plc.set_program(program)
+	plc.set_timer_preset(0, 0.2)
+	plc.set_timer_preset(1, 1.2)
+	plc.set_timer_preset(2, 0.2)
+
+
+## One fill station at `gate_x` on VT-601: the gate, and the eye, the load
+## cell and the needle at the spot where the gate holds a vial.
+static func _station(plant: Plant, tag: String, gate_x: float, d: float, target_g: float) -> void:
+	var hold_x := gate_x - d / 2.0
+	plant.place("stop_gate", "xg_601" + tag, {}, Vector3(gate_x, FLOOR, Z), 0.0, false)
+	plant.place("photo_eye", "ze_601" + tag, {}, Vector3(hold_x, FLOOR, Z), 0.0, false)
+	plant.place("load_cell", "wt_601" + tag, {"target_g": target_g}, Vector3(hold_x, FLOOR, Z), 0.0, false)
+	plant.place("fill_needle", "fn_601" + tag, {"cv_lps": 0.015}, Vector3(hold_x, FLOOR, Z), 0.0, false)
+
+
+## A station's ladder. A vial in the beam for the settle time (the TON)
+## opens the valve until the setpoint contact makes; FILLED latches at
+## the setpoint and holds while the vial is in the beam, releasing the
+## gate meanwhile. Without the latch the valve opened again as the full
+## vial rolled off the pan still in the beam, onto the bare belt; and the
+## beam is asked again beside its own timer because a timer's done bit
+## is updated at the end of the scan, so in the scan the vial leaves the
+## beam the timer still reads done while the latch has already dropped,
+## and the valve pulsed open for a scan (the first version did both,
+## 2026-09-22).
+static func _station_rungs(eye: String, at: String, settle: String, filled: String,
+		valve: String, gate: String) -> Array:
+	return [
+		{"coil": settle, "logic": [[{"ref": eye}]]},
+		{"coil": filled, "logic": [[{"ref": at}, {"ref": eye}], [{"ref": filled}, {"ref": eye}]]},
+		{"coil": valve, "logic": [[{"ref": eye}, {"ref": settle}, {"ref": filled, "nc": true},
+			{"ref": at, "nc": true}]]},
+		{"coil": gate, "logic": [[{"ref": filled}]]},
+	]
+
+
+## The filling room: a tiled floor of 4 m slabs and walls of 4 m panels
+## round it, windows along the west, and an open bay in the north wall
+## where the site's walkway comes in.
+static func _room(plant: Plant) -> void:
+	var x0 := ROOM.position.x
+	var z0 := ROOM.position.y
+	var cols := int(ROOM.size.x / 4.0)
+	var rows := int(ROOM.size.y / 4.0)
+	for i in cols:
+		for j in rows:
+			plant.place_structure("s_slab", "fl_601_%d_%d" % [i, j],
+				Vector3(x0 + 2.0 + 4.0 * i, 0.0, z0 + 2.0 + 4.0 * j), 0.0)
+	for i in cols:
+		var x := x0 + 2.0 + 4.0 * i
+		plant.place_structure("s_wall", "wl_601_s%d" % i, Vector3(x, FLOOR, z0), 0.0)
+		if i != 1:   # the bay
+			plant.place_structure("s_wall", "wl_601_n%d" % i, Vector3(x, FLOOR, z0 + ROOM.size.y), 0.0)
+	for j in rows:
+		var z := z0 + 2.0 + 4.0 * j
+		plant.place_structure("s_window", "wl_601_w%d" % j, Vector3(x0, FLOOR, z), PI / 2.0)
+		plant.place_structure("s_wall", "wl_601_e%d" % j, Vector3(x0 + ROOM.size.x, FLOOR, z), PI / 2.0)
 
 
 static func _tube(plant: Plant, a: String, a_port: String, b: String, b_port: String) -> void:
@@ -149,13 +247,14 @@ static func _tube(plant: Plant, a: String, a_port: String, b: String, b_port: St
 	var visuals: Array = plant.get("_wire_visuals")
 	for i in range(visuals.size() - 1, -1, -1):
 		var visual: Dictionary = visuals[i]
-		if str(visual["a"]) == a and visual["node"] is PipeView:
+		if str(visual["a"]) == a and str(visual["a_port"]) == a_port and visual["node"] is PipeView:
 			plant.set_run_service(visual["node"] as PipeView, PRODUCT, "", "tube")
 			return
 
 
-static func _cable(plant: Plant, a: String, a_port: String, b: String, b_port: String) -> void:
-	var why := plant.connect_equipment(a, a_port, b, b_port)
+static func _cable(plant: Plant, a: String, a_port: String, b: String, b_port: String,
+		waypoints: Array = []) -> void:
+	var why := plant.connect_equipment(a, a_port, b, b_port, waypoints)
 	if why != "":
 		push_error("fill line, %s.%s -> %s.%s: %s" % [a, a_port, b, b_port, why])
 
@@ -168,7 +267,8 @@ static func report(plant: Plant) -> PackedStringArray:
 	var sw := plant.sim.get_component("sw_601") as SimStarWheel
 	var t2 := plant.sim.get_component("vt_602") as SimVialTrack
 	var vx := plant.sim.get_component("vx_601") as SimVialTable
-	var fn := plant.sim.get_component("fn_601") as SimFillNeedle
+	var fa := plant.sim.get_component("fn_601a") as SimFillNeedle
+	var fb := plant.sim.get_component("fn_601b") as SimFillNeedle
 	var cp := plant.sim.get_component("cp_601") as SimCapper
 	var src := plant.sim.get_component("supply_601") as SimSource
 	if vm == null or vx == null:
@@ -176,12 +276,14 @@ static func report(plant: Plant) -> PackedStringArray:
 	var on_line := t1.vials_on + sw.vials_on + t2.vials_on
 	out.append("[flowstate] fill line: %d vials in, %d on the line, %d out (%d capped) · links %s" % [
 		vm.supplied, on_line, vx.count, vx.capped_count, _links(plant)])
-	out.append("[flowstate] fill line: fills %.2f mL mean (%.2f to %.2f) · %d caps · needle %.2f mL in vials, %.2f mL spilled" % [
-		vx.mean_ml, vx.min_ml, vx.max_ml, cp.caps_used, fn.delivered_l * 1000.0, fn.spilled_l * 1000.0])
+	var spilled := fa.spilled_l + fb.spilled_l
+	out.append("[flowstate] fill line: fills %.2f mL mean (%.2f to %.2f) · %d caps · station A %.2f mL, B %.2f mL in vials, %.2f mL spilled" % [
+		vx.mean_ml, vx.min_ml, vx.max_ml, cp.caps_used, fa.delivered_l * 1000.0, fb.delivered_l * 1000.0,
+		spilled * 1000.0])
 	var held := t1.held_l + sw.held_l + t2.held_l
 	out.append("[flowstate] fill line: header %.2f mL = vials out %.2f + on the line %.2f + spilled %.2f (residual %.4f mL) · mounts %s" % [
-		src.total_l * 1000.0, vx.out_l * 1000.0, held * 1000.0, fn.spilled_l * 1000.0,
-		(src.total_l - vx.out_l - held - fn.spilled_l) * 1000.0, _mounts(plant)])
+		src.total_l * 1000.0, vx.out_l * 1000.0, held * 1000.0, spilled * 1000.0,
+		(src.total_l - vx.out_l - held - spilled) * 1000.0, _mounts(plant)])
 	return out
 
 
@@ -195,7 +297,8 @@ static func _links(plant: Plant) -> String:
 
 static func _mounts(plant: Plant) -> String:
 	var parts := PackedStringArray()
-	for name_: String in ["xg_601", "ze_601", "wt_601", "fn_601", "cp_601"]:
+	for name_: String in ["xg_601a", "ze_601a", "wt_601a", "fn_601a", "xg_601b", "ze_601b", "wt_601b",
+			"fn_601b", "cp_601"]:
 		var device := plant.sim.get_component(name_) as SimVialMount
 		if device != null:
 			parts.append("%s@%s:%.3f" % [name_, device.host, device.s_m])

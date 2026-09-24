@@ -5046,6 +5046,9 @@ func snapshot() -> Dictionary:
 		"control_stations": station_list,
 		"components": comps, "wires": wire_list, "structures": struct_list,
 		"runs": run_list, "cabinets": cab_list,
+		# The solver's answer, nozzle by nozzle, so a load starts where the
+		# plant was rather than cold (2026-09-22).
+		"pressures": sim.port_pressures(),
 	}
 	return payload
 
@@ -5321,6 +5324,7 @@ func restore(payload: Dictionary) -> bool:
 			set_run_size((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
 				int(wire_entry["dn"]))
 	sim.time = float(payload.get("time", 0.0))
+	sim.load_pressures(payload.get("pressures", {}) as Dictionary)
 	_sync_bores(views.keys())
 	_sync_catches()   # an open end finds its vessel again at once, not at the sweep
 
