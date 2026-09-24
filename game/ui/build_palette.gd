@@ -1,9 +1,7 @@
 class_name BuildPalette
 extends Control
-## The build palette round the card menu (director, 2026-09-19: "icons
-## along the left for the build menu, and a number-key shortcut menu on
-## the bottom (player-defined)", so building no longer means tabbing
-## through pages): a rail of page icons down the left, and a hotbar of
+## The build palette round the card menu, so building does not mean
+## tabbing through pages: a rail of page icons down the left, and a hotbar of
 ## nine slots along the bottom that the number keys pick. Pure display
 ## with callbacks; the BuildController owns the state and the input.
 
@@ -83,7 +81,7 @@ func _ready() -> void:
 		column.mouse_filter = MOUSE_FILTER_IGNORE
 		column.add_theme_constant_override("separation", 1)
 		panel.add_child(column)
-		# Small: the number and the icon, no name (director, 2026-09-19).
+		# Small: the number and the icon, no name.
 		var badge := Label.new()
 		badge.text = str(i + 1)
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -118,7 +116,7 @@ func _ready() -> void:
 func set_state(page: int, open: bool) -> void:
 	_page_active = page
 	_open = open
-	_rail.visible = open   # the rail shows only with the palette (director, 2026-09-19)
+	_rail.visible = open   # the rail shows only with the palette
 	_restyle()
 
 

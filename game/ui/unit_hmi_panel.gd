@@ -1,6 +1,6 @@
 class_name UnitHmiPanel
 extends Control
-## An operator screen for Unit 400 in three pages, every reading taken
+## An operator screen for Unit 400 in four pages, every reading taken
 ## live from the records it names, nothing inferred or smoothed.
 ##
 ## OVERVIEW: a simplified P&ID — vessel levels with each switch marked
@@ -77,8 +77,7 @@ func _process(delta: float) -> void:
 		if not names.is_empty():
 			var acc := SimBalance.accounts(plant.sim, names)
 			_held0 = float(acc["held"]) - (float(acc["fed"]) - float(acc["out"]))
-	# Five redraws a second on every page (2026-09-13: the overview
-	# replayed its trend every frame): the process is 20 Hz, the eye
+	# Five redraws a second on every page: the process is 20 Hz, the eye
 	# reads a screen slower than that, and a redraw is real work.
 	_since_redraw += delta
 	if _since_redraw >= 0.2:

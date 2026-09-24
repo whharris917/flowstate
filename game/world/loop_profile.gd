@@ -1,17 +1,14 @@
 class_name LoopProfile
 extends Node
-## Where the main loop's time goes (2026-09-13: the showcase's loop
-## cost 21 ms a frame headless, a 45 fps ceiling before rendering).
-## Godot has no per-node profiler outside the editor, so this bisects:
+## Where the main loop's time goes. Godot has no per-node profiler outside the editor, so this bisects:
 ## it measures the loop with everything running, then with each group
 ## switched off in turn — the runs, the equipment views, the HUD, the
 ## world's own _process — and prints what each group cost. Headless
 ## only, under FLOWSTATE_LOOP_PROFILE=1; it quits when done.
 ##
-## Caveat (2026-09-13): headless has no GPU to cache glyphs, so every
-## Label and every screen's text is rasterised again each frame it
-## changes, and that swamps the loop — the world's HUD readout alone
-## read a second a frame here. Read this profile only for groups that
+## Caveat: headless has no GPU to cache glyphs, so every Label and
+## every screen's text is rasterised again each frame it changes, and
+## that swamps the loop. Read this profile only for groups that
 ## draw no text; the windowed HUD probe's "at 25%, … not processing"
 ## phases are the honest measure of script cost.
 

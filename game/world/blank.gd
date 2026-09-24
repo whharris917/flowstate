@@ -1,12 +1,10 @@
 extends "res://world/sandbox.gd"
 class_name BlankMap
-## The blank map (director, 2026-09-05): the sandbox's infinite plane,
-## sky and home pad with nothing on it, for a stress test in which the
-## director builds by hand and development answers what they find. No
-## starting loop, no showcase, no gallery; the material balance screen
-## stands on the pad because it is right with nothing placed. Saves to
-## its own file. The sandbox with the showcase is still there: open
-## world/sandbox.tscn and Play Current Scene.
+## The blank map: the sandbox's infinite plane, sky and home pad with
+## nothing on it, for building by hand. No starting loop, no showcase,
+## no gallery; the material balance screen stands on the pad because it
+## is right with nothing placed. Saves to its own file. The showcase is
+## world/sandbox.tscn.
 
 
 func _init() -> void:

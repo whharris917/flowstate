@@ -4,8 +4,7 @@ extends SimComponent
 ## sim/components.py Tank.
 ##
 ## Two nozzles, and the difference between them is where they are.
-## Each stands at a height on the shell (director, 2026-09-22: the
-## nozzle's position belongs in the kernel; the view sets it where the
+## Each stands at a height on the shell (the view sets it where the
 ## player welded it), and what it feels is where it stands against the
 ## liquid: under the surface it carries the static head of whatever is
 ## standing above it, which is why a full tank will drain into an
@@ -35,7 +34,8 @@ var nozzle_cv_lps: float = OUTLET_CV_LPS
 const UNCOVER_M := 0.03
 ## A nozzle height meaning "at the roof", whatever the height is.
 const AT_ROOF := -1.0
-## The bore every nozzle had before they took their line's size.
+## The reference bore: nozzle_cv_lps is a nozzle's Cv at this size, and
+## scales with the bore's area.
 const NOZZLE_DN_REF := 50
 const NOZZLE_PORTS: Array[String] = ["inlet", "outlet"]
 
@@ -50,8 +50,7 @@ var temp_c: float = SimStream.AMBIENT_C
 var contents: SimStream
 var overflowed_l: float = 0.0
 var ran_dry_ticks: int = 0
-## An open-topped vessel (director, 2026-09-20: "fill an open tank ...
-## drop by drop"): a line ending in the air above it lands what it
+## An open-topped vessel: a line ending in the air above it lands what it
 ## spills here. The headspace is atmospheric either way.
 var open_top: bool = false
 ## Where each nozzle stands on the shell, metres above the base
@@ -123,8 +122,7 @@ var depth_m: float:
 		return (level_l / 1000.0) / maxf(cross_section_m2, 1e-9)
 
 
-## A tank does not come with a level port (director's call, 2026-09-02):
-## the level tap exists for instruments mounted on the shell, and the
+## A tank does not come with a level port: the level tap exists for instruments mounted on the shell, and the
 ## plant wires it for them.
 func hidden_ports() -> Array[String]:
 	return ["level", "contents"]

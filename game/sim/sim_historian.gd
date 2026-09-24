@@ -7,12 +7,10 @@ class_name SimHistorian
 ## stopped). A tag's series aligns with the shared time axis via its
 ## start index.
 ##
-## Each tag's samples live in a Series object of their own (2026-09-13):
-## a packed array fetched out of a dictionary is a copy, so appending
-## to it and writing it back copied the whole series every scan, for
-## every tag — 700 copies a tick, each growing with the session, and
-## the tick grew with them until frames carrying it stuttered. Inside
-## its own object the array is appended in place.
+## Each tag's samples live in a Series object of their own: a packed
+## array fetched out of a dictionary is a copy, so appending to it and
+## writing it back would copy the whole series every scan, for every
+## tag. Inside its own object the array is appended in place.
 
 class Series extends RefCounted:
 	var values: PackedFloat64Array = PackedFloat64Array()
@@ -29,10 +27,9 @@ var data: Dictionary = {}       # String -> Series
 var _starts: Dictionary = {}    # String -> int
 var _readers: Dictionary = {}   # String -> Callable () -> float
 
-## One sample a second of sim time (director, 2026-09-13: "the
-## historian need only sample tags once per second"; it sampled every
-## 50 ms scan before, and its 970 reads were a third of the scan). A
-## real plant historian records slower still. The first scan samples,
+## One sample a second of sim time, not every scan: reading every tag
+## each scan is a large share of the scan's cost. A real plant historian
+## records slower still. The first scan samples,
 ## then every second.
 var sample_interval_s: float = 1.0
 var _next_sample_t: float = -INF
@@ -60,8 +57,8 @@ func register(tag: String, read: Callable) -> void:
 		return
 	if data.has(tag):
 		# A retired tag coming back: equipment removed and a new record
-		# placed under the same name (X then B, 2026-09-05). The old
-		# record's series goes with it; this is a new series from now.
+		# placed under the same name. The removed record's series goes
+		# with it; this is a new series from now.
 		data.erase(tag)
 		_starts.erase(tag)
 	_readers[tag] = read

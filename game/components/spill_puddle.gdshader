@@ -1,4 +1,4 @@
-// A spill standing on the floor (2026-09-22): wet ground, not a coloured
+// A spill standing on the floor: wet ground, not a coloured
 // disc. Dark and glossy, so it reads by what it reflects; an irregular
 // edge from noise, soft where the film thins; its size is set by the
 // node's scale from the volume spilled (SpillPuddle).

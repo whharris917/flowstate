@@ -75,7 +75,7 @@ class TestConservation:
 
 class TestHeadMatters:
     def test_a_drain_runs_faster_under_more_head(self) -> None:
-        """The thing a fixed rate_lps could never do."""
+        """A drain's rate follows the head above it, not a number."""
         sim, header, pump, tank = _plant()
         drain = sim.add(Drain("d", rate_lps=2.0))
         sim.connect(tank, "outlet", drain, "inlet")
@@ -87,8 +87,7 @@ class TestHeadMatters:
         assert deep > shallow * 1.5
 
     def test_a_raised_tank_drains_into_a_low_one_with_no_pump(self) -> None:
-        """Two vessels and a pipe. The old model could not express this
-        at all: it needed a pump to make the bookkeeping work."""
+        """Two vessels and a pipe, and no pump."""
         sim = Simulation(dt=0.05)
         full = sim.add(Tank("full", capacity_l=2000.0, level_l=1800.0,
                             height_m=3.0, elevation_m=5.0))
@@ -188,7 +187,7 @@ class TestValveAuthority:
 
     def test_flow_follows_the_square_root_not_the_position(self) -> None:
         """Half open is not half the flow, because the valve equation is
-        not linear. This is the thing a linear trim model got wrong."""
+        not linear."""
         sim, valve, tank, hand = self._loop(6.0)
         hand.kw = 100.0
         sim.run(20.0)

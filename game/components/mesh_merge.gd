@@ -1,7 +1,6 @@
 class_name MeshMerge
-## Fewer draw calls (director, 2026-09-13: the showcase held 10-12 fps
-## on every graphics preset, bound by three to four thousand draw
-## calls of furniture rather than by pixels). A view is built from
+## Fewer draw calls: a plant is bound by the draw calls of its
+## furniture rather than by pixels. A view is built from
 ## hundreds of primitives, each its own mesh instance and its own
 ## draw; this bakes them into one mesh per look. What a view might
 ## later move, hide or repaint it holds in a member variable, so
@@ -53,7 +52,7 @@ static func merge_list(parent: Node3D, nodes: Array, mat: Material) -> MeshInsta
 
 
 ## The port fittings of a view as one mesh per look under the view
-## (2026-09-13: two draws a port, 500 draws a frame in the showcase).
+## (otherwise two draws a port).
 ## A fitting's body keeps its collision and its tag; its meshes join
 ## the view's. A movable fitting (a tank's nozzle) keeps its own. An
 ## earlier merged fitting mesh is a source again, so fittings attached
@@ -183,8 +182,8 @@ static func _build(groups: Dictionary, out: Array) -> int:
 			st.append_from(source, 0, item[1])
 		var inst := MeshInstance3D.new()
 		inst.mesh = st.commit()
-		# Every source triangle must come out the other side: the day the
-		# elbows went missing, nothing said so.
+		# Every source triangle must come out the other side, or lost
+		# geometry vanishes silently.
 		var got := _triangles(inst.mesh)
 		if got != expected:
 			push_error("MeshMerge: merged %d triangles of %d under %s" % [got, expected,
@@ -223,7 +222,7 @@ static func _triangles(mesh: Mesh) -> int:
 ## a source's vertices and its indices; once the tool has any indices,
 ## only indexed vertices are drawn, so a non-indexed source (a swept
 ## elbow built by SurfaceTool) appended after an indexed primitive
-## vanished (director, 2026-09-13: "many pipe bends are now gone").
+## would vanish.
 static func _indexed(mesh: Mesh) -> Mesh:
 	var arrays := mesh.surface_get_arrays(0)
 	var idx: Variant = arrays[Mesh.ARRAY_INDEX]

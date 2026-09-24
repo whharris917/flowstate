@@ -1,4 +1,4 @@
-"""Live operator GUI for the build-order step 1 plant.
+"""Live operator GUI for the fill-loop plant.
 
 Launch from the project root:
 
@@ -36,7 +36,7 @@ SPEEDS = (1, 4, 16, 64)  # sim ticks per real 50 ms slice
 
 
 class LivePlant:
-    """The step-1 plant plus a real-time pacing loop and thread safety.
+    """The fill-loop plant plus a real-time pacing loop and thread safety.
 
     All mutation and reading happens under one lock; the HTTP threads and
     the tick thread never see a half-updated scan.

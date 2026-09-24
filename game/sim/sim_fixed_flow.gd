@@ -9,19 +9,17 @@ extends SimBranch
 ## Its conductance is zero -- pressure does not change what it does --
 ## but it is emphatically CONDUCTING. Material crosses it, so whatever
 ## it discharges into has a pressure to find rather than being
-## hydraulically adrift. Reading its flat slope as a wall is what
-## stopped a dryer ever pushing cake into a hopper: the receiving
-## nozzle sat behind a check that had not cracked yet, the solver
-## decided nothing could reach it, and the two ends waited for each
-## other for ever.
+## hydraulically adrift. Read as a wall, its flat slope would strand
+## the receiving nozzle: a dryer pushing cake at a hopper whose inlet
+## check has not cracked yet would find nothing could reach it, and the
+## two ends would wait for each other for ever.
 ##
-## What it draws, though, has to be there (2026-09-22): drawing from a
-## line nothing supplies, it starves as its suction nears a hard vacuum,
-## the pump's taper over the same band. Imposed regardless, the vial
-## filler "filled" from a silo whose outlet stood above the liquid, and
-## every millilitre was an imbalance the solve could never close. A
+## What it draws, though, has to be there: drawing from a line nothing
+## supplies, it starves as its suction nears a hard vacuum, the pump's
+## taper over the same band. Imposed regardless, every millilitre drawn
+## from nothing would be an imbalance the solve could never close. A
 ## machine drawing from its own fixed bowl or drum never nears vacuum
-## and is unchanged. The flow depends on the suction alone, so the
+## and is unaffected. The flow depends on the suction alone, so the
 ## branch is two-sided: all of its slope on the a side, none on the b.
 
 const STARVE_BAND_PA := SimPumpCurve.CAVITATION_BAND_PA

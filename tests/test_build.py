@@ -103,7 +103,7 @@ class TestRemoval:
         assert tank is not None
 
     def test_pulling_a_run_takes_the_network_with_it(self) -> None:
-        """One player pipe is now one kernel wire, so removing the pump
+        """One player pipe is one kernel wire, so removing the pump
         removes the whole flow path — there is no second bookkeeping
         wire left behind to keep a phantom draw alive."""
         sim, _ = self._plant()

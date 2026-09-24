@@ -1,7 +1,7 @@
 class_name LegGizmo
 extends Node3D
-## The selection of one straight of a line (director, 2026-09-13:
-## per-leg selection): a translucent sleeve along the leg, and a cube
+## The selection of one straight of a line: a translucent sleeve along
+## the leg, and a cube
 ## handle at each of its ends that is a corner the player may move —
 ## the stubs and the fittings' own points are not. Handles live on
 ## EditGizmo.LAYER like the equipment gizmo's, so the same drag picks
@@ -70,21 +70,18 @@ func refresh(path_: Array[Vector3], corners_: Array, locks_: Array = [], waypoin
 	var up := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
 	_sleeve.basis = Basis.looking_at(dir, up) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
 	# A cube at every corner of the whole line, not only the selected
-	# straight's ends (director, 2026-09-19: "clicking any pipe segment
-	# should show the gold cube handles for all corners on the whole
-	# continuous pipe"); the middle cubes went the same day. A handle is
-	# named by its path index.
+	# straight's ends. A handle is named by its path index.
 	for index in path.size():
 		if movable_corner(index):
 			# A locked corner is steel-grey; the rest gold.
 			var color := Color(0.55, 0.60, 0.68) if is_locked(index) else Color(0.95, 0.80, 0.30)
 			_make_handle("pt%d" % index, path[index], HANDLE, color)
 	# The hover cube: shown on the straight under the crosshair, so it is
-	# clear a press there makes a corner and drags it (director, 2026-09-19).
+	# clear a press there makes a corner and drags it.
 	_hover = MeshInstance3D.new()
 	var hover_mesh := BoxMesh.new()
-	# Wider than the pipe, and drawn over it: inside the pipe it was
-	# half hidden (director, 2026-09-19).
+	# Wider than the pipe, and drawn over it: inside the pipe it would be
+	# half hidden.
 	hover_mesh.size = Vector3.ONE * maxf(HANDLE * 0.55, pipe.radius() * 2.0 + 0.05)
 	_hover.mesh = hover_mesh
 	var hover_mat := ViewUtil.glow(Color(1.0, 0.95, 0.75), 0.9)
@@ -129,10 +126,8 @@ func _make_handle(name_: String, at: Vector3, size: float, color: Color) -> void
 
 
 ## A point the player may move: every corner of the line as laid but
-## the two fittings and their stub ends (director, 2026-09-20: a stub
-## end dragged beside a valve planted a corner nobody wanted; a stub
-## follows its fitting, and a corner near it is planted by clicking the
-## straight).
+## the two fittings and their stub ends (a stub follows its fitting,
+## and a corner near it is planted by clicking the straight).
 func movable_corner(index: int) -> bool:
 	return index >= 2 and index <= path.size() - 3
 

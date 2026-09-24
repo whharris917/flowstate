@@ -1,6 +1,6 @@
 class_name EditGizmo
 extends Node3D
-## In-world handles for M edit mode (director's design, 2026-09-05):
+## In-world handles for M edit mode:
 ## the equipment stays exactly as it is, at its real size, and grows
 ## handles — a ring round a tank for its diameter, a post above it for
 ## its height, crossed double-headed arrows at its base to move it
@@ -27,7 +27,7 @@ var _move_meshes: Array[MeshInstance3D] = []
 var _move_mats: Array[StandardMaterial3D] = []
 var _blocked_mat: StandardMaterial3D = ViewUtil.glow(Color(0.95, 0.25, 0.2), 1.2)
 # The selection highlight: a translucent box round the footprint, so
-# what is selected reads at a glance (director, 2026-09-13).
+# what is selected reads at a glance.
 var highlight_size := Vector3.ZERO
 
 

@@ -51,8 +51,7 @@ func _ready() -> void:
 	# World (1) + interact volumes (4) + routed runs (8); connect mode
 	# adds port markers (2).
 	ray.collision_mask = 1 | 4 | 8
-	# A second ray that sees only port fittings (director, 2026-09-13:
-	# G and the connect click did nothing on a placed tank). A fitting
+	# A second ray that sees only port fittings. A fitting
 	# lies inside its equipment's interaction volume, and a ray that
 	# sees both stops at the volume; whenever the main ray admits
 	# fittings, this one is asked first.
@@ -137,8 +136,7 @@ func _physics_process(delta: float) -> void:
 
 ## The camera follows every rendered frame, not every physics step:
 ## at a frame rate off the physics rate the step count per frame
-## alternates, and a camera moved in steps looked jumpy (director,
-## 2026-09-13).
+## alternates, and a camera moved in steps looks jumpy.
 func _process(delta: float) -> void:
 	_update_camera(delta)
 
@@ -162,8 +160,8 @@ func _update_camera(delta: float) -> void:
 
 
 ## What the crosshair is on. A port fitting under the crosshair wins
-## over the interaction volume it sits inside, in any mode (director,
-## 2026-09-13: a click on a fitting starts a line, a right-hold moves
+## over the interaction volume it sits inside, in any mode (a click on
+## a fitting starts a line, a right-hold moves
 ## a nozzle), unless the main ray stops well short of it — a fitting
 ## behind a wall is not under the crosshair. Otherwise the main ray.
 func aimed_collider() -> Node:

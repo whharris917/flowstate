@@ -159,9 +159,8 @@ func describe() -> String:
 	return "%s — pipe cap: %s\n%s through" % [cap.comp_name, state, SimTypes.flow_text(absf(cap.inputs["a"].flow_lps))]
 
 
-## E: the blind on or off (director, 2026-09-20: "place a cap on the
-## end if I choose to do so, otherwise it simply becomes an overflow
-## point"). A real edge in the sim, so it sounds.
+## E: the blind on or off; without it the end is an overflow point at
+## atmospheric pressure. A real edge in the sim, so it sounds.
 func use() -> void:
 	cap.open = not cap.open
 	EquipmentAudio.play_once(self, "res://audio/clunk.wav" if not cap.open else "res://audio/valve_air.wav",

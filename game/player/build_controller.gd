@@ -29,7 +29,7 @@ var hud: Hud
 var menu: BuildMenu
 var icons: AssetIcons
 var palette: BuildPalette
-## The hotbar (director, 2026-09-19): nine types the number keys pick,
+## The hotbar: nine types the number keys pick,
 ## the player's own, saved in the settings. Assigned by hovering a card
 ## in the palette and pressing the number.
 var hotbar: Array = ["tank", "pump", "valve", "source", "drain", "block_valve", "gauge_flow", "cabinet", "mains"]
@@ -69,7 +69,7 @@ var _nozzle_grab: Dictionary = {}   # {view, port, was: {frac, angle}}
 # Edit mode: the equipment under the handles, and the handle being dragged.
 var _edit_name := ""
 var _gizmo: EditGizmo = null
-# Or one leg of a line (director, 2026-09-13: per-leg selection).
+# Or one leg of a line.
 var _edit_run: PipeView = null
 var _edit_leg := -1
 var _leg_gizmo: LegGizmo = null
@@ -207,7 +207,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			and event.is_action_pressed("place"):
 		_commit_nozzle_grab()
 	elif mode == Mode.NORMAL and event.is_action_pressed("place") and _click_fitting():
-		pass  # a click on a fitting starts a line from it (director, 2026-09-13)
+		pass  # a click on a fitting starts a line from it
 	elif event.is_action_pressed("delete_item"):
 		_try_delete()
 	elif mode == Mode.PLACE and event.is_action_pressed("place"):
@@ -218,7 +218,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_finish_open()
 	elif mode == Mode.NORMAL and event.is_action_pressed("place"):
 		# Clicking a clickable affordance (the cabinet's EDIT button),
-		# else a click on equipment selects it (director, 2026-09-13).
+		# else a click on equipment selects it.
 		var clicked := player.look_view()
 		if clicked != null and clicked.has_method("use") \
 				and player.ray.is_colliding() \
@@ -437,7 +437,7 @@ func _update_hud() -> void:
 			if _palette_open:
 				menu.show_page(heading, entries, icons, catalog_index, _slot_map())
 			else:
-				menu.visible = false   # nothing but the hotbar until Tab (director, 2026-09-19)
+				menu.visible = false   # nothing but the hotbar until Tab
 			if _is_stretch():
 				var spec: Dictionary = StructureFactory.STRETCH[_current_type()]
 				var step := "click a supported START point" if _beam_anchor == Vector3.INF \
@@ -536,7 +536,7 @@ func _update_nozzle_grab() -> void:
 	if is_equal_approx(float(spot["frac"]), frac) and is_equal_approx(float(spot["angle"]), angle):
 		return
 	view.set_nozzle(str(_nozzle_grab["port"]), frac, angle)
-	# The lines on it follow as it moves (director, 2026-09-13): re-laid
+	# The lines on it follow as it moves: re-laid
 	# a few times a second while it is carried, the plant-wide sweep
 	# waiting for the weld.
 	var now := Time.get_ticks_msec()
@@ -561,7 +561,7 @@ func _update_route_preview() -> void:
 	# Aimed at a fitting that could finish the line: the preview is the
 	# route the lay would take — corners, lane, bridges, ending at the
 	# nozzle's stub — asked of the plant once per target and waypoint
-	# count, since the lane search is not cheap (director, 2026-09-18).
+	# count, since the lane search is not cheap.
 	var aimed := player.aimed_collider()
 	var target: StaticBody3D = null
 	if aimed != null and aimed.has_meta("port_name") and aimed != _pending_marker \
@@ -789,7 +789,7 @@ func _update_ghost() -> void:
 
 ## An inline type (a pump, a valve, a flow element) aimed at a line:
 ## the ghost sits on the pipe axis, turned along it, and the click cuts
-## it in (director, 2026-09-19). True when the crosshair is on a line.
+## it in. True when the crosshair is on a line.
 var _inline: Dictionary = {}   # {"view", "at"} while the ghost is on a line
 const INLINE_SNAP := 0.75       # an inline ghost snaps to a line this near the aim point
 
@@ -801,7 +801,7 @@ func _update_inline_ghost() -> bool:
 	if Plant.inline_spec(type_id).is_empty() or not player.ray.is_colliding():
 		return false
 	# On the pipe itself, or near it: the nearest line within reach of
-	# the aim point (2026-09-20: a pipe is a thin target).
+	# the aim point, since a pipe is a thin target.
 	var view: PipeView = null
 	var at := Vector3.ZERO
 	var collider := player.ray.get_collider() as Node
@@ -841,7 +841,7 @@ func _update_inline_ghost() -> bool:
 var _inline_why := ""
 
 
-## A filling-line part aimed near the line (2026-09-22): a device
+## A filling-line part aimed near the line: a device
 ## stands over the nearest track or star-wheel station, a track, wheel or
 ## table takes its vials from the nearest outfeed nothing else takes
 ## (VialLine.snap). True when the ghost was placed here.
@@ -1188,7 +1188,7 @@ func _try_pick_port() -> void:
 
 
 ## E while routing: the line ends where the last waypoint is, open to
-## the air (director, 2026-09-20). Only from an outlet: an open end
+## the air. Only from an outlet: an open end
 ## feeding an inlet would draw from nowhere.
 func _finish_open() -> void:
 	if bool(_pending_marker.get_meta("is_input")):
@@ -1212,8 +1212,8 @@ func _finish_open() -> void:
 
 
 ## A fitting picked in connect mode: the first of either kind starts
-## the line, one of the other kind finishes it (director, 2026-09-13:
-## inlet to outlet or outlet to inlet, not outlet first).
+## the line, one of the other kind finishes it (inlet to outlet or
+## outlet to inlet).
 func _pick_marker(marker: StaticBody3D) -> void:
 	if _pending_marker == null:
 		_pending_marker = marker
@@ -1408,8 +1408,8 @@ func _toggle_edit() -> void:
 	_select(name_)
 
 
-## A left click in normal play on movable equipment selects it
-## (director, 2026-09-13). False when the crosshair is on none.
+## A left click in normal play on movable equipment selects it.
+## False when the crosshair is on none.
 func _click_select() -> bool:
 	var aimed := player.aimed_collider()
 	if aimed != null and aimed.has_meta("run") and aimed.has_meta("leg"):
@@ -1447,8 +1447,8 @@ func _select_leg(pipe: PipeView, leg: int) -> bool:
 
 
 ## Select a piece of equipment: highlighted, with its handles, in
-## first person like everything else (director, 2026-09-13: no
-## detached view) — a handle is dragged by aiming at it, holding the
+## first person like everything else: a handle is dragged by aiming
+## at it, holding the
 ## button and looking. Selecting another moves the handles to it.
 func _select(name_: String) -> void:
 	_set_mode(Mode.EDIT)
@@ -1497,10 +1497,7 @@ func _edit_ray() -> Array[Vector3]:
 	return [player.camera.global_position, -player.camera.global_basis.z]
 
 
-## Mouse in edit mode: left drags a handle, middle pans (shift: orbits),
-## right orbits, a right click that did not move opens the device
-## menu, the wheel zooms. Returns true when the event was ours.
-## The right button in build and connect mode (director, 2026-09-13):
+## The right button in build and connect mode:
 ## a right click leaves the mode, and the wheel with the right button
 ## held turns the thing being placed, fifteen degrees a notch, instead
 ## of zooming the camera. A wheel turn under the button makes the
@@ -1542,7 +1539,7 @@ func _mode_mouse(event: InputEvent) -> bool:
 				_refresh_leg_gizmo()
 				if was_click:
 					# A right click cancels: whatever mode or selection is
-					# on, back to plain play (director, 2026-09-13).
+					# on, back to plain play.
 					_set_mode(Mode.NORMAL)
 			return true
 		MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
@@ -1618,8 +1615,7 @@ func _begin_carry() -> void:
 			name_ = str(aimed.get_meta("record_name"))
 	if name_ == "" or not plant.views.has(name_):
 		return
-	# A refusal says why (director, 2026-09-19: a right-hold that did
-	# nothing, with no word about it).
+	# A refusal says why.
 	var why := plant.movable(name_)
 	if why != "":
 		hud.toast(why)
@@ -1642,9 +1638,8 @@ var _carry_axis: Dictionary = {}   # an inline element on its line: {origin, axi
 
 
 ## An inline element whose lines run straight through it may only
-## slide along that line while carried (director, 2026-09-20: "drag a
-## valve or other inline element along a pipe without actually moving
-## or re-routing the pipe"): the axis is the element's own, the limits
+## slide along that line while carried, without moving or re-routing
+## the pipe: the axis is the element's own, the limits
 ## the corners either side less the room it needs. {} when it is not
 ## inline, or a line bends at it.
 func _inline_slide(name_: String) -> Dictionary:
@@ -1771,8 +1766,7 @@ func _edit_mouse(event: InputEvent) -> bool:
 			MOUSE_BUTTON_LEFT:
 				if button.pressed:
 					# A double click opens the properties of the selected
-					# equipment, or a selected line's service editor
-					# (director, 2026-09-13).
+					# equipment, or a selected line's service editor.
 					if button.double_click:
 						_drag = ""
 						if _edit_run != null:
@@ -1790,7 +1784,7 @@ func _edit_mouse(event: InputEvent) -> bool:
 							var leg := int(aimed.get_meta("leg"))
 							if pipe == _edit_run:
 								# Any straight of the selected line: the click
-								# plants a corner there (director, 2026-09-19); a
+								# plants a corner there; a
 								# stub or a riser, where none can go, just moves
 								# the sleeve.
 								if not _begin_grab() and leg >= 0:
@@ -1816,15 +1810,15 @@ func _edit_mouse(event: InputEvent) -> bool:
 				return true
 			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
 				# Over a selected line, Ctrl and the wheel is elevation: the
-				# held corner, or the whole straight (director, 2026-09-19:
-				# the plain wheel zooms as usual, even with a line selected).
+				# held corner, or the whole straight (the plain wheel zooms as
+				# usual, even with a line selected).
 				# Under the right button it still turns things, as everywhere.
 				if _leg_gizmo != null and not _right_down and button.pressed and button.ctrl_pressed:
 					_raise_selected(RAISE_STEP if button.button_index == MOUSE_BUTTON_WHEEL_UP else -RAISE_STEP)
 					return true
 				return _mode_mouse(event)
 			MOUSE_BUTTON_RIGHT:
-				# On a cube: delete that corner (director, 2026-09-19); the
+				# On a cube: delete that corner; the
 				# leg between its neighbours is routed afresh. Anywhere
 				# else the right button carries, turns, or cancels.
 				if button.pressed and _leg_gizmo != null and is_instance_valid(_edit_run):
@@ -1920,8 +1914,8 @@ func _begin_drag() -> void:
 	_dup_index = -1
 	if _drag.begins_with("pt") and Input.is_key_pressed(KEY_CTRL) and _leg_gizmo != null:
 		# Ctrl: the corner is duplicated in place, the copy next after
-		# it, and the drag that follows moves the copy (director,
-		# 2026-09-19). A stub end or router corner is planted instead.
+		# it, and the drag that follows moves the copy. A stub end or
+		# router corner is planted instead.
 		var index := _leg_gizmo.corner_index(_drag)
 		if index >= 0 and index < _leg_gizmo.path.size():
 			var at: Vector3 = _leg_gizmo.path[index]
@@ -2041,7 +2035,7 @@ func _grab_point() -> Vector3:
 	return a.lerp(b, t)
 
 
-## Middle click on a cube (director, 2026-09-19): lock the corner
+## Middle click on a cube: lock the corner
 ## where it stands, or unlock it. A corner the router laid, a stub end
 ## or a riser foot, is made the line's own first, in place, so it can
 ## be pinned too.
@@ -2161,9 +2155,7 @@ func _begin_grab() -> bool:
 	var corner_hit := _drag_hit(plant.to_global(at))
 	if corner_hit == Vector3.INF:
 		return false
-	# The click itself plants the corner (director, 2026-09-19: "left
-	# click to place a handle, and then that new handle cube would need
-	# to be left clicked and dragged"): a waypoint on the straight, the
+	# The click itself plants the corner: a waypoint on the straight, the
 	# line laid again through it and looking the same, its cube up. A
 	# pull that follows drags that cube; a release leaves it.
 	plant.begin_gesture()
@@ -2171,8 +2163,7 @@ func _begin_grab() -> bool:
 	_leg_gizmo.leg = _grab_leg
 	var index := _leg_gizmo.corner_index("grab")
 	# An exact match only: a click beside a planted corner is a new
-	# corner, not that one moved (2026-09-19: "the previous handle I'd
-	# placed disappears").
+	# corner, not that one moved.
 	var waypoints := dragged_waypoints(plant.wire_waypoints(_edit_run), _leg_gizmo.path, index, at, at)
 	_drag = "grab"
 	_relay_selected(waypoints, at, false)
@@ -2257,8 +2248,7 @@ func _relay_selected(waypoints: Array, moved: Vector3, as_start: bool) -> void:
 	_leg_gizmo.refresh(path, plant.wire_corners(relaid), plant.wire_locks(relaid), plant.wire_waypoints(relaid))
 
 
-## The wheel over a selected line (director, 2026-09-19: "how would I
-## change the elevation of a pipe"): a held corner goes up or down a
+## The wheel over a selected line: a held corner goes up or down a
 ## quarter metre a notch; with nothing held, the whole selected
 ## straight does, its ends becoming corners at the new height. Never
 ## below 0.15 m. The support rule then says what it says.
@@ -2292,10 +2282,9 @@ func _raise_selected(dy: float) -> void:
 	var a: Vector3 = path[leg]
 	var b: Vector3 = path[leg + 1]
 	if absf(a.y - b.y) > 0.001:
-		# A riser has no height of its own: raising its two ends put a
+		# A riser has no height of its own: raising its two ends puts a
 		# corner above the stub and one below it, a fold, and every
-		# notch squared it with more legs (director, 2026-09-19:
-		# "instant spaghetti pipes spring forth").
+		# notch would square it with more legs.
 		hud.toast("select a level straight to raise it — a riser follows its ends")
 		return
 	var a2 := a + Vector3(0, dy, 0)
@@ -2314,26 +2303,23 @@ func _raise_selected(dy: float) -> void:
 	_relay_selected(raised_waypoints(before, path, leg, a2, b2), a2, true)
 
 
-## What a dragged point of a line makes of its waypoints (2026-09-19:
-## the director dragged a handle and "a spaghetti pile rapidly
-## emerged" — every corner the router had derived, riser ends and
-## square-turn legs, was sent back as a waypoint, derived new corners
-## of its own on the next lay, and so on each tick). Only the player's
-## waypoints are kept: the dragged point moves if it is one of them,
-## or is inserted at its place along the path if the router laid it —
-## a stub end included, so pulling the end of a straight at a fitting
-## puts a corner there (director, the same day) — and a line gains one
-## waypoint per point the player has actually touched. A riser's
-## corners stand on one spot at different heights, so a waypoint over
-## or under the dragged point moves with it. `index` is into `path`,
-## the line as laid.
-## Both ends of a straight moved in one pass against the path as it
-## was (2026-09-19: two single-point edits in one tick put the far
-## corner ahead of the near one, since the near one had just left the
-## path the second edit ordered itself by, and the line looped back on
-## itself, "the total length of pipe approximately tripled"). An end
-## that is a waypoint is replaced; one that is not is inserted at its
-## place along the path.
+## What a dragged point of a line makes of its waypoints. Only the
+## player's waypoints are kept (a corner the router derived, riser ends
+## and square-turn legs, sent back as a waypoint would derive new
+## corners of its own on the next lay, and so on each tick): the
+## dragged point moves if it is one of them, or is inserted at its
+## place along the path if the router laid it — a stub end included,
+## so pulling the end of a straight at a fitting puts a corner there —
+## and a line gains one waypoint per point the player has actually
+## touched. A riser's corners stand on one spot at different heights,
+## so a waypoint over or under the dragged point moves with it.
+## `index` is into `path`, the line as laid.
+## Both ends of a straight move in one pass against the path as it
+## was: two single-point edits in one tick would put the far corner
+## ahead of the near one, since the near one has just left the path
+## the second edit orders itself by, and loop the line back on itself.
+## An end that is a waypoint is replaced; one that is not is inserted
+## at its place along the path.
 static func raised_waypoints(waypoints: Array, path: Array, leg: int, a2: Vector3, b2: Vector3) -> Array:
 	var a: Vector3 = path[leg]
 	var b: Vector3 = path[leg + 1]
@@ -2404,8 +2390,7 @@ static func _stacked(a: Vector3, b: Vector3) -> bool:
 
 
 ## Which waypoint a point of the player's own route is: the one it
-## equals, or -1. Never by nearness (director, 2026-09-19: "we cannot
-## have such proximity based rules").
+## equals, or -1. Never by nearness.
 static func match_waypoint(waypoints: Array, point: Vector3) -> int:
 	for k in waypoints.size():
 		if (waypoints[k] as Vector3).distance_to(point) < 0.01:
@@ -2449,9 +2434,8 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	# other end), never merely near the dragged point.
 	var anchor: Vector3 = waypoints[self_index] if self_index >= 0 else old
 	# A fresh copy goes to the side it is pulled toward, beyond a riser
-	# partner on that side, at that side's height (2026-09-20: a copy
-	# always placed after its original ran the line out to it and back,
-	# "a mysterious loop" at the foot of a rise).
+	# partner on that side, at that side's height: a copy always placed
+	# after its original would run the line out to it and back.
 	var copy_side := 0          # -1 before the original, +1 after
 	var copy_point := Vector3.ZERO
 	var copy_after_index := -1  # the waypoint the copy follows when +1 (a riser partner)
@@ -2472,8 +2456,7 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 		# A mate is a riser's other end: the same plan position at
 		# another height — never a copy standing on the same spot.
 		# A fresh copy has no mates of its own until it is parted from
-		# its original (2026-09-20: a Ctrl-drag of a riser head took the
-		# foot along, "as if they're tethered").
+		# its original, so a Ctrl-drag of a riser head leaves the foot.
 		var mate := not itself and not overridden and Vector2(w.x - anchor.x, w.z - anchor.z).length() < 0.02 \
 			and absf(w.y - anchor.y) > 0.02 and not is_lock(locks, w)
 		if itself and overridden:
@@ -2510,9 +2493,9 @@ static func dragged_waypoints(waypoints: Array, path: Array, index: int, moved: 
 	if not matched:
 		out.insert(insert_at, Vector3(moved.x, old.y, moved.z) if keep_height else moved)
 	if keep_height and not overridden:
-		# A riser moved by one end (2026-09-20: dragging the foot of the
-		# drop at the header left a drop where it was, since a falling
-		# leg drops first, and moved only the foot): the other end of
+		# A riser moved by one end takes its other end along (a falling leg
+		# drops first, so moving only the foot would leave the drop behind):
+		# the other end of
 		# the riser, when it is the router's and not a waypoint, becomes
 		# a corner of the line at the new spot, so the riser goes along.
 		var moved_at := Vector3(moved.x, old.y, moved.z)

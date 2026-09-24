@@ -1,4 +1,4 @@
-"""Tests for the four step-1 components and their closed loop."""
+"""Tests for the tank, float switch, relay and pump, and their closed loop."""
 from __future__ import annotations
 
 import pytest
@@ -102,7 +102,7 @@ class TestRelay:
 
 
 class TestPump:
-    """A pump is a branch in a network now, so it has to be *in* one to
+    """A pump is a branch in a network, so it has to be *in* one to
     say anything. Whether it is running is decided during the hydraulic
     pass, before the components tick."""
 
@@ -135,8 +135,7 @@ class TestPump:
         assert pump.starts == 2
 
     def test_it_finds_its_own_operating_point_not_its_rating(self) -> None:
-        """The thing a fixed rate could never do: what it delivers is
-        its curve against the system, so throttling the discharge walks
+        """What it delivers is its curve against the system, so throttling the discharge walks
         it back up the curve rather than doing nothing."""
         def deliver(k_pa_per_lps2: float) -> tuple[float, float]:
             sim = Simulation(dt=0.05)
@@ -193,8 +192,7 @@ class TestPump:
 
     def test_a_dead_headed_pump_turns_and_delivers_nothing(self) -> None:
         """Ask for more lift than its shutoff head and the motor runs,
-        the line is open, and the level does not move. The failure a
-        fixed rate could never produce."""
+        the line is open, and the level does not move."""
         sim = Simulation(dt=0.05)
         header = sim.add(Source("hdr", pressure_kpa=0.0))
         pump = sim.add(Pump("p", rated_lps=4.0, mode="hand", head_m=3.0))
@@ -209,7 +207,7 @@ class TestPump:
 
 
 class TestClosedLoop:
-    """The build-order step 1 acceptance test: wire it and watch it."""
+    """The fill loop's acceptance test: wire it and watch it."""
 
     def _build(self, low_l: float, high_l: float) -> tuple[Simulation, Tank, Relay]:
         sim = Simulation(dt=0.05)
@@ -235,8 +233,8 @@ class TestClosedLoop:
         assert tank.ran_dry_ticks == 0
         # 10 minutes at roughly 40 s per fill/drain cycle. The pump runs
         # out past its rating against this short line, so it fills
-        # faster than the old fixed-rate one did and cycles a little
-        # more often for it.
+        # faster than its rating suggests and cycles a little more often
+        # for it.
         assert relay.cycles < 25
 
     def test_zero_deadband_chatters(self) -> None:

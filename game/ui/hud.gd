@@ -59,7 +59,7 @@ func _ready() -> void:
 	_alarm_label.add_theme_color_override("font_color", Color(0.98, 0.45, 0.35))
 	_alarm_label.visible = false
 
-	# The frame-rate overlay (2026-09-12): under the readout, what the
+	# The frame-rate overlay: under the readout, what the
 	# frame costs and what the graphics preset is, so the balance
 	# between speed and looks can be read while walking.
 	_fps_label = _make_label(HORIZONTAL_ALIGNMENT_LEFT)

@@ -30,7 +30,7 @@ func setup(valve_: SimControlValve, bore_r: float = 0.07) -> void:
 	var steel := ViewUtil.flat(Color(0.55, 0.57, 0.60))
 	var green := ViewUtil.flat(Color(0.16, 0.42, 0.28))
 	# Body: horizontal run with flanges, globe bulge below, at the bore
-	# of the line (2026-09-20); the flanges are the mates of the lines'
+	# of the line; the flanges are the mates of the lines'
 	# own, their faces at the anchors (0.31).
 	var body := ViewUtil.cylinder(self, 0.09 * s, 0.56, Vector3(0, 0.32, 0), steel)
 	body.rotation_degrees = Vector3(0, 0, 90)

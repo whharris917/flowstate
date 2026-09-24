@@ -1,6 +1,6 @@
 class_name SimAlarms
 extends RefCounted
-## Alarm scanning (Tier 5, 2026-09-11): the conditions a plant would
+## Alarm scanning (Tier 5): the conditions a plant would
 ## annunciate, read off the records' own state and nothing else. An
 ## alarm is active while its condition holds; the scanner remembers
 ## when each came in, so the HUD can show its age and a new one can
@@ -26,7 +26,7 @@ var _tank_overflowed: Dictionary = {}
 func scan(sim: Simulation) -> Array[Dictionary]:
 	var now := sim.time
 	var seen := {}
-	# The solver itself (2026-09-22): a solve that did not land in the
+	# The solver itself: a solve that did not land in the
 	# last second has recorded flows that do not balance.
 	if now - sim.unconverged_last_t <= 1.0:
 		_raise(seen, "hydraulics", "NOT CONVERGED", now)

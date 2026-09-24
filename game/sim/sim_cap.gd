@@ -2,13 +2,10 @@ class_name SimCap
 extends SimComponent
 ## A pipe cap: a two-nozzle fitting that is one hydraulic node, a
 ## blind end while only one nozzle carries a line and a plain
-## coupling once both do. A cut leaves one on each side of the cut
-## (director, 2026-09-13: cutting is putting a closed cap on a pipe
-## until it is connected again). A node with one branch carries no
+## coupling once both do. A cut leaves one on each side of the cut,
+## closed until the line is connected again. A node with one branch carries no
 ## flow, so a capped line stands at pressure and moves nothing.
-## Open (director, 2026-09-20: a line laid to nowhere "simply becomes
-## an overflow point at atmospheric pressure"), the cap is an open
-## pipe end: its node vents to the air at its own height through a
+## Open (a line laid to nowhere), the cap is an open pipe end: its node vents to the air at its own height through a
 ## wide free discharge, and what arrives spills and is totalled.
 ## Mirrors sim/components.py Cap.
 
@@ -17,8 +14,8 @@ const VENT_CV_LPS := 60.0   # an open bore: the line's own resistance limits the
 var open: bool = false
 var elevation_m: float = 0.0   # the height of the open end, for the air it vents to
 var spilled_l: float = 0.0
-## What lands in an open vessel below (director, 2026-09-20: fill an
-## open tank from a line ending in the air above it). The plant names
+## What lands in an open vessel below, from a line ending in the air
+## above it. The plant names
 ## the vessel under the end; the kernel hands it the stream.
 var catch: SimTank = null
 var delivered_l: float = 0.0
@@ -50,15 +47,15 @@ func build_hydraulics(net: SimNetwork, node: Dictionary) -> void:
 	_air = net.add_node(SimHydraulics.static_head_pa(elevation_m), true)
 	_vent = net.add_branch(SimControlResistance.new(node["a"], _air, VENT_CV_LPS, comp_name)) \
 		as SimControlResistance
-	# One-way (2026-09-22): below the air at its height an open end draws
-	# air, not water; two-way, a raised end drew 35 L/s in from nowhere.
+	# One-way: below the air at its height an open end draws air, not
+	# water; two-way, a raised end would draw water in from nowhere.
 	_vent.one_way = true
 
 
 func update_hydraulics(net: SimNetwork, _node: Dictionary) -> void:
 	# The air the end vents to is at the end's height as it stands now,
-	# refreshed every scan like every other boundary (2026-09-21: an
-	# end moved after the network was built vented where it used to be).
+	# refreshed every scan like every other boundary, so an end moved
+	# after the network was built vents where it stands.
 	if _air >= 0:
 		net.set_pressure(_air, SimHydraulics.static_head_pa(elevation_m), true)
 	if _vent != null:

@@ -27,7 +27,7 @@ def feed(port, stream) -> None:
 
     This is how a unit operation is tested on its own equations without
     building a network around it. Setting only ``value`` does nothing
-    any more -- a component reads its rate off ``flow_lps``, because
+    -- a component reads its rate off ``flow_lps``, because
     that is the half of it the solver decides.
     """
     port.value = stream
@@ -66,7 +66,7 @@ def wire_supply(
     """Give each pump or valve a header to pull from.
 
     One header, one pipe run per machine, and nothing else — there is no
-    draw wire to pair with it any more. What each component gets is
+    draw wire to pair with it. What each component gets is
     whatever the network solves for it, so a test that wants a *known*
     flow has to arrange the pressures and resistances that produce it
     rather than asserting a rate.

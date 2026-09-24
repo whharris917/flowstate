@@ -1,5 +1,5 @@
 shader_type spatial;
-// Boulders and erratics (2026-09-12): the same granite as the ledge,
+// Boulders and erratics: the same granite as the ledge,
 // tinted per instance, wearing the tide's bands where the sea reaches
 // them. Flat-shaded facets from the mesh give the form; no relief map.
 #include "res://world/granite.gdshaderinc"

@@ -1,4 +1,4 @@
-// Falling water (2026-09-22): a stream from an open pipe end, or the
+// Falling water: a stream from an open pipe end, or the
 // sheet running down a tank that overflows. Streaks move along the mesh
 // (UV.y, 0 at the start, 1 at the end) at the liquid's real speed, so the
 // motion is the flow's own and never a decoration; the vertex colour's

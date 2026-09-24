@@ -1,7 +1,6 @@
 """Unit 400's T-401 draining by gravity through a stroking valve into
 T-402's dry top nozzle, in the Python kernel: the standing example of a
-plateau a stroking valve opens onto (half a second of unconverged scans,
-identical on the committed kernel of 2026-09-22, the balance still closing).
+plateau a stroking valve opens onto.
 
     PYTHONPATH=<repo> .venv/Scripts/python.exe tools/gravity_drain_rig.py
 

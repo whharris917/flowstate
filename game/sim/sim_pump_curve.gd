@@ -38,8 +38,7 @@ var exponent: float = 2.0
 ## piezometric (P + rho*g*z), so the pressure a gauge on the suction
 ## would read -- the one prime is judged on -- is the node's less this.
 ## A pump at the top of a rise sees a lower static suction than one at
-## the bottom, and can lose prime where the other does not (director,
-## 2026-09-21).
+## the bottom, and can lose prime where the other does not.
 var datum_pa: float = 0.0
 
 

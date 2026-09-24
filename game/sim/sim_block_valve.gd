@@ -110,8 +110,7 @@ func tick(dt: float) -> void:
 
 
 ## The valve's nominal bore, DN: bought at a size, changed only in its
-## CONFIGURE tab (director, 2026-09-20: "valves should be size-adjustable
-## just like tees").
+## CONFIGURE tab, like a tee's.
 var dn: int = 50
 
 

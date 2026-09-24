@@ -1,8 +1,7 @@
-"""An open drain is one-way (2026-09-22): it takes what it is given and
-gives nothing back. Under suction a real open drain draws air; the model
-had passed sewer water backwards onto a pump's suction, material from
-nowhere that the drain's meter, which counts only forward flow, never
-saw."""
+"""An open drain is one-way: it takes what it is given and gives nothing
+back. Under suction a real open drain draws air; sewer water passed
+backwards onto a pump's suction would be material from nowhere that the
+drain's meter, which counts only forward flow, never sees."""
 from __future__ import annotations
 
 import pytest

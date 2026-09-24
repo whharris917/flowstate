@@ -19,7 +19,7 @@ var historian: SimHistorian = null
 ## variables.
 var solve_ms: float = 0.0
 var newton_ms: float = 0.0
-## Solves that did not land since the simulation began (2026-09-22):
+## Solves that did not land since the simulation began:
 ## how many, the worst imbalance left, where and when. The smoke runs
 ## and the probes print it; the annunciator raises it while it lasts.
 var unconverged_scans: int = 0
@@ -130,9 +130,8 @@ func invalidate_network() -> void:
 func _rebuild_network() -> void:
 	# What the network being replaced had solved, nozzle by nozzle: a
 	# change of topology is a change in one corner, and the rest of the
-	# plant keeps its answer rather than starting cold (2026-09-22: every
-	# rebuild re-seeded the whole plant, and a piece placed anywhere could
-	# leave a line elsewhere unsettled).
+	# plant keeps its answer rather than starting cold, so a piece placed
+	# anywhere cannot leave a line elsewhere unsettled.
 	var carried := {}
 	var old := _network
 	if old != null:
@@ -465,8 +464,7 @@ func remove_component(name_: String) -> bool:
 
 ## What the other phases of a scan cost, beside solve_ms: the signal
 ## propagation, the component ticks and the historian's sample. The
-## plant's kernel-cost line prints them (2026-09-13: a 13 ms scan on
-## the main thread is the stutter the director sees).
+## plant's kernel-cost line prints them.
 var signal_ms: float = 0.0
 var components_ms: float = 0.0
 var historian_ms: float = 0.0
@@ -524,9 +522,7 @@ func run_for(seconds: float) -> void:
 
 ## A loaded plant's nozzle pressures, waiting for the first network to
 ## be built: the solver's answer is part of the plant's state, and a
-## load that forgot it started the whole plant cold (2026-09-22: the
-## build-api exercise's save round trip left the home loop's drain line
-## unsettled for a scan).
+## load without it would start the whole plant cold.
 var _loaded_pressures: Dictionary = {}
 
 

@@ -1,7 +1,7 @@
 class_name Milestones
 extends RefCounted
-## The campaign ladder (director, 2026-09-11: the general gameplay of
-## Satisfactory). A milestone is something the plant itself proves,
+## The campaign ladder (the general gameplay of Satisfactory). A
+## milestone is something the plant itself proves,
 ## read off live records and their own totalizers — never a flag the
 ## player can set — and each one completed unlocks build-menu types,
 ## tier by tier along the GDD's history of industrial control.

@@ -10,10 +10,9 @@ extends SimResistance
 ## nothing at all rather than a very large resistance, so a closed
 ## valve is genuinely closed.
 ##
-## One-way (2026-09-22), it passes from a to b only: an open drain to an
-## atmospheric sewer, which under suction draws air, never sewer water
-## (it had passed 3.46 L/s backwards for a scan onto a pump's suction,
-## 0.17 L from nowhere). Backwards it passes nothing and joins nothing,
+## One-way, it passes from a to b only: an open drain to an
+## atmospheric sewer, which under suction draws air, never sewer water.
+## Backwards it passes nothing and joins nothing,
 ## but reports the open side's slope, as the check valve does, so
 ## Newton knows where the wall is.
 

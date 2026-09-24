@@ -1,8 +1,8 @@
 class_name MainMenu
 extends Control
-## The title screen (2026-09-11): pick a world. Campaign is the game;
+## The title screen: pick a world. Campaign is the game;
 ## the blank map is the director's stress test; the sandbox is the
-## showcase; the hall is parked but bootable. Worlds are still scenes
+## showcase; the hall is parked but bootable. Worlds are scenes
 ## the editor can Play directly, so nothing here is required.
 
 const WORLDS: Array[Dictionary] = [

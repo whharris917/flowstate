@@ -4,8 +4,7 @@ The point of these units is that they compose. Each one is checked on
 its own equations, and then the whole downstream sequence is run end to
 end to prove the material balance closes across all of them.
 
-Since the kernel went over to pressure, none of these machines can be
-handed a throughput. Each has its own feed pump, so what it processes is
+None of these machines can be handed a throughput. Each has its own feed pump, so what it processes is
 that pump's curve against the vessel above it -- which is why the tests
 that care about a rate build a network, and the tests that care about
 the equations stand material at the nozzle with ``feed()`` and read the
@@ -314,7 +313,7 @@ class TestDownstreamTrain:
         """Crystallizer -> centrifuge -> dryer for the product, with the
         mother liquor going to a still for solvent recovery.
 
-        Every join here is now a single pipe: there is no draw wire to
+        Every join here is a single pipe: there is no draw wire to
         pair with it, and no tee component either. The hoppers between
         the machines are here because a real plant has them, not because
         the kernel demands them.

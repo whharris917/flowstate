@@ -30,8 +30,8 @@ const CATALOG_UTILITIES: Array[Dictionary] = [
 	{"type": "cap", "label": "Pipe cap"},
 ]
 
-# The small-line family (director, 2026-09-20: "what would exist in a
-# real processing plant on small-diameter lines"): new machines, never
+# The small-line family, what a real processing plant has on
+# small-diameter lines: new machines, never
 # the big ones drawn small. Each is built at the bore of the line on it.
 const CATALOG_SMALL_BORE: Array[Dictionary] = [
 	{"type": "orifice", "label": "Restriction orifice"},
@@ -43,8 +43,8 @@ const CATALOG_SMALL_BORE: Array[Dictionary] = [
 	{"type": "rotameter", "label": "Rotameter"},
 ]
 
-# The filling line (director, 2026-09-22: "build a vial filler from
-# individual parts"): vials as countable things, and the parts that
+# The filling line, a vial filler built from individual parts: vials
+# as countable things, and the parts that
 # move, fill, weigh and cap them. The plant links a part's outfeed to
 # the infeed standing where it ends, and seats a device on the track it
 # stands over (VialLine).
@@ -366,7 +366,6 @@ const MOUNTED_HOST_PORT := {"float_switch": "level", "gauge_level": "level", "ga
 
 # One player pipe is one kernel wire: a material nozzle to a material
 # nozzle, and the network decides what moves through it and which way.
-# There is no facade pairing and no hidden draw wire any more.
 const KIND_COLORS := {
 	SimTypes.PortKind.SIGNAL_DISCRETE: Color(0.11, 0.69, 0.48),
 	SimTypes.PortKind.SIGNAL_ANALOG: Color(0.92, 0.60, 0.10),
@@ -729,8 +728,7 @@ static func _anchor_dir(raw: Variant) -> Vector3:
 ## the equipment body; the fitting's local +X points outward along
 ## dir (derived radially when not given).
 ## Inline fittings wear their own flanges, built at the bore of the
-## line on them (director, 2026-09-20: "the valve geometry itself
-## matches the radius of the pipe to which it is connected"): their
+## line on them: their
 ## port fittings are flush — the pick volume and the colour ring on
 ## the fitting's own face, no neck, no second flange — and a line
 ## meets that face.
@@ -778,7 +776,7 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	var z_axis := dir.cross(up_ref).normalized()
 	body.basis = Basis(dir, z_axis.cross(dir), z_axis)
 	# A capsule the length of the fitting, along its axis: the same
-	# target from any side (director, 2026-09-18).
+	# target from any side.
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = maxf(0.11, bore_r * 1.5)
@@ -796,7 +794,7 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	# gland's end of a cable one (Plant.marker_face).
 	body.set_meta("face", (0.0 if flush else 0.175) if is_pipe else 0.145)
 	# The bore a line meets here (Plant._end_bore): a nozzle is built at
-	# the size of the line on it (director, 2026-09-22).
+	# the size of the line on it.
 	body.set_meta("bore", bore_r)
 	if is_pipe and flush:
 		# The colour ring on the fitting's own flange face, nothing else.
@@ -806,9 +804,7 @@ static func make_marker(view: Node3D, record_name: String, port_name: String,
 	elif is_pipe:
 		# A nozzle: the neck is the bore, the flange the mate of the
 		# line's own — 1.8 × bore, 0.045 thick, its face where the line's
-		# flange begins (2026-09-20: it was a 0.05 neck under a 0.09
-		# flange against the line's 0.07 and 0.126, and read as a
-		# smaller pipe stuck on every nozzle).
+		# flange begins, so the nozzle never reads as a smaller pipe.
 		var neck_r := 0.032
 		if SimTypes.is_material(kind):
 			neck_r = bore_r

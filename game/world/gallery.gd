@@ -1,5 +1,5 @@
 class_name Gallery
-## Unit 500: a geometry showcase (director's request, 2026-09-02).
+## Unit 500: a geometry showcase.
 ## Nothing here simulates anything; it exists so the director can see
 ## what high-detail placeholder art looks like before any of it is
 ## backed by a record. Four exhibits south of Unit 400: a tall
@@ -212,9 +212,7 @@ static func build(plant: Plant, world: Node3D) -> void:
 ## L1 over A and B, L2 over C and D, L3 over B, so every flight climbs
 ## under open sky. A bay is 4 m and a flight is 4.4 m plus 0.4 m of
 ## foot, so a flight can never climb inside the footprint of the deck
-## it serves: the deck above it has to be missing (found the hard way,
-## 2026-09-02, when the first tower stopped the player a metre up with
-## their head against L2). Flight 1 comes in from the aisle onto L1's
+## it serves: the deck above it has to be missing. Flight 1 comes in from the aisle onto L1's
 ## east edge; flight 2 climbs south up bay B's west strip onto L2;
 ## flight 3 climbs north up bay C's east strip onto L3; the catwalk
 ## leaves L3 westward to the vessel head.

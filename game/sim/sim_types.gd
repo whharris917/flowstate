@@ -22,8 +22,7 @@ enum PortKind {
 	PROCESS_LEVEL,
 	PROCESS_PRESSURE,
 	POWER,
-	# A handoff point for vials between two carriers (2026-09-22, the
-	# filling line): nothing flows or propagates along it; once a scan the
+	# A handoff point for vials between two carriers: nothing flows or propagates along it; once a scan the
 	# simulation moves an offered vial into a carrier with room for it.
 	ITEM,
 }
@@ -49,8 +48,7 @@ static func kind_name(kind: PortKind) -> String:
 
 
 ## A flow rate in the unit that shows it: litres, millilitres or
-## microlitres a second, since a millimetre line moves microlitres
-## (director, 2026-09-20: "somewhat multiscale").
+## microlitres a second, since a millimetre line moves microlitres.
 static func flow_text(lps: float) -> String:
 	var q := absf(lps)
 	if q >= 0.1:

@@ -1,5 +1,5 @@
 shader_type spatial;
-// A landscape's ground (2026-09-12): one heightfield wearing the field
+// A landscape's ground: one heightfield wearing the field
 // shader's grass where it is flat and clear of the sea, granite ledge
 // where it is steep or within the sea's reach, cobble where the site
 // says a beach is (vertex colour red), and the tide's bands on the
@@ -9,7 +9,7 @@ shader_type spatial;
 // Shared rock functions live in granite.gdshaderinc. Past FAR metres
 // the grain, the lichen and the relief are under a pixel, so the far
 // ground takes a cheap path: the same colours by slope and height
-// from one noise (2026-09-13: the full path cost the laptop 7 fps).
+// from one noise.
 #include "res://world/granite.gdshaderinc"
 
 const float FAR = 110.0;

@@ -1,7 +1,6 @@
-"""A pipe's resistance follows its length and size (director,
-2026-09-22). Before, every line had the same resistance whether it ran
-one metre or forty, so cutting a device into a line doubled it and
-moving equipment changed nothing."""
+"""A pipe's resistance follows its length and size, so cutting a device
+into a line leaves the line's resistance as it was and moving equipment
+changes it."""
 from __future__ import annotations
 
 import pytest

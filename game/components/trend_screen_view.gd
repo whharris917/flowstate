@@ -1,6 +1,6 @@
 class_name TrendScreenView
 extends HmiScreenView
-## A placeable trend screen (Tier 5, 2026-09-11): a framed screen on
+## A placeable trend screen (Tier 5): a framed screen on
 ## two posts showing up to four historian tags. The pens are picked in
 ## the right-click CONFIGURE tab; the record remembers them.
 

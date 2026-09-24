@@ -1,11 +1,9 @@
 """A material stream: how much, how hot, and what is in it.
 
 This is the value that travels on every process connection in the
-kernel. Before it existed, a process port carried a bare flow rate,
-which meant a separator had to be *told* the purity of its own feed on
-a signal wire and a heat exchanger had to hand its duty to a vessel on
-another one. Nothing composed; every train worked only in the order it
-was wired.
+kernel. Because it carries what is in the flow, a separator reads the
+purity of its own feed and a heat exchanger heats the stream itself;
+no signal wire reconciles them, and a train composes in any order.
 
 A Stream is treated as an immutable value. Operations return new
 Streams rather than mutating, because one Stream object is published on

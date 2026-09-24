@@ -1,6 +1,5 @@
 class_name SmallBoreUtil
-## What the small-line family shares (director, 2026-09-20: "what would
-## exist in a real processing plant on small-diameter lines"): the
+## What the small-line family shares: the
 ## fitting a little line meets a device with, and the body's proportions
 ## at its bore. A line of DN15 and under is tubing, and tubing joins
 ## with compression fittings -- a hex nut over a ferrule on a threaded
@@ -17,8 +16,7 @@ static func is_tube(bore_r: float) -> bool:
 
 ## How much shorter a small-bore body is on tubing than on pipe: its
 ## faces come in to under half the pipe-size half-length, so a train
-## of them sits nipple to nipple the way a fitter leaves it (director,
-## 2026-09-20: "so unnecessarily spaced apart").
+## of them sits nipple to nipple the way a fitter leaves it.
 static func half_scale(bore_r: float) -> float:
 	return 0.45 if is_tube(bore_r) else 1.0
 

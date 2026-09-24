@@ -8,9 +8,8 @@ extends Control
 ##
 ## The port table is not written down anywhere. SimLibrary reads it off
 ## a real constructed record, so a page always shows the I/O the game
-## actually has. Everything else comes from the Python specs via the
-## generator. Neither can drift into describing a machine that is not
-## the machine.
+## actually has and cannot drift into describing a machine that is not
+## the machine. Everything else is hand-authored prose in SimLibraryData.
 
 const COL_BG := Color(0.07, 0.075, 0.08, 0.96)
 const COL_PANEL := Color(0.115, 0.12, 0.13)

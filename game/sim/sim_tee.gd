@@ -4,13 +4,12 @@ extends SimComponent
 ## equal, flows summing to zero, composition the flow-weighted blend
 ## of what arrives. A splitter has one inlet and three outlets, a
 ## mixer three inlets and one outlet, on four separated nozzles; an
-## unused nozzle is capped. It exists because a nozzle takes one line
-## (director, 2026-09-12): joining and splitting is a fitting's job,
+## unused nozzle is capped. It exists because a nozzle takes one line:
+## joining and splitting is a fitting's job,
 ## with its own connection points. Mirrors sim/components.py Tee.
 
 var mode: String
-## The tee's nominal bore, DN (director, 2026-09-20: "a tee splitter/mixer
-## should not change size unless I explicitly reconfigure it"): the view
+## The tee's nominal bore, DN, changed only by reconfiguring it: the view
 ## is built at it, and a line of another size meets it through a reducer.
 var dn: int = 50
 

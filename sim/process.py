@@ -587,7 +587,7 @@ class VacuumLock(Component):
         self.condensate_l = 0.0
         self.draining_lps = 0.0
         self.cycles = 0
-        # The material balance's two numbers (2026-09-22): everything
+        # The material balance's two numbers: everything
         # condensed (what the lock feeds the plant) and what is still in
         # the chamber, this scan's discharge included (the drainer pushes
         # it at the next solve).
@@ -653,8 +653,8 @@ class VacuumLock(Component):
             elif self.state == "drain":
                 # Drain what is there and no more: the last scan of a
                 # cycle has less than a full scan's worth left, and
-                # running it at the full rate pushed out 0.04 L a cycle
-                # that nothing had supplied (2026-09-22).
+                # running it at the full rate would push out material
+                # that nothing had supplied.
                 drained = min(self.condensate_l, self.DRAIN_LPS * dt)
                 self.condensate_l -= drained
                 rate = drained / dt if dt > 0.0 else 0.0

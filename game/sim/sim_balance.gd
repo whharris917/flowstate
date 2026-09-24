@@ -1,6 +1,5 @@
 class_name SimBalance
-## Material accounting by unit, from the records' own meters: the same
-## arithmetic the showcase probe does for Unit 300, made general so a
+## Material accounting by unit, from the records' own meters, so a
 ## screen can show it live for any unit. Fed is what crossed the plant
 ## boundary inward: headers, the transfer lock's condensate, and the
 ## steam drum's makeup (the known gap, counted rather than hidden). Out
@@ -16,9 +15,7 @@ class_name SimBalance
 const HOME := 0
 ## Records the naming rule would file wrongly: the home loop's drain
 ## was numbered before the units were, and two of Unit 300's headers
-## are named for their service rather than their unit. The first run
-## of the plant-wide accounting caught both: a thousand litres fed to
-## the home loop and missing from Unit 300, in equal measure.
+## are named for their service rather than their unit.
 const UNIT_OVERRIDES := {"du_100": 0, "supply_bfw": 300, "supply_solv": 300}
 
 static var _tag_rx: RegEx = null
@@ -194,9 +191,8 @@ static func residual_points(historian: SimHistorian, tagset: Dictionary, held0: 
 	while start > 0 and times[start - 1] >= t0:
 		start -= 1
 	# Each tag's series and start index once, then plain array reads:
-	# a historian call per tag per sample was tens of thousands of
-	# script calls a redraw, five redraws a second, on every world's
-	# pad — the hitch under the whole game (2026-09-13).
+	# a historian call per tag per sample is tens of thousands of
+	# script calls a redraw.
 	var terms: Array = []   # [series, start_index, weight]
 	for group: Array in [["fed", 1.0], ["out", -1.0], ["held", -1.0]]:
 		for pair: Array in tagset[str(group[0])]:

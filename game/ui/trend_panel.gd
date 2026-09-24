@@ -35,8 +35,8 @@ func setup(historian_: SimHistorian, tank_: SimTank, switch_: SimFloatSwitch,
 
 
 ## Five redraws a second, like the other screens: the trend replays
-## ten minutes of samples each time, and at every frame that was a
-## visible slice of the loop (2026-09-13).
+## ten minutes of samples each time, and at every frame that would be
+## a visible slice of the loop.
 var _redraw_left := 0.0
 
 

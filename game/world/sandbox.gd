@@ -18,7 +18,7 @@ var _stars_mat: ShaderMaterial
 var _hall_lights: Array[OmniLight3D] = []
 var _hall_lamp_mat: StandardMaterial3D = null
 
-# The hall over the showcase (director, 2026-09-12): walls and a roof
+# The hall over the showcase: walls and a roof
 # round the developed slab, glass bands for daylight, skylight strips,
 # high-bay lights that come up with dusk. Sandbox only.
 const HALL_MIN := Vector3(-14.0, 0.0, -12.0)
@@ -96,14 +96,9 @@ func _build_pad() -> void:
 
 
 func _build_environment() -> void:
-	# A physical sky (2026-09-11): scattering, a real sun disc and the
-	# haze at the horizon all follow the sun, so dawn and dusk come from
-	# the sun's angle rather than from hand-picked colours.
-	# Our own sky (2026-09-18, world/sky.gdshader): the physical sky went
-	# black with the sun near the horizon, so dawn and dusk were a lit
-	# ground under a dark dome. This one carries its twilight, and the
-	# ambient and reflections come from it again. A crisp autumn day
-	# here (director, 2026-09-12): little haze.
+	# Our own sky (world/sky.gdshader): it carries its twilight, so the
+	# dome stays lit as the sun nears the horizon, and the ambient and
+	# reflections come from it. A crisp autumn day here: little haze.
 	var painted := ShaderMaterial.new()
 	painted.shader = load("res://world/sky.gdshader")
 	painted.set_shader_parameter("haze", 0.3)
@@ -115,7 +110,7 @@ func _build_environment() -> void:
 	sky.radiance_size = Sky.RADIANCE_SIZE_128
 	# The radiance follows the material's changes on its own; the clock
 	# does not run by itself, so nothing here needs the per-frame realtime
-	# mode (2026-09-18: a strobe was reported with it on).
+	# mode, which strobes.
 
 	var env := Environment.new()
 	sky_env = env
@@ -171,9 +166,9 @@ func _build_environment() -> void:
 	# Stars on a dome that follows the player; visibility follows the clock.
 	_stars_mat = ShaderMaterial.new()
 	_stars_mat.shader = load("res://world/stars.gdshader")
-	# The dome sits just inside the camera's far plane (4 km): at 1.5 km
-	# its stars drew in front of the far end of the heighliner (director,
-	# 2026-09-19), which hangs out past two.
+	# The dome sits just inside the camera's far plane (4 km), so its
+	# stars stay behind the far end of the heighliner, which hangs out
+	# past two.
 	var dome := SphereMesh.new()
 	dome.radius = 3800.0
 	dome.height = 7600.0
@@ -233,16 +228,15 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 		# The first stars wait for the afterglow to go: the brightest at
 		# the end of civil twilight, the field once it is dark.
 		_stars_mat.set_shader_parameter("visibility", pow(1.0 - twilight, 1.8))
-		# The dome covers the whole sky; by day it drew nothing and still
-		# cost the fill (4 fps on the laptop, 2026-09-13).
+		# The dome covers the whole sky; by day it draws nothing and still
+		# costs the fill.
 		_stars.visible = twilight < 0.999
-	# Night level set with the director (2026-09-12): 3 was too dim, 9
-	# too bright; 5.5 is a lit night shift.
+	# Night level: 3 is too dim, 9 too bright; 5.5 is a lit night shift.
 	for light in _hall_lights:
 		light.light_energy = lerpf(5.5, 1.2, twilight)
 		# By full day the sun and the skylights light the hall; thirty
-		# omni lights cost every pixel under them (4 fps on the laptop
-		# at Low, 2026-09-13), so they come on with the dusk.
+		# omni lights cost every pixel under them, so they come on with
+		# the dusk.
 		light.visible = twilight < 0.999
 	if _hall_lamp_mat != null:
 		_hall_lamp_mat.emission_energy_multiplier = lerpf(4.5, 1.5, twilight)
@@ -252,7 +246,7 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 
 func _build_enclosure() -> void:
 	# Everything the hall is made of goes under one node and is merged
-	# into a mesh per look at the end (2026-09-13): the lamp lenses
+	# into a mesh per look at the end: the lamp lenses
 	# share their material, so the night glow still reaches them.
 	var hall := Node3D.new()
 	hall.name = "Hall"
@@ -264,9 +258,8 @@ func _build_enclosure() -> void:
 	var cz := (HALL_MIN.z + HALL_MAX.z) / 2.0
 	var lx := HALL_MAX.x - HALL_MIN.x
 	var lz := HALL_MAX.z - HALL_MIN.z
-	# Up each wall: sill, window band, then wall to the roof (the
-	# clerestory came out, director 2026-09-12; daylight from above is
-	# the skylights' job).
+	# Up each wall: sill, window band, then wall to the roof; daylight
+	# from above is the skylights' job.
 	var bands: Array = [[0.0, 2.6, false], [2.6, 5.6, true], [5.6, top, false]]
 	# Roller-door openings in the sill band: west by the pad, east by
 	# Unit 300. Their lintel is the window band.

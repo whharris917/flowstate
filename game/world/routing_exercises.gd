@@ -1,17 +1,13 @@
 class_name RoutingExercises
-## Routing exercises on the Maine site (director, 2026-09-19: the
-## showcase's auto-routed pipes are "a spaghettified mess"; rather than
-## work on the showcase, simple configurations go on the Maine factory
-## one at a time, the director examines each auto-routed line and
-## says what is wrong). Every exercise is a few pieces of equipment
+## Routing exercises on the Maine site: simple configurations, each
+## examined on its own. Every exercise is a few pieces of equipment
 ## and a line laid with no waypoints, so what is seen is the router's
-## own answer. They accumulate here in the order they were asked for.
+## own answer. They are numbered in order.
 ##
-## Exercise 2 is the drip demo (director, 2026-09-20): the small-bore
+## Exercise 2 is the drip demo: the small-bore
 ## family on one little line, ending in the air over an open tank.
 ##
-## Exercise 3 is the line pressure gauges (director, 2026-09-22: "tap a
-## pressure gauge into any point on a pipe"): three cut into one long
+## Exercise 3 is the line pressure gauges: three cut into one long
 ## line the way the player's click cuts them in.
 
 
@@ -24,8 +20,8 @@ static func build(plant: Plant) -> void:
 ## Exercise 1: a single supply header leading to a single pump, on the
 ## pad, eight metres apart on one axis: the header's outlet faces the
 ## pump's inlet exactly in plan. The heights differ, a header at 1.55 m
-## and a pump inlet at 0.42 m, so the line must drop once. (A tank was
-## the first version; its inlet nozzle could not be aligned this way.)
+## and a pump inlet at 0.42 m, so the line must drop once. (A tank's
+## inlet nozzle cannot be aligned this way.)
 static func _one_source_one_pump(plant: Plant) -> void:
 	plant.place("source", "supply_1", {}, Vector3(-4.0, 0.0, -2.0), 0.0, false)
 	plant.place("pump", "p_1", {"rated_lps": 3.0}, Vector3(4.0, 0.0, -2.0), 0.0, false)
@@ -34,10 +30,9 @@ static func _one_source_one_pump(plant: Plant) -> void:
 		push_error("routing exercise 1: " + err)
 
 
-## Exercise 2, the drip demo (director, 2026-09-20: "fill an open tank
-## by routing a supply line to the air above the tank, adding a flow
-## limiter, and letting the tank fill drop by drop, where the drops are
-## audible"). A water header through a pressure regulator, a ball
+## Exercise 2, the drip demo: an open tank filled drop by drop,
+## audibly, from a supply line through a flow limiter to the air above
+## it. A water header through a pressure regulator, a ball
 ## valve, a needle valve, a rotameter and a restriction orifice, all
 ## on DN6 tubing, the line rising to an open end over an open-topped
 ## tank. E on the needle valve turns the drip up a turn at a time; the
@@ -53,9 +48,8 @@ const TUBE_COLOR := Color(0.13, 0.55, 0.28)   # water, ASME
 
 static func _drip_demo(plant: Plant) -> void:
 	# The drip line, west to east along z = 10.
-	# The train sits nipple to nipple, the way a fitter leaves it
-	# (director, 2026-09-20: the first version stood them 1.5 m apart,
-	# "so unnecessarily spaced apart"): a device every 0.3 m, the
+	# The train sits nipple to nipple, the way a fitter leaves it: a
+	# device every 0.3 m, the
 	# metering pump's longer body 0.4 m from its neighbour.
 	plant.place("source", "supply_2", {"pressure_kpa": 400.0}, Vector3(-4.0, 0.0, LINE_Z), 0.0, false)
 	plant.place("regulator", "pr_2", {"set_kpa": 150.0, "cv_lps": 0.5}, Vector3(-2.4, 0.0, LINE_Z), 0.0, false)
@@ -119,7 +113,7 @@ static func _drip_demo(plant: Plant) -> void:
 
 ## Exercise 3: a water header at 400 kPa feeding a drain sixteen metres
 ## east through one DN25 line, whose length and size make it cost the
-## header's pressure a good part of the way (2026-09-22), and three
+## header's pressure a good part of the way, and three
 ## line pressure gauges cut into its level stretch at a quarter, a half
 ## and three quarters, through Plant.place_inline as a click does. The
 ## pressure falls along the line; the three dials read it falling, and

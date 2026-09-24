@@ -1,6 +1,6 @@
-"""The first four components: tank, float switch, relay, pump.
+"""The basic loop's components: tank, float switch, relay, pump.
 
-Together they close the loop from build-order step 1: the pump fills the
+Together they close the fill loop: the pump fills the
 tank, the float switch reads the level, the relay carries the switch's
 contact to the pump motor. The float switch's two trip levels are the
 hysteresis lesson — set them apart and the pump cycles calmly, set them
@@ -22,8 +22,7 @@ class Tank(Component):
     """Holds liquid, and knows what the liquid is.
 
     Two nozzles, and the difference between them is where they are.
-    Each stands at a height on the shell (director, 2026-09-22: the
-    nozzle's position belongs in the kernel), and what it feels is
+    Each stands at a height on the shell, and what it feels is
     where it stands against the liquid: under the surface it carries
     the static head of whatever is standing above it -- which is why a
     full tank will drain into an empty one through nothing but a pipe
@@ -60,8 +59,7 @@ class Tank(Component):
         super().__init__(name)
         if capacity_l <= 0.0:
             raise ValueError("capacity_l must be positive")
-        # An open-topped vessel (director, 2026-09-20: "fill an open tank
-        # ... drop by drop"): a line ending in the air above it lands
+        # An open-topped vessel: a line ending in the air above it lands
         # what it spills here. Nothing else changes: the headspace is
         # atmospheric either way.
         self.open_top = bool(open_top)
@@ -169,7 +167,7 @@ class Tank(Component):
     UNCOVER_M = 0.03
     #: A nozzle height meaning "at the roof", whatever the height is.
     AT_ROOF = -1.0
-    #: The bore every nozzle had before they took their line's size.
+    #: The reference bore: the size nozzle_cv_lps is quoted at.
     NOZZLE_DN_REF = 50
 
     def nozzle_ports(self) -> tuple[str, ...]:
@@ -298,7 +296,7 @@ class Gauge(Component):
       - "press_kpa": a single pressure tap. PROCESS_PRESSURE ports
         carry Pa everywhere; this dial is scaled in kPa.
       - "line_kpa": a pressure gauge tapped into a pipe at any point
-        along it (director, 2026-09-22). It is cut into the line like
+        along it. It is cut into the line like
         the flow element, but its inlet and outlet are one hydraulic
         node, so it costs the line nothing; it reads that node's static
         pressure at its own height, kPa gauge.
@@ -510,7 +508,7 @@ class Drain(Component):
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         # The far side of the drain valve is the sewer: atmospheric, and
         # it will take whatever it is given, and give nothing back: an
-        # open drain under suction draws air (2026-09-22).
+        # open drain under suction draws air.
         self._sewer = net.add_node(static_head_pa(self.elevation_m), fixed=True)
         self._branch = net.add_branch(ControlResistance(
             node["inlet"], self._sewer, self.rate_lps, self.name, one_way=True))
@@ -519,7 +517,7 @@ class Drain(Component):
         # The sewer's height is refreshed every scan, like every other
         # boundary, so a drain moved after it was built vents where it
         # now stands rather than where it stood when the network was
-        # laid out (2026-09-21).
+        # laid out.
         net.set_pressure(self._sewer, static_head_pa(self.elevation_m), fixed=True)
         if self._branch is not None:
             self._branch.cv_lps = self.rate_lps
@@ -546,7 +544,7 @@ class MainsFeed(Component):
             raise ValueError("ways must be at least 1")
         self.spec = spec
         self.ways = ways
-        # One numbered way per load (director, 2026-09-12): a terminal
+        # One numbered way per load: a terminal
         # takes one cable, so a feeder that serves N loads has N ways.
         self.way_ports = [self.add_output(f"way{i + 1}", PortKind.POWER, spec)
                           for i in range(ways)]
@@ -564,7 +562,7 @@ class Tee(Component):
     of what arrives. A splitter has one inlet and three outlets, a
     mixer three inlets and one outlet, on four separated nozzles; an
     unused nozzle is capped. It exists because a nozzle takes one
-    line (director, 2026-09-12): joining and splitting is a fitting's
+    line: joining and splitting is a fitting's
     job, with its own connection points.
     """
 
@@ -594,9 +592,8 @@ class Tee(Component):
 class Cap(Component):
     """A pipe cap: a two-nozzle fitting that is one hydraulic node, a
     blind end while only one nozzle carries a line and a plain
-    coupling once both do. A cut leaves one on each side of the cut
-    (director, 2026-09-13: cutting is putting a closed cap on a pipe
-    until it is connected again). A node with one branch carries no
+    coupling once both do. A cut leaves one on each side of the cut,
+    so a cut line is capped until it is connected again. A node with one branch carries no
     flow, so a capped line stands at pressure and moves nothing.
     """
 
@@ -606,14 +603,12 @@ class Cap(Component):
         super().__init__(name)
         self.add_input("a", PortKind.PROCESS_MATERIAL)
         self.add_output("b", PortKind.PROCESS_MATERIAL)
-        # Open (director, 2026-09-20): an open pipe end, venting to the
+        # Open: an open pipe end, venting to the
         # air at its own height, spilling and totalling what arrives.
         self.open = False
         self.elevation_m = elevation_m
         self.spilled_l = 0.0
-        # What lands in an open vessel below (director, 2026-09-20: fill
-        # an open tank from a line ending in the air above it). The
-        # plant names the vessel; the kernel hands it the stream.
+        # What lands in an open vessel below. The plant names the vessel; the kernel hands it the stream.
         self.catch = None
         self.delivered_l = 0.0
         self._vent = None
@@ -630,8 +625,8 @@ class Cap(Component):
 
     def build_hydraulics(self, net, node: dict[str, int]) -> None:
         self._air = net.add_node(static_head_pa(self.elevation_m), fixed=True)
-        # One-way (2026-09-22): below the air at its height an open end
-        # draws air, not water; two-way, a raised end drew 35 L/s in from
+        # One-way: below the air at its height an open end draws air,
+        # not water; two-way, a raised end would draw water in from
         # nowhere.
         self._vent = net.add_branch(ControlResistance(
             node["a"], self._air, self.VENT_CV_LPS, self.name, one_way=True))
@@ -705,7 +700,7 @@ class ControlValve(Component):
 
     Which means its authority is real. Put it in a line whose own
     resistance dominates and opening it further buys almost nothing --
-    the classic badly-sized valve, and now a thing the player can
+    the classic badly-sized valve, and a thing the player can
     actually diagnose.
     """
 
@@ -1178,8 +1173,8 @@ class Pump(Component):
         # The height of its nozzles above grade. The network solves
         # piezometric pressures, so the static suction a gauge on the
         # pump reads, and prime and cavitation are judged on, is the
-        # node's pressure less rho*g*elevation (director, 2026-09-21: a
-        # pump at the top of a rise is not the pump at the bottom of it).
+        # node's pressure less rho*g*elevation: a pump at the top of a
+        # rise is not the pump at the bottom of it.
         self.elevation_m = float(elevation_m)
         self.mode = "auto"
         self.set_mode(mode)

@@ -1,5 +1,5 @@
-"""An open cap is an atmospheric end that spills what the line delivers
-(director, 2026-09-20); closed, it holds pressure and moves nothing."""
+"""An open cap is an atmospheric end that spills what the line delivers;
+closed, it holds pressure and moves nothing."""
 
 from sim.components import Cap, Source
 from sim.core import Simulation
@@ -48,8 +48,7 @@ def test_open_state_round_trips() -> None:
 
 
 def _header_over_tank(open_top: bool) -> tuple[Simulation, Cap, Source, "Tank"]:
-    """An open end standing over a vessel (director, 2026-09-20: fill an
-    open tank from a line ending in the air above it). The plant names
+    """An open end standing over a vessel. The plant names
     the vessel under the end; the kernel lands the stream."""
     from sim.components import Tank
     sim = Simulation()

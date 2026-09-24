@@ -1,8 +1,7 @@
 class_name SpillJet
 extends Node3D
-## What leaves an open pipe end, drawn and heard off the real flow
-## (2026-09-22; it replaced DripStream, which drew a straight column
-## down from the lip whatever the flow). The liquid leaves the end along
+## What leaves an open pipe end, drawn and heard off the real flow.
+## The liquid leaves the end along
 ## the pipe's axis at its real exit speed -- the flow the kernel solved
 ## over the bore's area -- and falls on a true parabola to what it lands
 ## on, the liquid in an open vessel or the floor:

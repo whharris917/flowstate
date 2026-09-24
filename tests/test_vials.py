@@ -1,4 +1,4 @@
-"""The filling line (2026-09-22): vials are conserved like litres, every
+"""The filling line: vials are conserved like litres, every
 part does what its page says, and the liquid that goes into vials closes
 against the header that supplied it."""
 from __future__ import annotations

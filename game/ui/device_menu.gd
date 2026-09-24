@@ -1,7 +1,7 @@
 class_name DeviceMenu
 extends Control
-## Right-click a device: everything you can do to it, in two tabs
-## (director, 2026-09-05: every modification to equipment goes through
+## Double-click a device: everything you can do to it, in two tabs
+## (every modification to equipment goes through
 ## this menu; M moves it, X removes it).
 ## I/O lists its declared ports straight from the sim record — outputs
 ## with live values, inputs with their wired state. Picking an output
@@ -114,7 +114,7 @@ func _fill_io(records: Array) -> void:
 			if hidden.has(port_name):
 				continue
 			var port: SimOutputPort = record.outputs[port_name]
-			# An outlet takes one line (director, 2026-09-12): a wired one
+			# An outlet takes one line: a wired one
 			# shows its reading and is not offered again.
 			var taken := _plant.visible_wire_count(record_name, port_name) > 0
 			_io_list.add_child(_row(record_name, port_name, port.kind, port.spec, false,

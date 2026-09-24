@@ -30,13 +30,13 @@ var reverb_wet := 0.25
 
 var _loop_players: Array[AudioStreamPlayer] = []
 
-# On-screen options (director, 2026-09-05): the sun follows a
+# On-screen options: the sun follows a
 # time-of-day slider and the music is a toggle, off by default. Both
 # persist in user://settings.json. Worlds hand their sun (and, outdoors,
 # their sky material) to these so one slider serves both worlds.
 const SETTINGS_PATH := "user://settings.json"
 var sun: DirectionalLight3D = null
-var sky_mat: Material = null          # PhysicalSkyMaterial outdoors; a ProceduralSkyMaterial is still honoured
+var sky_mat: Material = null          # sky.gdshader outdoors; a Procedural or Physical sky material is honoured too
 var sky_env: Environment = null
 var settings: SettingsPanel
 var music_player: AudioStreamPlayer = null
@@ -293,8 +293,7 @@ func _process(delta: float) -> void:
 
 
 ## Floating text (equipment names, port tags, line labels) shows only
-## on what the crosshair is over (director, 2026-09-13: "remove the
-## floating text, perhaps only showing it on hover"). Signs and
+## on what the crosshair is over. Signs and
 ## instrument faces are physical and stay. A port fitting under the
 ## crosshair reveals its owner's labels.
 var _labelled: Node = null
@@ -347,7 +346,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		player.input_locked = settings.visible
 		MouseMode.set_captured(not settings.visible)
 	elif event.is_action_pressed("undo", false, true):
-		# Ctrl+Z (director, 2026-09-19). Exact match, or Ctrl+Shift+Z
+		# Ctrl+Z. Exact match, or Ctrl+Shift+Z
 		# would undo as well as redo.
 		builder.reset_mode()
 		var why := plant.undo()
@@ -436,8 +435,8 @@ func set_time_of_day(hours: float) -> void:
 	if sky_env != null:
 		if sky_mat is PhysicalSkyMaterial or sky_mat is ShaderMaterial:
 			# The ambient follows the clock by hand: blue-grey by day, warm
-			# at dusk, blue at night (a physical sky's dome went dim long
-			# before the real one stopped lighting the ground; our own sky
+			# at dusk, blue at night (a physical sky's dome goes dim long
+			# before the real one stops lighting the ground; our own sky
 			# could supply it, but the tuned colours are kept). The sky
 			# supplies the reflections.
 			var day_amb := Color(0.62, 0.68, 0.78)
@@ -459,10 +458,10 @@ func _on_time_of_day(_horizon: float, _twilight: float) -> void:
 	pass
 
 
-## The graphics options (2026-09-12): GraphicsSettings holds the values
-## and applies them; the options panel edits them, F7 cycles the
-## presets, and the frame-rate overlay shows what each costs. The old
-## "high lighting" toggle (SDFGI and volumetric fog) is the Ultra preset.
+## The graphics options: GraphicsSettings holds the values and applies
+## them; the options panel edits them, F7 cycles the presets, and the
+## frame-rate overlay shows what each costs. A legacy "high lighting"
+## setting (SDFGI and volumetric fog) loads as the Ultra preset.
 func apply_graphics() -> void:
 	graphics.apply(self)
 
@@ -504,7 +503,7 @@ func _load_settings() -> void:
 				if saved.get("hotbar") is Array and builder != null:
 					builder.set_hotbar(saved["hotbar"])
 				elif bool(saved.get("high_lighting", false)):
-					graphics.set_preset("Ultra")  # the toggle this replaced
+					graphics.set_preset("Ultra")  # a legacy high_lighting setting
 	set_time_of_day(hours)
 	set_music(on)
 	graphics.apply(self)
@@ -528,9 +527,9 @@ func _build_audio() -> void:
 	reverb.damping = 0.55
 	AudioServer.add_bus_effect(bus, reverb)
 
-	# The music is off until the options toggle turns it on (director,
-	# 2026-09-05: it must not play for the seconds before the settings
-	# load, so it is never told to autoplay at all).
+	# The music is off until the options toggle turns it on: it must not
+	# play for the seconds before the settings load, so it is never told
+	# to autoplay at all.
 	music_player = _looping_player("res://audio/music_loop.wav", -16.0, "Master", false)
 	if with_hum:
 		_looping_player("res://audio/hum_loop.wav", -18.0, "Room")
@@ -584,6 +583,6 @@ func _static_box(size: Vector3, pos: Vector3, color: Color, material: Material =
 
 
 ## The plant floor: matte off-white tiles with grout, world-space, so
-## every slab tiles alike (director, 2026-09-12).
+## every slab tiles alike.
 static func tile_floor() -> ShaderMaterial:
 	return StructureFactory.tile_floor()

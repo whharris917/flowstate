@@ -90,7 +90,7 @@ static func material_for(type_id: String) -> Material:
 
 ## The plant floor: matte off-white tiles with grout, laid in world
 ## space on whichever face is drawn, so a placed slab, the home pad and
-## a hall floor all tile alike (director, 2026-09-12).
+## a hall floor all tile alike.
 static func tile_floor() -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://world/tile_floor.gdshader")

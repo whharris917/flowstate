@@ -62,9 +62,9 @@ func hidden_ports() -> Array[String]:
 	return []
 
 
-## Groups of nozzles that are one hydraulic node: a tee's (director,
-## 2026-09-12: a nozzle takes one line, so joining and splitting is a
-## fitting with its own separated nozzles). The layout gives every
+## Groups of nozzles that are one hydraulic node: a tee's (a nozzle
+## takes one line, so joining and splitting is a fitting with its own
+## separated nozzles). The layout gives every
 ## port in a group the same node.
 func shared_node_ports() -> Array:
 	return []

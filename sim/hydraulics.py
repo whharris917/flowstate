@@ -1,20 +1,13 @@
 """The hydraulic network: pressure drives flow.
 
-Before this existed, flow was *asserted*. A pump moved 2 L/s because it
-was labelled a 2 L/s pump, a valve passed a linear fraction of its Cv
-regardless of what was across it, and every consumer had to announce
-what it took on a ``draw`` wire so the supplier could decrement its
-inventory. That draw wire was double-entry bookkeeping wearing the
-costume of a pipe, and it showed: a supply header, which physically has
-no inlet at all, carried one.
-
-Here flow is *solved*. The plant's material connections form a network
+Flow is *solved*, never asserted: no consumer announces what it takes
+on a ``draw`` wire so a supplier can decrement its inventory. The plant's material connections form a network
 of nodes at some pressure, joined by branches with a hydraulic
 character. Headers and vessels set boundary pressures; pumps add head;
 valves and pipe runs resist. What flows is whatever satisfies all of
 them at once.
 
-Three things fall out of this that no amount of bookkeeping would give:
+Three things fall out of this:
 
   * A tee is not a component. A node where three branches meet splits
     flow by their resistances, because that is what a node *is*.
@@ -105,7 +98,7 @@ class Branch:
     #: serves both ends of it. A regulator, whose opening follows its
     #: downstream pressure, is far stiffer on the b side than the a
     #: side, and the Jacobian must know or Newton steps the inlet as if
-    #: it were the outlet and never lands (2026-09-20).
+    #: it were the outlet and never lands.
     two_sided = False
     #: A branch that can stand closed as a one-way wall -- a check, a
     #: vessel nozzle, a one-way valve -- and report the open side's slope
@@ -163,7 +156,7 @@ class Branch:
         against it, to pass ``push`` L/s (positive: net inflow, so the
         node must rise; negative: it must fall), or None when the branch
         is not such a wall. With ``passing`` False, the crack itself: the
-        wall reached at rest, for flow that will not last. The solver's way off a plateau (2026-09-22):
+        wall reached at rest, for flow that will not last. The solver's way off a plateau:
         between a node and a shut check or a dry nozzle nothing flows
         until the crack, so Newton's local slope climbs a 10 kPa gap in
         steps of a few hundred pascals while the flow arriving stays
@@ -204,7 +197,7 @@ class ControlResistance(Resistance):
     nothing at all rather than a very large resistance, so a closed
     valve is genuinely closed.
 
-    ``one_way`` (2026-09-22) passes from a to b only: an open drain to an
+    ``one_way`` passes from a to b only: an open drain to an
     atmospheric sewer, which under suction draws air, never sewer water.
     Backwards it passes nothing and joins nothing, but reports the open
     side's slope, as ``CheckResistance`` does, so Newton knows where the
@@ -308,17 +301,15 @@ class NozzleResistance(Resistance):
     a positive flow leaves the vessel.
 
     What a nozzle passes depends on where it stands relative to the
-    liquid (director, 2026-09-22: the nozzle's position on the shell
-    belongs in the kernel). Inflow is always free: a line can discharge
+    liquid. Inflow is always free: a line can discharge
     into a vessel through a nozzle above the liquid or under it. Outflow
     needs liquid standing over the nozzle, and ``submergence`` (0..1)
     is how much of it does: 1 well under the surface, 0 once the level
-    has fallen past it, the ramp between them the same 3 cm the bottom
-    nozzle always tailed off over, so an emptying vessel does not
-    chatter shut.
+    has fallen past it, the ramp between them 3 cm, so an emptying
+    vessel does not chatter shut.
 
-    Dry, it is a check valve seen from the vessel's side, and it keeps
-    the check valve's lesson: no flow out, but the *slope* reported is
+    Dry, it is a check valve seen from the vessel's side, and reports
+    as one does: no flow out, but the *slope* reported is
     the open side's, so Newton lands on the crack point instead of
     stepping past it for ever. Connectivity still sees a wall.
     """
@@ -473,7 +464,7 @@ class PumpCurve(Branch):
         # suction would read -- the one that decides whether the pump
         # has prime -- is the node's less this. A pump at the top of a
         # rise sees a lower static suction than one at the bottom, and
-        # can lose prime where the other does not (director, 2026-09-21).
+        # can lose prime where the other does not.
         self.datum_pa = 0.0
 
     def prime(self, suction_pa: float) -> float:
@@ -534,19 +525,16 @@ class FixedFlow(Branch):
     Its conductance is zero -- pressure does not change what it does --
     but it is emphatically *conducting*. Material crosses it, so
     whatever it discharges into has a pressure to find rather than being
-    hydraulically adrift. Reading its flat slope as a wall is what
-    stopped a dryer ever pushing cake into a hopper: the receiving
-    nozzle sat behind a check that had not cracked yet, the solver
-    decided nothing could reach it, and the two ends waited for each
-    other for ever.
+    hydraulically adrift. Read its flat slope as a wall and a receiving
+    nozzle behind a check that has not cracked yet looks unreachable,
+    and the two ends wait for each other for ever.
 
-    What it draws, though, has to be there (2026-09-22): drawing from a
-    line nothing supplies, it starves as its suction nears a hard vacuum,
-    the pump's taper over the same band. Imposed regardless, the vial
-    filler "filled" from a silo whose outlet stood above the liquid, and
-    every millilitre was an imbalance the solve could never close. A
-    machine drawing from its own fixed bowl or drum never nears vacuum
-    and is unchanged. The flow depends on the suction alone, so the
+    What it draws, though, has to be there: drawing from a line nothing
+    supplies, it starves as its suction nears a hard vacuum, the pump's
+    taper over the same band. Imposed regardless, a draw from a vessel
+    whose outlet stands above the liquid is an imbalance the solve can
+    never close. A machine drawing from its own fixed bowl or drum never
+    nears vacuum and is unaffected. The flow depends on the suction alone, so the
     branch is two-sided: all of its slope on the a side, none on the b.
     """
 
@@ -588,10 +576,9 @@ class Network:
     MAX_ITERATIONS = 20
     # A cold solve starts from a seed, not from last scan's answer, so it
     # may take longer to land: three times the budget, once, when new
-    # nodes appear (2026-09-22: whichever flat seed is used leaves some
-    # block far from its answer -- a drip line behind a shut regulator, a
-    # gravity drain started at the sewer's level -- and they landed on
-    # the 20th iteration, or the 21st).
+    # nodes appear. Any flat seed leaves some block far from its answer
+    # (a drip line behind a shut regulator, a gravity drain started at
+    # the sewer's level), and such a block takes about twenty iterations.
     COLD_ITERATIONS = 60
     #: A node is converged when its imbalance is below this, or below a
     #: thousandth of what passes through it, whichever is smaller: a
@@ -623,7 +610,7 @@ class Network:
         self.iterations = 0
         self.residual_lps = 0.0
         #: Whether the last solve landed: every node joined to a fixed
-        #: pressure within its tolerance (2026-09-22). A solve that stops
+        #: pressure within its tolerance. A solve that stops
         #: short records flows that do not balance, and inside a machine
         #: that passes material through that is material made or lost.
         self.converged = True
@@ -676,16 +663,15 @@ class Network:
         # nodes joined by branches, divided by the vessels and headers
         # that fix pressures between them; each block gets its own step
         # length, judged on its own imbalance, and a block that stalls
-        # stops alone (2026-09-22: one step length for the whole plant,
-        # judged on the whole plant, let the boiler's steam line swing
-        # across the drum pressure while Unit 400 improved enough to
-        # carry it, and when Unit 400 found no step that helped, the
-        # solve stopped with the steam line unsettled too).
+        # stops alone. One step length judged on the whole plant lets one
+        # block swing (a steam line across its drum pressure) while
+        # another improves enough to carry it, and a stall in one stops
+        # them all.
         blocks = self._blocks(free, index_of)
         # Cold start: put the free nodes somewhere plausible rather than
         # at zero, which may be a long way from any pressure in the
         # plant. Every scan after the first is warm-started from the
-        # last answer and this does not run, and since 2026-09-22 a
+        # last answer and this does not run, and a
         # rebuild carries every existing nozzle's pressure over, so only
         # new nodes are seeded.
         cold = not self._solved_once
@@ -696,9 +682,8 @@ class Network:
         # Failed steps in a row: a block stops after two. One failure is
         # often a wall or a regulator that has just changed state, and the
         # next linearisation, from the nudge the failure leaves, is what
-        # it needs (2026-09-22: the drip line's regulator cracked open on
-        # the step that failed, and a block stopped at the first failure
-        # ended the cold solve 82 mL/s out); a trickle that no step can
+        # it needs (a regulator can crack open on the step that failed);
+        # a trickle that no step can
         # help still stops at the second, rather than grind out the cap.
         failures = [0] * len(blocks)
         crossed = [False] * len(blocks)
@@ -760,13 +745,12 @@ class Network:
     def _seed_blocks(self, blocks: list[list[int]], free: list[int]) -> None:
         """The cold-start pressure of every node that has none of its own:
         the mean of the plant's fixed pressures. A node a rebuild carried
-        over (``warm``) keeps the answer it had. Two local seeds were tried
-        on 2026-09-22 and each found a case the mean does not: the mean of
-        the fixed pressures a block touches started the showcase's Unit 400
-        on a transient in which XV-403's dead leg flipped across its square
-        law for the rest of the solve (a latent weakness, recorded with its
-        network in tests/data), and a unit-conductance linear solve started
-        a node fed through a tight orifice below a one-way drain's crack."""
+        over (``warm``) keeps the answer it had. Local seeds do worse: the
+        mean of the fixed pressures a block touches can start a dead leg
+        behind a barely-open valve flipping across its square law for the
+        rest of the solve (a latent weakness, recorded with its network in
+        tests/data), and a unit-conductance linear solve can start a node
+        fed through a tight orifice below a one-way drain's crack."""
         known = [self.pressures[i] for i, f in enumerate(self.fixed) if f]
         plant_mean = sum(known) / len(known) if known else 0.0
         for block in blocks:
@@ -874,12 +858,12 @@ class Network:
 
         A closed wall (a shut check, a dry nozzle, a one-way valve shut
         backwards) reports the open side's slope so Newton knows a crack
-        is near when flow pushes at it -- the check-valve lesson. Pulled
+        is near when flow pushes at it (see CheckResistance). Pulled
         away from, it passes nothing whatever the pressure and anchors
-        nothing, and its slope -- enormous near the crack -- told Newton
-        otherwise: a line at rest between two dry nozzles sat with each
-        end pinned at its own nozzle's crack and a valve between them
-        passing a litre a second that could go nowhere (2026-09-22). So
+        nothing, and its slope -- enormous near the crack -- would tell
+        Newton otherwise: a line at rest between two dry nozzles would sit
+        with each end pinned at its own nozzle's crack and a valve between
+        them passing a litre a second that could go nowhere. So
         given the imbalances, a closed wall's slope is dropped from a
         node's row while that node's imbalance drives it away from the
         crack; the row may then lose its only anchor, and _drop_dead ties
@@ -896,7 +880,7 @@ class Network:
             # Closed by more than the linear stretch at the crack: within
             # a pascal of it the law is smooth on purpose, and dropping
             # the slope there as the imbalance flips sign each iteration
-            # left a trickle converging by a quarter an iteration.
+            # leaves a trickle converging by a quarter an iteration.
             closed = (residual is not None and branch.wall
                       and not branch.is_conducting_at(pa, pb)
                       and abs(pa - pb) > _DP_FLOOR_PA)
@@ -924,16 +908,15 @@ class Network:
         """A node with no slope at all has no equation: its row and column
         become a bare -1.
 
-        A node cut off from every fixed pressure keeps its equation
-        (2026-09-22), with a slight tie to where it stands so the island's
-        common level is still determined. Frozen, as they were, a false
-        island stayed false: the drip line stranded between a regulator
-        shut above its set point and a one-way open end shut below the air
-        had liquid still pushing through it, nothing moved it, and the
-        solve, which ignored islands, called it converged. Kept live, the
-        liquid inside it moves its pressures, a wall reopens, and the line
-        is solved; a real dead leg simply comes to one pressure. So every
-        node counts for convergence now."""
+        A node cut off from every fixed pressure keeps its equation, with
+        a slight tie to where it stands so the island's common level is
+        still determined. Frozen, a false island stays false: a line
+        stranded between a regulator shut above its set point and a
+        one-way open end shut below the air, with liquid still pushing
+        through it, never moves. Kept live, the liquid inside it moves its
+        pressures, a wall reopens, and the line is solved; a real dead leg
+        simply comes to one pressure. So every node counts for
+        convergence."""
         n = len(rhs)
         for i in range(n):
             if abs(jacobian[i][i]) < 1e-12:
@@ -952,8 +935,7 @@ class Network:
         node inside a machine that passes material through, what is left
         is material made or lost -- a third of a litre an hour at worst;
         near the answer Newton converges quadratically, so one step takes
-        it to rounding (2026-09-22: an exchanger's shell passed 1.15941
-        L/s in and 1.15945 out, converged)."""
+        it to rounding."""
         residual = self._residuals(index_of, n)
         before = _norm(residual)
         if before == 0.0:
@@ -1015,8 +997,7 @@ class Network:
         check, whose flow is flat until the crack) gets a step sized by
         the open side's slope, which reaches the crack only when the flow
         to push is large against the gap, so a longer step is tried
-        before the plateau step (2026-09-22: a Cv-sized nozzle fell 300
-        Pa short); the ladder climbs by 1.5 and 2 in turn because the
+        before the plateau step; the ladder climbs by 1.5 and 2 in turn because the
         window of scales that improves the norm opens at the crack and
         closes where the open side overshoots."""
         before = _norm([residual[slot] for slot in block])
@@ -1053,7 +1034,7 @@ class Network:
                     break
         # A node stranded below a closed one-way wall with flow pushing
         # at it: step it to the wall's crack, and keep that instead when
-        # it leaves less imbalance than Newton's step (2026-09-22).
+        # it leaves less imbalance than Newton's step.
         # Newton's own step can keep improving a little and run out the
         # iteration cap crawling up the gap.
         newton_at = [self.pressures[free[slot]] for slot in block]
@@ -1068,8 +1049,7 @@ class Network:
             # it anyway, once a solve. Judged where it lands, the step
             # looks worse -- the node rose, so what feeds it pushes harder
             # for a moment -- but from the open side the next iteration
-            # settles (2026-09-22: a tank's drain line started 38 kPa
-            # under the sewer and sat four scans).
+            # settles.
             crossed[b] = True
             return True
         for i, slot in enumerate(block):
@@ -1081,8 +1061,7 @@ class Network:
         # kPa away and whose slope says otherwise. The block stops -- at
         # the shortest step tried, not back at the start: that nudge is
         # what lets the next scan leave a plateau whose slope reads zero
-        # (a regulator shut a hair above its setpoint, 2026-09-22:
-        # restored exactly, the drip demo never reopened it).
+        # (a regulator shut a hair above its setpoint).
         place(shortest)
         return False
 
@@ -1098,11 +1077,10 @@ class Network:
         held. Kept only if it leaves less imbalance than ``before``; the
         caller puts its own step back otherwise.
 
-        Why (2026-09-22): XV-401 opens onto T-402's dry roof nozzle 10
-        kPa above the line. Nothing flows until the crack, so the local
-        slope sizes Newton's step at a few hundred pascals, and the line
-        crawled up the gap over twenty scans with the valve's whole flow
-        unbalanced."""
+        Why: a valve opening onto a dry roof nozzle 10 kPa above the line
+        passes nothing until the crack, so the local slope sizes Newton's
+        step at a few hundred pascals, and the line would crawl up the gap
+        over twenty scans with the valve's whole flow unbalanced."""
         slots = block if block is not None else list(range(n))
         in_block = set(slots)
         for slot in slots:
@@ -1111,8 +1089,8 @@ class Network:
         # at it passing (a sustained feed, XV-401 into T-402), and the
         # crack at rest (flow that is only the network settling: a cold
         # boiler's line, drum and sewer both at zero, whose trickle into a
-        # one-way drain died as the line came up and left the passing
-        # landing always a trickle short, 2026-09-22). Both are tried and
+        # one-way drain dies as the line comes up and leaves the passing
+        # landing always a trickle short). Both are tried and
         # the better kept.
         jacobian0 = self._jacobian(index_of, n, residual)
         rhs0 = [-r for r in residual]
@@ -1238,8 +1216,8 @@ def _improves(after: float, before: float, scale: float = 1.0) -> bool:
     Armijo condition): by a ten-thousandth of it per unit of step. A
     Newton step on a square law lands near the mirror image of where it
     started, nearly the same imbalance the other side; a bare "less than"
-    accepted it for a hair of improvement, and a stopped pump's suction
-    flipped between the two for twenty iterations (2026-09-22). Refused,
+    accepts it for a hair of improvement, and a stopped pump's suction
+    flips between the two. Refused,
     the first halving lands on the answer."""
     return after < before * (1.0 - 1e-4 * scale)
 
@@ -1292,8 +1270,7 @@ BEND_K = 0.3
 
 
 def pipe_k(length_m: float, dn: int, bend_quarters: float = 0.0) -> float:
-    """A pipe's resistance follows its length and size (director,
-    2026-09-22): Darcy-Weisbach with one friction factor, plus a loss
+    """A pipe's resistance follows its length and size: Darcy-Weisbach with one friction factor, plus a loss
     coefficient per quarter-turn of bend,
     dP = (f*L/D + K*bends) * rho*v^2/2, in Pa per (L/s)^2. The bore is
     the nominal size in millimetres. The kernel stays geometry-free:

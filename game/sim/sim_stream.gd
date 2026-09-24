@@ -3,11 +3,9 @@ extends RefCounted
 ## A material stream: how much, how hot, and what is in it.
 ## Mirrors sim/stream.py.
 ##
-## This is the value that travels on every process connection. Before it
-## existed a process port carried a bare flow rate, which meant a
-## separator had to be *told* the purity of its own feed on a signal
-## wire. Nothing composed; every train worked only in the order it was
-## wired.
+## This is the value that travels on every process connection, so a
+## separator reads the purity of its own feed rather than being told it
+## on a signal wire, and trains compose whatever order they are wired in.
 ##
 ## IMPORTANT: a Stream is treated as an IMMUTABLE VALUE. Every operation
 ## returns a new Stream rather than mutating, because one Stream object

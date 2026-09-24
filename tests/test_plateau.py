@@ -1,8 +1,7 @@
-"""Solves that used to stop short (2026-09-22). A solve that does not
-land records flows that do not balance, and inside a machine that passes
-material through that is material made or lost; the showcase counted
-377 such scans in its first fifty seconds. Each case here is one of the
-patterns that census found, and each must now converge every scan."""
+"""Solves that stop short at a plateau. A solve that does not land
+records flows that do not balance, and inside a machine that passes
+material through that is material made or lost. Each case here is one
+such pattern, and each must converge every scan."""
 from __future__ import annotations
 
 import pytest
@@ -22,8 +21,8 @@ def _run_counting(sim: Simulation, seconds: float) -> None:
 class TestPlateau:
     def test_a_valve_opening_onto_a_dry_roof_nozzle(self) -> None:
         # Unit 400's XV-401: T-401 drains by gravity through a stroking
-        # valve into T-402's dry roof nozzle, 10 kPa above the line as it
-        # stood. Newton's local slope climbed that gap in steps of a few
+        # valve into T-402's dry roof nozzle, 10 kPa above the line.
+        # Newton's local slope alone climbs that gap in steps of a few
         # hundred pascals for twenty scans with the valve's flow
         # unbalanced; the plateau step goes straight to the crack.
         sim = Simulation(dt=0.05)
@@ -44,9 +43,9 @@ class TestPlateau:
         assert top.level_l + mid.level_l == pytest.approx(600.0, abs=1e-6)
 
     def test_a_filler_cannot_draw_from_a_dry_outlet(self) -> None:
-        # The silo's outlet stood above its liquid; the filler's imposed
-        # draw was taken anyway, an imbalance the solve could never close,
-        # and vials filled from nowhere. An imposed draw now starves as its
+        # The silo's outlet stands above its liquid; an imposed draw
+        # taken anyway is an imbalance the solve can never close, and
+        # vials filled from nowhere. An imposed draw starves as its
         # suction nears a hard vacuum.
         sim = Simulation(dt=0.05)
         silo = sim.add(Tank("pt", capacity_l=1.0, height_m=7.0, diameter_m=3.2))
@@ -80,9 +79,9 @@ class TestPlateau:
         # pressure feeds an exchanger's shell whose condensate and a
         # vacuum lock's drain meet in a tee to a one-way drain. The answer
         # is every node at zero with nothing flowing; the landing at the
-        # drain's crack with the arriving trickle passing was always a
-        # trickle short, and the solve crept by a quarter an iteration.
-        # The landing at rest is tried too (2026-09-22).
+        # drain's crack with the arriving trickle passing is always a
+        # trickle short, and the solve creeps by a quarter an iteration.
+        # The landing at rest is tried too.
         sim = Simulation(dt=0.05)
         bfw = sim.add(Source("bfw", "water"))
         sg = sim.add(SteamGen("sg", rated_kgps=0.5))

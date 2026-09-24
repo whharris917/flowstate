@@ -30,12 +30,12 @@ func _run(world: WorldBase) -> void:
 	# From the pad's south-east corner, out over the ledges to the sea.
 	await _view(player, Vector3(70.0, 0.35, 55.0), -2.35, -0.12, 0.0, "pad_sea")
 	if world is MaineMap:
-		# The drip demo (2026-09-20): the small-bore line from its west
+		# The drip demo: the small-bore line from its west
 		# end, the open end over the tank close up, and the dosing line.
 		await _view(player, Vector3(-4.5, 0.35, 12.0), -0.9, -0.3, 0.0, "drip_line")
 		await _view(player, Vector3(0.6, 0.35, 12.3), 0.0, -0.3, 0.0, "drip_end")
 		await _view(player, Vector3(3.2, 0.35, 11.0), 0.0, -0.35, 0.0, "dosing_line")
-		# The line pressure gauges (2026-09-22): the line from its west
+		# The line pressure gauges: the line from its west
 		# end, then the middle dial close up.
 		await _view(player, Vector3(-6.0, 0.35, 19.0), -0.9, -0.2, 0.0, "line_gauges")
 		await _view(player, Vector3(4.1, 0.35, 17.0), 0.0, -0.35, 0.0, "line_gauge_close")
@@ -65,9 +65,8 @@ func _run(world: WorldBase) -> void:
 		await _shot("user://%sgraphics_%s.png" % [_prefix, preset.to_lower()])
 		print("[probe] graphics %s: %.0f fps (loop %.0f ms) — %s" % [preset, best, loop_ms,
 			world.graphics.summary()])
-	# What each part of the landscape costs on Low (director, 2026-09-13:
-	# "not even reaching 60 fps on Low"): the rate with each part hidden
-	# in turn, and with the cheaper upscaler.
+	# What each part of the landscape costs on Low: the rate with each
+	# part hidden in turn, and with the cheaper upscaler.
 	world.graphics.set_preset("Low")
 	world.graphics.apply(world)
 	var forests: Array[Forest] = []

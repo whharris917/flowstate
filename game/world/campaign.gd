@@ -1,7 +1,6 @@
 extends "res://world/blank.gd"
 class_name CampaignMap
-## The campaign (director, 2026-09-11: the general gameplay of
-## Satisfactory): the blank map with the milestone ladder switched on.
+## The campaign: the blank map with the milestone ladder switched on.
 ## The build menu starts with a tank, a header and a drain plus all the
 ## structure, and grows as the plant proves each milestone (J opens
 ## the journal). Its own save file. The blank map stays ungated for

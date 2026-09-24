@@ -34,8 +34,8 @@ func _ready() -> void:
 	add_child(_cards)
 
 
-## `slots` maps a type to its hotbar slot, shown on the card instead
-## of the old page number (2026-09-19: the number keys are the hotbar).
+## `slots` maps a type to its hotbar slot, shown on the card (the
+## number keys are the hotbar).
 func show_page(page_name: String, entries: Array, icons: AssetIcons, selected: int,
 		slots: Dictionary = {}) -> void:
 	visible = true

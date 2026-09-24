@@ -14,7 +14,7 @@ node and its pressure, and whether the solve landed.
 
     PYTHONPATH=<repo> .venv/Scripts/python.exe tools/replay_network.py <dump.json> [--quiet]
 
-The point (2026-09-22): a solver failure inside a running plant can be
+The point: a solver failure inside a running plant can be
 watched only through prints; replayed here it can be studied, changed
 and re-run in seconds, and a fix proven on the very network that failed.
 """

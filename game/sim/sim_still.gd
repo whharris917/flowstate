@@ -27,10 +27,10 @@ var boilup_lps: float = 0.0
 var distillate_lps: float = 0.0
 var bottoms_lps: float = 0.0
 var recovered_l: float = 0.0
-## What is inside it between scans (2026-09-22): its discharges are
+## What is inside it between scans: its discharges are
 ## imposed at the next solve from what it drew at this one, so one scan
 ## of feed is always in the machine. The material balance counts it as
-## held; left out, a running still read as 0.05 L gone missing.
+## held.
 var in_flight_l: float = 0.0
 
 var inlet: SimInputPort

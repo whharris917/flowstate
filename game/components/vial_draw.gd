@@ -2,7 +2,7 @@ class_name VialDraw
 extends Node3D
 ## Draws a carrier's vials in three draws whatever their number: the
 ## glass, the liquid in each at its real volume and colour, and the caps
-## on those that have one (2026-09-22). Each is a MultiMesh of a unit
+## on those that have one. Each is a MultiMesh of a unit
 ## cylinder scaled per vial. The liquid's colour is its composition:
 ## water nearly clear, product amber, as the reactor's sight glass reads.
 

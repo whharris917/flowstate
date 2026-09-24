@@ -1,6 +1,5 @@
 class_name DrawCensus
-## Where the draw calls come from (director, 2026-09-13: "we need to
-## reduce draw calls for the showcase"): a walk over every visual
+## Where the draw calls come from: a walk over every visual
 ## instance in a world, counted by what owns it — a run, a structure,
 ## an equipment view by its class, the forest, the landscape, labels,
 ## the world's own walls and pads — with the surfaces each draws, and

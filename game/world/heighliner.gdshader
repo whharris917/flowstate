@@ -1,7 +1,7 @@
 shader_type spatial;
-// The heighliner's hull (2026-09-18): dark and matte, lit by the sun
-// like anything else, but outside the environment's fog — at a
-// kilometre the aerial perspective turned it a pale ghost of the sky,
+// The heighliner's hull: dark and matte, lit by the sun like anything
+// else, but outside the environment's fog — at a kilometre the aerial
+// perspective would turn it a pale ghost of the sky,
 // and a thing that size should stay a dark presence. It takes a
 // little of the horizon's colour itself instead, set from the clock.
 render_mode fog_disabled, cull_back;

@@ -2,10 +2,7 @@ class_name SimHydraulics
 ## The hydraulic network's constants and the square-law helpers every
 ## branch shares. Mirrors the module-level part of sim/hydraulics.py.
 ##
-## Before this existed, flow was *asserted*: a pump moved 2 L/s because
-## it was labelled a 2 L/s pump, and every consumer announced what it
-## took on a draw wire so the supplier could decrement its inventory.
-## Here flow is *solved*. Every material nozzle is a node at some
+## Flow is *solved*, never asserted. Every material nozzle is a node at some
 ## pressure, every pipe run and every pump or valve is a branch, and
 ## what flows is whatever satisfies all of them at once.
 ##
@@ -42,8 +39,7 @@ static func static_head_pa(depth_m: float) -> float:
 	return HEAD_PA_PER_M * maxf(depth_m, 0.0)
 
 
-## A pipe's resistance follows its length and size (director,
-## 2026-09-22): Darcy-Weisbach with one friction factor, plus a loss
+## A pipe's resistance follows its length and size: Darcy-Weisbach with one friction factor, plus a loss
 ## coefficient per quarter-turn of bend, dP = (f*L/D + K*bends) * rho*v^2/2.
 ## The bore is the nominal size, DN millimetres. The kernel stays
 ## geometry-free: whoever lays the run measures it and asks this.

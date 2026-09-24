@@ -17,7 +17,7 @@ var service_label := ""
 var fitting := "flange"   # "flange", "clamp" (sanitary tri-clamp) or "tube" (compression)
 ## The bore of the fittings the line meets, set by the plant before
 ## setup; where it differs from the line's own, each end spool is a
-## concentric reducer tapering between the two (director, 2026-09-20).
+## concentric reducer tapering between the two.
 var end_radius_a := -1.0   # the bore of the fitting at the line's start
 var end_radius_b := -1.0   # and at its end
 var _fitting_nodes: Array[Node3D] = []
@@ -58,10 +58,9 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 	_set_service_color(color)
 	_bad = ViewUtil.glow(ALARM, 1.3)
 	_bad.cull_mode = BaseMaterial3D.CULL_DISABLED
-	# Corners are swept bends (director, 2026-09-12: the sphere joints
-	# read as bulbs): each straight is shortened by the bend radius at
-	# a corner that bends, and a quarter-torus elbow fills the gap. A
-	# corner too tight for a bend keeps the old ball joint.
+	# Corners are swept bends: each straight is shortened by the bend
+	# radius at a corner that bends, and a quarter-torus elbow fills the
+	# gap. A corner too tight for a bend keeps a ball joint.
 	# Colliders once; the geometry in _build_body, which set_fitting
 	# runs again, since the flanges are baked into the body.
 	if collider_layer > 0:
@@ -73,7 +72,7 @@ func setup(path: Array[Vector3], getter: Callable, color: Color, radius: float,
 
 ## The run's geometry — straights, bends, joints, end fittings — then
 ## merged: one mesh for the body with its flanges, one or two for the
-## clamp parts (2026-09-13: a run was three draws; two now).
+## clamp parts.
 func _build_body() -> void:
 	var path := _path
 	# Tubing bends round a wide radius, since it is bent, not fitted.
@@ -81,8 +80,7 @@ func _build_body() -> void:
 	# A bend of any angle: each straight gives up the bend's tangent
 	# length at its end, and the elbow sweeps the angle between them.
 	# The tangents are fitted to the legs first, so a short leg gets a
-	# tighter bend rather than a ball joint (director, 2026-09-13: "some
-	# bends still look weirdly bulbous").
+	# tighter bend rather than a ball joint, which reads as bulbous.
 	var tangents: Array[float] = []
 	if _style != "tray":
 		tangents = _tangents(path, bend)
@@ -143,7 +141,7 @@ func _build_body() -> void:
 
 ## One mesh for the run's body — every straight, bend and joint shares
 ## the service material and is repainted as one — and one or two for
-## the end fittings (2026-09-13: a run was thirty draw calls).
+## the end fittings.
 func _merge_body() -> void:
 	var body: Array = []
 	for inst in _meshes:
@@ -182,8 +180,7 @@ func _end_fitting(at: Vector3, toward: Vector3, end_r: float = -1.0) -> void:
 	var basis := _segment_basis(direction) * Basis.from_euler(Vector3(-PI / 2.0, 0, 0))
 	if fitting == "tube" and not SmallBoreUtil.is_tube(_end_r()):
 		# A tube landing on a flanged nozzle ends in a flange behind its
-		# reducer, never in a nut the size of the nozzle (director,
-		# 2026-09-20: a 30 cm hex nut at the header).
+		# reducer, never in a nut the size of the nozzle.
 		var disc := _fitting_disc(_end_r() * 1.8, 0.045, _cold)
 		disc.position = at + direction * 0.03
 		disc.basis = basis
@@ -192,8 +189,7 @@ func _end_fitting(at: Vector3, toward: Vector3, end_r: float = -1.0) -> void:
 		return
 	if fitting == "tube":
 		# A compression fitting: the hex nut over the tube end, a short
-		# ferrule showing behind it (director, 2026-09-20: tubing "uses a
-		# whole set of different-looking equipment"). Sized to the tube.
+		# ferrule showing behind it. Sized to the tube.
 		var nut_mat := ViewUtil.flat(Color(0.62, 0.66, 0.70))
 		var nut_r := maxf(_radius * 2.2, 0.014)
 		var nut_h := maxf(_radius * 2.4, 0.016)
@@ -319,8 +315,7 @@ func _line_label(text: String, at: Vector3) -> Label3D:
 	label.outline_size = 8
 	label.modulate = Color(0.95, 0.95, 0.90)
 	label.visibility_range_end = 30.0  # unreadable further off, and each label is a draw
-	# Floating text shows only for the run under the crosshair
-	# (director, 2026-09-13).
+	# Floating text shows only for the run under the crosshair.
 	label.visible = false
 	label.set_meta("floating", true)
 	add_child(label)
@@ -543,7 +538,7 @@ static func joint_node(at: Vector3, radius: float, style: String,
 	var joint := MeshInstance3D.new()
 	var elbow := SphereMesh.new()
 	# The pipe's own radius: a ball no wider than the pipe fills the
-	# corner without a bulge (2026-09-13: 1.2 read as bulbous).
+	# corner without a bulge.
 	elbow.radius = radius * 1.02
 	elbow.height = radius * 2.04
 	joint.mesh = elbow
@@ -655,8 +650,7 @@ func is_unsupported() -> bool:
 
 
 func describe() -> String:
-	# The support rule only speaks up when it fails (director's call,
-	# 2026-09-02).
+	# The support rule only speaks up when it fails.
 	var tag := "" if service_label == "" else " · %s" % service_label
 	var alarm := "\nUNSUPPORTED SPAN — add structure" if _unsupported else ""
 	return "%s%s%s\n(E color/label · X removes)" % [_desc, tag, alarm]

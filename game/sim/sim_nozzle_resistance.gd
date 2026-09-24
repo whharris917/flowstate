@@ -5,17 +5,15 @@ extends SimResistance
 ## NozzleResistance.
 ##
 ## What a nozzle passes depends on where it stands relative to the
-## liquid (director, 2026-09-22: the nozzle's position on the shell
-## belongs in the kernel). Inflow is always free: a line can discharge
+## liquid. Inflow is always free: a line can discharge
 ## into a vessel through a nozzle above the liquid or under it. Outflow
 ## needs liquid standing over the nozzle, and submergence (0..1) is how
 ## much of it does: 1 well under the surface, 0 once the level has
-## fallen past it, the ramp between them the same 3 cm the bottom
-## nozzle always tailed off over, so an emptying vessel does not
-## chatter shut.
+## fallen past it, a 3 cm ramp between them, so an emptying vessel
+## does not chatter shut.
 ##
-## Dry, it is a check valve seen from the vessel's side, and it keeps
-## the check valve's lesson: no flow out, but the SLOPE reported is the
+## Dry, it is a check valve seen from the vessel's side, and reports
+## as one: no flow out, but the SLOPE reported is the
 ## open side's, so Newton lands on the crack point instead of stepping
 ## past it for ever. Connectivity still sees a wall.
 

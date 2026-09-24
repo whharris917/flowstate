@@ -235,10 +235,9 @@ class TestPortBehaviour:
         assert sink.inlet.stream.frac("solvent") == pytest.approx(1.0)
 
     def test_there_is_only_one_material_kind(self) -> None:
-        """The old model needed three: material that was pushed,
-        material that was offered, and the arithmetic wire reconciling
-        the two. With pressure solving direction, one nozzle kind is all
-        that is left."""
+        """With pressure solving direction, one nozzle kind is all there
+        is: no pushed material, no offered material, and no arithmetic
+        wire reconciling the two."""
         assert not hasattr(PortKind, "PROCESS_STREAM")
         assert not hasattr(PortKind, "PROCESS_SUPPLY")
         assert not hasattr(PortKind, "PROCESS_FLOW")

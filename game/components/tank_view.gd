@@ -23,7 +23,7 @@ var nozzles := {
 }
 
 ## Each nozzle's bore, port -> radius: the size of the line on it, set
-## by the plant (director, 2026-09-22: nozzles are auto-size-matched).
+## by the plant: nozzles are auto-size-matched.
 ## DN50 until a line lands.
 var nozzle_bores: Dictionary = {}
 
@@ -73,7 +73,7 @@ func rebuild() -> void:
 	var dark := ViewUtil.flat(Color(0.22, 0.23, 0.25))
 	_surface = null
 	if tank.open_top:
-		# An open-topped vessel (director, 2026-09-20): no roof, a rolled
+		# An open-topped vessel: no roof, a rolled
 		# rim, and the liquid seen from above at its real level.
 		var rim := MeshInstance3D.new()
 		var rim_mesh := TorusMesh.new()
@@ -161,11 +161,10 @@ func rebuild() -> void:
 
 	ViewUtil.label(_built, tank.comp_name, Vector3(0, h + 0.45, 0))
 	# The body hangs from the rebuilt geometry but must answer for the
-	# tank itself: hover, E, X and G all ask the collider for its view
-	# (director, 2026-09-05: X could not remove a tank).
-	# Round, and the size of the shell: a box reached 41 % past the
-	# shell at its corners and buried the nozzles there, so the connect
-	# ray stopped at the box and G never saw a nozzle (2026-09-13).
+	# tank itself: hover, E, X and G all ask the collider for its view.
+	# Round, and the size of the shell: a box would reach 41 % past the
+	# shell at its corners and bury the nozzles there, stopping the
+	# connect ray before it reached them.
 	var body := ViewUtil.interact_cylinder(_built, r + 0.03, h, Vector3(0, h / 2.0, 0))
 	body.set_meta("view", self)
 
@@ -224,8 +223,7 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	body.collision_layer = 2
 	body.collision_mask = 0
 	# The pick volume is a capsule the length of the neck, so the nozzle
-	# is the same target from the side as from the front (director,
-	# 2026-09-18: a sphere at its root vanished from any other angle).
+	# is the same target from the side as from the front.
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.12
@@ -235,9 +233,8 @@ func _build_nozzle(port: String) -> StaticBody3D:
 	shape.position = Vector3(0.1, 0, 0)
 	body.add_child(shape)
 
-	# The neck is the line's own bore (director, 2026-09-13: the old
-	# nozzle, fatter than its pipe with a flange twice its width, read
-	# as cartoonish), with a slimmer flange and a thin colour band.
+	# The neck is the line's own bore, with a slim flange and a thin
+	# colour band.
 	var is_level := port == "level"
 	var neck_r := 0.035 if is_level else float(nozzle_bores.get(port, 0.07))
 	body.set_meta("bore", neck_r)   # what a line meets here (Plant._end_bore)
@@ -284,7 +281,7 @@ func _place_nozzle(port: String, body: StaticBody3D, spot: Dictionary) -> void:
 	body.position = dir * (r + 0.10) + Vector3(0, height, 0)
 	# The neck's local +X points outward, along the shell normal.
 	body.basis = Basis(dir, Vector3.UP, dir.cross(Vector3.UP))
-	# The kernel's nozzle stands where the weld is (director, 2026-09-22):
+	# The kernel's nozzle stands where the weld is:
 	# the one place the height is set, so a weld, a resize and a load
 	# all land it, and a tank keeps a heel below its outlet.
 	tank.set_nozzle_height(port, height)

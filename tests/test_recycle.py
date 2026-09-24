@@ -95,7 +95,7 @@ class RecyclePlant:
         # Reactor -> crystallizer -> centrifuge. A transfer pump between
         # the two vessels, because the reactor sits at grade and cannot
         # push its own batch up into the crystallizer. That is a
-        # judgement about elevation now, not a rule the kernel enforces:
+        # judgement about elevation, not a rule the kernel enforces:
         # raise the reactor instead and the pipe alone would do it.
         sim.connect(self.reactor, "outlet", self.pump_tx, "inlet")
         sim.connect(self.pump_tx, "outlet", self.cx, "inlet")
@@ -227,9 +227,9 @@ class TestRecycleLoop:
         """Pull the recycle line and the ring behaves differently --
         proof it is load-bearing rather than decorative.
 
-        Pulling a pipe is now one disconnect, not two. The draw wire it
-        used to be paired with is gone, so there is no way to leave a
-        pump still sucking on a tank and discharging onto the floor.
+        Pulling a pipe is one disconnect. No draw wire is paired with
+        it, so there is no way to leave a pump still sucking on a tank
+        and discharging onto the floor.
         """
         closed = RecyclePlant()
         opened = RecyclePlant()
@@ -250,8 +250,7 @@ class TestRecycleLoop:
         """Pulling only the discharge leaves the recycle pump piped to
         the tank and open to nothing. With pressure solving direction a
         line that ends nowhere passes nothing, so the pump turns and the
-        tank stays where it is -- the old model would have kept
-        decrementing the tank through the draw wire."""
+        tank stays where it is."""
         plant = RecyclePlant()
         plant.sim.disconnect(
             plant.pump_recycle, "outlet", plant.reactor, "inlet_a"

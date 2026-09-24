@@ -1,11 +1,10 @@
 class_name Landscape
 extends Node3D
-## A landscape under a site (director, 2026-09-12: "have fun building
-## different landscapes"): a heightfield terrain built from a height
+## A landscape under a site: a heightfield terrain built from a height
 ## function, a sea with a tide on the clock, boulders on the shore, a
 ## forest planted wherever the ground will take a tree, and the sounds
 ## of the place. Art and collision only — no records, nothing
-## simulated — like the forest before it. A site subclass answers
+## simulated — like the forest. A site subclass answers
 ## height_at() and coast_distance() and builds its landmarks in
 ## _build_landmarks().
 ##

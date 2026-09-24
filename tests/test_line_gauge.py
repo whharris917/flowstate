@@ -1,5 +1,4 @@
-"""A pressure gauge tapped into a pipe at any point along it (director,
-2026-09-22: "tap a pressure gauge into any point on a pipe").
+"""A pressure gauge tapped into a pipe at any point along it.
 
 The gauge is cut into the line like a flow element, but a tapping is a
 hole in the pipe wall, not a restriction: its inlet and outlet are one

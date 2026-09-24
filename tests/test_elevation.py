@@ -1,6 +1,5 @@
-"""Inline equipment stands at a height (director, 2026-09-21: "a pump
-placed on a particular pipe run will behave meaningfully different if it
-was placed at the top of a rise or the bottom of a drop").
+"""Inline equipment stands at a height: a pump at the top of a rise
+behaves differently from one at the bottom of a drop.
 
 Node pressures are piezometric, so a pump, a valve or a regulator that
 knows its own elevation can read the *static* pressure at its nozzles:

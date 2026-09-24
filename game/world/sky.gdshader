@@ -1,7 +1,6 @@
 shader_type sky;
-// The sky (director, 2026-09-18: "the sunrise and sunset lighting looks
-// rather unnatural"). Godot's physical sky goes black as the sun nears
-// the horizon, so dawn and dusk were a lit ground under a dark dome.
+// The sky. Godot's physical sky goes black as the sun nears the
+// horizon, leaving dawn and dusk a lit ground under a dark dome.
 // This is an analytic sky with the twilight built in: the dome stays
 // bright while the sun is low or just under, warm along the horizon
 // toward the sun and cool away from it, and only then fades to night.
@@ -52,8 +51,8 @@ void sky() {
 	// Where the sun stands along the horizon: 1 looking straight at it.
 	// Clamped: looking exactly away from the sun the dot rounds a hair
 	// under -1, and pow() of a negative base is NaN, which the glow
-	// bloomed into a trail of white blobs down the sky opposite the sun
-	// and the tone mapper painted black at the centre (2026-09-18).
+	// blooms into a trail of white blobs down the sky opposite the sun
+	// and the tone mapper paints black at the centre.
 	vec2 sun_flat = normalize(sun.xz + vec2(1e-5, 0.0));
 	vec2 eye_flat = normalize(eye.xz + vec2(1e-5, 0.0));
 	float toward = sat(dot(sun_flat, eye_flat) * 0.5 + 0.5);
@@ -92,8 +91,8 @@ void sky() {
 
 	// ---- the sun's disc, only while it is up, softened by haze. Its
 	// edge is a few times its own radius wide and its peak modest: a
-	// pin-sharp disc many times over white flickered through the glow
-	// as it crossed pixels (2026-09-18).
+	// pin-sharp disc many times over white flickers through the glow
+	// as it crosses pixels.
 	float disc = smoothstep(cos(SUN_RADIUS * 5.0), cos(SUN_RADIUS * 1.5), cos_sun);
 	float sun_up = smoothstep(-0.02, 0.03, s);
 	vec3 disc_color = mix(twilight_warm.rgb, sun_glow_day.rgb, smoothstep(0.0, 0.3, s));

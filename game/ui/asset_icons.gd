@@ -11,7 +11,7 @@ const SIZE := 168
 var _icons: Dictionary = {}   # type_id -> Texture2D
 
 ## A render landed: whatever shows icons can fill in (the hotbar sits
-## on screen from the first frame, before any has, 2026-09-19).
+## on screen from the first frame, before any has).
 signal landed(type_id: String)
 
 

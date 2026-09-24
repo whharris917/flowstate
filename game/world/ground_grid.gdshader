@@ -1,16 +1,13 @@
 shader_type spatial;
-// World-space grass (director, 2026-09-12: the concrete read as snow at
-// noon and a dappled mess at other hours). Procedural value noise at
+// World-space grass. Procedural value noise at
 // four scales — metre-wide patches that dry to straw, forty-centimetre
 // clumps, blade-scale grain near the camera, and a faint relief from
 // that grain — drawn in world space so the mesh can follow the player
 // without the pattern swimming. No grid: the build ghost snaps anyway.
 
-// Uniformly green (director, 2026-09-12: the straw drifts read as a
-// drought): the "dry" tone is only a lighter, warmer green, and it
-// mixes in lightly.
-// Darker and quieter than the first cut (director, 2026-09-12: too
-// bright): a mown field under trees, not a sports pitch.
+// Uniformly green: the "dry" tone is only a lighter, warmer green, and
+// it mixes in lightly.
+// Dark and quiet: a mown field under trees, not a sports pitch.
 uniform vec3 base_color : source_color = vec3(0.15, 0.26, 0.09);
 uniform vec3 dry_color : source_color = vec3(0.23, 0.32, 0.11);
 uniform vec3 dark_color : source_color = vec3(0.09, 0.17, 0.06);

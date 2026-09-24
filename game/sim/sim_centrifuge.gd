@@ -24,7 +24,7 @@ var starts: int = 0
 var cake_lps: float = 0.0
 var liquor_lps: float = 0.0
 var wash_lps: float = 0.0
-## What is inside it between scans (2026-09-22): its discharges are
+## What is inside it between scans: its discharges are
 ## imposed at the next solve from what it drew at this one, so one scan
 ## of feed is always in the machine. The material balance counts it as
 ## held.

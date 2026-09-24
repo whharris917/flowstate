@@ -29,8 +29,7 @@ var views: Dictionary = {}         # record name -> Node3D view
 var equip_types: Dictionary = {}   # record name -> type_id
 var protected: Dictionary = {}     # record name -> true (not deletable)
 
-## ---- undo / redo (director, 2026-09-19: "we need a ctrl+z to undo and
-## also a redo") -------------------------------------------------------------
+## ---- undo / redo -------------------------------------------------------------
 ## Every edit begins with checkpoint(): the plant as it stands goes on
 ## the undo stack as a snapshot, once per frame at most, and a gesture
 ## (a carry, a handle drag, a nozzle grab, a cut) is one step however
@@ -125,15 +124,14 @@ var _accumulator: float = 0.0
 var last_tick_ms: float = 0.0     # what the latest scan cost, for the frame-rate overlay
 
 # The scans a frame owes run on a worker thread while the frame is
-# drawn (director, 2026-09-13: the showcase must reach 60 fps on Low,
-# and a 9 ms scan on the main thread was a third of the frame). The
+# drawn, off the main thread's critical path. The
 # window is RenderingServer.frame_pre_draw to frame_post_draw: every
 # script that reads the sim — the views' _process, the HUD, the
 # alarms, the screens' _draw (flushed after _process), input handlers,
 # saves — runs outside it, and the sim itself never touches a node.
 # The thread is joined before the draw ends, so nothing ever sees a
 # scan in progress. Headless runs, and FLOWSTATE_SYNC_SCAN=1, scan in
-# the physics step as before.
+# the physics step.
 const MAX_SCANS_PER_FRAME := 3
 var threaded_scan: bool = DisplayServer.get_name() != "headless" \
 	and OS.get_environment("FLOWSTATE_SYNC_SCAN") == ""
@@ -216,9 +214,8 @@ var _support_exercise_phase: int = 0
 var _support_exercise_wait: int = 0
 
 
-## The commissioned starting loop and its HMI. A blank map (the
-## director's stress test, 2026-09-05) sets this false and starts with
-## nothing placed; the headless build exercises need the loop, so they
+## The commissioned starting loop and its HMI. A blank map sets this
+## false and starts with nothing placed; the headless build exercises need the loop, so they
 ## run only with it.
 var build_home := true
 
@@ -242,8 +239,7 @@ func _ready() -> void:
 	_new_graph()
 	# The kernel self-checks simulate ten minutes of plant and cost
 	# about eight seconds; they are for the headless smoke runs, not for
-	# someone pressing Play (director, 2026-09-12: the wait after the
-	# title screen).
+	# someone pressing Play.
 	if DisplayServer.get_name() == "headless":
 		_self_check()
 	startup_ms["self-check"] = Time.get_ticks_msec() - t0
@@ -286,7 +282,7 @@ func _exercise_build_api() -> void:
 	if pump2 == null or not remove_equipment(pump2.comp_name):
 		problems.append("place/remove pump failed")
 	# G move: a tank set down elsewhere carries its elevation, its run
-	# follows, and commissioned equipment moves too (since 2026-09-19).
+	# follows, and commissioned equipment moves too.
 	var mv_tank := place_new("tank", _world(Vector3(6.0, 0.0, -3.0)), 0.0) as SimTank
 	var mv_drain := place_new("drain", _world(Vector3(8.0, 0.0, -3.0)), 0.0)
 	if mv_tank == null or mv_drain == null:
@@ -312,7 +308,7 @@ func _exercise_build_api() -> void:
 		if absf(mv_tank.height_m - 2.0) > 1e-6 or absf(mv_tank.nozzle_cv_lps - 60.0) > 1e-6:
 			problems.append("configured tank size did not land on the record")
 		# A transmitter on the shell is ranged again when the vessel is
-		# resized (2026-09-21): its litres per metre are the new
+		# resized: its litres per metre are the new
 		# cross-section, or it reads the wrong kPa for the rest of the game.
 		var mv_lt := mount_new("gauge_level", mv_tank.comp_name, 0.4, 0.6) as SimGauge
 		if mv_lt == null:
@@ -325,8 +321,8 @@ func _exercise_build_api() -> void:
 				problems.append("resized tank's transmitter reads %.1f L/m, expected %.1f" % [
 					mv_lt.liters_per_meter, ranged])
 			remove_equipment(mv_lt.comp_name)
-		# A nozzle's weld is the kernel's nozzle height (director,
-		# 2026-09-22), and it follows a resize; a line's size is the
+		# A nozzle's weld is the kernel's nozzle height, and it follows a
+		# resize; a line's size is the
 		# nozzle's size, in the kernel and on the fitting.
 		var mv_view := views[mv_tank.comp_name] as TankView
 		mv_view.set_nozzle("outlet", 0.5, 0.0)
@@ -516,7 +512,7 @@ func _exercise_build_api() -> void:
 			problems.append("unpowered PLC drove an output")
 		# Through a waypoint: the save/load round trip below checks that
 		# a routed line keeps its corners (the home loop has none of its
-		# own since 2026-09-19).
+		# own).
 		if connect_equipment("plant_mains", free_way("plant_mains"), psu_name, "ac_in",
 				[Vector3(0.0, 0.3, 3.0)]) != "":
 			problems.append("mains to cabinet PSU refused")
@@ -662,9 +658,7 @@ func _new_graph() -> void:
 ## re-derived from the saved position on load, and from the new spot
 ## when the equipment is moved.
 ##
-## One rule, not a list (director, 2026-09-21: an open cap kept the
-## vent height it was placed at, since only five types were on the
-## list that re-derived it): every record with an elevation_m property
+## One rule, not a list: every record with an elevation_m property
 ## takes it from where it stands, at placement, on a move, and on a
 ## load (which places again). What "where it stands" means per type is
 ## the one thing tabulated: a vessel, header or drain stands on its
@@ -815,7 +809,7 @@ func place_new(type_id: String, world_pos: Vector3, rot_y: float) -> SimComponen
 
 ## ---- instruments on vessels ------------------------------------------------
 ## A level switch or level transmitter is not placed on the floor and
-## piped to a "level" nozzle (director's call, 2026-09-02): it is
+## piped to a "level" nozzle: it is
 ## mounted on a vessel's shell, and the plant lands the kernel wire
 ## from the vessel's internal tap for it. frac is the height up the
 ## shell, angle the bearing round it.
@@ -1047,8 +1041,7 @@ func remove_cabinet(name_: String) -> bool:
 	return true
 
 
-## X on a junction box or a control station (2026-09-11, a stress-test
-## gap): its records go, every wire on them, and any multicore that
+## X on a junction box or a control station: its records go, every wire on them, and any multicore that
 ## carried its circuits — the cable has nothing left to carry.
 func remove_junction_box(name_: String) -> bool:
 	checkpoint()
@@ -1174,8 +1167,7 @@ func _sync_cabinet(cab: String) -> void:
 			child.queue_free()
 	# Flank fittings run down each side in rows; a cabinet with more
 	# terminals than one column holds starts a second column further
-	# along the flank rather than putting a fitting below the floor
-	# (2026-09-18: a station lamp circuit left its cabinet at -0.085 m).
+	# along the flank rather than putting a fitting below the floor.
 	var y := 1.72
 	var z := 0.12
 	for module_v: Variant in entry["modules"]:
@@ -1264,9 +1256,8 @@ func resize_tank(name_: String, height_m: float, diameter_m: float) -> void:
 	MeshMerge.merge_view(view)
 	refresh_wires_of(name_)
 	# Instruments on the shell moved with it; their cables follow, and a
-	# level transmitter is ranged again to the new cross-section (found
-	# 2026-09-21 auditing state set once at placement: ranged at the
-	# mount and never after, a resized tank read the wrong kPa).
+	# level transmitter is ranged again to the new cross-section, or it
+	# reads the wrong kPa.
 	for inst_name: String in mounted:
 		if str((mounted[inst_name] as Dictionary)["host"]) == name_:
 			var inst := sim.get_component(inst_name)
@@ -1286,7 +1277,7 @@ func refresh_wires_of(name_: String) -> void:
 
 ## The same re-lay without the plant-wide sweep after it: a nozzle
 ## being carried has its lines follow it a few times a second, and the
-## sweep waits for the weld (director, 2026-09-13).
+## sweep waits for the weld.
 func preview_wires_of(name_: String) -> void:
 	for visual in _wire_visuals:
 		if visual["node"] == null:
@@ -1326,15 +1317,12 @@ func _refresh_visual(visual: Dictionary) -> void:
 	_sync_line_resistance(visual)
 
 
-## A line's resistance follows its length and size (director,
-## 2026-09-22), by one rule applied wherever a line is laid — placed,
+## A line's resistance follows its length and size, by one rule applied wherever a line is laid — placed,
 ## re-laid, stretched by a move, slid, cut, resized or loaded: the
 ## pipe as drawn, face to face, its length and the right angles it
 ## turns through, through SimHydraulics.pipe_k at its bore. Nothing
 ## sets a line's resistance by hand; a line that must pass more is a
-## bigger line. (Before, every line was 5000 Pa per (L/s)^2 at DN50
-## whatever its length, so a device cut in doubled it and a line laid
-## the long way round cost nothing more.)
+## bigger line.
 func _sync_line_resistance(visual: Dictionary) -> void:
 	if visual["node"] == null:
 		return
@@ -1389,8 +1377,7 @@ func resistance_report() -> PackedStringArray:
 
 ## Where two runs would pass through each other — crossings, not the
 ## parallel stretches the lanes see to. A run being laid hops over
-## each one (director, 2026-09-12: the drain and the makeup line into
-## T-403's tee crossed at the same height). Each entry: the segment of
+## each one. Each entry: the segment of
 ## `path` it is on, how far along it, and the other run's top and
 ## bottom there. Risers cannot hop and the first and last half metre
 ## are the fittings' own.
@@ -1604,7 +1591,7 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 					for candidate in candidates:
 						# Clear of solids, and not landed on another run: a jog
 						# round a riser must not come down on the line that
-						# riser feeds (2026-09-13).
+						# riser feeds.
 						var jog: Array[Vector3] = [p0 - dir * 0.5, p0, p0 + candidate, p1 + candidate, p1, p1 + dir * 0.5]
 						if clearance.hits([p0, p0 + candidate, p1 + candidate, p1], bridge_ctx).is_empty() \
 								and _crossings(jog, radius, skip, ignore, order, 0.0).is_empty():
@@ -1625,7 +1612,7 @@ func _with_jumpers(path: Array[Vector3], radius: float, skip: Dictionary, ignore
 					var down := Vector3.UP * (under - a.y)
 					# A span with a riser in it as well (a line's own bridge, deck
 					# and ramps) is passed over or under the deck and beside the
-					# ramp at once (2026-09-13); without one, straight over or under.
+					# ramp at once; without one, straight over or under.
 					var jogs: Array[Vector3] = [Vector3.ZERO]
 					var riser_normal: Vector3 = span[9]
 					if riser_normal != Vector3.ZERO:
@@ -1728,9 +1715,7 @@ func crossing_report() -> PackedStringArray:
 ## Every run failing the support rule, with where its longest
 ## unsupported span begins and how long it is.
 ## Every place a laid run passes through solid geometry, by the one
-## rule in RunClearance (director, 2026-09-18: "pipes must not intersect
-## or travel through the volume of tanks or other equipment"). One line
-## per run and owner.
+## rule in RunClearance. One line per run and owner.
 func intersection_report() -> PackedStringArray:
 	var lines := PackedStringArray()
 	var checks: Array = []
@@ -1777,15 +1762,14 @@ func unsupported_report() -> PackedStringArray:
 func movable(name_: String) -> String:
 	if not equip_types.has(name_) or not views.has(name_):
 		return "only placed equipment moves — remove and re-place structure"
-	# Commissioned equipment moves like anything else (director,
-	# 2026-09-19: "let's drop that rule"); only its removal and its
-	# sizing stay refused, so the starting loop can never be broken.
+	# Commissioned equipment moves like anything else; only its removal
+	# and its sizing stay refused, so the starting loop can never be broken.
 	if mounted.has(name_) or PlantFactory.MOUNTABLE.has(str(equip_types[name_])):
 		return "%s is mounted on a vessel — remove it and mount it again" % name_
 	return ""
 
 
-## Set placed equipment down somewhere else (director, 2026-09-05).
+## Set placed equipment down somewhere else.
 ## Its runs are re-laid from their own waypoints, instruments on its
 ## shell ride with it, and a vessel takes its elevation from the new
 ## height exactly as it did at placement.
@@ -1810,8 +1794,8 @@ func move_equipment(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 	return true
 
 
-## Sizing from the device menu's CONFIGURE tab (director, 2026-09-05:
-## every modification to equipment goes through that menu). Values
+## Sizing from the device menu's CONFIGURE tab: every modification to
+## equipment goes through that menu. Values
 ## are keyed like the record's constructor params, which is what
 ## _params_for saves, so a change survives a reload. The plant owns
 ## what a change means: a tank re-renders and re-anchors its runs, a
@@ -1975,9 +1959,8 @@ func _line_through(name_: String) -> Dictionary:
 		"fitting": str(up.get("fitting", ""))}
 
 
-## Lay the line a removed tapping was cut into back as one (director,
-## 2026-09-22): the pipe it was, through the pieces' corners, at its
-## size and service; its resistance follows from what is laid.
+## Lay the line a removed tapping was cut into back as one: the
+## pipe it was, through the pieces' corners, at its size and service; its resistance follows from what is laid.
 func _rejoin_line(line: Dictionary) -> void:
 	var a := str(line["a"])
 	var a_port := str(line["a_port"])
@@ -2025,16 +2008,13 @@ func connect_equipment(src_name: String, src_port: String,
 	if in_port.wire_count > 0 and not SimTypes.allows_multiple_sources(in_port.kind):
 		return "%s already has a wire" % in_port.path()
 	if visible:
-		# One line per nozzle, one cable per terminal (director,
-		# 2026-09-12): joining and splitting is a fitting's job, with its
+		# One line per nozzle, one cable per terminal: joining and splitting is a fitting's job, with its
 		# own separated connection points. A tap does not count as a
 		# line on what it reads. Hidden wires — mounts, cabinet internals,
 		# multicore circuits — are the plant's own bookkeeping.
 		# A pressure or level port is an instrument tap by nature: what
 		# leaves it is an impulse line, and a room with a gauge on each of
-		# two walls has two (2026-09-22: PDI-ISO's low side was refused
-		# because PDI-CORE already read the core room, and it read the
-		# isolator's pressure alone).
+		# two walls has two.
 		var to_tap := dst.tap_ports().has(dst_port) \
 			or out_port.kind == SimTypes.PortKind.PROCESS_PRESSURE \
 			or out_port.kind == SimTypes.PortKind.PROCESS_LEVEL
@@ -2096,8 +2076,7 @@ func line_between(src_name: String, src_port: String, dst_name: String, dst_port
 	return null
 
 
-## A line's size (director, 2026-09-20: "changing pipe diameters"): its
-## drawn radius and its resistance follow, the line laid again as it
+## A line's size: its drawn radius and its resistance follow, the line laid again as it
 ## was. The two lines of a cut or an inline device each keep their own.
 func set_run_size(view: PipeView, dn: int) -> PipeView:
 	if not LINE_SIZES.has(dn):
@@ -2424,9 +2403,7 @@ func remove_run(view: PipeView) -> bool:
 	return false
 
 
-## Cut a line where the player pulled across it (director, 2026-09-13:
-## "cutting is equivalent to putting a closed cap on a pipe until it
-## is connected again"): the wire goes, a cap stands on each side of
+## Cut a line where the player pulled across it: the wire goes, a cap stands on each side of
 ## the cut, and the two pieces are laid again from the corners the
 ## line had, so they keep their shape; each cap's outer nozzle is a
 ## blind end a later line can land on. Returns "" or why not.
@@ -2457,10 +2434,8 @@ static func _nearest_on_path(path: Array[Vector3], at: Vector3) -> Dictionary:
 		"distance": best_d}
 
 
-## Equipment that stands on the floor: above it, it gets a pedestal
-## (director, 2026-09-19: "the pump to automatically have supports
-## placed under it rather than float in the air if the pipe is high
-## up"). Measured from the floor, slab or deck actually below, in the
+## Equipment that stands on the floor: above it, it gets a pedestal.
+## Measured from the floor, slab or deck actually below, in the
 ## deferred pass where physics is known, so a placement, a move and a
 ## load all get one; nothing within reach below, and it stays as it is.
 const PEDESTAL_TYPES: Array[String] = ["pump", "metering_pump"]
@@ -2510,12 +2485,9 @@ func _set_pedestal(view: Node3D, height: float) -> void:
 	ViewUtil.box(pedestal, Vector3(0.6, 0.03, 0.5), Vector3(0, -0.015, 0), steel)
 
 
-## ---- inline equipment (director, 2026-09-19: "place a pump on an
-## existing pipe ... The pump should simply delete the segment of pipe
-## needed for it to fit inline, and automatically connect") -------------
+## ---- inline equipment ----------------------------------------------------
 
-## How a type goes inline, or {} for one that cannot (director,
-## 2026-09-20: tanks and tees "just like pumps, valves, flow meters"):
+## How a type goes inline, or {} for one that cannot:
 ## `in` and `out`, the ports the two pieces take; `in_angle`, the
 ## bearing the inlet leaves the device at, so it can be turned to face
 ## upstream; `half`, the room the device needs either side along the
@@ -2554,8 +2526,7 @@ static func inline_spec(type_id: String, dn: int = 50) -> Dictionary:
 
 ## The room an inline device needs either side of its centre along
 ## the line: its half, its flange, and the straight spool every
-## fitting keeps after the flange — nothing more (director, 2026-09-20:
-## "1 meter on both sides is excessive"; a pump asks 0.78 m now).
+## fitting keeps after the flange — nothing more.
 static func inline_need(type_id: String, dn: int = 50) -> float:
 	var spec := inline_spec(type_id, dn)
 	if spec.is_empty():
@@ -2567,9 +2538,8 @@ static func inline_need(type_id: String, dn: int = 50) -> float:
 
 
 ## The line nearest a point (world), within `max_d` of its drawn path,
-## and the point of it: {"view", "at"} or {} (director, 2026-09-20: an
-## inline element aimed near a pipe went down beside it, since the snap
-## needed the crosshair on the pipe itself).
+## and the point of it: {"view", "at"} or {}. A pipe is a thin target,
+## so an inline element snaps to one near the crosshair.
 func nearest_wire(world_point: Vector3, max_d: float) -> Dictionary:
 	var local := to_local(world_point)
 	var best := max_d
@@ -2711,9 +2681,7 @@ func place_inline(type_id: String, view: PipeView, at_global: Vector3) -> String
 				if color != "":
 					set_run_service(piece, Color.html(color), label_, fitting)
 	# The two pieces are priced by their own lengths, as every line is,
-	# so together they are the line less the length the device took
-	# (director, 2026-09-22: each piece used to take the whole line's
-	# resistance, so every cut-in doubled it).
+	# so together they are the line less the length the device took.
 	return ""
 
 
@@ -2789,8 +2757,7 @@ func cut_wire(view: PipeView, at_global: Vector3) -> String:
 	return ""
 
 
-## Lay a line again through the corners the player set (director,
-## 2026-09-13: a selected leg's ends can be moved). The corners become
+## Lay a line again through the corners the player set. The corners become
 ## the line's own waypoints, so from here on it is laid the player's
 ## way and the router only fills between them.
 func set_wire_corners(view: PipeView, corners: Array) -> PipeView:
@@ -2812,9 +2779,7 @@ func set_wire_corners(view: PipeView, corners: Array) -> PipeView:
 	return null
 
 
-## A line laid to nowhere (director, 2026-09-20: "place pipes without
-## connecting to anything ... otherwise it simply becomes an overflow
-## point at atmospheric pressure"): the last waypoint becomes an open
+## A line laid to nowhere: the last waypoint becomes an open
 ## cap, turned to take the line, and the line runs from the outlet to
 ## it. "" on success, else why not.
 func connect_open(src_name: String, src_port: String, waypoints: Array) -> String:
@@ -2850,8 +2815,8 @@ func connect_open(src_name: String, src_port: String, waypoints: Array) -> Strin
 	return ""
 
 
-## Delete a corner of a fixed line (director, 2026-09-19: a right
-## click on a cube): the waypoint goes, and the leg between its two
+## Delete a corner of a fixed line (a right click on a cube): the
+## waypoint goes, and the leg between its two
 ## neighbours — the next corners either side, or the stub ends — is
 ## auto-routed afresh, round solids, its corners becoming the line's.
 ## "" on success, else why not.
@@ -2912,9 +2877,7 @@ func wire_ends(view: PipeView) -> Array:
 
 
 ## The locked waypoints of a wire (plant-local positions): corners the
-## player pinned, which no edit moves (director, 2026-09-19: "lock a
-## corner at its position so that it doesn't move as I move other
-## things around it"). Saved with the wire; a lock lapses with its
+## player pinned, which no edit moves. Saved with the wire; a lock lapses with its
 ## waypoint.
 func wire_locks(view: PipeView) -> Array:
 	for visual in _wire_visuals:
@@ -2986,9 +2949,8 @@ func unique_name(prefix: String) -> String:
 
 
 ## A cap shows a blind flange on each nozzle without a line.
-## An open end over an open-topped vessel lands what it spills in it
-## (director, 2026-09-20: fill an open tank from a line ending in the
-## air above it). Geometry the plant knows and the kernel does not: the
+## An open end over an open-topped vessel lands what it spills in it.
+## Geometry the plant knows and the kernel does not: the
 ## open nozzle's face, in plan inside the vessel's rim and above its
 ## top, names the vessel to the cap. Every open cap is asked again
 ## whenever the plant changes.
@@ -3100,8 +3062,7 @@ func _schedule_revalidate() -> void:
 func _revalidate_supports() -> void:
 	var t0 := Time.get_ticks_msec()
 	# The obstacle cells are the plant's solids, which the sweep's own
-	# re-lays never change: cleared once per schedule, not every round
-	# (2026-09-18: probing them again cost 1.3 s a round with nothing moved).
+	# re-lays never change: cleared once per schedule, not every round.
 	if _relay_round == 0:
 		clearance.clear()
 		PipeRoute.clear_cache()
@@ -3154,7 +3115,7 @@ func _revalidate_supports() -> void:
 			moved = (visual["node"] as PipeView).is_unsupported()
 		# A run re-laid twice already since the plant last changed is left
 		# where it is: a knot of short cables at one cabinet can trade
-		# lanes for ever, each moving because another did (2026-09-18).
+		# lanes for ever, each moving because another did.
 		if moved and int(visual.get("relays", 0)) >= 2:
 			moved = false
 			_relay_capped += 1
@@ -3191,7 +3152,7 @@ func _revalidate_supports() -> void:
 				_lay_phases(), Time.get_ticks_msec() - t2])
 
 
-## Runs sharing the same space (director's walkdown, 2026-09-12): every
+## Runs sharing the same space: every
 ## pair of parallel segments closer than their two radii for longer
 ## than min_length, worst first. Trays are left out: a conduit in a
 ## tray is where it belongs.
@@ -3244,9 +3205,9 @@ func overlap_report(min_length: float = 0.5) -> PackedStringArray:
 	return lines
 
 
-## Every port carrying more than one wire (director, 2026-09-12: a
-## nozzle or a terminal takes one line; joining and splitting is a
-## fitting's job, with its own separated connection points).
+## Every port carrying more than one wire: a nozzle or a terminal
+## takes one line; joining and splitting is a fitting's job, with its
+## own separated connection points.
 func fanout_report() -> PackedStringArray:
 	var counts: Dictionary = {}
 	for wire in sim.wires:
@@ -3261,15 +3222,12 @@ func fanout_report() -> PackedStringArray:
 	return lines
 
 
-## How far two segments run side by side within `gap` of each other,
-## and where: [length, midpoint]. Zero unless they are parallel.
 ## The stretch of segment ab that lies within gap of segment ce, at
 ## whatever angle they meet: [length, its midpoint]. For parallel
 ## segments it is the length they run side by side; for segments
 ## that cross it is short, and the steeper the crossing the shorter
 ## (a right angle gives about a pipe's width, which no rule minds);
-## a shallow crossing (2026-09-13: legs run at any bearing now) is a
-## long stretch, and is the lanes' business like a parallel one.
+## a shallow crossing is a long stretch, and is the lanes' business like a parallel one.
 static func _segment_overlap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3,
 		gap: float) -> Array:
 	var da := a1 - a0
@@ -3359,9 +3317,9 @@ func _wire_visual(src_name: String, src_port: String,
 	_next_wire_dn = 50
 	if dn != 50:
 		# The fittings at both ends take the line's size before its first
-		# lay: laid against DN50 bodies that a 0.3 m train of tube
-		# devices overlap, every leg detoured and kept its lane for good
-		# (2026-09-20, the loops between the demo's devices).
+		# lay: laid against DN50 bodies that a close train of tube
+		# devices overlaps, every leg would detour and keep its lane for
+		# good.
 		_pending_dn = {src_name: dn, dst_name: dn}
 		_sync_bores([src_name, dst_name])
 		_pending_dn = {}
@@ -3380,10 +3338,7 @@ func _wire_visual(src_name: String, src_port: String,
 ## Bake a line: its waypoints become the corners it is drawn with —
 ## every sidestep, bridge, detour and square leg the router decided —
 ## and from then on it is laid plainly through them and never routed
-## again (director, 2026-09-19: "if a shift is necessary to avoid
-## intersecting something, then the shifted position is the new
-## waypoint", and "existing pipes should not be recalculated"). The
-## fittings and their stubs are not corners: they follow the equipment.
+## again. The fittings and their stubs are not corners: they follow the equipment.
 func _bake(visual: Dictionary) -> void:
 	var node := visual["node"] as PipeView
 	if node == null:
@@ -3425,22 +3380,20 @@ func _bake(visual: Dictionary) -> void:
 
 
 ## `order`: the run's place in the laying order. It is laid round the
-## runs before it and never reacts to the ones after (director,
-## 2026-09-12: when two runs both shift to avoid each other they still
-## meet; one stays where it was and only the other moves). Lanes,
+## runs before it and never reacts to the ones after: when two runs
+## both shift to avoid each other they still meet, so one stays where
+## it is and only the other moves. Lanes,
 ## bridges and the router's busy cells all keep to it, so a sweep in
 ## order settles in one pass.
 ## The route a line takes, in full: its corners round what is solid,
 ## its lane, its bridges. {lane, path, corners, searched, base_path}.
 ## Shared by the lay itself and the preview a player sees while
-## routing (director, 2026-09-18: the preview rose to the crosshair's
-## point on the tank, not to the nozzle's stub where the line lands).
+## routing, so the preview ends at the nozzle's stub where the line lands.
 func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: String,
 		waypoints: Array, lane: int, preferred: int, order: int, radius: float,
 		fixed: bool = false) -> Dictionary:
 	if fixed:
-		# A fixed line (director, 2026-09-19: "waypoints should never
-		# differ from actual points on the pipe"): its waypoints are its
+		# A fixed line: its waypoints are its
 		# corners, laid plainly, stub to stub, no search, no lane, no
 		# bridge — those were decided once and baked into the waypoints.
 		var plain := _route_points(src_name, src_port, dst_name, dst_port, waypoints, 0, radius)
@@ -3470,7 +3423,7 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 		if preferred > 0:
 			lane_order.append(preferred)
 		lane_order.append(0)  # lane 0, the route as laid, is always tried
-		# Then sideways steps before tiers (2026-09-18): a tier lifts a
+		# Then sideways steps before tiers: a tier lifts a
 		# run, and a lifted drop beside a column leaves the floor's reach,
 		# so every step out on the ground is tried before the first lift.
 		var rest: Array[int] = []
@@ -3506,7 +3459,7 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 				_lay_us["support"] = int(_lay_us.get("support", 0)) + Time.get_ticks_usec() - t_check
 			# And through nothing solid: a lane's sidestep or tier can put
 			# a run into a column or a neighbouring machine the plain route
-			# cleared (director, 2026-09-18). Checked for a lane that would
+			# cleared. Checked for a lane that would
 			# win, like the support rule.
 			if cost < best_cost:
 				var t_check := Time.get_ticks_usec()
@@ -3539,9 +3492,9 @@ func _lay_route(src_name: String, src_port: String, dst_name: String, dst_port: 
 	t_start = Time.get_ticks_usec()
 	var base_path := path
 	# The route the player owns: lane 0 through their waypoints, every
-	# one of which is a point of it exactly. The handles stand on it
-	# (2026-09-19: matching drawn corners back to waypoints by distance
-	# was wrong, and the lane pass moves the drawn corners).
+	# one of which is a point of it exactly. The handles stand on it:
+	# the lane pass moves the drawn corners, so they are never matched
+	# back to waypoints by distance.
 	var own_path := base_path if chosen == 0 else _route_points(src_name, src_port, dst_name, dst_port,
 		corners, 0, radius)
 	path = _with_jumpers(path, radius, {}, [src_name, dst_name], order)
@@ -3592,9 +3545,9 @@ func preview_route(src_name: String, src_port: String, dst_name: String, dst_por
 
 ## What a route (world-space) would pass through, by the clearance
 ## rule, as the owners' names — empty when it is clear. The preview
-## names them and the lay refuses them (director, 2026-09-18: it is the
-## player's responsibility not to route where it is truly impossible;
-## the game's part is to say so rather than thread the line through).
+## names them and the lay refuses them: it is the player's
+## responsibility not to route where it is truly impossible; the
+## game's part is to say so rather than thread the line through.
 func route_obstacles(path_global: Array, src_name: String, dst_name: String, radius: float) -> PackedStringArray:
 	var out := PackedStringArray()
 	if path_global.size() < 2:
@@ -3645,8 +3598,7 @@ func connect_equipment_checked(src_name: String, src_port: String,
 
 ## The bore a line meets at a record: an inline fitting's own (built at
 ## the bore of the biggest line on it), or the nozzle's own, which is
-## the size of the line on it once one has landed (director,
-## 2026-09-22: "nozzles should be auto-size-matched") and DN50 before.
+## the size of the line on it once one has landed, and DN50 before.
 func _end_bore(name_: String, port_: String = "") -> float:
 	var view: Node3D = views.get(name_)
 	if view == null:
@@ -3662,7 +3614,7 @@ func _end_bore(name_: String, port_: String = "") -> float:
 
 ## The nominal size of the material line on one port of a record, 0
 ## with none: what its nozzle is built to. A cable is a wire visual of
-## style pipe too, so the source port's kind decides (2026-09-20).
+## style pipe too, so the source port's kind decides.
 func _line_dn_on(name_: String, port_: String) -> int:
 	for visual in _wire_visuals:
 		if visual["node"] == null or not (visual["node"] is PipeView):
@@ -3713,8 +3665,7 @@ func _free_markers(view: Node3D) -> void:
 			child.queue_free()
 
 
-## A nozzle is built at the size of the line on it (director,
-## 2026-09-22: "nozzles should be auto-size-matched"): each material
+## A nozzle is built at the size of the line on it: each material
 ## port of a record that is not an inline fitting gets a fitting at
 ## its own line's bore, DN50 with none, and a tank's kernel nozzle
 ## takes the size too, so its Cv follows the bore. Rebuilt when any
@@ -3766,7 +3717,7 @@ func _sync_nozzle_bores(name_: String, type_id: String, view: Node3D, record: Si
 	return true
 
 
-## An inline fitting is bought in the line size (director, 2026-09-20):
+## An inline fitting is bought in the line size:
 ## its body is built at the bore of the biggest material line on it,
 ## and rebuilt — body, fittings, merge — when that changes, the lines
 ## on it laid again so their ends take the new bore.
@@ -3796,8 +3747,7 @@ func _sync_bores(names: Array) -> void:
 			if (visual["node"] as PipeView).style() != "pipe":
 				continue
 			# Material lines only: a cable landing on a pump or a coil is
-			# a wire visual too, and it is not a DN50 pipe (2026-09-20: the
-			# power cable held the metering pump at DN50 on a DN6 tube).
+			# a wire visual too, and it sizes nothing.
 			var src := sim.get_component(str(visual["a"]))
 			if src == null or not src.outputs.has(str(visual["a_port"])) 					or not SimTypes.is_material((src.outputs[str(visual["a_port"])] as SimOutputPort).kind):
 				continue
@@ -3807,7 +3757,7 @@ func _sync_bores(names: Array) -> void:
 		if dn == 0:
 			dn = 50
 		if record.get("dn") != null:
-			dn = int(record.get("dn"))   # its own size, never the lines' (director, 2026-09-20)
+			dn = int(record.get("dn"))   # its own size, never the lines'
 		var r := line_radius(dn)
 		if absf(float(view.get("bore")) - r) < 0.001:
 			continue
@@ -3835,12 +3785,11 @@ func _sync_bores(names: Array) -> void:
 		_schedule_revalidate()
 
 
-## Line sizes: nominal bores, DN50 the size every line had before
-## 2026-09-20 (drawn at radius 0.07), the rest scaled with it; a
+## Line sizes: nominal bores, DN50 the reference (drawn at radius
+## 0.07), the rest scaled with it; a
 ## line's resistance is its length and bends at its bore
 ## (SimHydraulics.pipe_k), so it falls as the fifth power of the bore.
-## Down to a millimetre (director, 2026-09-20: "somewhat multiscale ...
-## micro-fluidic like things with very small pipes"): a metre of DN1
+## Down to a millimetre: a metre of DN1
 ## passes about 5 mL/s at 4 bar (turbulent friction; a real capillary
 ## is laminar and passes less).
 const LINE_SIZES: Array[int] = [1, 2, 3, 6, 10, 15, 25, 40, 50, 80, 100, 150]
@@ -3876,7 +3825,7 @@ func _build_pipe(src_name: String, src_port: String, dst_name: String, dst_port:
 		or kind == SimTypes.PortKind.PROCESS_LEVEL
 	var radius := line_radius(dn) if is_process else 0.025
 	# The lane: the first one whose route does not lie inside a run
-	# already laid (director's walkdown, 2026-09-12). A run without
+	# already laid. A run without
 	# waypoints has nothing to shift and takes the route as it comes.
 	var laid := _lay_route(src_name, src_port, dst_name, dst_port, waypoints, lane, preferred, order, radius, fixed)
 	var chosen: int = laid["lane"]
@@ -3923,7 +3872,7 @@ func _lane_supported(path: Array[Vector3]) -> bool:
 
 ## A run's route in its lane: the waypoints shifted sideways so runs
 ## that share a corridor lie side by side instead of inside each other
-## (director's walkdown, 2026-09-12). Lane 0 is the route as laid;
+## Lane 0 is the route as laid;
 ## lanes 1, 2, 3… step out alternately either side, and the step is
 ## diagonal so legs along x and legs along z both move over.
 func _route_points(src_name: String, src_port: String, dst_name: String, dst_port: String,
@@ -3944,8 +3893,8 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 		# shift once the stub ends are fixed (a plumb drop under a stub
 		# moves with the stub): give it one at the middle of its longest
 		# level leg, so the lane bends it there in two shallow angles.
-		# Added to its corners, never in their place (2026-09-19: a line
-		# raised by its two riser corners was laid back on the ground).
+		# Added to its corners, never in their place: replacing them lays
+		# a line raised by its two riser corners back on the ground.
 		base = PipeRoute.routed(from, from_dir, to, to_dir, _with_mid_corner(base, corners), squaring, sa, sb)
 	# Lane slots: either side, then the same two one tier up, then a
 	# step further out. A tier is a run's width, the way cables stack
@@ -3959,9 +3908,9 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 	var k := slot / (2 * LANE_TIERS) + 1
 	var step := 2.0 * radius + 0.03
 	var lift := tier * (step + 0.02)
-	# Room is probed at the tier's own height: a lifted lane used to be
-	# checked at the base level and could rise into a valve or a beam
-	# the base route passed under (2026-09-18).
+	# Room is probed at the tier's own height: a lifted lane checked at
+	# the base level could rise into a valve or a beam the base route
+	# passed under.
 	var room_key := "%s.%s>%s.%s|%d|%d" % [src_name, src_port, dst_name, dst_port, side, tier]
 	if not _lane_room.has(room_key):
 		_lane_room[room_key] = _leg_room(base, side, step, lift, lane_ctx)
@@ -3970,9 +3919,9 @@ func _route_points(src_name: String, src_port: String, dst_name: String, dst_por
 
 
 ## A corner between two level legs, strictly between the stubs: where
-## a lane can bend a line. Riser ends are not (2026-09-19: they became
-## corners of the line's own, for the handles, and the lanes must not
-## lose the middle corner over them).
+## a lane can bend a line. Riser ends are not: they are corners of the
+## line's own, for the handles, and the lanes must not lose the middle
+## corner over them.
 static func _has_level_corner(path: Array[Vector3]) -> bool:
 	for i in range(2, path.size() - 2):
 		if absf(path[i].y - path[i - 1].y) < 0.001 and absf(path[i + 1].y - path[i].y) < 0.001:
@@ -4058,7 +4007,7 @@ func _leg_room(base: Array[Vector3], side: int, step: float, lift: float, ctx: D
 ## The interior corners of `base` moved sideways by up to `want`, leg
 ## by leg: each horizontal leg takes the offset on its side that the
 ## room beside it allows, so a bundle bends round a rack column or a
-## drain together instead of shifting into it (director, 2026-09-12).
+## drain together instead of shifting into it.
 ## A corner between two horizontal legs at right angles takes both
 ## offsets, which is where the two shifted lines meet. A vertical leg
 ## takes one shift at both its ends so it stays vertical: both
@@ -4090,9 +4039,8 @@ func _offset_polyline(base: Array[Vector3], side: int, want: float, lift: float,
 	var vertical_shift := {"ctx": ctx}
 	var out: Array = []
 	# A lane steps sideways off a stub end at a right angle, square to
-	# the stub (2026-09-13: the old shift moved the stub end itself
-	# where the offset lines met, a diagonal jog off the nozzle, an
-	# acute elbow now that legs run direct); the routed path keeps the
+	# the stub, never moving the stub end itself (a diagonal jog off
+	# the nozzle, an acute elbow); the routed path keeps the
 	# stub end and adds this corner after it, and a vertical leg off a
 	# stub takes the same step so it stays plumb. Lane 0 never comes
 	# here, so a lone line is stub, straight, riser, stub.
@@ -4124,7 +4072,7 @@ func _offset_polyline(base: Array[Vector3], side: int, want: float, lift: float,
 
 ## Where two offset lines meet: the corner between a leg shifted by
 ## o1 along its normal n1 and one shifted by o2 along n2, at whatever
-## angle the legs meet (2026-09-13: legs run at any bearing now). At a
+## angle the legs meet. At a
 ## right angle it is the sum of the two shifts; between parallel legs,
 ## or across a hairpin the lines never meet cleanly, the first leg's.
 static func _corner_shift(o1: Vector3, n1: Vector3, o2: Vector3, n2: Vector3) -> Vector3:
@@ -4205,8 +4153,8 @@ func _visual_path(visual: Dictionary) -> Array[Vector3]:
 		view.radius() if view != null else 0.025)
 
 
-## The corners of a run's own route, laid round whatever is solid
-## (director, 2026-09-12): the search runs between the waypoints the
+## The corners of a run's own route, laid round whatever is solid:
+## the search runs between the waypoints the
 ## player gave, and the result is what the lanes then shift. Physics
 ## only knows a body the frame after it is added, so a run laid in the
 ## same frame as its equipment is re-laid by the deferred pass.
@@ -4225,8 +4173,8 @@ func _avoided_corners(src_name: String, src_port: String, dst_name: String, dst_
 		clearance.busy.bind([src_name], order), sa, sb)
 	# The corners are the route without its fittings and stubs, stripped
 	# by position: the router's straightening drops a stub end that lies
-	# on the last straight, so slicing by index lost a line's only corner
-	# (2026-09-19: the director saw no handle on the exercise line).
+	# on the last straight, so slicing by index would lose a line's only
+	# corner.
 	var fixed: Array[Vector3] = [from, from + from_dir * sa, to + to_dir * sb, to]
 	var corners: Array = []
 	for p: Vector3 in full:
@@ -4257,7 +4205,7 @@ func _avoided_corners(src_name: String, src_port: String, dst_name: String, dst_
 func _allowed_overlap(a1: String, b1: String, a2: String, b2: String, at: Vector3) -> float:
 	# Two runs from one source (a feeder's ways down one trunk) fan out
 	# from the corner where they part, each on the direct line to its
-	# own load (2026-09-13): for a metre or so past that corner they
+	# own load: for a metre or so past that corner they
 	# lie within a hand of each other, as they would in a real fan.
 	if a1 == a2:
 		return 1.5
@@ -4283,8 +4231,8 @@ static var _module_re: RegEx = null
 static func _approach_group(name_: String) -> String:
 	if name_ == "":
 		return "<none>"
-	# Compiled once: this was built afresh for every run a lane was
-	# checked against, thousands of times a lay (2026-09-18).
+	# Compiled once: it is asked for every run a lane is checked
+	# against, thousands of times a lay.
 	if _module_re == null:
 		_module_re = RegEx.create_from_string("^(.*)_m\\d+(_t\\d+)?$")
 	var hit := _module_re.search(name_)
@@ -4295,7 +4243,7 @@ static func _approach_group(name_: String) -> String:
 ## or 0. Trays do not count: a conduit belongs in one. Runs leaving
 ## the same fitting are allowed the stub and a jog, a metre — the
 ## fan-out at a nozzle or a gland plate is physics, not a mistake — and
-## no more (the director saw two metres of it at T-403, 2026-09-12).
+## no more.
 func _path_collision(path: Array[Vector3], radius: float, a: String, a_port: String,
 		b: String, b_port: String, order: int = ORDER_ALL) -> float:
 	var worst := 0.0
@@ -4335,8 +4283,8 @@ static func _paths_overlap(pa: Array, pb: Array, gap: float, pb_box: AABB = AABB
 		return 0.0
 	var box_a := _path_box(pa).grow(gap)
 	# The other path's box is kept with it: with a hundred and fifty
-	# runs and thirty-three lanes a lay, computing it here was most of
-	# the lane loop (2026-09-18).
+	# runs and thirty-three lanes a lay, computing it here would be most
+	# of the lane loop.
 	if not box_a.intersects(_path_box(pb) if pb_box.size == Vector3.ZERO else pb_box):
 		return 0.0
 	var worst := 0.0
@@ -4368,15 +4316,13 @@ static func _path_box(path: Array) -> AABB:
 	return box
 
 
-## The radius a line from this port is drawn at: process lines are
-## fatter than signal and power runs.
 ## The straight a line keeps at this fitting: five of its own bores,
 ## or five of the fitting's where the fitting is the bigger (a DN6
 ## tube meets a DN50 nozzle through a reducer that needs the room).
 func _stub_of(record_name: String, port_name: String, radius: float) -> float:
 	var record := sim.get_component(record_name)
 	if record == null or not record.material_ports().has(port_name):
-		return PipeRoute.STUB   # a cable keeps the gland stub it always had
+		return PipeRoute.STUB   # a cable keeps its gland stub
 	return PipeRoute.stub_for(maxf(radius, _end_bore(record_name, port_name)))
 
 
@@ -4398,9 +4344,7 @@ func _marker_pos(record_name: String, port_name: String) -> Vector3:
 
 
 ## Where a line meets a fitting: its outer face, `face` along its
-## axis from its origin (director, 2026-09-18: lines aimed at the
-## origin, at the root of the neck, and entered the nozzle behind its
-## flat face). World space.
+## axis from its origin, never the root of the neck. World space.
 static func marker_face(marker: Node3D) -> Vector3:
 	return marker.global_position + marker.global_basis.x.normalized() * float(marker.get_meta("face", 0.0))
 
@@ -4434,14 +4378,12 @@ func _build_initial_plant() -> void:
 	place("source", "raw_water", {}, _world(Vector3(-6.4, 0, -2.9)), 0.0, true)
 	place("drain", "du_100", {"rate_lps": 1.5}, _world(Vector3(4.7, 0, -1.4)), 0.0, true)
 	# Power first — nothing runs without a cable back to the feeder.
-	# No waypoints on any of these (director, 2026-09-19): the hand-laid
-	# ones from before the direct-line rule forced the water line to the
-	# floor and off its axis, ten corners where the router's own answer
-	# has four. What the router lays here is what a player gets.
+	# No waypoints on any of these: what the router lays here is what a
+	# player gets.
 	connect_equipment("plant_mains", free_way("plant_mains"), "fill_pump", "power")
 	# The flow path is honest end to end: the pump pulls from the
 	# supply header, and the tank's consumption is a real drain. One
-	# pipe per connection — the facade meters the draw underneath.
+	# pipe per connection.
 	connect_equipment("raw_water", "outlet", "fill_pump", "inlet")
 	connect_equipment("supply_tank", "outlet", "du_100", "inlet")
 	connect_equipment("level_switch", "contact", "pump_relay", "coil")
@@ -4585,7 +4527,7 @@ func _hydraulics_self_check() -> void:
 	if dst_t.level_l > 0.1 or absf(src_t.level_l - 400.0) > 0.1:
 		problems.append("gravity ran uphill")
 
-	# A nozzle stands where it was welded (director, 2026-09-22): an
+	# A nozzle stands where it was welded: an
 	# outlet 0.3 m up the shell drains the vessel to a 0.3 m heel and
 	# no further, and a nozzle above the liquid passes nothing out.
 	sim = Simulation.new(SIM_DT)
@@ -4640,7 +4582,7 @@ func _hydraulics_self_check() -> void:
 	if not (weak.running and weak.flow_lps < 0.01):
 		problems.append("pump lifted past its head (%.2f L/s)" % weak.flow_lps)
 
-	# A pump knows its height (director, 2026-09-21): drawing from an
+	# A pump knows its height: drawing from an
 	# atmospheric header, one 9 m up sees a static suction of -88 kPa,
 	# inside the prime band, and one 12 m up is past a hard vacuum and
 	# moves nothing; at grade the same pump makes its rating.
@@ -4849,7 +4791,7 @@ func _exercise_supports() -> void:
 	var run: Array[Vector3] = [origin + Vector3(-4, 2, 0), origin + Vector3(4, 2, 0)]
 	if _support_exercise_phase == 1:
 		# An 8 m span 2 m over the pad stands on pipe stands; the same
-		# span 8 m up is beyond a stand (6 m) and fails (2026-09-19).
+		# span 8 m up is beyond a stand (6 m) and fails.
 		var open_check := SupportCheck.evaluate(run, space)
 		if not bool(open_check["ok"]) or int(open_check["stands"]) < 2:
 			push_warning("[flowstate] support exercise FAILED: 8 m span 2 m up was not stood on stands (ok %s, %d stands)"
@@ -4881,8 +4823,8 @@ func _exercise_supports() -> void:
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space, 5.8) != "":
 		problems.append("stretched 5.8 m beam across columns was refused")
 	# The interactive flow seats beams center-to-center: length equals
-	# the column spacing exactly. Must bear (regression: the 0.2 m end
-	# inset used to miss the 0.35 m column with a hairline ray).
+	# the column spacing exactly. Must bear: a 0.2 m end inset would
+	# miss the 0.35 m column with a hairline ray.
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 4), 0.0, space, 5.6) != "":
 		problems.append("center-to-center beam across columns was refused")
 	if StructureFactory.placement_ok("s_beam", origin + Vector3(0, 6.0, 8), 0.0, space) == "":
@@ -4922,7 +4864,7 @@ func _exercise_supports() -> void:
 ## ---- save / load ---------------------------------------------------------
 
 ## The whole plant as a dictionary: what a save writes and what undo
-## keeps (2026-09-19).
+## keeps.
 func snapshot() -> Dictionary:
 	var comps: Array[Dictionary] = []
 	for name_: String in views:
@@ -5047,7 +4989,7 @@ func snapshot() -> Dictionary:
 		"components": comps, "wires": wire_list, "structures": struct_list,
 		"runs": run_list, "cabinets": cab_list,
 		# The solver's answer, nozzle by nozzle, so a load starts where the
-		# plant was rather than cold (2026-09-22).
+		# plant was rather than cold.
 		"pressures": sim.port_pressures(),
 	}
 	return payload
@@ -5199,8 +5141,7 @@ func restore(payload: Dictionary) -> bool:
 	for name_: String in cabinets:
 		((cabinets[name_] as Dictionary)["node"] as Node).queue_free()
 	# Enclosures too, or the saved ones are refused as duplicates and
-	# their terminals never come back (found by the round-trip exercise,
-	# 2026-09-11).
+	# their terminals never come back.
 	for name_: String in junction_boxes:
 		((junction_boxes[name_] as Dictionary)["node"] as Node).queue_free()
 	for name_: String in control_stations:
@@ -5259,7 +5200,7 @@ func restore(payload: Dictionary) -> bool:
 		for point: Array in entry["points"]:
 			pts.append(Vector3(point[0], point[1], point[2]))
 		# A multicore's circuits come back with it, and its getter reads
-		# the reloaded wires by name (the cable used to load dead).
+		# the reloaded wires by name.
 		var circuits: Array = entry.get("circuits", [])
 		place_run(entry["kind"], entry["name"], pts,
 			_multicore_getter(circuits.duplicate(true)) if not circuits.is_empty() else Callable())
@@ -5319,7 +5260,7 @@ func restore(payload: Dictionary) -> bool:
 				Color.html(str(wire_entry["color"])), str(wire_entry.get("label", "")),
 				str(wire_entry.get("fitting", "")))
 		# An older save's hand-set "k" is ignored: the line's length and
-		# size make its resistance (director, 2026-09-22).
+		# size make its resistance.
 		if error == "" and wire_entry.has("dn"):
 			set_run_size((_wire_visuals[_wire_visuals.size() - 1] as Dictionary)["node"] as PipeView,
 				int(wire_entry["dn"]))

@@ -1,12 +1,11 @@
-"""A tank's nozzles stand where they were welded (director, 2026-09-22:
-"the tank's nozzle position should certainly be in the kernel"), and
-each takes the size of the line on it.
+"""A tank's nozzles stand where they were welded, and each takes the
+size of the line on it.
 
 What a nozzle feels is where it stands against the liquid: under the
 surface it carries the head of everything above it and passes flow
 either way; above it, it sits at headspace pressure, lets a line fall
 in, and passes nothing out. The two defaults -- the outlet on the
-floor, the inlet at the roof -- are the tank as it always was.
+floor, the inlet at the roof -- are the plain tank.
 """
 from __future__ import annotations
 

@@ -47,8 +47,7 @@ func _run() -> void:
 			loop_ms += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0 / 6.0
 		await _shot("user://probe_graphics_%s.png" % preset.to_lower())
 		print("[probe] graphics %s: %.0f fps (loop %.0f ms) — %s" % [preset, best, loop_ms, world.graphics.summary()])
-	# What each part of the showcase costs on Low (director, 2026-09-13:
-	# "the showcase needs to reach 60 fps on Low"): the rate with each
+	# What each part of the showcase costs on Low: the rate with each
 	# part hidden in turn, and with cheaper settings.
 	world.graphics.set_preset("Low")
 	world.graphics.apply(world)
@@ -144,8 +143,7 @@ func _run() -> void:
 			waited += 1
 	print("[probe] scan join on Low: %d frames, %d waited, mean %.1f ms, worst %.1f ms, scan %.1f ms"
 		% [waits.size(), waited, wait_sum / maxi(waits.size(), 1), wait_max, plant.last_tick_ms])
-	# Frame pacing on Medium (director, 2026-09-13: "looking around is a
-	# bit jumpy"): a jumpy look is frames of uneven length, not a low
+	# Frame pacing on Medium: a jumpy look is frames of uneven length, not a low
 	# average, so every frame's length is sampled for three seconds and
 	# the spread is printed with the mean.
 	world.graphics.set_preset("Medium")

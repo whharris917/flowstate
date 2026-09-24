@@ -1,6 +1,6 @@
 class_name SpillYard
-## The spill yard on the Maine site (director, 2026-09-22: "a dramatic
-## showcase of overflowing, spilling, nozzle gushing, puddles, splashes").
+## The spill yard on the Maine site: overflowing, spilling, gushing
+## nozzles, puddles and splashes.
 ## Every piece is a real record and every stream the flow the network
 ## solved; the tanks are charged near their working levels so the yard
 ## is running within seconds of arrival, as the showcase's Unit 300 is.

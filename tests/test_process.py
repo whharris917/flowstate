@@ -5,8 +5,7 @@ conserved through every unit, heat cannot appear from nowhere or exceed
 its source, and quality is derived from what is actually in the vessel
 rather than asserted on a signal wire.
 
-Since the kernel went over to pressure, a unit cannot be handed a flow
-rate. Where these tests need one they set it at the nozzle exactly the
+A unit cannot be handed a flow rate: flow is solved. Where these tests need one they set it at the nozzle exactly the
 way the hydraulic pass does -- a signed ``flow_lps`` plus the material
 standing at the node -- and where the flow itself is the thing under
 test they build a network and let it be solved.
@@ -172,7 +171,7 @@ class TestHeatExchanger:
         assert hx.duty_kw == pytest.approx(200.0)
 
     def test_everything_admitted_condenses(self) -> None:
-        """Mass has to close across the shell, and now it closes by
+        """Mass has to close across the shell, and it closes by
         construction: the shell is a single branch, so whatever enters
         the steam nozzle leaves the condensate nozzle."""
         sim, hx, boiler, trap, tank = self._train()
@@ -185,9 +184,8 @@ class TestHeatExchanger:
     def test_a_shell_with_nowhere_for_condensate_passes_no_steam(self) -> None:
         """The exchanger with no trap fitted. It is a dead end, so
         nothing flows through the shell and no heat is delivered --
-        which the old model could not express at all, because duty was
-        a number handed over rather than steam that had to go
-        somewhere."""
+        because duty is steam that has to go somewhere, not a number
+        handed over."""
         sim, hx, boiler, trap, tank = self._train()
         sim.run(60.0)
         assert hx.duty_kw > 0.0
@@ -488,7 +486,7 @@ class TestSynthesisTrain:
         -> reactor -> centrifuge -> product tank + waste drain, with
         steam from the boiler. The whole chain, conserving mass.
 
-        One player pipe is one kernel wire now: there are no draw wires
+        One player pipe is one kernel wire: there are no draw wires
         to pair with the material ones, and no tee component either --
         the two reagent lines simply land on their own nozzles.
         """
@@ -587,9 +585,8 @@ class TestVacuumLock:
 
     def test_it_drains_exactly_what_it_condensed(self) -> None:
         # Between cycles nothing is in flight: the drain has taken every
-        # cycle's condensate, to the millilitre, and not a drop more. The
-        # last scan of each drain used to run at the full rate on less
-        # than a scan's worth, creating 0.04 L a cycle (2026-09-22).
+        # cycle's condensate, to the millilitre, and not a drop more: the
+        # last scan of each drain passes only what is left.
         sim, lock, drain = self._lock()
         lock.is_on = True
         while lock.cycles < 5:
@@ -600,9 +597,7 @@ class TestVacuumLock:
 
     def test_its_books_close_every_scan(self) -> None:
         # What it condensed is what the drain took plus what is still in
-        # the chamber, at every scan, mid-drain included (the balance
-        # counted the chamber's condensate as fed and swung five litres
-        # every drain, 2026-09-22).
+        # the chamber, at every scan, mid-drain included.
         sim, lock, drain = self._lock()
         lock.is_on = True
         for _ in range(int(120.0 / 0.05)):

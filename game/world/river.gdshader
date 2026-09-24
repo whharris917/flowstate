@@ -1,5 +1,5 @@
 shader_type spatial;
-// A river (2026-09-18): a ribbon of water along a stream's centreline,
+// A river: a ribbon of water along a stream's centreline,
 // its UV in metres across and along, so the ripples run down it. Tea
 // water, as a Maine river is: clear and brown over the stones, dark
 // in the pools. The surface is the sea shader's idea with the swell

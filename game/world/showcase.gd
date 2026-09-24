@@ -237,13 +237,13 @@ static func _unit_300(plant: Plant) -> void:
 		Vector3(38.8, 0.0, -7.2), 0.0, false)
 	plant.place("centrifuge", "cf_301", {"rate_lps": 1.2}, Vector3(41.4, 0.0, -4.5), 0.0, false)
 	# A hand valve on a wash line from the solvent header to the
-	# centrifuge (2026-09-11): shut as commissioned, so nothing changes
+	# centrifuge: shut as commissioned, so nothing changes
 	# until someone opens it at the handwheel — then clean solvent
 	# displaces the mother liquor in the cake, the purity on the fill
 	# line climbs, and the solvent inventory climbs with it.
 	plant.place("block_valve", "hv_311", {"cv_lps": 2.0, "stroke_s": 3.0},
 		Vector3(39.6, 0.0, -6.4), 0.0, false)
-	# A nozzle takes one line (director, 2026-09-12): the header feeds a
+	# A nozzle takes one line: the header feeds a
 	# splitter tee, P-SOLV off its near side leg, the wash off the far.
 	plant.place("tee_split", "tee_solv", {}, Vector3(25.6, 0.0, 7.6), 0.0, false)
 	plant.connect_equipment("supply_solv", "outlet", "tee_solv", "in")
@@ -264,7 +264,7 @@ static func _unit_300(plant: Plant) -> void:
 		Vector3(49.2, 0.0, -1.0), 0.0, false)
 	plant.mount_instrument("gauge_level", "lt_300", {}, "pt_300", 0.22, 0.53, false)
 	plant.place("vialfill", "vf_310", {}, Vector3(52.6, 0.0, -2.6), 0.0, false)
-	# A trend screen by the filler (2026-09-11): the purity on the fill
+	# A trend screen by the filler: the purity on the fill
 	# line beside the reactor's own purity and temperature, and the
 	# wash that HV-311 lets through — the composition story of the
 	# train on one page, replayed from the historian.
@@ -303,9 +303,9 @@ static func _unit_300(plant: Plant) -> void:
 	# (a 6 m riser to the top head would be an unsupported span).
 	var pt_view := plant.views["pt_300"] as TankView
 	pt_view.set_nozzle("inlet", 0.10, -1.9)
-	# The outlet as low as a weld goes (2026-09-22): at the default tenth
-	# of its seven metres it stood above the whole commissioned heel, and
-	# the filler drew from nothing.
+	# The outlet as low as a weld goes: at the default tenth of its seven
+	# metres it would stand above the whole commissioned heel, and the
+	# filler would draw from nothing.
 	pt_view.set_nozzle("outlet", 0.04, -0.7)
 
 	# ---- process path ----------------------------------------------
@@ -393,13 +393,13 @@ static func _unit_300(plant: Plant) -> void:
 
 	# ---- power: 480 V from the plant feeder, up onto the PR-1 tray,
 	# east along it, and down beside each load. Sixteen conduits in
-	# one tray, the way a plant carries them; at grade they could not
-	# pass between the drain and the tank (2026-09-12).
+	# one tray, the way a plant carries them; at grade they cannot
+	# pass between the drain and the tank.
 	var riser_top := Vector3(-2.6, 3.6, -0.8)
 	# The tray hangs 0.75 m off the column line: at 2.1 the lanes toward
-	# the columns were inside them and sixteen conduits did not fit the
-	# lanes that were left; at 2.4 it was past the beams' reach and hung
-	# in the air (2026-09-18).
+	# the columns would be inside them and sixteen conduits would not fit
+	# the lanes left; at 2.4 it would be past the beams' reach and hang
+	# in the air.
 	var tray_in := Vector3(-2.6, 3.6, 2.25)
 	const TRAY_END := 38.6
 	var loads: Array = [
@@ -420,16 +420,16 @@ static func _unit_300(plant: Plant) -> void:
 		var load: Array = loads[i]
 		var at: Vector3 = load[1]
 		# Sixteen risers side by side along the feeder's flank, two rows
-		# of eight, laid deliberately: one shared riser spot left the
-		# lanes to part sixteen conduits on one line (2026-09-18).
+		# of eight, laid deliberately: one shared riser spot would leave
+		# the lanes to part sixteen conduits on one line.
 		@warning_ignore("integer_division")
 		var riser := riser_top + Vector3(0.15 * (i / 8), 0.0, 0.12 * (i % 8))   # the second row away from the column
 		# Off the tray sideways before dropping: straight down from the
 		# tray centreline is straight through the beam under it.
 		var drop_x := _drop_x(minf(at.x, TRAY_END))
 		# Down beside the column, then to the load: the router routes round
-		# whatever stands between (2026-09-18: a corner at the load's own z
-		# was tried and put two drops through the crystallizer).
+		# whatever stands between; a corner at the load's own z would put
+		# two drops through the crystallizer.
 		var path: Array[Vector3] = [plant.to_local(riser), plant.to_local(tray_in),
 			plant.to_local(Vector3(drop_x, 3.6, 2.25)), plant.to_local(Vector3(drop_x, 3.6, 2.65)),
 			plant.to_local(at)]
@@ -484,7 +484,7 @@ static func _unit_300(plant: Plant) -> void:
 
 	_service_wire(plant, "sg_301", "e_301", Color(0.78, 0.79, 0.82), "ST-301")
 	# Product-side lines are sanitary: tri-clamp fittings wherever a line
-	# has to come apart to be cleaned (director, 2026-09-04).
+	# has to come apart to be cleaned.
 	_service_wire(plant, "cf_301", "ht_304", Color(0.13, 0.55, 0.28), "CK-301", "clamp")
 	_service_wire(plant, "cf_301", "lt_306", Color(0.45, 0.36, 0.25), "ML-301", "clamp")
 	_service_wire(plant, "st_307", "tee_308", Color(0.20, 0.45, 0.75), "SR-307", "clamp")
@@ -555,8 +555,7 @@ static func _unit_400(plant: Plant) -> void:
 	# the top tank's floor really is six metres above the sump's. The
 	# mid tank keeps to the north-east corner, clear of both landings.
 	# The batch is 300 L, moved at about 20 L/s so a whole cycle runs in
-	# a minute and a half (director, 2026-09-04: ten times faster than
-	# the first version). The sump works between 300 and 600 L, the two
+	# a minute and a half. The sump works between 300 and 600 L, the two
 	# tanks above between a 150 L heel and 450 L, so the lift ends when
 	# the top tank is full at the same moment the sump reaches its heel,
 	# and no pump ever draws on an uncovered nozzle.
@@ -571,14 +570,12 @@ static func _unit_400(plant: Plant) -> void:
 		Vector3(-1.4, 6.025, 11.4), 0.0, false)
 	# Two pumps that look alike and are not: P-401 is rated to lift
 	# 35 m, P-402 only 5 m, and the top tank's inlet is 7.5 m up.
-	# The pump skid, laid for the real line sizes (2026-09-22): the sump's
+	# The pump skid, laid for the real line sizes: the sump's
 	# suction tee sends one leg each way -- north to P-401, west to
 	# P-402, south to the sewer -- so no suction line meets another, and
 	# the two discharges join north of the tower, P-401's straight up its
 	# own line through FI-401, P-402's round the skid's west edge, before
-	# one riser beside the north-west column climbs to the top tank. At
-	# DN50 the old skid's lines passed between each other; at DN150 and
-	# DN80 they ran into each other and the starter's cables.
+	# one riser beside the north-west column climbs to the top tank.
 	plant.place("pump", "p_401", {"rated_lps": 20.0, "head_m": 35.0}, Vector3(-3.4, 0.0, 9.9), PI / 2.0, false)
 	plant.place("pump", "p_402", {"rated_lps": 20.0, "head_m": 5.0}, Vector3(-5.0, 0.0, 11.0), PI, false)
 	plant.place("relay", "k_401", {}, Vector3(-2.2, 0.0, 9.5), 0.0, false)
@@ -626,11 +623,11 @@ static func _unit_400(plant: Plant) -> void:
 	plant.mount_instrument("gauge_level", "li_403", {}, "t_403", 0.5, -PI / 2.0, false)
 
 	# Nozzles face their runs, and every outlet sits low: a nozzle is
-	# where the kernel's nozzle stands (2026-09-22), so a tank drains
-	# only to its outlet, and an outlet at 16 % of the height left
-	# 163 L in a 1,018 L tank whose step exits at the 150 L heel
-	# switch — the sequence stood at DRAIN T-401 for the rest of the
-	# soak. At 6 % the heel is 61 L, under every switch.
+	# where the kernel's nozzle stands, so a tank drains only to its
+	# outlet, and an outlet at 16 % of the height would leave 163 L in a
+	# 1,018 L tank whose step exits at the 150 L heel switch — the
+	# sequence would stand at DRAIN T-401. At 6 % the heel is 61 L,
+	# under every switch.
 	var sump := plant.views["t_403"] as TankView
 	sump.set_nozzle("outlet", 0.06, PI)
 	sump.set_nozzle("inlet", 0.92, PI / 2.0)
@@ -690,13 +687,12 @@ static func _unit_400(plant: Plant) -> void:
 		_local(plant, [Vector3(-0.2, 0.35, 15.0), Vector3(-0.2, 0.35, 13.0)]))
 	# Line sizing, for about 20 L/s everywhere so each stage moves its
 	# 300 L in fifteen seconds or so. A line's resistance is its length
-	# at its size (director, 2026-09-22), so sizing is choosing the bore:
+	# at its size, so sizing is choosing the bore:
 	# the sump's outlet and inlet the fattest, DN150, since the sewer and
 	# the gravity drains have only a metre or two of head behind them;
 	# the gravity drains and the sewer line DN100; the pump lines DN80,
 	# so the lift lands near P-401's rating; the makeup DN50, which
-	# throttles the fill to take about as long as the lift. (These were
-	# hand-set resistances until the rule, each a line size in disguise.)
+	# throttles the fill to take about as long as the lift.
 	for line: Array in [
 			["tee_403m", "out", "t_403", "inlet", 150],
 			["t_401", "outlet", "xv_401", "inlet", 100],
@@ -787,9 +783,7 @@ static func _unit_400(plant: Plant) -> void:
 		{"coil": "do_6", "logic": [[{"ref": "m_5", "nc": true}]]},
 	])
 	# The local control station beside the HMI-400 screen, facing the
-	# walkway like the screen does (the first version stood behind the
-	# sequence signs facing a sign's back, and the director could not
-	# find it). START and STOP to the input strip, RUNNING and STOPPED
+	# walkway like the screen does. START and STOP to the input strip, RUNNING and STOPPED
 	# from the output strip, all along the ground to the cabinet.
 	plant.place_control_station("lcs_401", Vector3(1.9, 0.0, 9.0), 0.0, Plant.default_station_devices())
 	plant.connect_equipment("lcs_401_start", "contact", di + "6", "in",
@@ -806,7 +800,7 @@ static func _unit_400(plant: Plant) -> void:
 	(plant.sim.get_component("lcs_401_start") as SimPushbutton).press()
 
 	# ---- field wiring: two junction boxes, two multicores --------------
-	# The way a real field is wired (director, 2026-09-04): the switches
+	# The way a real field is wired: the switches
 	# and the east-side valves land on JB-401 beside the north-east
 	# column, the starter and the sewer valve on JB-402 beside the
 	# north-west column, and each box sends one multicore to the

@@ -1,6 +1,5 @@
 """The filling line: vials as countable things, and the parts that move,
-fill, weigh and cap them (director, 2026-09-22: "build a vial filler from
-individual parts, rather than have an all-in-one object").
+fill, weigh and cap them.
 
 Liquids move as flows; a filling line moves items. A vial is a record of
 its own -- its size, what is in it, whether it is capped -- carried by a

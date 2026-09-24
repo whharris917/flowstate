@@ -14,7 +14,7 @@ extends SimComponent
 ##   "dp_pa"     — differential pressure across two taps, Pa
 ##   "press_kpa" — a single pressure tap; ports carry Pa, dial in kPa
 ##   "line_kpa"  — a pressure gauge tapped into a pipe at any point along
-##                 it (director, 2026-09-22): cut into the line like the
+##                 it: cut into the line like the
 ##                 flow element, but its inlet and outlet are one node, so
 ##                 it costs the line nothing; it reads the static pressure
 ##                 there, at its own height, kPa gauge

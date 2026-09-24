@@ -46,7 +46,7 @@ class PortKind(Enum):
     PROCESS_PRESSURE = "process_pressure"  # gauge pressure, Pa (float)
     POWER = "power"                      # electrical supply (1.0 = energized)
     # A handoff point for countable items -- vials -- between two
-    # carriers (2026-09-22, the filling line). Nothing flows along an
+    # carriers on the filling line. Nothing flows along an
     # item wire and nothing propagates: once a scan the simulation asks
     # the upstream carrier what it offers and the downstream one whether
     # it has room, and moves the vial if so (Simulation._transfer_items).
@@ -247,8 +247,8 @@ class Component:
 
     def shared_node_ports(self) -> list[list[str]]:
         """Groups of nozzles that are one hydraulic node: a tee's three
-        (director, 2026-09-12: a nozzle takes one line, so joining and
-        splitting is a fitting with its own separated nozzles). The
+        (a nozzle takes one line, so joining and splitting is a fitting
+        with its own separated nozzles). The
         layout gives every port in a group the same node."""
         return []
 
@@ -327,9 +327,8 @@ class Simulation:
         """
         # What the network being replaced had solved, nozzle by nozzle: a
         # change of topology is a change in one corner, and the rest of
-        # the plant keeps its answer rather than starting cold
-        # (2026-09-22: every rebuild re-seeded the whole plant, and a
-        # piece placed anywhere could leave a line elsewhere unsettled).
+        # the plant keeps its answer rather than starting cold, so a
+        # piece placed anywhere leaves no line elsewhere unsettled.
         carried: dict[str, float] = {}
         old = self._network
         if old is not None:
@@ -396,7 +395,7 @@ class Simulation:
                     net, {name: port.node for name, port in ports.items()})
         net.solve()
         if not net.converged:
-            # Solves that did not land (2026-09-22): their flows do not
+            # Solves that did not land: their flows do not
             # balance, so they are counted where they cannot be missed.
             self.unconverged_scans += 1
             self.unconverged_worst_lps = max(self.unconverged_worst_lps, net.residual_lps)

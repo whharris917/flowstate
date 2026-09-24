@@ -1,10 +1,9 @@
 class_name SimLibraryData
 ## The in-game equipment library pages. HAND-AUTHORED under the
-## director's editorial review (2026-09-01) — edit this file directly.
+## director's editorial review — edit this file directly.
 ##
-## It was seeded from the Python EquipmentSpecs by a generator that
-## has since been removed. It is not derived from the Python source
-## and is not required to match it.
+## It is not derived from the Python source and is not required to
+## match it.
 ##
 ## Port NAMES, KINDS and DIRECTIONS are deliberately absent: the
 ## library reads those off a live component so a page can never
@@ -1008,8 +1007,8 @@ const PAGES := {
 		],
 	},
 
-	# ---- the small-bore family (director, 2026-09-20): new machines for
-	# little lines, sized in L/s at 1 bar like every valve ---------------
+	# ---- the small-bore family: machines for little lines, sized in
+	# L/s at 1 bar like every valve -------------------------------------
 	"orifice": {
 		"title": "Restriction Orifice",
 		"tier": "utility",
@@ -1164,7 +1163,7 @@ const PAGES := {
 			"No float bounce, and nothing readable below a tenth of scale.",
 		],
 	},
-	# ---- the filling line (2026-09-22): drafts for the director's review ----
+	# ---- the filling line: drafts for the director's review ----
 	"vial_magazine": {
 		"title": "Vial Magazine",
 		"tier": "utility",

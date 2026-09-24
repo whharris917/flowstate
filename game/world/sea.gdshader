@@ -1,5 +1,5 @@
 shader_type spatial;
-// The sea (2026-09-12): one flat plane that follows the player at the
+// The sea: one flat plane that follows the player at the
 // tide's height. Waves are in the normal only — four directional
 // trains at deep-water speed, the longest a swell from the open sea,
 // plus a wind chop of hashed noise — fading with distance so the far

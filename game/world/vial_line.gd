@@ -1,5 +1,5 @@
 class_name VialLine
-## The filling line's one placement rule (2026-09-22), run by the plant
+## The filling line's one placement rule, run by the plant
 ## whenever a line part is placed, moved, resized or removed and on a
 ## load, and asked by the builder for a snapped ghost:
 ##

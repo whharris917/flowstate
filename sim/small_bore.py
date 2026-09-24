@@ -1,9 +1,6 @@
 """The small-bore family: what a real plant fits on its little lines.
 
-Director, 2026-09-20: "a much smaller valve is needed on a tiny pipe,
-and a much smaller pump too. This will involve expanding our library of
-buildable objects, not simply scaling down existing designs." So these
-are new machines with their own equations, not the big valve drawn
+These are machines with their own equations, not the big valve drawn
 small. Every one of them is a real branch in the hydraulic network,
 sized in the game's own units (L/s at a 1 bar drop, the same basis as
 the control valve), and follows the rich-streams, simple-insides rule:

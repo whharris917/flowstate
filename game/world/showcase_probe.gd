@@ -61,8 +61,8 @@ func _run(world: Node) -> void:
 	var still := plant.sim.get_component("st_307") as SimStill
 	var solvent_tank := plant.sim.get_component("sv_308") as SimTank
 	var product_tank := plant.sim.get_component("pt_300") as SimTank
-	# Steam is material now, so read the rate off the stream, not off
-	# the port float, which no longer carries it.
+	# Steam is material, so read the rate off the stream, not off the
+	# port float, which does not carry it.
 	print("[probe] u300 front: steam %.2f kg/s at %.0f C · duty->%.0f kW · reactor %.0f L %.1f C %.1f%% pure" % [
 		sg.steam.stream.flow_lps, sg.steam.stream.temp_c, reac.heat_duty.value,
 		reac.volume_l, reac.temp_c, reac.purity_frac * 100.0])
@@ -134,7 +134,7 @@ func _run(world: Node) -> void:
 	var top := player.global_position
 	print("[probe] stairs: west flight leaves the player at (%.1f, %.2f, %.1f) — %s" % [
 		top.x, top.y, top.z, "ON THE TOP DECK" if top.y > 5.9 and top.z < 12.9 else "BLOCKED"])
-	# And Unit 100's flight, which used to run under the frame's beam.
+	# And Unit 100's flight, which must clear the frame's beams.
 	await _walk(player, Vector3(16.5, 0.15, 3.3), 0.0, 3.5)
 	var u100 := player.global_position
 	print("[probe] stairs: Unit 100 flight leaves the player at (%.1f, %.2f, %.1f) — %s" % [
@@ -159,7 +159,7 @@ func _run(world: Node) -> void:
 	# The gallery's stair tower, with real input: three flights, then
 	# the catwalk to the bioreactor head. The first flight's foot is
 	# out in the aisle at x 4.3, so this also proves nothing is parked
-	# on it (the autoclave was, 2026-09-02).
+	# on it.
 	await _walk(player, Vector3(6.2, 0.15, 29.75), PI / 2.0, 3.5)
 	var l1 := player.global_position
 	await _walk(player, Vector3(-3.2, 3.2, 29.0), PI, 3.5)
@@ -192,8 +192,7 @@ func _run(world: Node) -> void:
 	if u400_step >= 0:
 		u400_timeline.append("%s %s" % [_clock(plant.sim.time), U400_STEPS[u400_step]])
 	# Twenty simulated minutes by default; FLOWSTATE_SOAK_MIN shortens it
-	# for a quick visual check (the director, 2026-09-05: the full probe
-	# after every change is overkill).
+	# for a quick visual check.
 	var soak_min := 20.0
 	if OS.has_environment("FLOWSTATE_SOAK_MIN"):
 		soak_min = maxf(float(OS.get_environment("FLOWSTATE_SOAK_MIN")), 0.5)

@@ -1,5 +1,5 @@
 shader_type spatial;
-// A star field (director, 2026-09-12): drawn on a dome that follows the
+// A star field: drawn on a dome that follows the
 // player, additive over the sky, fading in as the sun's twilight fades
 // out. Stars are hashed on a cube-mapped grid so they are as dense at
 // the zenith as at the horizon; each has its own magnitude and a

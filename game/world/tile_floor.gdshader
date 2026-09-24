@@ -1,6 +1,5 @@
 shader_type spatial;
-// A plant floor: matte off-white tiles with grout (director,
-// 2026-09-12), laid in world space on whichever face of the slab is
+// A plant floor: matte off-white tiles with grout, laid in world space on whichever face of the slab is
 // being drawn, so the pad and a hall floor tile the same way without
 // UVs. Each tile varies a few percent in tone and a faint dirt haze
 // sits over the lot, so it reads as a floor and not a grid.

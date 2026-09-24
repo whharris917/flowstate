@@ -24,11 +24,11 @@ var press_pa: float = PRESS_ATM_PA
 var condensate_l: float = 0.0
 var draining_lps: float = 0.0
 var cycles: int = 0
-## The material balance's two numbers (2026-09-22): everything the lock
-## has condensed, which is what it feeds the plant, and what is still in
-## its chamber, the scan's worth on its way out included (the drainer
-## pushes this tick's rate at the next solve). Counting the chamber's
-## condensate as fed swung the unit's residual by five litres every drain.
+## The material balance's two numbers: everything the lock has
+## condensed, which is what it feeds the plant, and what is still in its
+## chamber, the scan's worth on its way out included (the drainer pushes
+## this tick's rate at the next solve). The chamber's condensate is held,
+## not fed.
 var condensed_l: float = 0.0
 var holdup_l: float = 0.0
 var vent_bursts_done: int = 0       # lifetime counter; views watch edges
@@ -102,8 +102,8 @@ func tick(dt: float) -> void:
 			"drain":
 				# Drain what is there and no more: the last scan of a
 				# cycle has less than a full scan's worth left, and
-				# running it at the full rate pushed out 0.04 L a cycle
-				# that nothing had supplied (2026-09-22).
+				# running it at the full rate would push out material
+				# that nothing supplied.
 				var drained := minf(condensate_l, DRAIN_LPS * dt)
 				condensate_l -= drained
 				rate = drained / dt if dt > 0.0 else 0.0
@@ -127,7 +127,7 @@ func apply_state(state_: Dictionary) -> void:
 	press_pa = state_.get("press_pa", press_pa)
 	condensate_l = state_.get("condensate_l", condensate_l)
 	cycles = int(state_.get("cycles", cycles))
-	# A save from before the counter: every finished cycle's lump, and the
+	# A save without the counter: every finished cycle's lump, and the
 	# one in the chamber while it drains.
 	condensed_l = float(state_.get("condensed_l", cycles * CONDENSATE_PER_CYCLE_L
 		+ (CONDENSATE_PER_CYCLE_L if state == "drain" else 0.0)))

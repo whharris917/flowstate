@@ -1,6 +1,6 @@
 class_name SimVial
-## One vial: glass of a standard size and whatever has been put in it
-## (2026-09-22, the filling line). Pure data; the carrier holding it
+## One vial: glass of a standard size and whatever has been put in it.
+## Pure data; the carrier holding it
 ## decides where it is. Mirrors sim/vials.py Vial.
 
 ## Standard tubular vials: nominal mL -> [outer diameter m, height m,

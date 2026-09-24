@@ -81,7 +81,7 @@ func _ready() -> void:
 	_line.text_submitted.connect(func(_t: String) -> void: _ok())
 	column.add_child(_line)
 	# What the line ends in: flanges, sanitary clamps, or on a small
-	# line compression fittings on tubing (director, 2026-09-20).
+	# line compression fittings on tubing.
 	var fitting_row := HBoxContainer.new()
 	fitting_row.add_theme_constant_override("separation", 8)
 	column.add_child(fitting_row)
@@ -93,7 +93,7 @@ func _ready() -> void:
 	_fitting.add_item("sanitary tri-clamp", 1)
 	_fitting.add_item("tubing, compression fittings", 2)
 	fitting_row.add_child(_fitting)
-	# The line size (director, 2026-09-20): a nominal bore.
+	# The line size: a nominal bore.
 	_size_row = HBoxContainer.new()
 	_size_row.add_theme_constant_override("separation", 8)
 	column.add_child(_size_row)

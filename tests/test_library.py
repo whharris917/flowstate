@@ -103,7 +103,7 @@ class TestPortTablesMatchReality:
                     f"{page['title']}.{row['name']} is {row['kind']}"
 
     def test_no_page_still_advertises_a_draw_port(self) -> None:
-        """The draw wire is gone. A page offering one would be inviting
+        """There is no draw wire. A page offering one would be inviting
         the player to wire up bookkeeping."""
         for page in catalog(sample_components()):
             names = {row["name"] for row in page["ports"]}

@@ -2,9 +2,8 @@ class_name PipeRoute
 ## Turns a sparse waypoint list into a pipe path.
 ##
 ## Each leg between waypoints is the shortest path with vertical
-## elevation changes (director, 2026-09-13: the auto-route favoured
-## the world axes and looked wrong; a run should take the direct
-## line, and only its risers and drops are vertical). One horizontal
+## elevation changes: a run takes the direct line, and only its risers
+## and drops are vertical. One horizontal
 ## straight at whatever bearing, and one vertical, with the trade's
 ## convention for which comes first: a rising leg runs horizontal and
 ## comes up at the destination; a falling leg drops first.
@@ -14,9 +13,8 @@ const STUB := 0.35   # a run leaves its fitting straight, this far, at DN50
 
 
 ## The stub a line of this radius keeps at a fitting: five bores, so a
-## DN50 pipe leaves straight for 0.35 m and a DN6 tube for 4 cm
-## (director, 2026-09-20: the demo devices stood "so unnecessarily
-## spaced apart", and the DN50 stub was one of the two reasons).
+## DN50 pipe leaves straight for 0.35 m and a DN6 tube for 4 cm, and
+## small devices on tubing can stand close together.
 static func stub_for(radius: float) -> float:
 	return clampf(radius * 5.0, 0.03, STUB)
 
@@ -39,11 +37,9 @@ static func routed(from: Vector3, from_dir: Vector3, to: Vector3, to_dir: Vector
 	return square_turns(path, blocked)
 
 
-## No angle between two straights sharper than 45 degrees (director,
-## 2026-09-13: "we should avoid acute angles"; 2026-09-18: a line
-## arriving from behind a nozzle folded back through it; 2026-09-19:
-## "allow acute angles down to 45 degrees but no lower", since a corner
-## the player sets is theirs). A corner that turns further — more than
+## No angle between two straights sharper than 45 degrees: a line
+## arriving from behind a nozzle would otherwise fold back through it,
+## and down to 45 a corner the player sets is theirs. A corner that turns further — more than
 ## FOLD_DEG of change of direction — is split in two: a short leg
 ## square to the way in, then the rest of the turn — so a line leaving
 ## a stub for a point behind it goes out, turns square, and turns
@@ -101,8 +97,7 @@ static func _leg_blocked(a: Vector3, b: Vector3, blocked: Callable) -> bool:
 
 
 ## The same route, but each leg found by search on a half-metre grid
-## round whatever `blocked` says is solid (director, 2026-09-12:
-## intersection avoidance for every run), then pulled straight: the
+## round whatever `blocked` says is solid, then pulled straight: the
 ## grid walks in six directions, so its path is a staircase, and every
 ## stretch of it with a clear direct line collapses to one. A leg that
 ## cannot be found within the search budget falls back to the plain
@@ -127,8 +122,8 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 	sparse.append(stub_b)
 	var out: Array[Vector3] = [from, stub_a]
 	# The open zone round the fittings is the route's two ends only, not
-	# every waypoint (2026-09-18: with each leg's ends exempt, anything
-	# within STUB_CLEAR of a waypoint was never checked).
+	# every waypoint: exempting each leg's ends would leave anything
+	# within STUB_CLEAR of a waypoint unchecked.
 	var ends: Array[Vector3] = [from, to]
 	last_searched = false
 	for k in range(1, sparse.size()):
@@ -137,10 +132,10 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 		# The way in at the leg's start: the stub's, or the last leg's.
 		var d_in := (a - out[out.size() - 2]).normalized()
 		# A leg that folds back against the way in takes its square leg
-		# FIRST, and is searched from its end with the way in known
-		# (2026-09-19: square_turns after the search put the corner in
-		# and moved the leg after it 0.45 m, back through the pump the
-		# search had gone round; nothing checked the moved leg).
+		# FIRST, and is searched from its end with the way in known:
+		# splitting it after the search would move the leg after it
+		# 0.45 m, unchecked, possibly back through what the search went
+		# round.
 		var plain_dir := (_leg(a, b)[0] - a).normalized()
 		if _folds(d_in, plain_dir) and a.distance_to(b) >= 0.3:
 			var side := _square_side(d_in, plain_dir, a, blocked, 1.0)
@@ -165,15 +160,15 @@ static func routed_avoiding(from: Vector3, from_dir: Vector3, to: Vector3, to_di
 	# The net under the rule: a fold the search's own fallback left
 	# (a grid step against a pulled straight) is still split here.
 	# A waypoint that lies on a straight stays a corner of the line: it
-	# is the player's, and its handle stands on it (2026-09-19: a click
-	# on a straight plants one to drag later).
+	# is the player's, and its handle stands on it (a click on a
+	# straight plants one to drag later).
 	return _straighten(square_turns(out, blocked), waypoints)
 
 
 ## One leg between two corners of a line the player is editing, for
-## the plant: plain where clear, searched round solids otherwise
-## (director, 2026-09-19: a deleted corner leaves "an auto-routed
-## segment between the two closest corners"). The points after `a`,
+## the plant: plain where clear, searched round solids otherwise (a
+## deleted corner is replaced by an auto-routed leg between its
+## neighbours). The points after `a`,
 ## ending on `b`.
 static func leg_avoiding(a: Vector3, b: Vector3, d_in: Vector3, blocked: Callable,
 		busy: Callable, ends: Array[Vector3]) -> Array[Vector3]:
@@ -241,14 +236,13 @@ static func _clear(start: Vector3, points: Array[Vector3], blocked: Callable,
 		var steps := maxi(1, ceili(length / 0.15))   # the oracle's own spacing: a hand valve is 0.3 m
 		# `blocked` is told whether the sample is on a vertical: a run's
 		# own equipment is open to a drop down its flank, not to a leg
-		# through its body (2026-09-18).
+		# through its body.
 		var vertical := absf(b.y - a.y) > maxf(absf(b.x - a.x), absf(b.z - a.z))
 		for i in range(1, steps + 1):
 			var p := a.lerp(b, float(i) / steps)
 			# Near a fitting the run's own equipment is open to it (the
-			# stub leaves through its volume); everything else still counts
-			# (2026-09-18: the whole zone used to be unchecked, and lines
-			# went through railings and neighbours beside their fittings).
+			# stub leaves through its volume); everything else still counts,
+			# railings and neighbours beside the fitting included.
 			var near_end := p.distance_to(leg_a) < STUB_CLEAR or p.distance_to(leg_b) < STUB_CLEAR
 			if bool(blocked.call(p, vertical or near_end)):
 				last_block = p

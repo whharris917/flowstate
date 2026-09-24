@@ -1,6 +1,6 @@
 class_name VialPartView
 extends Node3D
-## What every part of the filling line shares (2026-09-22): the height
+## What every part of the filling line shares: the height
 ## of the line (a conveyor stands its vials at bench height), the vial
 ## size the line runs (set by the plant from the magazine upstream,
 ## VialLine.sync), and a smoothed position per vial, since the kernel

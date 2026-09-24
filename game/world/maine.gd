@@ -1,7 +1,6 @@
 extends "res://world/blank.gd"
 class_name MaineMap
-## The Maine coast (director, 2026-09-12: "let's start by building a
-## site at a scenic spot in coastal Maine"): the blank map's rules —
+## The Maine coast: the blank map's rules —
 ## bare ground, everything unlocked, its own save — on a graded site
 ## over the Gulf of Maine. MaineCoast builds the landscape; this world
 ## owns the sky, the fog that lies on the water at dawn, the tide's
@@ -72,13 +71,12 @@ func _process(delta: float) -> void:
 
 
 func _after_plant() -> void:
-	# The routing exercises (director, 2026-09-19): simple configurations
-	# laid by the router alone, for the director to examine one by one.
+	# The routing exercises: simple configurations laid by the router
+	# alone, to be examined one by one.
 	RoutingExercises.build(plant)
-	# The spill yard (director, 2026-09-22), north of the exercises.
+	# The spill yard, north of the exercises.
 	SpillYard.build(plant)
-	# The filling line built from parts (director, 2026-09-22), south of
-	# the exercises.
+	# The filling line built from parts, south of the exercises.
 	FillLineDemo.build(plant)
 	hud.toast("The Maine coast. The site is graded; the shore is a walk east or south, the lighthouse is across the cove, and a river comes down to the sea beyond it. B build · C connect · L library · O options · F5/F9 save/load")
 	var s := coast.stats

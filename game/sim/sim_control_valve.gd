@@ -8,7 +8,7 @@ extends SimComponent
 ##
 ## Which means its authority is real. Put it in a line whose own
 ## resistance dominates and opening it further buys almost nothing —
-## the classic badly-sized valve, and now a thing the player can
+## the classic badly-sized valve, and a thing the player can
 ## actually diagnose.
 
 var cv_lps: float
@@ -18,7 +18,7 @@ var position: float = 0.0   # percent, follows the command with a lag
 ## stands. The drop across a valve is the same whichever way the
 ## pressures are reckoned, so the elevation changes no flow; it is
 ## what makes the static pressure at the valve, which a gauge there
-## reads, honest (director, 2026-09-21).
+## reads, honest.
 var elevation_m: float = 0.0
 var inlet_pa: float = 0.0    # static, at the valve's own height
 var outlet_pa: float = 0.0
@@ -68,8 +68,7 @@ func tick(dt: float) -> void:
 
 
 ## The valve's nominal bore, DN: bought at a size, changed only in its
-## CONFIGURE tab (director, 2026-09-20: "valves should be size-adjustable
-## just like tees").
+## CONFIGURE tab, like a tee's.
 var dn: int = 50
 
 

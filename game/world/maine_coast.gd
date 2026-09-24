@@ -1,7 +1,6 @@
 class_name MaineCoast
 extends Landscape
-## A site on the coast of Maine (director, 2026-09-12: "let's start by
-## building a site at a scenic spot in coastal Maine"). A graded pad on
+## A site on the coast of Maine. A graded pad on
 ## a granite headland seven metres over the Gulf of Maine, with the
 ## sea to the east and south; a cove with a cobble beach at its head
 ## to the south-west and a lighthouse on the next point across it;
@@ -16,9 +15,7 @@ extends Landscape
 ## station graded flat. The lighthouse is art, like the trees: its
 ## beam turns, and the lens flashes as it sweeps past the viewer.
 ##
-## The river (director, 2026-09-18: "add a river … reached by going a
-## bit further around the coast in the direction of the lighthouse")
-## comes down out of the north-west hills and meets the sea west of
+## The river comes down out of the north-west hills and meets the sea west of
 ## the light, beyond the point: a tidal reach at sea level for its
 ## first two hundred metres — the sea plane fills it, ledge and gravel
 ## bars along it — then a rapid stream climbing between wooded banks,
@@ -48,8 +45,7 @@ const RIVER_PERP := Vector2(-0.7829, 0.6222)
 const RIVER_TIDAL := 220.0
 const RIVER_GRADE := 0.03
 const RIVER_END := 560.0
-# The heighliner (director, 2026-09-18: "a large, foreboding heighliner
-# hanging silently over the ocean"): a hollow cylinder a mile long
+# The heighliner: a hollow cylinder a mile long
 # hanging out over the sea to the south-east, its bore open at both
 # ends, angled so the site sees one mouth. Art, silent, still.
 const SHIP_CENTRE := Vector3(1250.0, 560.0, 950.0)
@@ -570,6 +566,6 @@ func _process(delta: float) -> void:
 			var beam_dir := Vector3(-sin(_beam_angle), 0.0, -cos(_beam_angle))
 			flash = smoothstep(0.975, 0.999, beam_dir.dot(to_cam.normalized()))
 	# A sweep, not a strobe: the flash rises and falls over a wider arc
-	# and peaks lower (2026-09-18: at eighty times white it bloomed
-	# across the whole sky every ten seconds).
+	# and peaks lower: at eighty times white it blooms across the whole
+	# sky every ten seconds.
 	_lamp_mat.emission_energy_multiplier = 1.0 + (6.0 + 24.0 * flash) * _night

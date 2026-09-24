@@ -1,7 +1,7 @@
 class_name SpillPuddle
 extends MeshInstance3D
-## Liquid standing where a spill or an overflow reaches the floor
-## (2026-09-22). Fed every frame with the rate arriving (L/s) from the
+## Liquid standing where a spill or an overflow reaches the floor.
+## Fed every frame with the rate arriving (L/s) from the
 ## record's own meter; the puddle holds a volume at a film's depth, so
 ## its area is that volume spread thin, and the ground takes it back at
 ## a steady rate per square metre -- a litre a second stands about

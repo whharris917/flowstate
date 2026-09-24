@@ -1,4 +1,4 @@
-"""The small-bore family (director, 2026-09-20): new machines for little
+"""The small-bore family: machines for little
 lines, each a real branch in the network. A test cannot name a flow
 rate -- flow is solved -- so each checks the shape of the answer
 against the meters and the equations the page states."""

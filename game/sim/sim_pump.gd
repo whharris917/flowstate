@@ -24,9 +24,8 @@ var head_m: float = 30.0
 ## The height of its nozzles above grade, re-derived by the plant from
 ## where it stands. The network solves piezometric pressures, so the
 ## static suction a gauge on the pump reads, and prime and cavitation
-## are judged on, is the node's pressure less rho*g*elevation
-## (director, 2026-09-21: a pump at the top of a rise is not the pump
-## at the bottom of it).
+## are judged on, is the node's pressure less rho*g*elevation: a pump
+## at the top of a rise is not the pump at the bottom of it.
 var elevation_m: float = 0.0
 var mode: String = "auto"
 var running: bool = false
@@ -76,8 +75,8 @@ var head_pa: float:
 		return discharge_pa - suction_pa
 
 
-## How the selector position reads to the player (director's call,
-## 2026-09-02: "Manual On", never "Hand"). The kernel keeps the short
+## How the selector position reads to the player ("Manual On", never
+## "Hand"). The kernel keeps the short
 ## internal names.
 static func mode_label(mode_: String) -> String:
 	match mode_:

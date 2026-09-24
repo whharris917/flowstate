@@ -5,9 +5,7 @@ kernel, for bisecting solver behaviour against an older tree.
     git archive <rev> sim tests | tar -x -C <dir>; PYTHONPATH=<dir> ... tools/drip_rig.py
 
 Prints iterations, residual and the drip, rotameter and metering-pump
-flows every 2.5 s, then every unbalanced node and every branch. Found
-the shortest-step rule of 2026-09-22 (restoring a failed step exactly
-left the regulator shut for good)."""
+flows every 2.5 s, then every unbalanced node and every branch."""
 import sys
 
 from sim.components import Cap, MainsFeed, PowerSupply, Source, Tank

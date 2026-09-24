@@ -1,6 +1,6 @@
 class_name OverflowSheet
 extends Node3D
-## A vessel running over (2026-09-22): liquid spilling from its top and
+## A vessel running over: liquid spilling from its top and
 ## running down the shell to the floor, where it splashes and pools.
 ## Driven by the record's own meter, `overflowed_l`: the rate is what
 ## that counter gained, smoothed over half a second, since the scan

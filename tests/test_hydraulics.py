@@ -192,8 +192,7 @@ class TestPumpCurve:
 class TestStaticHead:
     def test_a_tank_drains_downhill_without_a_pump(self) -> None:
         """Two vessels and a pipe. No pump anywhere, and the full one
-        empties into the empty one -- which the old model could not
-        express at all."""
+        empties into the empty one."""
         net = Network()
         full = net.add_node(static_head_pa(6.0), fixed=True)
         empty = net.add_node(ATMOSPHERIC_PA, fixed=True)

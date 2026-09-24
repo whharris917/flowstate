@@ -11,8 +11,7 @@ class_name SupportCheck
 ## drawn — every BRACKET_SPACING meters of supported run, anchored to
 ## the nearest surface (down, sideways, then overhead hanger).
 ##
-## Stands (director, 2026-09-19: "shouldn't the supports
-## auto-generate?"): a level stretch that would fail the rule is stood
+## Stands: a level stretch that would fail the rule is stood
 ## on pipe stands every BRACKET_SPACING wherever a floor, a slab or a
 ## deck (layer 1, never equipment) lies within STAND_REACH below it,
 ## and those samples count as supported. A run higher than a stand
@@ -96,10 +95,9 @@ static func evaluate(path: Array[Vector3], space: PhysicsDirectSpaceState3D,
 		if stretch_end - stretch_start > MAX_SPAN + 0.01:
 			# Stands stand at fixed fractions of each level straight —
 			# evenly spaced, at most BRACKET_SPACING apart — so they keep
-			# their place along the pipe as it rises (2026-09-19: spaced
-			# from the start of the stretch, whose risers grow with the
-			# height, they wandered, and the director saw one appear and
-			# vanish between notches). A riser before the straight or
+			# their place along the pipe as it rises (spaced from the
+			# start of the stretch, whose risers grow with the height,
+			# they would wander). A riser before the straight or
 			# after it that would overrun the span with the level beside
 			# it puts one more stand at that end.
 			var g0 := i0

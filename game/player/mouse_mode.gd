@@ -1,7 +1,7 @@
 class_name MouseMode
 ## The one place the mouse is captured. Play captures it for the
 ## first-person look and releases it for panels; a probe never
-## captures it at all (director, 2026-09-12: a test window that grabs
+## captures it at all (a test window that grabs
 ## the cursor while someone is working is a nuisance), so every probe
 ## sets `probe = true` before it instantiates a world.
 

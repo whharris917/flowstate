@@ -1,4 +1,4 @@
-// A slat-top chain belt (2026-09-22): stainless slats at the standard
+// A slat-top chain belt: stainless slats at the standard
 // 38.1 mm pitch, the dark gaps between them moving at the belt's real
 // travel, which the view integrates from the record's speed while it
 // runs -- so the belt moves exactly when and as fast as the kernel says.

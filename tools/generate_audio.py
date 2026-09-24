@@ -114,7 +114,7 @@ def loop_crossfade(buf: list[float], fade_s: float) -> list[float]:
 
 
 # ---- music ----------------------------------------------------------------
-# A clockwork sequencer piece (director's brief, 2026-09-02: the vibe of
+# A clockwork sequencer piece (the vibe of
 # Daniel Pemberton's "Clock Numbers" from Project Hail Mary — an
 # original piece in that analog-sequencer lineage, not a copy). A tick
 # on every beat, a sixteenth-note pluck arpeggio rolling through the
@@ -560,7 +560,7 @@ def make_servo() -> None:
 
 
 def make_milestone() -> None:
-    """Milestone chime (campaign, 2026-09-11): three rising notes of a D
+    """Milestone chime (campaign): three rising notes of a D
     major triad with a soft octave under each, bell-like decays, a
     touch under a second. Pure sines and no RNG, so every other file
     stays byte-identical."""
@@ -581,7 +581,7 @@ def make_milestone() -> None:
 
 
 # ---- the coast --------------------------------------------------------------
-# The Maine coast's ambience (2026-09-12). Each has its own RNG so the
+# The Maine coast's ambience. Each has its own RNG so the
 # files above stay byte-identical whatever is added here.
 
 def _noise_r(r: random.Random, n: int) -> list[float]:
@@ -802,7 +802,7 @@ def make_dosing() -> None:
 
 
 def make_clink() -> None:
-    """A vial set down on steel (2026-09-22, the filling line): a glass
+    """A vial set down on steel (the filling line): a glass
     tap, a handful of inharmonic partials ringing out at their own rates
     over a click. Pure sines, no RNG, so no other file moves."""
     duration = 0.4

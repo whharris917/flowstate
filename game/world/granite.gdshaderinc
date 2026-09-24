@@ -1,4 +1,4 @@
-// Shared ground functions for a landscape (2026-09-12): value noise, a
+// Shared ground functions for a landscape: value noise, a
 // triplanar sample of it, and the granite of the Maine coast with the
 // bands the sea leaves on it. Included by terrain.gdshader (the
 // heightfield), rock.gdshader (the boulders) and sea.gdshader (the
@@ -6,9 +6,9 @@
 //
 // Colours are written as an artist reads them (sRGB) and put through
 // lin(): a literal in a shader is linear, a `source_color` uniform is
-// converted, and mixing the two made the first granite read as snow.
-// This world's exposure turns even an sRGB 0.47 grey into snow (the
-// tile floor did, 2026-09-12), so the rock sits about 0.40.
+// converted, and mixing the two unconverted reads five times too bright.
+// This world's exposure turns even an sRGB 0.47 grey into snow, so the
+// rock sits about 0.40.
 
 vec3 lin(vec3 srgb) {
 	return pow(srgb, vec3(2.2));

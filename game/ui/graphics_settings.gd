@@ -1,8 +1,8 @@
 class_name GraphicsSettings
 extends RefCounted
-## The graphics options (director, 2026-09-12: switch between them in
-## play "to understand what the right balance is between speed and
-## prettiness"). A dictionary of values, four presets over it, and
+## The graphics options, switched between in play to find the balance
+## between speed and prettiness. A dictionary of values, four presets
+## over it, and
 ## apply(), which pushes the values into the viewport, the rendering
 ## server, the sun, the environment and the foliage. The world saves
 ## them with its other settings; the options panel edits them in
@@ -11,12 +11,10 @@ extends RefCounted
 
 const PRESET_NAMES: Array[String] = ["Low", "Medium", "High", "Ultra"]
 
-# What each preset sets. High is the game as it was tuned on
-# 2026-09-11; Low is what an integrated GPU can hold; Ultra adds the
-# global illumination and fog the old "high lighting" toggle held.
-# Low and Medium upscale with FSR 1, not FSR 2: on the director's
-# integrated GPU FSR 2's temporal pass cost half the frame (the Maine
-# coast on Low: 41 fps with it, 78 without, 2026-09-13).
+# What each preset sets. High is the game as tuned; Low is what an
+# integrated GPU can hold; Ultra adds global illumination and fog.
+# Low and Medium upscale with FSR 1, not FSR 2: on an integrated GPU
+# FSR 2's temporal pass costs half the frame.
 const PRESETS: Dictionary = {
 	"Low": {"scale": 0.5, "upscaler": "fsr1", "aa": "off", "shadow_size": 2048,
 		"shadow_filter": "hard", "shadow_distance": 60, "shadow_splits": 1, "ssao": false, "ssr": false,
@@ -67,8 +65,8 @@ var values: Dictionary = {}
 
 
 func _init() -> void:
-	# Medium is the balance found on the director's laptop (2026-09-13):
-	# a fresh install starts there; F7 and the panel go either way.
+	# Medium is the balance on an integrated GPU: a fresh install starts
+	# there; F7 and the panel go either way.
 	set_preset("Medium")
 	for key: String in EXTRAS:
 		values[key] = EXTRAS[key]
@@ -115,7 +113,7 @@ func from_dict(saved: Dictionary) -> void:
 		var current: Variant = values[key]
 		var incoming: Variant = saved[key]
 		if key == "vsync" and incoming is bool:
-			incoming = "on" if bool(incoming) else "off"  # the switch this was
+			incoming = "on" if bool(incoming) else "off"  # a vsync saved as a switch
 		if current is bool:
 			values[key] = bool(incoming)
 		elif current is int:

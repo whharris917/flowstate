@@ -23,17 +23,15 @@ extends RefCounted
 const MAX_ITERATIONS := 20
 ## A cold solve starts from a seed, not from last scan's answer, so it may
 ## take longer to land: three times the budget, once, when new nodes
-## appear (2026-09-22: whichever flat seed is used leaves some block far
-## from its answer -- a drip line behind a shut regulator, a gravity drain
-## started at the sewer's level -- and they landed on the 20th iteration,
-## or the 21st).
+## appear: whichever flat seed is used leaves some block far from its
+## answer -- a drip line behind a shut regulator, a gravity drain started
+## at the sewer's level -- and those need about twenty iterations.
 const COLD_ITERATIONS := 60
 ## A node is converged when its imbalance is below this, or below a
 ## thousandth of what passes through it, whichever is smaller: a drip
 ## line moving a tenth of a millilitre a second cannot be judged by an
-## absolute tenth of a millilitre (2026-09-20: the open end reported
-## three times the rotameter upstream of it, both "converged"). Never
-## looser than the absolute figure, never tighter than the floor.
+## absolute tenth of a millilitre. Never looser than the absolute figure,
+## never tighter than the floor.
 const TOLERANCE_LPS := 1e-4
 const TOLERANCE_REL := 1e-3
 const TOLERANCE_FLOOR_LPS := 1e-8
@@ -59,10 +57,9 @@ var branches: Array[SimBranch] = []
 var iterations: int = 0
 var residual_lps: float = 0.0
 ## Whether the last solve landed: every node joined to a fixed pressure
-## within its tolerance (2026-09-22). A solve that stops short records
-## flows that do not balance, and at a node inside a machine that passes
-## material through, the difference is material made or lost: E-301's
-## shell lost 2.9 L in the showcase's first seconds this way.
+## within its tolerance. A solve that stops short records flows that do
+## not balance, and at a node inside a machine that passes material
+## through, the difference is material made or lost.
 var converged: bool = true
 ## The node carrying residual_lps, for diagnosing a solve that did
 ## not land.
@@ -112,7 +109,7 @@ func node_count() -> int:
 ## replaying a solve in the Python reference kernel
 ## (tools/replay_network.py). Taken before a solve, it reproduces that
 ## solve: the way to study a failure offline rather than through prints
-## in a running plant (2026-09-22).
+## in a running plant.
 func to_dict() -> Dictionary:
 	var out_branches: Array = []
 	for branch in branches:
@@ -181,8 +178,8 @@ func solve() -> void:
 	# Cold start: put the free nodes somewhere plausible rather than at
 	# zero, which may be a long way from any pressure in the plant.
 	# Every scan after the first is warm-started from the last answer
-	# and this does not run, and since 2026-09-22 a rebuild carries every
-	# existing nozzle's pressure over, so only new nodes are seeded.
+	# and this does not run, and a rebuild carries every existing
+	# nozzle's pressure over, so only new nodes are seeded.
 	var cold := not _solved_once
 	if cold:
 		_seed_blocks(free, count)
@@ -200,12 +197,10 @@ func solve() -> void:
 	# The plant is many independent problems, one per block of free nodes
 	# joined by branches, divided by the vessels and headers that fix
 	# pressures between them; each block gets its own step length, judged
-	# on its own imbalance, and a block that stalls stops alone
-	# (2026-09-22: one step length for the whole plant, judged on the
-	# whole plant, let the boiler's steam line swing across the drum
-	# pressure while Unit 400 improved enough to carry it, and when Unit
-	# 400 found no step that helped, the solve stopped with the steam line
-	# unsettled too).
+	# on its own imbalance, and a block that stalls stops alone. One step
+	# length judged on the whole plant lets one corner swing across a
+	# pressure while gains elsewhere carry it, and stops every block when
+	# one finds no step that helps.
 	var block_count := _blocks.size()
 	var stalled := PackedByteArray()
 	stalled.resize(block_count)
@@ -216,10 +211,9 @@ func solve() -> void:
 	# Failed steps in a row: a block stops after two. One failure is often
 	# a wall or a regulator that has just changed state, and the next
 	# linearisation, from the nudge the failure leaves, is what it needs
-	# (2026-09-22: the drip line's regulator cracked open on the step that
-	# failed, and a block stopped at the first failure ended the cold solve
-	# 82 mL/s out); a trickle that no step can help still stops at the
-	# second, rather than grind out the cap.
+	# (a regulator can crack open on the step that failed); a trickle that
+	# no step can help still stops at the second, rather than grind out
+	# the cap.
 	var failures := PackedInt32Array()
 	failures.resize(block_count)
 	failures.fill(0)
@@ -276,7 +270,7 @@ func solve() -> void:
 func _ensure_ordering(index_of: PackedInt32Array, n: int, free: PackedInt32Array) -> void:
 	# Keyed on the free set itself, not its size: a node that turns fixed
 	# as another turns free (a boiler's drum as it fires) leaves the size
-	# alone and the old ordering wrong (2026-09-22).
+	# alone and the ordering wrong.
 	if _order_n == n and _order_free == free and _order_branches == branches.size():
 		return
 	var adjacency: Array = []
@@ -499,12 +493,12 @@ func _residuals(index_of: PackedInt32Array, n: int) -> PackedFloat64Array:
 ##
 ## A closed wall (a shut check, a dry nozzle, a one-way valve shut
 ## backwards) reports the open side's slope so Newton knows a crack is
-## near when flow pushes at it -- the check-valve lesson. Pulled away
-## from, it passes nothing whatever the pressure and anchors nothing,
-## and its slope -- enormous near the crack -- told Newton otherwise: a
-## line at rest between two dry nozzles sat with each end pinned at its
-## own nozzle's crack and a valve between them passing a litre a second
-## that could go nowhere (2026-09-22). So with `walls` set, a closed
+## near when flow pushes at it. Pulled away from, it passes nothing
+## whatever the pressure and anchors nothing, and its slope -- enormous
+## near the crack -- tells Newton otherwise: a line at rest between two
+## dry nozzles would sit with each end pinned at its own nozzle's crack
+## and a valve between them passing flow that can go nowhere. So with
+## `walls` set, a closed
 ## wall's slope is dropped from a node's row while that node's imbalance
 ## drives it away from the crack (closed by more than the linear stretch
 ## at the crack, where the law is smooth on purpose); the row may then
@@ -563,16 +557,15 @@ static func _pulled_away(branch: SimBranch, node: int, pa: float, pb: float, pus
 ## A node with no slope at all has no equation: its row and column
 ## become a bare -1.
 ##
-## A node cut off from every fixed pressure keeps its equation
-## (2026-09-22), with a slight tie to where it stands so the island's
-## common level is still determined (an island alone is singular).
-## Frozen, as they were, a false island stayed false: the drip line
-## stranded between a regulator shut above its set point and a one-way
-## open end shut below the air had liquid still pushing through it,
-## nothing moved it, and the solve, which ignored islands, called it
-## converged. Kept live, the liquid inside it moves its pressures, a wall
-## reopens, and the line is solved; a real dead leg simply comes to one
-## pressure. So every node counts for convergence now.
+## A node cut off from every fixed pressure keeps its equation, with a
+## slight tie to where it stands so the island's common level is still
+## determined (an island alone is singular). Frozen, a false island stays
+## false: a line stranded between a regulator shut above its set point
+## and a one-way open end shut below the air can have liquid still
+## pushing through it that nothing moves. Kept live, the liquid inside it
+## moves its pressures, a wall reopens, and the line is solved; a real
+## dead leg simply comes to one pressure. So every node counts for
+## convergence.
 func _drop_dead(matrix: PackedFloat64Array, rhs: PackedFloat64Array, reachable: PackedByteArray,
 		n: int) -> void:
 	var band := _band
@@ -602,10 +595,10 @@ func _drop_dead(matrix: PackedFloat64Array, rhs: PackedFloat64Array, reachable: 
 ## step back otherwise. Mirrors _plateau_step in
 ## sim/hydraulics.py.
 ##
-## Why (2026-09-22): XV-401 opens onto T-402's dry roof nozzle 10 kPa
-## above the line. Nothing flows until the crack, so the local slope
-## sized Newton's step at a few hundred pascals, and the line crawled up
-## the gap over twenty scans with the valve's whole flow unbalanced.
+## Why: a valve opening onto a dry roof nozzle 10 kPa above the line
+## passes nothing until the crack, so the local slope sizes Newton's step
+## at a few hundred pascals, and the line would crawl up the gap over
+## many scans with the valve's whole flow unbalanced.
 func _plateau_step(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 		residual: PackedFloat64Array, reachable: PackedByteArray, saved: PackedFloat64Array,
 		before: float, cracks_only: bool, b: int) -> bool:
@@ -616,8 +609,8 @@ func _plateau_step(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 	# Where the block's stranded nodes would land, found from its own
 	# branches before anything costly: the residual and the throughput
 	# the tolerance reads are the iteration's, taken at these pressures
-	# (every block asking the whole plant for this at every iteration cost
-	# the showcase five times its solve).
+	# (every block asking the whole plant for this at every iteration
+	# would cost several times the solve).
 	var variants: Array = []
 	for passing: bool in [true, false]:
 		var found := _crack_targets(index_of, residual, cracks_only, passing, b)
@@ -627,11 +620,11 @@ func _plateau_step(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 	if variants.is_empty():
 		return false
 	# Two honest landings at a wall: the crack with the flow pushing at it
-	# passing (a sustained feed, XV-401 into T-402), and the crack at rest
-	# (flow that is only the network settling: a cold boiler's line, drum
-	# and sewer both at zero, whose trickle into a one-way drain died as
-	# the line came up and left the passing landing always a trickle
-	# short, 2026-09-22). Both are tried and the better kept.
+	# passing (a sustained feed), and the crack at rest (flow that is only
+	# the network settling: a cold boiler's line, drum and sewer both at
+	# zero, whose trickle into a one-way drain dies as the line comes up
+	# and leaves the passing landing always a trickle short). Both are
+	# tried and the better kept.
 	var band := _band
 	var w := 2 * band + 1
 	var matrix0 := PackedFloat64Array()
@@ -716,8 +709,7 @@ func _crack_targets(index_of: PackedInt32Array, residual: PackedFloat64Array, cr
 ## inside a machine that passes material through, what is left is
 ## material made or lost -- a third of a litre an hour at worst; near the
 ## answer Newton converges quadratically, so one step takes it to
-## rounding (2026-09-22: an exchanger's shell passed 1.15941 L/s in and
-## 1.15945 out, converged). Mirrors Network._polish.
+## rounding. Mirrors Network._polish.
 func _polish(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 		matrix: PackedFloat64Array, rhs: PackedFloat64Array) -> void:
 	var residual := _residuals(index_of, n)
@@ -755,8 +747,7 @@ func _polish(free: PackedInt32Array, index_of: PackedInt32Array, n: int,
 ## arriving at a dry nozzle or a shut check, whose flow is flat until the
 ## crack) gets a step sized by the open side's slope, which reaches the
 ## crack only when the flow to push is large against the gap, so a
-## longer step is tried before the plateau step (2026-09-22: a Cv-sized
-## nozzle fell 300 Pa short); the ladder climbs by 1.5 and 2 in turn
+## longer step is tried before the plateau step; the ladder climbs by 1.5 and 2 in turn
 ## because the window of scales that improves the norm opens at the
 ## crack and closes where the open side overshoots.
 func _block_step(b: int, free: PackedInt32Array, index_of: PackedInt32Array, n: int,
@@ -794,7 +785,7 @@ func _block_step(b: int, free: PackedInt32Array, index_of: PackedInt32Array, n: 
 				break
 	# A node stranded below a closed one-way wall with flow pushing at it:
 	# step it to the wall's crack, and keep that instead when it leaves
-	# less imbalance than Newton's step (2026-09-22). Newton's own step can
+	# less imbalance than Newton's step. Newton's own step can
 	# keep improving a little and run out the iteration cap crawling up
 	# the gap.
 	var newton_at := PackedFloat64Array()
@@ -809,9 +800,7 @@ func _block_step(b: int, free: PackedInt32Array, index_of: PackedInt32Array, n: 
 		# Newton's own step failed and a wall stands in the way: cross it
 		# anyway, once a solve. Judged where it lands, the step looks worse
 		# -- the node rose, so what feeds it pushes harder for a moment --
-		# but from the open side the next iteration settles (2026-09-22: a
-		# tank's drain line started 38 kPa under the sewer and sat four
-		# scans).
+		# but from the open side the next iteration settles.
 		crossed[b] = 1
 		return true
 	for i in block.size():
@@ -824,8 +813,8 @@ func _block_step(b: int, free: PackedInt32Array, index_of: PackedInt32Array, n: 
 	# away and whose slope says otherwise. The block stops -- at the
 	# shortest step tried, not back at the start: that nudge is what lets
 	# the next scan leave a plateau whose slope reads zero (a regulator
-	# shut a hair above its setpoint, 2026-09-22: restored exactly, the
-	# drip demo never reopened it).
+	# shut a hair above its setpoint, which a step restored exactly never
+	# reopens).
 	_place(block, free, step, saved, shortest)
 	_evaluate_list(own)
 	return false
@@ -873,7 +862,7 @@ func _block_within(b: int, residual: PackedFloat64Array) -> bool:
 	return true
 
 
-## Every node counts, cut off or not (2026-09-22; see _drop_dead).
+## Every node counts, cut off or not (see _drop_dead).
 func _within_tolerance(_reachable: PackedByteArray, residual: PackedFloat64Array, n: int) -> bool:
 	for i in n:
 		if absf(residual[i]) >= _tolerance_at(i):
@@ -943,10 +932,9 @@ func describe_node(node: int) -> String:
 ## Whether a step cut the imbalance enough for its length (the Armijo
 ## condition): by a ten-thousandth of it per unit of step. A Newton step
 ## on a square law lands near the mirror image of where it started,
-## nearly the same imbalance the other side; a bare "less than" accepted
-## it for a hair of improvement, and a stopped pump's suction flipped
-## between the two for twenty iterations (2026-09-22). Refused, the first
-## halving lands on the answer. Mirrors _improves in sim/hydraulics.py.
+## nearly the same imbalance the other side; a bare "less than" accepts
+## it for a hair of improvement, and a stopped pump's suction flips
+## between the two. Refused, the first halving lands on the answer. Mirrors _improves in sim/hydraulics.py.
 static func _improves(after: float, before: float, scale: float = 1.0) -> bool:
 	return after < before * (1.0 - 1e-4 * scale)
 
@@ -994,13 +982,12 @@ static func _solve_banded(matrix: PackedFloat64Array, rhs: PackedFloat64Array,
 
 ## The cold-start pressure of every node that has none of its own: the
 ## mean of the plant's fixed pressures. A node a rebuild carried over
-## (warm) keeps the answer it had. Two local seeds were tried on
-## 2026-09-22 and each found a case the mean does not: the mean of the
-## fixed pressures a block touches started the showcase's Unit 400 on a
-## transient in which XV-403's dead leg flipped across its square law for
-## the rest of the solve (a latent weakness, recorded with its network in
-## tests/data), and a unit-conductance linear solve started a node fed
-## through a tight orifice below a one-way drain's crack.
+## (warm) keeps the answer it had. Local seeds are worse: the mean of the
+## fixed pressures a block touches can start a transient in which a dead
+## leg flips across its square law for the rest of the solve (a latent
+## weakness, recorded with its network in tests/data), and a
+## unit-conductance linear solve can start a node fed through a tight
+## orifice below a one-way drain's crack.
 func _seed_blocks(free: PackedInt32Array, count: int) -> void:
 	var plant_total := 0.0
 	var known := 0

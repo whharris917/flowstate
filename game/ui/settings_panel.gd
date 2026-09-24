@@ -1,12 +1,10 @@
 class_name SettingsPanel
 extends Control
-## On-screen options (director, 2026-09-05): a time-of-day slider that
-## moves the sun and a background music toggle, off by default. Since
-## 2026-09-12 the graphics as well: a preset and every knob under it,
-## with the frame rate live beside them so the balance between speed
-## and looks can be read while flipping switches (director: "understand
-## what the right balance is between speed/responsiveness and
-## prettiness"). Opens over a dimmed backdrop with the mouse freed; the
+## On-screen options: a time-of-day slider that moves the sun, a
+## background music toggle, off by default, and the graphics: a preset
+## and every knob under it, with the frame rate live beside them so the
+## balance between speed and looks can be read while flipping switches.
+## Opens over a dimmed backdrop with the mouse freed; the
 ## world applies the values and remembers them between sessions.
 
 var on_time_changed: Callable = Callable()

@@ -1,9 +1,8 @@
 class_name RunClearance
 extends RefCounted
-## The one answer to "may a run pass here?" (director, 2026-09-18: pipes
-## must not intersect or travel through the volume of tanks or other
-## equipment or geometry — and the fix must not spiral into special
-## cases). The router's plain legs and grid search, the lanes' room,
+## The one answer to "may a run pass here?": pipes must not intersect
+## or travel through the volume of tanks or other equipment or
+## geometry. The router's plain legs and grid search, the lanes' room,
 ## the risers' slides, the bridges, the square-turn legs, the lane
 ## cost and the intersection report all ask this and nothing else
 ## probes for solids. Positions are plant-local.

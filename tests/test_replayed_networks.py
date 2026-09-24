@@ -1,24 +1,24 @@
-"""Networks from the game that the solver once failed, replayed
-(2026-09-22). Each was dumped by the GD kernel just before the failing
+"""Networks from the game that the solver once failed, replayed.
+Each was dumped by the GD kernel just before the failing
 solve (FLOWSTATE_NET_DUMP, see tools/replay_network.py) and is rebuilt
 here from the Python classes the GD kernel mirrors; the Python and GD
-solvers followed the same iterations to the digit on both. Each must
-now land.
+solvers follow the same iterations to the digit on both. Each must
+land.
 
   * showcase_rebuild_124_30: the showcase just after its network was
-    rebuilt. The boiler's steam line (drum just firing) and Unit 400's
-    line between two dry nozzles were both unsettled; one step length
-    for the whole plant let the steam line swing across the drum
-    pressure, and when Unit 400 found no step that helped the solve
-    stopped with both unsettled (0.16 L/s). Solved block by block.
+    rebuilt, with the boiler's steam line (drum just firing) and Unit
+    400's line between two dry nozzles both unsettled. One step length
+    for the whole plant lets the steam line swing across the drum
+    pressure, and when Unit 400 finds no step that helps the solve
+    stops with both unsettled. Solved block by block.
   * maine_cold_start: the Maine site's first solve, from nowhere near the
-    answer. The drip line's regulator cracked open on a step that
-    failed, and a block stopped at its first failure ended the solve
-    82 mL/s out.
+    answer. The drip line's regulator cracks open on a step that fails,
+    so a block that stops at its first failure ends the solve 82 mL/s
+    out.
 
 One is known to fail still, and is kept so the fix has a target:
 
-  * showcase_xv403_dead_leg (2026-09-22): a warm solve of the showcase on
+  * showcase_xv403_dead_leg: a warm solve of the showcase on
     a transient reached from a different cold seed. The short dead leg
     between Unit 400's sewer valve XV-403 (a few percent open) and its
     shut one-way drain carries a flow back through the valve; Newton's

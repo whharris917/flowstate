@@ -1,9 +1,7 @@
 class_name FillLineDemo
-## The filling line demo on the Maine site (director, 2026-09-22: "build a
-## vial filler from individual parts, rather than have an all-in-one
-## object"; a demo of its own, not part of the showcase; then "floors and
-## walls, and moving the actual fill line away from the power and control
-## equipment", and "a higher vial throughput"). Every part is a placeable
+## The filling line demo on the Maine site, a vial filler built from
+## individual parts, a demo of its own and not part of the showcase.
+## Every part is a placeable
 ## record, every link the plant's own rule (VialLine), and the PLC's
 ## program is the whole of the machine's intelligence.
 ##
@@ -24,8 +22,7 @@ class_name FillLineDemo
 ## arrival to its release, well inside the 1.4 s the next one needs to
 ## close the gap. A queue would defeat the gates: a vial following nose to
 ## tail keeps the beam broken as the filled one leaves, the latch holds,
-## and it slips through unfilled (the first version, at 0.2 m/s, did so
-## once at start-up, 2026-09-22). A real line spaces its vials the same
+## and it slips through unfilled. A real line spaces its vials the same
 ## way, or with a timing screw.
 ##
 ## The product comes from a header through a tee to the two valves on DN6
@@ -197,13 +194,12 @@ static func _station(plant: Plant, tag: String, gate_x: float, d: float, target_
 ## A station's ladder. A vial in the beam for the settle time (the TON)
 ## opens the valve until the setpoint contact makes; FILLED latches at
 ## the setpoint and holds while the vial is in the beam, releasing the
-## gate meanwhile. Without the latch the valve opened again as the full
-## vial rolled off the pan still in the beam, onto the bare belt; and the
-## beam is asked again beside its own timer because a timer's done bit
-## is updated at the end of the scan, so in the scan the vial leaves the
-## beam the timer still reads done while the latch has already dropped,
-## and the valve pulsed open for a scan (the first version did both,
-## 2026-09-22).
+## gate meanwhile. Without the latch the valve would open again as the
+## full vial rolls off the pan still in the beam, onto the bare belt; and
+## the beam is asked again beside its own timer because a timer's done
+## bit is updated at the end of the scan, so in the scan the vial leaves
+## the beam the timer still reads done while the latch has already
+## dropped, and the valve would pulse open for a scan.
 static func _station_rungs(eye: String, at: String, settle: String, filled: String,
 		valve: String, gate: String) -> Array:
 	return [

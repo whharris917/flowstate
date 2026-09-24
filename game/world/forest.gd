@@ -1,9 +1,8 @@
 class_name Forest
 extends Node3D
-## A forest around the clearing (director, 2026-09-12: the grass ran
-## featurelessly to the horizon; the plant should stand in a large
-## clearing with trees in the near distance hiding the horizon from
-## ground level). Two rings of procedural trees — conifers of stacked
+## A forest around the clearing: the plant stands in a large clearing
+## with trees in the near distance hiding the horizon from ground
+## level. Two rings of procedural trees — conifers of stacked
 ## cones and broadleaves of clustered spheres on trunks — drawn with
 ## MultiMeshes so a few thousand cost almost nothing. Deterministic
 ## from a seed. Art only: no records, no collision, nothing simulated.
@@ -58,7 +57,7 @@ func plant_bushes(center: Vector3, r_in: float, r_out: float, spacing: float,
 
 
 ## Trees scattered over a rectangle wherever the ground will take one
-## (a landscape, 2026-09-12): sampler.call(x, z) answers the ground
+## (a landscape): sampler.call(x, z) answers the ground
 ## height for a tree there, or -INF for none — water, ledge, the
 ## graded site. conifer_frac is the share of conifers; the Maine coast
 ## is spruce and fir nearly to the water, with a few grey snags where
