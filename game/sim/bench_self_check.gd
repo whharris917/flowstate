@@ -48,8 +48,8 @@ static func run() -> String:
 	# Esterification settles at its equilibrium.
 	var ester := _mix({"acetic_acid": 60.05, "ethanol": 46.07, "sulfuric_acid": 2.0, "water": 5.0})
 	ester.temp_c = 70.0
-	for _k in 6000:
-		ester.step(2.0, 0.0, 1.0)
+	for _k in 2400:
+		ester.step(5.0, 0.0, 1.0)
 		ester.temp_c = 70.0
 	var q := ester.liquid[ChemLibrary.index_of("ethyl_acetate")] * ester.liquid[ChemLibrary.index_of("water")] \
 		/ (ester.liquid[ChemLibrary.index_of("acetic_acid")] * ester.liquid[ChemLibrary.index_of("ethanol")])

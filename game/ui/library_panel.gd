@@ -51,7 +51,7 @@ func _ready() -> void:
 	heading.bbcode_enabled = true
 	heading.fit_content = true
 	heading.custom_minimum_size.y = 46
-	heading.text = ("[b][color=#6bb8fa]EQUIPMENT LIBRARY[/color][/b]    "
+	heading.text = ("[b][color=#6bb8fa]LIBRARY[/color][/b]  [color=#8c8e92]equipment, substances, reactions[/color]    "
 		+ "[color=#8c8e92]up/down select · page up/down scroll · "
 		+ "L or Esc to close[/color]")
 	rows.add_child(heading)
@@ -74,6 +74,13 @@ func _ready() -> void:
 	split.add_child(_page)
 
 	_types = SimLibrary.type_ids()
+	# After the equipment, the chemistry: every substance the hold packed
+	# and every reaction the bench knows, read off the chemistry library.
+	ChemLibrary.ensure()
+	for key: String in ChemLibrary.keys:
+		_types.append("species:" + key)
+	for r: Dictionary in ChemLibrary.reactions:
+		_types.append("reaction:" + str(r["key"]))
 
 
 func toggle() -> void:
@@ -121,21 +128,149 @@ func _refresh() -> void:
 func _draw_index() -> void:
 	var text := ""
 	var last_tier := ""
+	var line := 0
+	var selected_line := 0
 	for i in _types.size():
 		var type_id := _types[i]
-		var tier := SimLibrary.tier_of(type_id)
+		var tier := _tier(type_id)
 		if tier != last_tier:
 			text += "\n[color=#8c8e92]%s[/color]\n" % tier.to_upper()
+			line += 2
 			last_tier = tier
 		if i == _selected:
-			text += "[bgcolor=#1f3d5c][color=#ffffff]  %s[/color][/bgcolor]\n" % \
-				SimLibrary.label_of(type_id)
+			selected_line = line
+			text += "[bgcolor=#1f3d5c][color=#ffffff]  %s[/color][/bgcolor]\n" % _label(type_id)
 		else:
-			text += "[color=#c9cbcd]  %s[/color]\n" % SimLibrary.label_of(type_id)
+			text += "[color=#c9cbcd]  %s[/color]\n" % _label(type_id)
+		line += 1
 	_index.text = text
+	_index.scroll_to_paragraph(maxi(selected_line - 8, 0))
+
+
+func _tier(type_id: String) -> String:
+	if type_id.begins_with("species:"):
+		return "substances"
+	if type_id.begins_with("reaction:"):
+		return "reactions"
+	return SimLibrary.tier_of(type_id)
+
+
+func _label(type_id: String) -> String:
+	if type_id.begins_with("species:"):
+		return ChemLibrary.names[ChemLibrary.index_of(type_id.substr(8))]
+	if type_id.begins_with("reaction:"):
+		return str(_reaction(type_id.substr(9))["name"])
+	return SimLibrary.label_of(type_id)
+
+
+func _reaction(key: String) -> Dictionary:
+	for r: Dictionary in ChemLibrary.reactions:
+		if str(r["key"]) == key:
+			return r
+	return {}
+
+
+## A substance's page: what the chemistry knows of it, read off the
+## library, with its note.
+func _draw_species(key: String) -> void:
+	var i := ChemLibrary.index_of(key)
+	var phase_names := {ChemLibrary.Phase.LIQUID: "liquid", ChemLibrary.Phase.SOLID: "solid",
+		ChemLibrary.Phase.DISSOLVED: "only in solution", ChemLibrary.Phase.GAS: "gas"}
+	var text := "[font_size=26][b]%s[/b][/font_size]   [color=#8c8e92]%s[/color]\n\n" % [
+		ChemLibrary.names[i], ChemLibrary.formulas[i]]
+	text += "%s\n\n" % ChemLibrary.notes[i]
+	text += "[b][color=#6bb8fa]PROPERTIES[/color][/b]\n"
+	text += "  molar mass [b]%.2f g/mol[/b] · density [b]%.3f g/mL[/b] · %s at room temperature\n" % [
+		ChemLibrary.molar_mass[i], ChemLibrary.density[i], phase_names[ChemLibrary.phase[i]]]
+	text += "  melts [b]%.1f °C[/b] · boils [b]%.1f °C[/b] · heat capacity [b]%.2f J/(g K)[/b]\n" % [
+		ChemLibrary.mp[i], ChemLibrary.bp[i], ChemLibrary.cp[i]]
+	if ChemLibrary.phase[i] == ChemLibrary.Phase.LIQUID:
+		text += "  heat of vaporization [b]%.1f kJ/mol[/b]\n" % ChemLibrary.dh_vap[i]
+	if ChemLibrary.phase[i] == ChemLibrary.Phase.SOLID:
+		var sw := ChemLibrary.sol_water[i]
+		var so := ChemLibrary.sol_organic[i]
+		text += "  dissolves in water [b]%s[/b] g per 100 g at 20 °C, [b]%s[/b] at 80 °C; in organic solvent %s and %s\n" % [
+			_amount(sw.x), _amount(sw.y), _amount(so.x), _amount(so.y)]
+		if ChemLibrary.dh_solution[i] != 0.0:
+			text += "  dissolving %s [b]%.1f kJ/mol[/b]\n" % [
+				"releases" if ChemLibrary.dh_solution[i] < 0.0 else "takes up", absf(ChemLibrary.dh_solution[i])]
+	var f := ChemLibrary.family[i]
+	if f >= 0:
+		var pkas := PackedStringArray()
+		for pka: float in ChemLibrary.family_pka[f]:
+			pkas.append("%.2f" % pka)
+		text += "  acid-base: the %s family, pKa %s\n" % [ChemLibrary.family_keys[f], ", ".join(pkas)]
+	if ChemLibrary.strong_cations[i] > 0.0 or ChemLibrary.strong_anions[i] > 0.0:
+		text += "  in solution, fully dissociated: %d positive and %d negative charges per formula unit\n" % [
+			int(ChemLibrary.strong_cations[i]), int(ChemLibrary.strong_anions[i])]
+	if ChemLibrary.hazards[i] != "":
+		text += "  [color=#eab347]hazard: %s[/color]\n" % ChemLibrary.hazards[i]
+	text += "\n[b][color=#6bb8fa]TAKES PART IN[/color][/b]\n"
+	var any := false
+	for r: Dictionary in ChemLibrary.reactions:
+		if (r["reactants"] as Dictionary).has(i) or (r["products"] as Dictionary).has(i) \
+				or (r["catalysts"] as Dictionary).has(i):
+			text += "  %s  [color=#8c8e92]%s[/color]\n" % [r["name"], r["equation"]]
+			any = true
+	if not any:
+		text += "  [color=#8c8e92]nothing the bench knows[/color]\n"
+	_page.text = text
+
+
+static func _amount(g: float) -> String:
+	if g >= 10.0:
+		return "%d" % int(round(g))
+	if g >= 0.1:
+		return "%.1f" % g
+	return "%.4f" % g
+
+
+## A reaction's page: its equation, its rate law with its constants, and
+## its heat.
+func _draw_reaction(key: String) -> void:
+	var r := _reaction(key)
+	var text := "[font_size=26][b]%s[/b][/font_size]\n\n" % r["name"]
+	text += "  [color=#e8d9a0]%s[/color]\n\n" % r["equation"]
+	text += "[b][color=#6bb8fa]RATE[/color][/b]\n"
+	if bool(r["fast"]):
+		text += "  As fast as the two meet: complete within a second stirred, within a few unstirred.\n"
+	else:
+		var terms := PackedStringArray()
+		var orders: Dictionary = r["orders"]
+		for s: int in orders:
+			terms.append("[%s]%s" % [ChemLibrary.formulas[s], "" if float(orders[s]) == 1.0 else "^%s" % orders[s]])
+		var catalysts: Dictionary = r["catalysts"]
+		for s: int in catalysts:
+			terms.append("[%s]" % ChemLibrary.formulas[s])
+		if float(r["h_order"]) != 0.0:
+			terms.append("[H+]")
+		text += "  r = k · %s\n" % " · ".join(terms)
+		text += "  k = %s at 25 °C, activation energy %.0f kJ/mol (so %s at 80 °C)\n" % [
+			_sci(float(r["k25"])), float(r["ea"]), _sci(ChemLibrary.rate_constant(r, 80.0))]
+		if float(r["equilibrium"]) > 0.0:
+			text += "  reversible: it stops where the products over the reactants make K = %.1f\n" % float(r["equilibrium"])
+		if not catalysts.is_empty() or float(r["h_order"]) != 0.0:
+			text += "  [color=#8c8e92]needs its catalyst: without it, nothing happens[/color]\n"
+	text += "\n[b][color=#6bb8fa]HEAT[/color][/b]\n"
+	var dh := float(r["dh"])
+	text += "  %s [b]%.1f kJ[/b] per mole as written\n" % ["releases" if dh < 0.0 else "takes up", absf(dh)]
+	_page.text = text
+
+
+static func _sci(value: float) -> String:
+	if value >= 0.01 and value < 1000.0:
+		return "%.3f" % value
+	var exponent := int(floor(log(value) / log(10.0)))
+	return "%.2f×10^%d" % [value / pow(10.0, exponent), exponent]
 
 
 func _draw_page(type_id: String) -> void:
+	if type_id.begins_with("species:"):
+		_draw_species(type_id.substr(8))
+		return
+	if type_id.begins_with("reaction:"):
+		_draw_reaction(type_id.substr(9))
+		return
 	var label := SimLibrary.label_of(type_id)
 	var model := SimLibrary.title_of(type_id)
 	var text := "[font_size=26][b]%s[/b][/font_size]   [color=#8c8e92]%s[/color]\n" % [

@@ -136,8 +136,8 @@ def test_esterification_stops_at_its_equilibrium():
     lib = library()
     m = mix_of(acetic_acid=60.05, ethanol=46.07, sulfuric_acid=2.0, water=5.0)
     m.temp_c = 70.0
-    for _ in range(6000):              # a few hours: Fischer esterification is slow
-        m.step(2.0, mix=1.0)
+    for _ in range(2400):              # a few hours: Fischer esterification is slow
+        m.step(5.0, mix=1.0)
         m.temp_c = 70.0
     c = {k: m.liquid[lib.index_of[k]] for k in ("acetic_acid", "ethanol", "ethyl_acetate", "water")}
     q = c["ethyl_acetate"] * c["water"] / (c["acetic_acid"] * c["ethanol"])

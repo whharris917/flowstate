@@ -1368,4 +1368,120 @@ const PAGES := {
 			"It never fills up.",
 		],
 	},
+	"reagent_bottle": {
+		"title": "Reagent Bottle",
+		"tier": "bench",
+		"summary": "Something the hold packed, in the quantity it packed it: a glass bottle for a liquid, a white jar for a powder, a label saying what is in it and a red band if it is corrosive, an oxidizer or flammable. The label is the one thing on the bench you are told rather than have to measure.\n\nPick what it holds in CONFIGURE; a different reagent is a fresh bottle from the hold. Pour from it through the device menu, in millilitres for a liquid and grams for a powder.",
+		"ports": {},
+		"equations": [
+			["n_i = m_i / M_i", "What the stock list gives in grams becomes moles of each substance, which is what the chemistry counts."],
+		],
+		"params": [
+			["stock", "", "water", "Which reagent. The list is the hold's: acids and bases at 1 M, salts, solvents, peroxide, an indicator."],
+		],
+		"assumptions": [
+			"The hold never runs out: a bottle chosen again is full again.",
+			"Nothing in a bottle ages, absorbs water from the air or loses strength.",
+		],
+	},
+	"lab_beaker": {
+		"title": "Beaker",
+		"tier": "bench",
+		"summary": "An open glass beaker, and what is in it. Whatever is poured in mixes with what was there, at the temperature the two heat capacities give. Then it does what the chemistry says: substances that react do so at their rate law, solids dissolve toward their solubility or come out of solution past it, heat is released or taken up, gas bubbles off and a liquid above its boiling point boils away. You see the level at the graduations, the colour, the solid settled at the bottom or clouding the liquid while it is stirred, the bubbles and the steam. Temperature, pH and weight take the instruments beside it.\n\nStand it on a hotplate to heat and stir it, on a balance to weigh it, under a meter's electrode to read its pH.",
+		"ports": {},
+		"equations": [
+			["r = k(T) * product(C_i ^ order_i) * [H+]^h * product(C_cat ^ order)", "Each reaction's rate, in mol per litre per second. A reaction between separate substances also waits on stirring: unstirred, a tenth as fast."],
+			["k(T) = k25 * exp(-Ea/R * (1/T - 1/298.15))", "Arrhenius: a rate constant climbs with temperature."],
+			["r_net = r_forward - r_forward / K * product(C_products)", "A reversible reaction stops at its equilibrium constant, and runs back if it is past it."],
+			["S_mix = S_water ^ phi_w * S_organic ^ (1 - phi_w)", "Solubility in a mixed solvent, log-linear in the solvent's water fraction; each solvent's own is log-linear in temperature between 20 and 80 C."],
+			["C dT/dt = Q_plate - UA (T - T_room) - sum(dH_r * r * V) - sum(dH_sol * dissolved)", "The heat balance: the hotplate's heat, the room's, and the heats of reaction and of dissolving."],
+			["sum(x_i * P_i(T_boil)) = 1 atm", "The mixture boils where its vapour pressure reaches an atmosphere (Raoult, each vapour pressure from its boiling point by Clausius-Clapeyron). Heat past that boils off vapour of the matching composition."],
+			["[H+] - Kw/[H+] + sum(strong cations) - sum(strong anions) + sum(C_family * mean charge) = 0", "pH is where the charges balance: strong ions fully dissociated, each acid family by its pKa values."],
+		],
+		"params": [
+			["capacity_ml", "mL", "250", "Its size. The diameter and height scale with the cube root, the glass with the area."],
+		],
+		"assumptions": [
+			"Liquids mix in any proportion; nothing separates into layers.",
+			"Water is the only solvent acids and bases dissociate in; pH is taken as in water whatever else is present.",
+			"Ideal solutions: no activity coefficients, no azeotropes, no heat of mixing between liquids.",
+			"Solids dissolve and crystallize at rates set by how far they are from saturation, not by particle size.",
+			"A gas made in solution leaves at once; none stays dissolved.",
+			"Nothing evaporates below the boiling point.",
+		],
+	},
+	"lab_flask": {
+		"title": "Erlenmeyer Flask",
+		"tier": "bench",
+		"summary": "The same chemistry as a beaker in a conical flask: wide at the base, narrowing to a neck, so it swirls without slopping and holds its level high as it empties.",
+		"ports": {},
+		"equations": [
+			["V(h) = pi h / 3 (R0^2 + R0 r(h) + r(h)^2)", "The level for a volume in the cone, which is why the same millilitres stand taller near the top."],
+		],
+		"params": [
+			["capacity_ml", "mL", "250", "Its size."],
+		],
+		"assumptions": [
+			"As the beaker.",
+			"The narrow neck slows nothing: it boils and loses heat as an open vessel.",
+		],
+	},
+	"lab_vial": {
+		"title": "Sample Vial",
+		"tier": "bench",
+		"summary": "A 20 mL screw-cap vial: a sample taken off, kept and looked at. The chemistry is a beaker's.",
+		"ports": {},
+		"equations": [],
+		"params": [],
+		"assumptions": [
+			"As the beaker. The cap is drawn but never on.",
+		],
+	},
+	"hotplate": {
+		"title": "Hotplate Stirrer",
+		"tier": "bench",
+		"summary": "A ceramic plate with a 600 W element under it, a magnetic stirrer, and a temperature probe on a stand that dips into whatever stands on the plate. The element is on or off on a thermostat relay: its amber lamp and the click tell you when. It holds the probe at the setpoint by holding the plate above it, in proportion to how far the vessel is short, so a beaker comes up to temperature without the stored heat in the plate carrying it past. With nothing on it, it holds the plate itself at the setpoint.\n\nHeat reaches the vessel only through its base, so a litre takes a good while to boil. The stirrer turns a bar in the vessel: it keeps solid suspended, dissolves it faster and lets reactions between separate substances run at full speed. E switches the stirrer; the setpoint and speed are in CONFIGURE.",
+		"ports": {},
+		"equations": [
+			["T_plate_target = min(max(T_set + 20 (T_set - T_vessel), T_set), 380 C)", "The cascade: the plate runs hotter the further the vessel is below its setpoint."],
+			["C_plate dT_plate/dt = P_element - 0.8 W/K (T_plate - T_vessel) - 1.2 W/K (T_plate - T_room)", "The plate's own heat balance; the middle term is what the vessel receives."],
+			["mix = 0.1 + 0.9 min(rpm / 400, 1)", "What the stirring does for dissolving and for reactions between substances."],
+		],
+		"params": [
+			["setpoint_c", "C", "0 (off)", "The probe's setpoint. At or below the room it is off."],
+			["stir_rpm", "rpm", "0", "Stirrer speed; full mixing from 400 rpm."],
+		],
+		"assumptions": [
+			"Only a vessel centred on the plate is heated; one standing half off it is not on it.",
+			"The plate's heat reaches the vessel at one fixed conductance whatever the vessel's size.",
+			"The stir bar is always in the vessel on the plate.",
+		],
+	},
+	"lab_meter": {
+		"title": "pH and Temperature Meter",
+		"tier": "bench",
+		"summary": "A benchtop meter with a combined pH and temperature electrode on a swing arm. Stand a vessel where the electrode hangs and the display reads it; move the vessel away and it reads nothing. With no water in the liquid there is no pH to read.",
+		"ports": {},
+		"equations": [
+			["pH = -log10[H+]", "From the vessel's charge balance."],
+		],
+		"params": [],
+		"assumptions": [
+			"The electrode needs no calibration and reads instantly.",
+			"pH is taken as in water, and ionic strength is ignored.",
+		],
+	},
+	"lab_balance": {
+		"title": "Balance",
+		"tier": "bench",
+		"summary": "A top-loading balance. It weighs whatever stands on its pan, glass and contents together, less the tare: set an empty beaker on it, press E to tare, and it reads what you pour in. Gas bubbling off or steam leaving shows as the weight falling.",
+		"ports": {},
+		"equations": [
+			["reading = m_glass + m_contents - tare", "What stands on the pan, less what stood there when it was tared."],
+		],
+		"params": [],
+		"assumptions": [
+			"It reads to a hundredth of a gram, instantly and without drift.",
+		],
+	},
 }

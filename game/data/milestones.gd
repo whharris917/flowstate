@@ -26,7 +26,10 @@ const LADDER: Array[Dictionary] = [
 			{"kind": "header_total", "target": 200.0, "label": "drawn from headers", "unit": "L"},
 			{"kind": "sewer_total", "target": 100.0, "label": "sent to the sewer", "unit": "L"},
 		],
-		"unlocks": ["mains", "psu", "pump"],
+		# The bench comes with the first water: the route was only ever
+		# run at this scale, and here is where the player first runs it.
+		"unlocks": ["mains", "psu", "pump", "reagent_bottle", "lab_beaker", "lab_flask", "lab_vial",
+			"hotplate", "lab_meter", "lab_balance"],
 	},
 	{
 		"id": "lift", "tier": "TIER 0 — POWER", "title": "Lift",

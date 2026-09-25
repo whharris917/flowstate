@@ -8,6 +8,8 @@ extends Control
 ## starts a routed connection from that port; picking an input (with a
 ## source pending) completes one. Cabinets list their whole terminal
 ## strip.
+## POUR, on a bench vessel, says what can be seen in it and pours a
+## measured amount into another vessel nearby (Plant.pour).
 ## CONFIGURE edits the sizing the record was placed with — the same
 ## keys the save file carries — from PlantFactory.CONFIG. Apply hands
 ## the values to the plant, which owns what a change means (a resized
@@ -24,6 +26,8 @@ var _config_form: VBoxContainer
 var _title: Label
 var _note: Label
 var _fields: Dictionary = {}   # key -> SpinBox or OptionButton
+var _pour_page: MarginContainer
+var _pour_list: VBoxContainer
 
 
 func _ready() -> void:
@@ -75,6 +79,13 @@ func _ready() -> void:
 	_config_form = VBoxContainer.new()
 	_config_form.add_theme_constant_override("separation", 8)
 	config_page.add_child(_config_form)
+	_pour_page = MarginContainer.new()
+	_pour_page.name = "POUR"
+	_pour_page.add_theme_constant_override("margin_top", 8)
+	_tabs.add_child(_pour_page)
+	_pour_list = VBoxContainer.new()
+	_pour_list.add_theme_constant_override("separation", 6)
+	_pour_page.add_child(_pour_list)
 
 	_note = Label.new()
 	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -97,7 +108,9 @@ func open(plant: Plant, title: String, records: Array, type_id: String,
 	_note.text = "M moves it · X removes it"
 	_fill_io(records)
 	_fill_config(type_id)
-	_tabs.current_tab = 0
+	var pours := _fill_pour()
+	_tabs.set_tab_hidden(_pour_page.get_index(), not pours)
+	_tabs.current_tab = _pour_page.get_index() if pours else 0
 	visible = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -172,6 +185,19 @@ func _fill_config(type_id: String) -> void:
 			check.text = "yes"
 			grid.add_child(check)
 			_fields[key] = check
+		elif str(field.get("options", "")) == "stocks":
+			# A reagent the hold packed: every stock by its label.
+			var stocks := OptionButton.new()
+			var current_stock := str(record.get("stock"))
+			var keys := ChemLibrary.stock_keys()
+			for i in keys.size():
+				stocks.add_item(str(ChemLibrary.stock(keys[i])["label"]), i)
+				stocks.set_item_metadata(i, keys[i])
+				if keys[i] == current_stock:
+					stocks.select(i)
+			stocks.custom_minimum_size = Vector2(260, 0)
+			grid.add_child(stocks)
+			_fields[key] = stocks
 		elif field.has("options"):
 			var choice := OptionButton.new()
 			var current := str(record.call("species_key"))
@@ -210,7 +236,10 @@ func _apply() -> void:
 	var values := {}
 	for key: String in _fields:
 		var control: Control = _fields[key]
-		if control is OptionButton:
+		if control is OptionButton and key == "stock":
+			var picked := control as OptionButton
+			values[key] = str(picked.get_item_metadata(picked.selected))
+		elif control is OptionButton:
 			values[key] = SimSpecies.key_of((control as OptionButton).get_selected_id())
 		elif control is TagPicker:
 			values[key] = (control as TagPicker).text
@@ -226,6 +255,54 @@ func _apply() -> void:
 	else:
 		_note.text = why
 		_note.add_theme_color_override("font_color", Color(0.95, 0.55, 0.45))
+
+
+## The POUR tab for a bench vessel: what it looks like, an amount, and
+## a button per vessel within reach. False for anything else.
+func _fill_pour() -> bool:
+	for old in _pour_list.get_children():
+		old.queue_free()
+	var vessel := _plant.sim.get_component(_record_name) as SimLabVessel if _record_name != "" else null
+	if vessel == null:
+		return false
+	var seen := Label.new()
+	seen.text = LabVesselView.look(vessel.contents)
+	seen.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	seen.custom_minimum_size = Vector2(400, 0)
+	_pour_list.add_child(seen)
+	var by_weight := vessel.pours_by_weight()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var tag := Label.new()
+	tag.text = "Amount"
+	row.add_child(tag)
+	var amount := SpinBox.new()
+	amount.min_value = 0.1
+	amount.max_value = 2000.0
+	amount.step = 0.1
+	amount.value = 5.0 if by_weight else 25.0
+	amount.suffix = " g" if by_weight else " mL"
+	amount.custom_minimum_size = Vector2(150, 0)
+	row.add_child(amount)
+	_pour_list.add_child(row)
+	var near := _plant.vessels_near(_record_name)
+	if near.is_empty():
+		var none := Label.new()
+		none.text = "nothing to pour into within reach · set a beaker beside it"
+		_pour_list.add_child(none)
+	for entry: Array in near:
+		var target := str(entry[0])
+		var into := _plant.sim.get_component(target) as SimLabVessel
+		var button := Button.new()
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.text = "Pour into %s   (%s, room for %d mL)" % [target, LabVesselView.look(into.contents), int(into.room_ml())]
+		button.clip_text = true
+		button.custom_minimum_size = Vector2(400, 0)
+		button.pressed.connect(func() -> void:
+			_note.text = _plant.pour(_record_name, target, amount.value)
+			_fill_pour())
+		_pour_list.add_child(button)
+	return true
 
 
 func _row(record_name: String, port_name: String, kind: SimTypes.PortKind,

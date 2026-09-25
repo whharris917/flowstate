@@ -40,12 +40,7 @@ func _init(name_: String, kind_: String = "beaker", capacity_ml_: float = 250.0,
 	stock = stock_
 	if stock != "" and capacity_ml_ <= 0.0:
 		capacity_ml_ = float(ChemLibrary.stock(stock).get("capacity_ml", 500.0))
-	capacity_ml = capacity_ml_
-	var shape: Array = SHAPES[kind]
-	var scale := pow(capacity_ml / float(shape[0]), 1.0 / 3.0)
-	diameter_m = float(shape[1]) * scale
-	height_m = float(shape[2]) * scale
-	tare_g = float(shape[3]) * scale * scale
+	resize(capacity_ml_)
 	contents = SimMixture.from_stock(stock) if stock != "" else SimMixture.new()
 	add_observable("temp_c", &"temp_c")
 	add_observable("volume_ml", &"volume_ml")
@@ -73,6 +68,17 @@ var gas_ml_s: float:
 var boil_g_s: float:
 	get:
 		return contents.boil_g_s
+
+
+## Its size and so its shape and glass: the size scales the reference
+## shape by the cube root, the glass by the area. What is in it stays.
+func resize(capacity_ml_: float) -> void:
+	capacity_ml = capacity_ml_
+	var shape: Array = SHAPES[kind]
+	var scale := pow(capacity_ml / float(shape[0]), 1.0 / 3.0)
+	diameter_m = float(shape[1]) * scale
+	height_m = float(shape[2]) * scale
+	tare_g = float(shape[3]) * scale * scale
 
 
 func room_ml() -> float:

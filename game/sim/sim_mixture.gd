@@ -21,6 +21,7 @@ const K_DISSOLVE := 0.08     # 1/s toward saturation, stirred
 const K_CRYSTAL := 0.03      # 1/s toward saturation from above, just past it
 const MAX_DRIVE := 20.0      # the most supersaturation speeds crystallizing
 const UNSTIRRED := 0.1       # mixing with nothing stirring
+const VIEW_PATH_CM := 5.0    # the depth of liquid a look through a vessel crosses
 
 var liquid: PackedFloat64Array
 var solid: PackedFloat64Array
@@ -219,8 +220,9 @@ static func _pressure(parts: Array[Vector2], t: float) -> float:
 
 
 ## The colour a look through the liquid shows: each coloured species by
-## its concentration, and an indicator by the pH. Alpha is how much of
-## the view it takes.
+## its absorbance across a vessel (Beer-Lambert over VIEW_PATH_CM), an
+## indicator by the pH. Alpha is how much of the view it takes, easing
+## toward full as the absorbance passes a few units.
 func liquid_color() -> Color:
 	var litres := liquid_ml() / 1000.0
 	if litres <= 1e-9:
@@ -244,7 +246,7 @@ func liquid_color() -> Color:
 			c = Color(float(ic[0]), float(ic[1]), float(ic[2]), float(ic[3]) * on)
 		if c.a <= 0.0:
 			continue
-		var absorb := 1.0 - exp(-c.a * liquid[i] / litres * 0.05)
+		var absorb := 1.0 - exp(-c.a * liquid[i] / litres * VIEW_PATH_CM / 3.0)
 		tint = tint.lerp(Color(c.r, c.g, c.b), absorb / maxf(strength + absorb, 1e-9))
 		strength = minf(strength + absorb, 1.0)
 	tint.a = strength

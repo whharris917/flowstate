@@ -279,7 +279,7 @@ func _pick_index(index: int) -> void:
 ## How many build pages there are: the palette rail has one icon each,
 ## and adding a page means touching _page_catalog, _is_equipment_page,
 ## page_names and this.
-const PAGES := 9
+const PAGES := 10
 
 
 ## A hotbar slot: its type, wherever it lives in the pages.
@@ -426,7 +426,7 @@ func _update_hud() -> void:
 				% [_edit_name, handles])
 		Mode.PLACE:
 			var page_names: Array[String] = ["EQUIPMENT", "SEPARATION", "INSTRUMENTS", "STRUCTURE",
-				"ROUTING · FLOOR · SIGNS", "CONTROL", "UTILITIES", "SMALL BORE", "FILLING LINE"]
+				"ROUTING · FLOOR · SIGNS", "CONTROL", "UTILITIES", "SMALL BORE", "FILLING LINE", "BENCH"]
 			var entries := _catalog()
 			catalog_index = mini(catalog_index, maxi(entries.size() - 1, 0))
 			var heading := page_names[page]
@@ -760,6 +760,8 @@ func _update_ghost() -> void:
 		return
 	if _update_vial_ghost():
 		return
+	if _update_bench_ghost():
+		return
 	if _update_inline_ghost():
 		return
 	var space := player.camera.get_world_3d().direct_space_state
@@ -874,6 +876,37 @@ func _update_vial_ghost() -> bool:
 	_ghost_valid = true
 	_vial_snap = snap
 	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45)
+	return true
+
+
+## Bench things stand where they are aimed on whatever surface is
+## there, on a fine grid; a vessel aimed at a hotplate's plate or a
+## balance's pan sits centred on it (BenchLayout.snap). True when this
+## was a bench thing.
+func _update_bench_ghost() -> bool:
+	var type_id := _current_type()
+	if not _is_equipment_page() or not BenchLayout.is_bench_type(type_id):
+		return false
+	(_guide_mesh.mesh as ImmediateMesh).clear_surfaces()
+	var hit := _place_hit()
+	if hit.is_empty() or (hit["normal"] as Vector3).y < 0.6:
+		_ghost.visible = false
+		_ghost_valid = false
+		return true
+	var snap := BenchLayout.snap(plant, type_id, hit["position"] as Vector3, BenchLayout.radius_of(type_id))
+	_ghost.rotation.y = rot_y
+	_ghost.visible = true
+	if snap.has("why"):
+		_ghost_pos = hit["position"] as Vector3
+		_ghost_valid = false
+		_inline_why = str(snap["why"])
+	else:
+		_ghost_pos = snap["pos"] as Vector3
+		_ghost_valid = true
+		_inline_why = ""
+	_ghost.global_position = _ghost_pos
+	_ghost_mat.albedo_color = Color(0.25, 0.85, 0.35, 0.45) if _ghost_valid \
+		else Color(0.9, 0.25, 0.2, 0.45)
 	return true
 
 
@@ -1033,12 +1066,13 @@ func _page_catalog() -> Array[Dictionary]:
 		6: return PlantFactory.CATALOG_UTILITIES
 		7: return PlantFactory.CATALOG_SMALL_BORE
 		8: return PlantFactory.CATALOG_FILLING
+		9: return PlantFactory.CATALOG_BENCH
 	return PlantFactory.CATALOG_CONTROL
 
 
-## Pages 0, 1, 2, 5, 6, 7 and 8 place sim equipment; 3 and 4 place structure.
+## Pages 0, 1, 2, 5, 6, 7, 8 and 9 place sim equipment; 3 and 4 place structure.
 func _is_equipment_page() -> bool:
-	return page in [0, 1, 2, 5, 6, 7, 8]
+	return page in [0, 1, 2, 5, 6, 7, 8, 9]
 
 
 func _current_type() -> String:
@@ -1710,6 +1744,9 @@ func _update_carry() -> void:
 		_carry_name = ""
 		return
 	var base := _base_of(_carry_name)
+	if BenchLayout.is_bench_type(str(plant.equip_types.get(_carry_name, ""))):
+		_carry_bench(view as BenchView, base)
+		return
 	var hit := _ground_hit(base.y)
 	if hit == Vector3.INF:
 		return
@@ -1733,6 +1770,29 @@ func _update_carry() -> void:
 			_gizmo.set_blocked(false)
 	elif _gizmo != null and _edit_name == _carry_name:
 		_gizmo.set_blocked(true)
+
+
+## A bench thing carried goes where the crosshair is on a surface, by
+## the bench's own snap: up onto a hotplate or a balance, down onto the
+## bench, and never into another bench thing.
+func _carry_bench(view: BenchView, base: Vector3) -> void:
+	var hit := _place_hit()
+	if hit.is_empty() or (hit["normal"] as Vector3).y < 0.6:
+		return
+	var snap := BenchLayout.snap(plant, str(plant.equip_types[_carry_name]), hit["position"] as Vector3,
+		view.radius(), view)
+	if snap.has("why"):
+		if _gizmo != null and _edit_name == _carry_name:
+			_gizmo.set_blocked(true)
+		return
+	var target := snap["pos"] as Vector3
+	if target.is_equal_approx(base):
+		return
+	_carry_moved = true
+	plant.move_equipment(_carry_name, target, view.rotation.y)
+	if _gizmo != null and _edit_name == _carry_name:
+		_gizmo.refresh()
+		_gizmo.set_blocked(false)
 
 
 func _turn_carried(angle: float) -> void:

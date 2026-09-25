@@ -19,7 +19,7 @@ class_name SimLibrary
 ## Reading order for the index: process first, then the separation
 ## train, then the utilities that feed them, then the control tier —
 ## roughly the order material moves through a plant.
-const TIER_ORDER: Array[String] = ["process", "separation", "utility", "control"]
+const TIER_ORDER: Array[String] = ["process", "separation", "utility", "control", "bench"]
 
 
 ## Every placeable type that has a page, grouped by tier and in build
@@ -33,7 +33,7 @@ static func type_ids() -> Array[String]:
 			PlantFactory.CATALOG, PlantFactory.CATALOG_SEPARATION,
 			PlantFactory.CATALOG_INSTRUMENTS, PlantFactory.CATALOG_CONTROL,
 			PlantFactory.CATALOG_UTILITIES, PlantFactory.CATALOG_SMALL_BORE,
-			PlantFactory.CATALOG_FILLING]:
+			PlantFactory.CATALOG_FILLING, PlantFactory.CATALOG_BENCH]:
 		for entry: Dictionary in group:
 			var type_id := str(entry["type"])
 			var tier := tier_of(type_id)
@@ -54,7 +54,7 @@ static func label_of(type_id: String) -> String:
 			PlantFactory.CATALOG, PlantFactory.CATALOG_SEPARATION,
 			PlantFactory.CATALOG_INSTRUMENTS, PlantFactory.CATALOG_CONTROL,
 			PlantFactory.CATALOG_UTILITIES, PlantFactory.CATALOG_SMALL_BORE,
-			PlantFactory.CATALOG_FILLING]:
+			PlantFactory.CATALOG_FILLING, PlantFactory.CATALOG_BENCH]:
 		for entry: Dictionary in group:
 			if str(entry["type"]) == type_id:
 				return str(entry["label"])

@@ -60,6 +60,19 @@ const CATALOG_FILLING: Array[Dictionary] = [
 	{"type": "vial_table", "label": "Outfeed table"},
 ]
 
+# The bench: glassware, the hold's reagents, and the instruments that
+# work on a vessel standing on or beside them (BenchLayout). Chemistry at
+# the scale the route was written at, before any of it is a plant.
+const CATALOG_BENCH: Array[Dictionary] = [
+	{"type": "reagent_bottle", "label": "Reagent from the hold"},
+	{"type": "lab_beaker", "label": "Beaker"},
+	{"type": "lab_flask", "label": "Erlenmeyer flask"},
+	{"type": "lab_vial", "label": "Sample vial 20 mL"},
+	{"type": "hotplate", "label": "Hotplate stirrer"},
+	{"type": "lab_meter", "label": "pH and temperature meter"},
+	{"type": "lab_balance", "label": "Balance"},
+]
+
 const CATALOG_INSTRUMENTS: Array[Dictionary] = [
 	{"type": "float_switch", "label": "Level switch"},
 	{"type": "gauge_level", "label": "Level gauge"},
@@ -138,6 +151,13 @@ const FOOTPRINTS := {
 	"fill_needle": Vector3(0.1, 1.2, 0.56),
 	"capper": Vector3(0.14, 1.3, 0.56),
 	"vial_table": Vector3(0.9, 1.0, 0.9),
+	"reagent_bottle": Vector3(0.12, 0.25, 0.12),
+	"lab_beaker": Vector3(0.09, 0.12, 0.09),
+	"lab_flask": Vector3(0.10, 0.16, 0.10),
+	"lab_vial": Vector3(0.03, 0.06, 0.03),
+	"hotplate": Vector3(0.21, 0.12, 0.31),
+	"lab_meter": Vector3(0.28, 0.3, 0.21),
+	"lab_balance": Vector3(0.21, 0.1, 0.29),
 }
 const Y_OFFSETS := {
 	"tank": 0.0, "pump": 0.0, "relay": 1.5, "hmi_trend": 1.6,
@@ -155,6 +175,8 @@ const Y_OFFSETS := {
 	"metering_pump": 0.0, "regulator": 0.0, "rotameter": 0.0,
 	"vial_magazine": 0.0, "vial_track": 0.0, "star_wheel": 0.0, "stop_gate": 0.0, "photo_eye": 0.0,
 	"load_cell": 0.0, "fill_needle": 0.0, "capper": 0.0, "vial_table": 0.0,
+	"reagent_bottle": 0.0, "lab_beaker": 0.0, "lab_flask": 0.0, "lab_vial": 0.0,
+	"hotplate": 0.0, "lab_meter": 0.0, "lab_balance": 0.0,
 }
 
 # Where each port's fitting sits in the view's local space, flush with
@@ -541,6 +563,23 @@ static func make_record(sim: Simulation, type_id: String, name_: String,
 			return sim.add(SimCapper.new(name_, params.get("cap_s", 0.8)))
 		"vial_table":
 			return sim.add(SimVialTable.new(name_))
+		"reagent_bottle":
+			return sim.add(SimLabVessel.new(name_, "bottle", 0.0, str(params.get("stock", "water"))))
+		"lab_beaker":
+			return sim.add(SimLabVessel.new(name_, "beaker", float(params.get("capacity_ml", 250.0))))
+		"lab_flask":
+			return sim.add(SimLabVessel.new(name_, "flask", float(params.get("capacity_ml", 250.0))))
+		"lab_vial":
+			return sim.add(SimLabVessel.new(name_, "vial", float(params.get("capacity_ml", 20.0))))
+		"hotplate":
+			var plate := SimHotplate.new(name_)
+			plate.setpoint_c = float(params.get("setpoint_c", 0.0))
+			plate.stir_rpm = float(params.get("stir_rpm", 0.0))
+			return sim.add(plate)
+		"lab_meter":
+			return sim.add(SimLabMeter.new(name_))
+		"lab_balance":
+			return sim.add(SimLabBalance.new(name_))
 	push_error("unknown equipment type '%s'" % type_id)
 	return null
 
@@ -634,6 +673,14 @@ static func make_view(type_id: String, record: SimComponent,
 			view = CapperView.new()
 		"vial_table":
 			view = VialTableView.new()
+		"reagent_bottle", "lab_beaker", "lab_flask", "lab_vial":
+			view = LabVesselView.new()
+		"hotplate":
+			view = HotplateView.new()
+		"lab_meter":
+			view = LabMeterView.new()
+		"lab_balance":
+			view = LabBalanceView.new()
 	if view == null:
 		push_error("unknown equipment type '%s'" % type_id)
 		return null
@@ -934,6 +981,19 @@ const CONFIG := {
 	],
 	"capper": [
 		{"key": "cap_s", "label": "Time to cap", "unit": "s", "min": 0.1, "max": 5.0, "step": 0.05},
+	],
+	"reagent_bottle": [
+		{"key": "stock", "label": "Reagent", "options": "stocks"},
+	],
+	"lab_beaker": [
+		{"key": "capacity_ml", "label": "Size", "unit": "mL", "min": 25.0, "max": 2000.0, "step": 25.0},
+	],
+	"lab_flask": [
+		{"key": "capacity_ml", "label": "Size", "unit": "mL", "min": 25.0, "max": 2000.0, "step": 25.0},
+	],
+	"hotplate": [
+		{"key": "setpoint_c", "label": "Heat (off at 21)", "unit": "°C", "min": 0.0, "max": 350.0, "step": 1.0},
+		{"key": "stir_rpm", "label": "Stir speed", "unit": "rpm", "min": 0.0, "max": 1500.0, "step": 50.0},
 	],
 	"regulator": [
 		{"key": "set_kpa", "label": "Setting", "unit": "kPa", "min": 1.0, "max": 2000.0, "step": 1.0},

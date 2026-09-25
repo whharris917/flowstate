@@ -599,12 +599,18 @@ var _catch_t := 0.0
 ## The filling line is derived again once a frame after any change to
 ## it (VialLine): links, seats and vial sizes follow where parts stand.
 var _vial_line_dirty := false
+## The bench is linked again the same way (BenchLayout): which vessel
+## stands on which hotplate or balance, which the meter's probe is in.
+var _bench_dirty := false
 
 
 func _process(delta: float) -> void:
 	if _vial_line_dirty:
 		_vial_line_dirty = false
 		VialLine.sync(self)
+	if _bench_dirty:
+		_bench_dirty = false
+		BenchLayout.sync(self)
 	_catch_t -= delta
 	if _catch_t <= 0.0:
 		_catch_t = 0.25
@@ -802,6 +808,9 @@ func place(type_id: String, name_: String, params: Dictionary,
 	if view is VialPartView:
 		(view as VialPartView).setup_record(record)
 		_vial_line_dirty = true
+	if view is BenchView:
+		(view as BenchView).setup_record(record)
+		_bench_dirty = true
 	# Where it stands is where it reckons its pressures: the one
 	# elevation rule, for every record that has one.
 	_apply_elevation(record, type_id, view, to_local(world_pos).y, params)
@@ -1844,6 +1853,8 @@ func move_equipment(name_: String, world_pos: Vector3, rot_y: float) -> bool:
 			refresh_wires_of(inst_name)
 	if view is VialPartView:
 		_vial_line_dirty = true
+	if view is BenchView:
+		_bench_dirty = true
 	return true
 
 
@@ -1868,7 +1879,10 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 		if not allowed.has(key):
 			return "%s has no %s" % [name_, key]
 		var field: Dictionary = allowed[key]
-		if field.has("options"):
+		if str(field.get("options", "")) == "stocks":
+			if ChemLibrary.stock(str(values[key])).is_empty():
+				return "the hold has no %s" % str(values[key])
+		elif field.has("options"):
 			if SimSpecies.index_of(str(values[key])) < 0:
 				return "unknown species"
 		elif str(field.get("kind", "")) == "toggle":
@@ -1917,6 +1931,21 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 		if values.has("height_m") or values.has("diameter_m"):
 			resize_tank(name_, float(values.get("height_m", tank_rec.height_m)),
 				float(values.get("diameter_m", tank_rec.diameter_m)))
+	elif record is SimLabVessel:
+		var lab := record as SimLabVessel
+		if values.has("stock") and str(values["stock"]) != lab.stock:
+			# A fresh bottle of that from the hold.
+			lab.stock = str(values["stock"])
+			lab.resize(float(ChemLibrary.stock(lab.stock).get("capacity_ml", lab.capacity_ml)))
+			lab.contents = SimMixture.from_stock(lab.stock)
+		if values.has("capacity_ml"):
+			lab.resize(float(values["capacity_ml"]))
+		var lab_view := views.get(name_) as BenchView
+		if lab_view != null:
+			lab_view.rebuild()
+			MeshMerge.merge_view(lab_view)
+		_bench_dirty = true
+		return ""
 	elif record is SimFloatSwitch:
 		var fs := record as SimFloatSwitch
 		var low := float(values.get("low_l", fs.low_l))
@@ -1956,6 +1985,50 @@ func configure_equipment(name_: String, values: Dictionary) -> String:
 	return ""
 
 
+## Pour from one bench vessel into another, from the source's device
+## menu: amount in mL of liquid, or in g when the source holds only
+## solid. The pour is what the kernel says moved (SimLabVessel.pour: an
+## unstirred source decants, a full destination takes no more). Returns
+## what happened, for the player.
+func pour(src_name: String, dst_name: String, amount: float) -> String:
+	var src := sim.get_component(src_name) as SimLabVessel
+	var dst := sim.get_component(dst_name) as SimLabVessel
+	if src == null or dst == null or src == dst:
+		return "nothing to pour between"
+	checkpoint()
+	var by_weight := src.pours_by_weight()
+	var stirred := src.mix > SimMixture.UNSTIRRED + 0.01
+	var moved := SimLabVessel.pour(src, dst, amount, stirred)
+	if moved <= 0.0:
+		return "%s has no room" % dst_name if dst.room_ml() <= 0.0 else "%s is empty" % src_name
+	var src_view := views.get(src_name) as Node3D
+	if src_view != null:
+		EquipmentAudio.play_once(src_view, "res://audio/pour_loop.wav",
+			Vector3(0, src.height_m, 0), -14.0, 1.4)
+	return "poured %.1f %s from %s into %s" % [moved, "g" if by_weight else "mL", src_name, dst_name]
+
+
+## The glassware near a vessel, for the pour menu: [name, distance],
+## nearest first, at most `most`. Stock bottles are the hold's and are
+## poured from, not into.
+func vessels_near(name_: String, reach: float = 2.0, most: int = 8) -> Array:
+	var here := views.get(name_) as Node3D
+	var out: Array = []
+	if here == null:
+		return out
+	for other: String in views:
+		if other == name_ or not views[other] is LabVesselView:
+			continue
+		var into := sim.get_component(other) as SimLabVessel
+		if into == null or into.stock != "":
+			continue
+		var d := (views[other] as Node3D).global_position.distance_to(here.global_position)
+		if d <= reach:
+			out.append([other, d])
+	out.sort_custom(func(a: Array, b: Array) -> bool: return float(a[1]) < float(b[1]))
+	return out.slice(0, most)
+
+
 func remove_equipment(name_: String) -> bool:
 	checkpoint()
 	if protected.has(name_) or not views.has(name_):
@@ -1981,6 +2054,8 @@ func remove_equipment(name_: String) -> bool:
 	_wire_visuals = keep
 	if views[name_] is VialPartView:
 		_vial_line_dirty = true
+	if views[name_] is BenchView:
+		_bench_dirty = true
 	(views[name_] as Node).queue_free()
 	views.erase(name_)
 	equip_types.erase(name_)
@@ -5998,6 +6073,12 @@ func _params_for(record: SimComponent) -> Dictionary:
 	if record is SimVialMagazine:
 		var vm := record as SimVialMagazine
 		return {"vial_ml": vm.vial_ml, "rate_per_min": vm.rate_per_min}
+	if record is SimLabVessel:
+		var lab := record as SimLabVessel
+		return {"capacity_ml": lab.capacity_ml, "stock": lab.stock}
+	if record is SimHotplate:
+		var hp := record as SimHotplate
+		return {"setpoint_c": hp.setpoint_c, "stir_rpm": hp.stir_rpm}
 	if record is SimVialTrack:
 		var vt := record as SimVialTrack
 		return {"length_m": vt.length_m, "speed_mps": vt.speed_mps}
@@ -6094,6 +6175,7 @@ func load_game() -> bool:
 func restore(payload: Dictionary) -> bool:
 	_restoring = true
 	_vial_line_dirty = true
+	_bench_dirty = true
 	if campaign != null and payload.has("campaign"):
 		campaign.apply_state(payload["campaign"])
 
@@ -6255,6 +6337,7 @@ func restore(payload: Dictionary) -> bool:
 	sim.load_pressures(payload.get("pressures", {}) as Dictionary)
 	_sync_bores(views.keys())
 	_sync_catches()   # an open end finds its vessel again at once, not at the sweep
+	BenchLayout.sync(self)   # and a vessel its hotplate, balance or meter
 
 	tank = sim.get_component("supply_tank") as SimTank
 	switch = sim.get_component("level_switch") as SimFloatSwitch

@@ -1,5 +1,5 @@
 {
-  "_about": "The bench chemistry library, hand-authored: species, reactions and the reagent stocks the hold supplies. Both kernels read this file (sim/chemistry.py, game/sim/chem_library.gd). Units: molar mass g/mol; density g/mL of the pure substance at 25 C (for a species that exists only in solution, its apparent density there); mp and bp in C; cp J/(g K); dh_vap and dh_solution kJ/mol (negative releases heat); solubility grams per 100 g of solvent at 20 C and 80 C. Reaction k25 is the rate constant at 25 C in mol, litre and second units matching its orders; ea kJ/mol; dh kJ per mol of reaction as written. Notes are drafts for the director.",
+  "_about": "The bench chemistry library, hand-authored: species, reactions and the reagent stocks the hold supplies. Both kernels read this file (sim/chemistry.py, game/sim/chem_library.gd). Units: molar mass g/mol; density g/mL of the pure substance at 25 C (for a species that exists only in solution, its apparent density there); mp and bp in C; cp J/(g K); dh_vap and dh_solution kJ/mol (negative releases heat); solubility grams per 100 g of solvent at 20 C and 80 C. A colour's fourth number is the molar absorptivity at its peak, L/(mol cm). Reaction k25 is the rate constant at 25 C in mol, litre and second units matching its orders; ea kJ/mol; dh kJ per mol of reaction as written. Notes are drafts for the director.",
   "families": {
     "acetate": {"pka": [4.76], "z_base": -1},
     "carbonate": {"pka": [6.35, 10.33], "z_base": -2},
@@ -48,7 +48,7 @@
      "notes": "Source of aluminium for the adjuvant. Its solutions are more acidic than this model says (aluminium hydrolysis is not modelled)."},
     {"key": "aluminium_hydroxide", "name": "Aluminium hydroxide", "formula": "Al(OH)3", "molar_mass": 78.00, "density": 2.42, "phase": "solid", "mp": 300.0, "bp": 2000.0, "cp": 0.93, "solubility": {"water": [0.0001, 0.0001], "organic": [0.0001, 0.0001]}, "solid_color": [0.93, 0.93, 0.92],
      "notes": "A white gel when it falls out of solution: the aluminium adjuvant that makes a vaccine provoke a stronger response."},
-    {"key": "copper_sulfate", "name": "Copper(II) sulfate pentahydrate", "formula": "CuSO4·5H2O", "molar_mass": 249.69, "density": 2.286, "phase": "solid", "mp": 110.0, "bp": 650.0, "cp": 1.12, "solubility": {"water": [32.0, 83.0], "organic": [0.1, 0.1]}, "dh_solution": 11.5, "strong_cations": 2, "family": "sulfate", "color": [0.10, 0.42, 0.90, 9.0], "solid_color": [0.15, 0.40, 0.85],
+    {"key": "copper_sulfate", "name": "Copper(II) sulfate pentahydrate", "formula": "CuSO4·5H2O", "molar_mass": 249.69, "density": 2.286, "phase": "solid", "mp": 110.0, "bp": 650.0, "cp": 1.12, "solubility": {"water": [32.0, 83.0], "organic": [0.1, 0.1]}, "dh_solution": 11.5, "strong_cations": 2, "family": "sulfate", "color": [0.10, 0.42, 0.90, 12.0], "solid_color": [0.15, 0.40, 0.85],
      "notes": "Blue crystals, blue solution. Hydroxide turns it to a pale blue solid."},
     {"key": "copper_hydroxide", "name": "Copper(II) hydroxide", "formula": "Cu(OH)2", "molar_mass": 97.56, "density": 3.37, "phase": "solid", "mp": 80.0, "bp": 1000.0, "cp": 0.98, "solubility": {"water": [0.0001, 0.0001], "organic": [0.0001, 0.0001]}, "solid_color": [0.45, 0.72, 0.95],
      "notes": "Pale blue precipitate."},
@@ -68,7 +68,7 @@
      "notes": "The base half of a phosphate buffer. Mixed with its partner it holds pH near 7.2, which is where proteins are comfortable."},
     {"key": "ammonium_nitrate", "name": "Ammonium nitrate", "formula": "NH4NO3", "molar_mass": 80.04, "density": 1.725, "phase": "solid", "mp": 169.6, "bp": 210.0, "cp": 1.74, "solubility": {"water": [192.0, 580.0], "organic": [3.8, 5.0]}, "dh_solution": 25.7, "strong_anions": 1, "family": "ammonium", "hazard": "oxidizer",
      "notes": "Dissolving it pulls heat out of the water: the cold pack."},
-    {"key": "phenolphthalein", "name": "Phenolphthalein", "formula": "C20H14O4", "molar_mass": 318.33, "density": 1.28, "phase": "solid", "mp": 262.0, "bp": 557.0, "cp": 1.2, "solubility": {"water": [0.04, 0.1], "organic": [8.0, 15.0]}, "indicator": {"from_ph": 8.2, "to_ph": 10.0, "color": [0.92, 0.12, 0.55, 4000.0]},
+    {"key": "phenolphthalein", "name": "Phenolphthalein", "formula": "C20H14O4", "molar_mass": 318.33, "density": 1.28, "phase": "solid", "mp": 262.0, "bp": 557.0, "cp": 1.2, "solubility": {"water": [0.04, 0.1], "organic": [8.0, 15.0]}, "indicator": {"from_ph": 8.2, "to_ph": 10.0, "color": [0.92, 0.12, 0.55, 30000.0]},
      "notes": "An indicator: colourless in acid, pink once the solution turns basic past about pH 8.2."},
     {"key": "carbon_dioxide", "name": "Carbon dioxide", "formula": "CO2", "molar_mass": 44.01, "density": 0.0018, "phase": "gas", "mp": -78.5, "bp": -78.5, "cp": 0.84,
      "notes": "Leaves as bubbles."},

@@ -76,6 +76,8 @@ func _after_plant() -> void:
 	RoutingExercises.build(plant)
 	# The filling line built from parts, south of the exercises.
 	FillLineDemo.build(plant)
+	# The bench, east of the home pad.
+	BenchDemo.build(plant)
 	hud.toast("The Maine coast. The site is graded; the shore is a walk east or south, the lighthouse is across the cove, and a river comes down to the sea beyond it. B build · C connect · L library · O options · F5/F9 save/load")
 	var s := coast.stats
 	print("[flowstate] landscape: %d vertices, %.0f%% sea, %d trees, %d rocks, %d surf emitters, a river of %d m with %d emitters — terrain %d ms, rocks %d ms, forest %d ms, %d ms in all"
@@ -168,6 +170,8 @@ func _headless_reports() -> void:
 		print(line)
 	for line in FillLineDemo.report(plant):
 		print(line)
+	for line in BenchDemo.report(plant):
+		print("[flowstate] " + line)
 	print("[flowstate] cable carriers: %s" % ", ".join(plant.carrier_report()))
 	var trip := RoutingExercises.round_trip(plant)
 	print("[flowstate] drip demo save round trip: %s" % ("OK" if trip == "" else trip))
@@ -176,3 +180,5 @@ func _headless_reports() -> void:
 	for line in FillLineDemo.report(plant):
 		if line.contains("sleeve"):
 			print(line.replace("fill line:", "fill line after load:"))
+	for line in BenchDemo.report(plant):
+		print("[flowstate] " + line.replace("bench demo:", "bench demo after load:"))

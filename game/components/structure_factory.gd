@@ -25,6 +25,7 @@ const CATALOG_ROUTING: Array[Dictionary] = [
 	{"type": "s_sign", "label": "Sign — E edits"},
 	{"type": "s_slab", "label": "Floor slab 4 m (tile)"},
 	{"type": "s_slab_seamless", "label": "Floor slab 4 m (seamless)"},
+	{"type": "s_lab_bench", "label": "Lab bench 1.8 m"},
 ]
 
 # Standalone routed infrastructure — laid before any equipment exists,
@@ -62,6 +63,7 @@ const SIZES := {
 	"s_sign": Vector3(0.9, 2.2, 0.12),
 	"s_slab": Vector3(4.0, 0.06, 4.0),
 	"s_slab_seamless": Vector3(4.0, 0.06, 4.0),
+	"s_lab_bench": Vector3(1.8, 0.9, 0.75),
 }
 
 const COL_STEEL := Color(0.16, 0.17, 0.19)
@@ -85,6 +87,7 @@ const COLORS := {
 	# A poured epoxy floor, the finish of a clean room: one colour, no
 	# joints, so slabs laid edge to edge read as one floor.
 	"s_slab_seamless": Color(0.70, 0.72, 0.72),
+	"s_lab_bench": Color(0.07, 0.07, 0.08),
 }
 
 
@@ -143,6 +146,8 @@ static func make_view(type_id: String, name_: String, length: float = -1.0) -> S
 			_build_railing(body, size)
 		"s_sign":
 			_build_sign(body, size)
+		"s_lab_bench":
+			_build_lab_bench(body, size)
 		_:
 			_build_basic(body, type_id, size)
 	body.set_meta("view", body)
@@ -191,6 +196,37 @@ static func _build_basic(body: StructureView, type_id: String, size: Vector3) ->
 			ViewUtil.box(body, Vector3(0.012, 0.006, size.z - 0.04),
 				Vector3(-size.x / 2.0 + 0.125 + i * 0.25, size.y / 2.0 + 0.003, 0),
 				ViewUtil.flat(Color(0.22, 0.23, 0.25)))
+
+
+## A laboratory bench: a black epoxy resin top, 30 mm thick with a
+## small overhang, on a base of painted steel cupboards with a recessed
+## kick plate. The top stands at 0.90 m, where bench glassware is worked.
+## Solid as a block: nothing walks under it.
+static func _build_lab_bench(body: StructureView, size: Vector3) -> void:
+	_collide(body, size, Vector3.ZERO)
+	var top_t := 0.03
+	var resin := ViewUtil.matte(Color(0.06, 0.06, 0.07))
+	resin.roughness = 0.55
+	ViewUtil.box(body, Vector3(size.x, top_t, size.z), Vector3(0, size.y / 2.0 - top_t / 2.0, 0), resin)
+	var cabinet := ViewUtil.painted(Color(0.72, 0.74, 0.74))
+	var base_h := size.y - top_t
+	var kick := 0.1
+	ViewUtil.box(body, Vector3(size.x - 0.04, base_h - kick, size.z - 0.06),
+		Vector3(0, -size.y / 2.0 + kick + (base_h - kick) / 2.0, 0.0), cabinet)
+	ViewUtil.box(body, Vector3(size.x - 0.1, kick, size.z - 0.14),
+		Vector3(0, -size.y / 2.0 + kick / 2.0, 0.0), ViewUtil.matte(Color(0.12, 0.12, 0.13)))
+	# Cupboard doors along the front, each with a pull.
+	var doors := maxi(1, int(round((size.x - 0.04) / 0.6)))
+	var door_w := (size.x - 0.04) / doors
+	var door_h := base_h - kick - 0.06
+	var front := -(size.z - 0.06) / 2.0 - 0.004
+	var pull := ViewUtil.steel()
+	var seam := ViewUtil.matte(Color(0.35, 0.36, 0.37))
+	for i in doors:
+		var x := -(size.x - 0.04) / 2.0 + door_w * (i + 0.5)
+		ViewUtil.box(body, Vector3(0.004, door_h, 0.004), Vector3(x - door_w / 2.0 + 0.002,
+			-size.y / 2.0 + kick + 0.03 + door_h / 2.0, front), seam)
+		ViewUtil.box(body, Vector3(0.12, 0.012, 0.02), Vector3(x, size.y / 2.0 - top_t - 0.08, front - 0.01), pull)
 
 
 ## Doorway frame with a sliding leaf. Opening 1.24 x 2.05; the leaf
@@ -359,7 +395,7 @@ static func placement_ok(type_id: String, base_pos: Vector3, rot_y: float,
 		space: PhysicsDirectSpaceState3D, length: float = -1.0) -> String:
 	var basis := Basis.from_euler(Vector3(0, rot_y, 0))
 	match type_id:
-		"s_column", "s_wall", "s_door", "s_window", "s_stairs", "s_sign", "s_slab", "s_slab_seamless":
+		"s_column", "s_wall", "s_door", "s_window", "s_stairs", "s_sign", "s_slab", "s_slab_seamless", 		"s_lab_bench":
 			if not bears_point(base_pos, space, 0.6):
 				return "needs bearing below"
 		"s_beam", "s_railing":
