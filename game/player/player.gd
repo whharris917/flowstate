@@ -52,6 +52,7 @@ var _was_on_floor: bool = true
 var _fall_speed: float = 0.0
 var _off_floor: float = 0.0     # seconds since last on the floor
 var _jump_wanted: float = 0.0   # seconds a jump press stays pending
+var _silent := DisplayServer.get_name() == "headless"
 
 
 func _ready() -> void:
@@ -245,7 +246,11 @@ func _update_landing() -> void:
 	_was_on_floor = on_floor
 
 
+## A headless run mixes no audio, so a sound started there is never
+## finished and outlives its stream at exit; it plays none.
 func _play(stream: AudioStream, pitch: float) -> void:
+	if _silent:
+		return
 	_steps.stream = stream
 	_steps.pitch_scale = pitch
 	_steps.volume_db = -17.0 + randf_range(-2.0, 0.0)

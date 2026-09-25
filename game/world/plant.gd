@@ -5422,6 +5422,13 @@ func _self_check() -> void:
 			% [c_tank.level_l, c_tank.overflowed_l, c_relay.cycles, closure])
 	_hydraulics_self_check()
 	_control_self_check()
+	var t_bench := Time.get_ticks_msec()
+	var bench := BenchSelfCheck.run()
+	if bench == "":
+		print("[flowstate] bench self-check OK — pH by charge balance, heats of reaction, gas and boiling, equilibrium, the hotplate holds (%d ms)"
+			% (Time.get_ticks_msec() - t_bench))
+	else:
+		push_warning("[flowstate] bench self-check FAILED — " + bench)
 	_stream_self_check()
 
 
