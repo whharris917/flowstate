@@ -44,7 +44,7 @@ void fragment() {
 
 	// The room behind: a warm glow, brighter toward the sill, curtains
 	// at the sides, a blind drawn part way down.
-	vec3 bulb = mix(vec3(1.0, 0.55, 0.24), vec3(1.0, 0.72, 0.42), COLOR.a);
+	vec3 bulb = mix(vec3(1.0, 0.46, 0.16), vec3(1.0, 0.60, 0.28), COLOR.a);
 	float glow = 0.55 + 0.45 * (1.0 - uv.y);
 	float blind_at = 1.0 - 0.15 - 0.5 * fract(seed * 7.13);
 	vec3 curtain = mix(vec3(0.9, 0.55, 0.35), vec3(0.75, 0.8, 0.55), fract(seed * 3.7));
@@ -55,7 +55,7 @@ void fragment() {
 		room = mix(room, bulb * vec3(1.0, 0.85, 0.6) * 1.2, step(blind_at, uv.y));
 	} else if (style < 0.75) {
 		// A shop: brighter, the shelves' shadows in bands under the transom.
-		room = bulb * (1.3 + 0.3 * step(0.8, uv.y)) * (0.75 + 0.25 * step(0.5, fract(uv.y * 5.0)));
+		room = bulb * (0.8 + 0.25 * step(0.8, uv.y)) * (0.88 + 0.12 * step(0.5, fract(uv.y * 5.0)));
 	} else {
 		room = bulb * vec3(1.0, 0.8, 0.5) * (0.8 + 0.4 * value_noise(uv * vec2(6.0, 20.0)));
 	}
@@ -66,5 +66,5 @@ void fragment() {
 	ROUGHNESS = mix(0.04, mix(0.5, 0.25, wet), bar);
 	SPECULAR = mix(0.75, 0.4, bar);
 	METALLIC = 0.0;
-	EMISSION = room * on * (1.0 - bar) * 2.2;
+	EMISSION = room * on * (1.0 - bar) * 0.75;
 }

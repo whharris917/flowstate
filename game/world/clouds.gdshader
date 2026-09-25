@@ -85,7 +85,7 @@ void fragment() {
 	if (open_sky || scene > t_high) {
 		vec2 p = (cam.xz + d.xz * t_high + drift_high) * 0.00055;
 		float n = fbm(p, 5);
-		float edge = 1.0 - cover;
+		float edge = 1.0 - cover - 0.3 * storm;
 		a_high = smoothstep(edge - 0.06, edge + 0.22, n) * smoothstep(0.004, 0.05, d.y);
 		float thick = smoothstep(edge, edge + 0.45, n);
 		// Light through it: the sun's on the thin parts and round the

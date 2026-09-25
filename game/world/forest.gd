@@ -18,6 +18,10 @@ var _cone_xforms: Array[Transform3D] = []
 var _cone_colors: Array[Color] = []
 var _ball_xforms: Array[Transform3D] = []
 var _ball_colors: Array[Color] = []
+## Every tree as planted, for a detailed finish: [foot, height, yaw,
+## kind (0 conifer, 1 broadleaf), leaf colour].
+var _plants: Array = []
+var _snag_xforms: Array[Transform3D] = []
 
 
 ## Trees between r_in and r_out from centre, about one per `spacing`
@@ -89,6 +93,7 @@ func plant_scatter(min_xz: Vector2, max_xz: Vector2, spacing: float, height: flo
 ## A dead spruce: a bare grey trunk, tapered, with two broken limbs.
 func _snag(at: Vector3, h: float, yaw: float) -> void:
 	var trunk_r := h * 0.03
+	_snag_xforms.append(_xform(at + Vector3(0, h / 2.0, 0), yaw, Vector3(trunk_r, h, trunk_r)))
 	_trunk_xforms.append(_xform(at + Vector3(0, h / 2.0, 0), yaw, Vector3(trunk_r, h, trunk_r)))
 	_trunk_colors.append(SNAG_COLOR)
 	for k in 2:
@@ -108,6 +113,7 @@ func _conifer(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> 
 	_trunk_xforms.append(_xform(at + Vector3(0, trunk_h / 2.0, 0), yaw, Vector3(trunk_r, trunk_h, trunk_r)))
 	_trunk_colors.append(TRUNK_COLOR)
 	var tint := CONIFER_COLOR.lightened(rng.randf_range(-0.03, 0.05))
+	_plants.append([at, h, yaw, 0, tint])
 	var base_r := h * rng.randf_range(0.12, 0.16)
 	# Three cones, each narrower and higher, overlapping into one crown.
 	for k in 3:
@@ -117,6 +123,11 @@ func _conifer(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> 
 		_cone_xforms.append(_xform(at + Vector3(0, h * frac + cone_h / 2.0, 0), yaw,
 			Vector3(cone_r, cone_h, cone_r)))
 		_cone_colors.append(tint)
+
+
+## One spruce where it is wanted.
+func plant_conifer(at: Vector3, h: float, rng: RandomNumberGenerator) -> void:
+	_conifer(at, h, rng.randf_range(0.0, TAU), rng)
 
 
 ## One broadleaf where it is wanted, in a leaf colour of its own: a
@@ -132,6 +143,7 @@ func _broadleaf(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator,
 	_trunk_xforms.append(_xform(at + Vector3(0, trunk_h / 2.0, 0), yaw, Vector3(trunk_r, trunk_h, trunk_r)))
 	_trunk_colors.append(TRUNK_COLOR)
 	var tint := leaf.lightened(rng.randf_range(-0.03, 0.06))
+	_plants.append([at, h, yaw, 1, tint])
 	var crown_r := h * rng.randf_range(0.17, 0.22)
 	# A crown of four lobes: one on top, three around it.
 	_ball_xforms.append(_xform(at + Vector3(0, h * 0.72, 0), yaw, Vector3(crown_r, crown_r * 0.9, crown_r)))
@@ -151,7 +163,10 @@ func _xform(at: Vector3, yaw: float, scale: Vector3) -> Transform3D:
 ## Build the three MultiMeshes from what the planters gathered. A far
 ## wood (low_detail) draws its cones and crowns with fewer sides: a
 ## tree three hundred metres off in the haze is a silhouette.
-func finish(cast_shadows: bool, low_detail: bool = false) -> void:
+func finish(cast_shadows: bool, low_detail: bool = false, detailed: bool = false) -> void:
+	if detailed:
+		_finish_detailed(cast_shadows)
+		return
 	var trunk := CylinderMesh.new()
 	trunk.top_radius = 0.7
 	trunk.bottom_radius = 1.0
@@ -170,6 +185,55 @@ func finish(cast_shadows: bool, low_detail: bool = false) -> void:
 	ball.radial_segments = 7 if low_detail else 12
 	ball.rings = 4 if low_detail else 7
 	_multimesh(ball, _ball_xforms, _ball_colors, _leaf_material(), cast_shadows)
+
+
+## Trees with leaves (TreeKit): each planted tree an instance of a
+## spruce or a broadleaf mesh, a variant picked by where it stands, its
+## leaf colour its own; a few broadleaves are elms. The dead snags stay
+## bare trunks.
+func _finish_detailed(cast_shadows: bool) -> void:
+	var groups: Dictionary = {}
+	for plant: Array in _plants:
+		var at: Vector3 = plant[0]
+		var variant := absi(int(at.x * 7.0 + at.z * 13.0)) % TreeKit.VARIANTS
+		var kind := "spruce"
+		if int(plant[3]) == 1:
+			kind = "elm" if absi(int(at.x * 3.0 - at.z * 5.0)) % 5 == 0 else "maple"
+			if kind == "elm":
+				variant = 0
+		var key := "%s%d" % [kind, variant]
+		if not groups.has(key):
+			groups[key] = []
+		(groups[key] as Array).append(plant)
+	for key: String in groups:
+		var plants: Array = groups[key]
+		var kind := key.substr(0, key.length() - 1)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = TreeKit.mesh(kind, int(key.substr(key.length() - 1)))
+		mm.instance_count = plants.size()
+		for i in plants.size():
+			var plant: Array = plants[i]
+			var s := float(plant[1]) / TreeKit.REF_H
+			mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, float(plant[2])).scaled(Vector3(s, s, s)), plant[0]))
+			mm.set_instance_custom_data(i, plant[4])
+		var inst := MultiMeshInstance3D.new()
+		inst.name = "Trees_" + key
+		inst.multimesh = mm
+		inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast_shadows 			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if cast_shadows:
+			inst.add_to_group("foliage_shadows")
+		add_child(inst)
+	var trunk := CylinderMesh.new()
+	trunk.top_radius = 0.7
+	trunk.bottom_radius = 1.0
+	trunk.height = 1.0
+	trunk.radial_segments = 6
+	var snag_colors: Array[Color] = []
+	for _x in _snag_xforms:
+		snag_colors.append(SNAG_COLOR)
+	_multimesh(trunk, _snag_xforms, snag_colors, _leaf_material(), cast_shadows)
 
 
 func _leaf_material() -> StandardMaterial3D:

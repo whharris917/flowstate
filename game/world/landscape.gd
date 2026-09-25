@@ -35,6 +35,9 @@ var stats: Dictionary = {}     # what build() made, for the smoke run's line
 var _rng := RandomNumberGenerator.new()
 var _rock_meshes: Array[ArrayMesh] = []
 var _gull_next := 4.0
+var detailed_trees := false   # the near wood as trees with leaves (TreeKit) rather than cones and balls
+var near_spacing := 5.2        # metres between trees in the near wood, on average
+const DETAIL_R := 150.0        # how far from the centre detailed trees reach
 
 
 ## ---- what a site answers -------------------------------------------------
@@ -419,9 +422,30 @@ func _build_forest() -> void:
 			return -INF
 		return tree_ground(x, z)
 	var near := Forest.new()
-	var planted := near.plant_scatter(Vector2(centre.x - r_near, centre.z - r_near),
-		Vector2(centre.x + r_near, centre.z + r_near), 5.2, 13.0, 0.85, rng, near_sampler)
-	near.finish(true)
+	var planted := 0
+	if detailed_trees:
+		# Trees with leaves out to DETAIL_R; the plain wood from there to
+		# the near wood's edge, where a leaf would be under a pixel.
+		var detail_sampler := func(x: float, z: float) -> float:
+			if Vector2(x - centre.x, z - centre.z).length() > DETAIL_R:
+				return -INF
+			return tree_ground(x, z)
+		var ring_sampler := func(x: float, z: float) -> float:
+			if Vector2(x - centre.x, z - centre.z).length() <= DETAIL_R:
+				return -INF
+			return near_sampler.call(x, z)
+		planted += near.plant_scatter(Vector2(centre.x - DETAIL_R, centre.z - DETAIL_R),
+			Vector2(centre.x + DETAIL_R, centre.z + DETAIL_R), near_spacing, 13.0, 0.85, rng, detail_sampler)
+		near.finish(true, false, true)
+		var ring := Forest.new()
+		planted += ring.plant_scatter(Vector2(centre.x - r_near, centre.z - r_near),
+			Vector2(centre.x + r_near, centre.z + r_near), 5.2, 13.0, 0.85, rng, ring_sampler)
+		ring.finish(true)
+		add_child(ring)
+	else:
+		planted = near.plant_scatter(Vector2(centre.x - r_near, centre.z - r_near),
+			Vector2(centre.x + r_near, centre.z + r_near), near_spacing, 13.0, 0.85, rng, near_sampler)
+		near.finish(true)
 	add_child(near)
 	var far := Forest.new()
 	planted += far.plant_scatter(Vector2(centre.x - r_far, centre.z - r_far),

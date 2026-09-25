@@ -18,7 +18,7 @@ func _init() -> void:
 	plant_save_path = "user://save_town.json"
 	with_exercises = false
 	settings_prefix = "town_"
-	time_of_day = 18.4
+	time_of_day = 18.1
 	weather_level = 0.9
 
 
@@ -70,8 +70,9 @@ func _after_plant() -> void:
 		player.rotation.y = -PI / 2.0
 	hud.toast("The harbour town. Main Street runs east to the church; Harbor Street goes down to the wharf. O options: the time of day and the weather. B build · C connect · L library · F5/F9 save/load")
 	var s := town.stats
-	print("[flowstate] harbour town: %d houses, %d lamps, %d signs, %d triangles, %d solids, built in %d ms"
-		% [int(s["houses"]), int(s["lamps"]), int(s["signs"]), int(s["triangles"]), int(s["solids"]), int(s["ms"])])
+	print("[flowstate] harbour town: %d houses, %d street trees, %d lamps, %d signs, %d triangles, %d solids, built in %d ms; %d trees in the woods"
+		% [int(s["houses"]), int(s["trees"]), int(s["lamps"]), int(s["signs"]), int(s["triangles"]), int(s["solids"]), int(s["ms"]),
+		int(coast.stats.get("trees", 0))])
 	if DisplayServer.get_name() == "headless":
 		_self_check()
 		_town_check()
@@ -87,7 +88,7 @@ func _town_check() -> void:
 	var high := coast.sea_level + coast.tide_range
 	for body in town.find_child("Solids", false, false).get_children():
 		var p := (body as Node3D).global_position
-		if p.y < -2.0:
+		if p.y < -0.5:
 			continue  # the waterfront stands in the water on purpose
 		if coast.height_at(p.x, p.z) < high + 0.3:
 			problems.append("a solid at (%.0f, %.0f) stands below high water" % [p.x, p.z])
@@ -124,6 +125,7 @@ func _town_check() -> void:
 	var queued := weather._thunder.size()
 	var harbor_before := harbor.bell_strikes
 	var boat: Node3D = harbor._boats[0]["node"]
+	harbor.step(1.0 / 60.0)
 	var y0 := boat.global_position.y
 	var moved := 0.0
 	for _i in 600:

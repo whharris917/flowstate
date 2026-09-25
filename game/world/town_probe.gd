@@ -22,17 +22,17 @@ func _run(world: TownMap) -> void:
 	world.graphics.set_preset("Medium")
 	world.graphics.apply(world)
 	world.set_weather(0.9)
-	world.set_time_of_day(18.4)
+	world.set_time_of_day(18.1)
 	world.weather.wet = 1.0
 	world.weather._next_strike = 1000.0
 	# The showpiece: Main Street in the storm, east to the church.
 	await _view(player, Vector3(-6.0, 0.4, 17.5), -PI / 2.0, 0.02, "storm_main")
 	# Down the harbour road over the waterfront to the boats and the light.
-	await _view(player, Vector3(-12.0, 0.4, 58.0), 2.35, -0.10, "storm_harbor_road")
+	await _view(player, Vector3(-12.0, 0.4, 58.0), 2.75, -0.12, "storm_harbor_road")
 	# On the T-head looking out past the boats to the buoy.
-	await _view(player, Vector3(-28.0, TownCoast.DECK_Y + 0.1, 118.0), -0.15 + PI, 0.0, "storm_wharf")
+	await _view(player, Vector3(-26.0, TownCoast.DECK_Y + 0.1, 119.0), PI + 0.24, 0.02, "storm_wharf")
 	# From the waterfront back up at the town glowing over the harbour.
-	await _view(player, Vector3(-36.0, TownCoast.DECK_Y + 0.1, 119.0), 0.25, 0.08, "storm_town_from_wharf")
+	await _view(player, Vector3(-24.0, TownCoast.DECK_Y + 0.1, 114.0), -0.43, 0.1, "storm_town_from_wharf")
 	# A stroke out over the sea, caught mid-flash.
 	player.global_position = Vector3(-28.0, TownCoast.DECK_Y + 0.1, 118.0)
 	player.rotation.y = -2.35
@@ -70,18 +70,18 @@ func _run(world: TownMap) -> void:
 	world.weather.wet = 0.0
 	world.set_time_of_day(12.5)
 	await _view(player, Vector3(-6.0, 0.4, 17.5), -PI / 2.0, 0.15, "fair_main")
-	await _view(player, Vector3(-12.0, 0.4, 58.0), 2.35, -0.05, "fair_harbor_road")
+	await _view(player, Vector3(-12.0, 0.4, 58.0), 2.75, -0.08, "fair_harbor_road")
 	world.set_weather(0.35)
 	world.set_time_of_day(16.0)
-	await _view(player, Vector3(-12.0, 0.4, 58.0), 2.35, 0.2, "cloudy_harbor_road")
+	await _view(player, Vector3(-12.0, 0.4, 58.0), 2.75, 0.2, "cloudy_harbor_road")
 	# A clear night: the sky, the Milky Way, the town's lights.
 	world.set_weather(0.0)
 	world.set_time_of_day(21.5)
 	await _view(player, Vector3(-28.0, TownCoast.DECK_Y + 0.1, 118.0), PI, 0.75, "night_sky")
-	await _view(player, Vector3(-36.0, TownCoast.DECK_Y + 0.1, 119.0), 0.25, 0.05, "night_town")
+	await _view(player, Vector3(-24.0, TownCoast.DECK_Y + 0.1, 114.0), -0.43, 0.1, "night_town")
 	# The aerial, at dusk in the storm.
 	world.set_weather(0.9)
-	world.set_time_of_day(18.4)
+	world.set_time_of_day(18.1)
 	await _view_zoom(player, Vector3(15.0, 0.4, 10.0), -2.35, -0.8, 2.3, "storm_aerial")
 	print("[probe] screenshots written to user://")
 	get_tree().quit()

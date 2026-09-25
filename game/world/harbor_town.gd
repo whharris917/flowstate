@@ -70,6 +70,7 @@ var _trees: Forest
 var _signs := 0
 var _houses := 0
 var _marquee_bulb := 0
+var stats_trees := 0
 
 
 func build(c: TownCoast) -> void:
@@ -96,9 +97,9 @@ func build(c: TownCoast) -> void:
 	_street_trees()
 	m.commit(self, {"wall": wall_mat, "glass": glass_mat, "street": street_mat, "lamp": lamp_mat,
 		"iron": iron_mat, "steel": steel_mat}, ["wall", "iron", "steel"])
-	_trees.finish(true)
+	_trees.finish(true, false, true)
 	add_child(_trees)
-	stats = {"houses": _houses, "lamps": lamps.size(), "signs": _signs, "triangles": m.triangles,
+	stats = {"trees": stats_trees, "houses": _houses, "lamps": lamps.size(), "signs": _signs, "triangles": m.triangles,
 		"solids": _solids.get_child_count(), "ms": Time.get_ticks_msec() - t0}
 
 
@@ -1058,23 +1059,44 @@ func _wharf_lamp(foot: Vector3) -> void:
 
 ## ---- trees ----------------------------------------------------------------
 
-## Maples and elms along Elm Street and in the yards, turning.
+## Street trees down both sides of every street in town, maples and
+## elms turning; more in the yards and round the church, and a few
+## spruces standing among the houses.
 func _street_trees() -> void:
 	var trees: Array[Vector2] = []
-	var x := 0.0
-	while x < 70.0:
-		trees.append(Vector2(x + _rng.randf_range(-1.0, 1.0), TownCoast.ELM_Z - 5.2))
-		trees.append(Vector2(x + 7.0 + _rng.randf_range(-1.0, 1.0), TownCoast.ELM_Z + 5.0))
-		x += 13.0
-	for k in 22:
-		var p := Vector2(_rng.randf_range(-44.0, 74.0), _rng.randf_range(-40.0, 58.0))
-		if _clear_for_tree(p):
-			trees.append(p)
+	for k in 4:
+		var street: Array = TownCoast.STREETS[k]
+		var pts: Array = street[0]
+		var a: Vector2 = pts[0]
+		var b: Vector2 = pts[1]
+		var dir := (b - a).normalized()
+		var side := Vector2(-dir.y, dir.x)
+		var off := float(street[1]) / 2.0 + (3.9 if k < 2 else 2.2)
+		var t := 3.0
+		while t < a.distance_to(b):
+			for s: float in [-1.0, 1.0]:
+				trees.append(a + dir * (t + _rng.randf_range(-1.5, 1.5) + (4.5 if s > 0.0 else 0.0)) + side * s * off)
+			t += 10.0
+	for k in 500:
+		trees.append(Vector2(_rng.randf_range(-44.0, 74.0), _rng.randf_range(-40.0, 58.0)))
+	var planted: Array[Vector2] = []
 	for p in trees:
 		if not _clear_for_tree(p):
 			continue
-		var leaf := LEAVES[_rng.randi() % LEAVES.size()]
-		_trees.plant_broadleaf(Vector3(p.x, coast.height_at(p.x, p.y), p.y), _rng.randf_range(10.0, 15.0), leaf, _rng)
+		var crowded := false
+		for q in planted:
+			if p.distance_to(q) < 5.0:
+				crowded = true
+				break
+		if crowded:
+			continue
+		planted.append(p)
+		var foot := Vector3(p.x, coast.height_at(p.x, p.y), p.y)
+		if _rng.randf() < 0.12 and coast.street_distance(p.x, p.y) > 4.0:
+			_trees.plant_conifer(foot, _rng.randf_range(11.0, 17.0), _rng)
+		else:
+			_trees.plant_broadleaf(foot, _rng.randf_range(10.0, 16.0), LEAVES[_rng.randi() % LEAVES.size()], _rng)
+	stats_trees = planted.size()
 
 
 ## A tree stands clear of the streets and of every building.
@@ -1085,7 +1107,7 @@ func _clear_for_tree(p: Vector2) -> bool:
 		var b := body as StaticBody3D
 		var shape := (b.get_child(0) as CollisionShape3D).shape as BoxShape3D
 		var local := b.transform.affine_inverse() * Vector3(p.x, b.transform.origin.y, p.y)
-		var half := shape.size / 2.0 + Vector3(2.0, 0, 2.0)
+		var half := shape.size / 2.0 + Vector3(0.8, 0, 0.8)
 		if absf(local.x) < half.x and absf(local.z) < half.z:
 			return false
 	return true

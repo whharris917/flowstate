@@ -1,10 +1,11 @@
 class_name Weather
 extends Node3D
 ## The weather over the harbour town, from one level: 0 a fair day, a
-## few clouds; then cloud building to an overcast; rain; at 1 a storm
-## off the sea, a low scud racing in under the deck, lightning, a gale,
-## whitecaps outside and a sea running in the harbour. Art and sound
-## only: no records.
+## few clouds; then cloud building to an overcast; a drizzle; at 1 a
+## storm out over the sea, a low scud racing in under the deck, the
+## lightning flickering in the cloud on the horizon and its thunder
+## rolling in soft from miles off, a wind, whitecaps outside and a sea
+## running in the harbour. Art and sound only: no records.
 ##
 ## The level sets what the weather is; the world's clock and the level
 ## together set the light (apply_light, called whenever either moves):
@@ -12,9 +13,10 @@ extends Node3D
 ## darkness from 0 to 1 that the town's lamps and windows answer. Every
 ## frame it carries the clouds on the wind, keeps the rain round the
 ## player, wets the streets as it rains and dries them after, and
-## throws the lightning: strokes at random through a storm, each lighting
-## the cloud and the town, its thunder arriving at the speed of sound
-## from where it struck. In thick weather the light station's foghorn
+## throws the lightning: strokes at random through a storm, three to
+## eleven kilometres out, most seen only as the cloud lighting, the odd
+## channel showing low on the horizon, each one's thunder arriving at
+## the speed of sound from where it struck. In thick weather the light station's foghorn
 ## sounds on its cycle, and now and then a ship's horn answers from the
 ## sea.
 
@@ -112,11 +114,14 @@ func set_level(l: float) -> void:
 		sea.set_shader_parameter("whitecaps", smoothstep(0.55, 1.0, level))
 		sea.set_shader_parameter("rain", rain)
 	harbor.swell = 1.0 + 1.4 * storm
+	for mat in TreeKit.materials():
+		mat.set_shader_parameter("wind", wind)
+		mat.set_shader_parameter("wind_dir", wind_dir)
 	harbor.wind_dir = wind_dir
 	if _rain != null:
 		_rain.emitting = rain > 0.01
 		_rain.amount_ratio = clampf(rain, 0.05, 1.0)
-		_rain_process.direction = Vector3(wind_dir.x * 0.35 * wind, -1.0, wind_dir.y * 0.35 * wind).normalized()
+		_rain_process.direction = Vector3(wind_dir.x * 0.6 * wind, -1.0, wind_dir.y * 0.6 * wind).normalized()
 	if _headless or not is_inside_tree():
 		wet = rain
 
@@ -142,7 +147,7 @@ func apply_light(horizon: float, twilight: float) -> void:
 	var amb := env.ambient_light_color
 	var grey := Color(amb.get_luminance(), amb.get_luminance(), amb.get_luminance() * 1.08)
 	env.ambient_light_color = amb.lerp(grey, 0.7 * o)
-	env.ambient_light_energy *= 1.0 - 0.45 * storm
+	env.ambient_light_energy *= 1.0 - 0.2 * storm
 	_ambient_energy = env.ambient_light_energy
 	var horizon_col := env.fog_light_color
 	var fog_col := horizon_col.lerp(Color(horizon_col.get_luminance(), horizon_col.get_luminance(), horizon_col.get_luminance() * 1.1), o)
@@ -152,7 +157,7 @@ func apply_light(horizon: float, twilight: float) -> void:
 	var painted := world.sky_mat as ShaderMaterial
 	if painted != null:
 		painted.set_shader_parameter("overcast", 0.95 * o)
-		painted.set_shader_parameter("energy", 1.0 - 0.6 * storm)
+		painted.set_shader_parameter("energy", 1.0 - 0.45 * storm)
 	# The darkness the lamps and windows answer to.
 	var daylight := twilight * (0.3 + 0.7 * horizon) * (1.0 - 0.65 * o)
 	night = 1.0 - daylight
@@ -160,16 +165,17 @@ func apply_light(horizon: float, twilight: float) -> void:
 	harbor.night = night
 	if clouds_mat != null:
 		var sun_lin := Color(_sun_color.r, _sun_color.g, _sun_color.b).srgb_to_linear()
-		var sky_lin := env.ambient_light_color.srgb_to_linear()
+		var sky_lin := env.ambient_light_color.srgb_to_linear() * Color(0.82, 0.9, 1.08)
 		var sun_dir := world.sun.global_transform.basis.z
 		var painted_sun: Variant = painted.get_shader_parameter("sun_dir") if painted != null else null
 		if painted_sun is Vector3:
 			sun_dir = painted_sun
 		clouds_mat.set_shader_parameter("sun_dir", sun_dir)
-		clouds_mat.set_shader_parameter("sun_light", Vector3(sun_lin.r, sun_lin.g, sun_lin.b) * _sun_energy * 0.55 * twilight)
+		# Under a deck the eye sees its underside, which the sun does not reach.
+		clouds_mat.set_shader_parameter("sun_light", Vector3(sun_lin.r, sun_lin.g, sun_lin.b) * _sun_energy * 0.55 * twilight * (1.0 - 0.85 * o))
 		clouds_mat.set_shader_parameter("sky_light", Vector3(sky_lin.r, sky_lin.g, sky_lin.b) * _ambient_energy * 1.4)
 		var fog_lin := env.fog_light_color.srgb_to_linear()
-		clouds_mat.set_shader_parameter("horizon_color", Vector3(fog_lin.r, fog_lin.g, fog_lin.b) * (0.5 + 0.5 * twilight))
+		clouds_mat.set_shader_parameter("horizon_color", Vector3(fog_lin.r, fog_lin.g, fog_lin.b) * (0.5 + 0.5 * twilight) * (1.0 - 0.4 * storm))
 	coast.beam_mat.set_shader_parameter("density", smoothstep(0.5, 0.85, night) * (0.25 + 0.75 * maxf(fog, rain)))
 	_switch_lamps()
 
@@ -200,7 +206,7 @@ func _update_lamps() -> void:
 		light.visible = k > 0.002
 	if clouds_mat != null:
 		var glow := Color(1.0, 0.62, 0.32).srgb_to_linear()
-		var g := 0.10 * smoothstep(0.5, 0.9, night) * (1.0 if lamps_on else 0.0) * (0.5 + 0.5 * scud)
+		var g := 0.04 * smoothstep(0.5, 0.9, night) * (1.0 if lamps_on else 0.0) * (0.5 + 0.5 * scud)
 		clouds_mat.set_shader_parameter("town_glow", Vector3(glow.r, glow.g, glow.b) * g)
 
 
@@ -226,15 +232,15 @@ func _build_clouds() -> void:
 	add_child(_clouds)
 
 
-## Rain: streaks round the player, falling at their terminal speed and
+## Drizzle: fine streaks round the player, falling at their terminal speed and
 ## slanting with the wind, each a pair of crossed ribbons aligned to its
 ## fall so it reads from any side, lit by whatever lamp is near.
 func _build_rain() -> void:
 	_rain = GPUParticles3D.new()
 	_rain.name = "Rain"
-	_rain.amount = 9000
-	_rain.lifetime = 1.7
-	_rain.preprocess = 1.7
+	_rain.amount = 3500
+	_rain.lifetime = 4.0
+	_rain.preprocess = 4.0
 	_rain.local_coords = false
 	_rain.visibility_aabb = AABB(Vector3(-40, -40, -40), Vector3(80, 80, 80))
 	_rain.emitting = false
@@ -243,16 +249,16 @@ func _build_rain() -> void:
 	_rain_process.emission_box_extents = Vector3(22.0, 1.0, 22.0)
 	_rain_process.direction = Vector3(0, -1, 0)
 	_rain_process.spread = 2.0
-	_rain_process.initial_velocity_min = 11.0
-	_rain_process.initial_velocity_max = 13.0
-	_rain_process.gravity = Vector3(0, -3.0, 0)
+	_rain_process.initial_velocity_min = 4.0
+	_rain_process.initial_velocity_max = 5.0
+	_rain_process.gravity = Vector3(0, -0.5, 0)
 	_rain_process.particle_flag_align_y = true
 	_rain.process_material = _rain_process
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for k in 2:
-		var across := Vector3(0.007, 0, 0) if k == 0 else Vector3(0, 0, 0.007)
-		var up := Vector3(0, 0.32, 0)
+		var across := Vector3(0.004, 0, 0) if k == 0 else Vector3(0, 0, 0.004)
+		var up := Vector3(0, 0.12, 0)
 		var n := Vector3(0, 0, 1) if k == 0 else Vector3(1, 0, 0)
 		for p: Vector3 in [-across - up, -across + up, across + up, -across - up, across + up, across - up]:
 			st.set_normal(n)
@@ -260,7 +266,7 @@ func _build_rain() -> void:
 	var streak := st.commit()
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.72, 0.76, 0.82, 0.26)
+	mat.albedo_color = Color(0.72, 0.76, 0.82, 0.18)
 	mat.roughness = 0.2
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.render_priority = 2
@@ -346,7 +352,7 @@ func _process(delta: float) -> void:
 	clouds_mat.set_shader_parameter("drift_low", _drift_low)
 	# The rain falls round the player, from upwind so the slant still
 	# covers the view.
-	_rain.global_position = eye + Vector3(0, 17.0, 0) - Vector3(wind_dir.x, 0, wind_dir.y) * 5.0 * wind
+	_rain.global_position = eye + Vector3(0, 14.0, 0) - Vector3(wind_dir.x, 0, wind_dir.y) * 8.0 * wind
 	# The surfaces wet up in a minute of rain and dry over a few after.
 	var target := rain
 	var rate := 1.0 / 25.0 if target > wet else 1.0 / 240.0
@@ -356,6 +362,8 @@ func _process(delta: float) -> void:
 	town.glass_mat.set_shader_parameter("wet", wet)
 	town.street_mat.set_shader_parameter("wet", wet)
 	town.street_mat.set_shader_parameter("rain", rain)
+	for mat in TreeKit.materials():
+		mat.set_shader_parameter("wet", wet)
 	if _lamps_since < 20.0:
 		_lamps_since += delta
 		_update_lamps()
@@ -368,7 +376,7 @@ func _step_lightning(delta: float, eye: Vector3) -> void:
 		_next_strike -= delta
 		if _next_strike <= 0.0:
 			_strike(eye)
-			_next_strike = -log(maxf(_rng.randf(), 1e-4)) * lerpf(40.0, 14.0, lightning)
+			_next_strike = -log(maxf(_rng.randf(), 1e-4)) * lerpf(45.0, 18.0, lightning)
 	# The return strokes: each a sharp rise and a fast fade.
 	_flash = 0.0
 	for p in _pulses:
@@ -409,11 +417,11 @@ func _strike(eye: Vector3) -> void:
 	strikes += 1
 	var toward_sea := atan2(0.7071, 0.7071)
 	var az := toward_sea + _rng.randf_range(-1.3, 1.3)
-	var dist := exp(_rng.randf_range(log(700.0), log(7000.0)))
+	var dist := exp(_rng.randf_range(log(3000.0), log(11000.0)))
 	var ground := Vector2(eye.x, eye.z) + Vector2(cos(az), sin(az)) * dist
 	var at := Vector3(ground.x, coast.sea_level, ground.y)
 	_flash_dir = (at + Vector3(0, 350.0, 0) - eye).normalized()
-	_flash_reach = clampf(1400.0 / dist, 0.15, 1.0)
+	_flash_reach = clampf(1400.0 / dist, 0.1, 0.45)
 	_flash_light.basis = Basis.looking_at(-_flash_dir)
 	var count := 1 + _rng.randi() % 4
 	var start := _t
@@ -424,9 +432,9 @@ func _strike(eye: Vector3) -> void:
 		_bolt.mesh = _bolt_mesh(at, eye)
 	else:
 		_bolt.mesh = null   # in the cloud, or past the horizon: the sky lights, no channel shows
-	var file := "res://audio/thunder_near.wav" if dist < 1600.0 else ("res://audio/thunder_1.wav" if dist < 3500.0 else "res://audio/thunder_2.wav")
+	var file := "res://audio/thunder_1.wav" if dist < 4500.0 else ("res://audio/thunder_2.wav" if dist < 7500.0 else "res://audio/thunder_3.wav")
 	_thunder.append({"at": _t + dist / SOUND, "file": file,
-		"volume": 3.0 - 16.0 * log(dist / 700.0) / log(10.0), "dir": _flash_dir})
+		"volume": -3.0 - 12.0 * log(dist / 3000.0) / log(10.0), "dir": _flash_dir})
 
 
 ## The channel: from the cloud's base down to the sea in jagged steps,
@@ -487,8 +495,8 @@ func _play_thunder(th: Dictionary, eye: Vector3) -> void:
 func _step_sound(delta: float, eye: Vector3) -> void:
 	if _headless:
 		return
-	_rain_audio.volume_db = linear_to_db(maxf(rain, 0.0001)) - 3.0
-	_gale_audio.volume_db = linear_to_db(maxf(smoothstep(0.35, 1.0, wind), 0.0001)) - 7.0
+	_rain_audio.volume_db = linear_to_db(maxf(rain, 0.0001)) - 10.0
+	_gale_audio.volume_db = linear_to_db(maxf(smoothstep(0.35, 1.0, wind), 0.0001)) - 15.0
 	# The fog signal: while the air is thick, one blast on its cycle.
 	if fog > 0.3 or rain > 0.6:
 		_next_horn -= delta

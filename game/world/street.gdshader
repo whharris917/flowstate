@@ -29,14 +29,14 @@ float h21(vec2 p) {
 vec2 ripples(vec2 p, float t) {
 	vec2 g = vec2(0.0);
 	for (int k = 0; k < 2; k++) {
-		vec2 q = p / 0.42 + float(k) * 0.5;
+		vec2 q = p / 0.22 + float(k) * 0.5;
 		vec2 cell = floor(q);
 		vec2 c = cell + 0.2 + 0.6 * vec2(h21(cell + 1.7), h21(cell + 3.1));
 		float phase = fract(t * 1.1 + h21(cell + 5.3));
 		vec2 to = q - c;
 		float d = length(to);
-		float r = phase * 0.55;
-		float ring = exp(-pow((d - r) / 0.05, 2.0)) * (1.0 - phase) * sin((d - r) * 40.0);
+		float r = phase * 0.4;
+		float ring = exp(-pow((d - r) / 0.06, 2.0)) * (1.0 - phase) * (1.0 - phase) * sin((d - r) * 30.0);
 		g += (d > 1e-4 ? to / d : vec2(0.0)) * ring;
 	}
 	return g;
@@ -88,8 +88,8 @@ void fragment() {
 	rough = mix(rough, 0.03, standing);
 	vec3 n = vec3(0.0, 1.0, 0.0);
 	if (rain > 0.0 && near > 0.0) {
-		vec2 g = ripples(p, TIME) * rain * near * (0.25 + 0.75 * standing) * wet;
-		n = normalize(vec3(-g.x * 0.35, 1.0, -g.y * 0.35));
+		vec2 g = ripples(p, TIME * 0.6) * rain * 0.6 * near * (0.25 + 0.75 * standing) * wet;
+		n = normalize(vec3(-g.x * 0.2, 1.0, -g.y * 0.2));
 	}
 	ALBEDO = col;
 	ROUGHNESS = rough;

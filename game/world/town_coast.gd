@@ -51,6 +51,14 @@ var beam_mat: ShaderMaterial
 
 func _init() -> void:
 	super()
+	# The woods round the town are trees with leaves, and thicker.
+	detailed_trees = true
+	near_spacing = 4.6
+
+
+## No starship over this coast.
+func _build_heighliner() -> void:
+	pass
 
 
 ## The light station as on the coast, and the lighthouse's beam made
