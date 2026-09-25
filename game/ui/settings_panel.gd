@@ -10,11 +10,15 @@ extends Control
 var on_time_changed: Callable = Callable()
 var on_music_changed: Callable = Callable()
 var on_graphics_changed: Callable = Callable()   # after any graphics value changes
+var on_weather_changed: Callable = Callable()    # a world with weather sets this; the row shows only then
 var graphics: GraphicsSettings = null           # the world's, edited in place
 
 var _slider: HSlider
 var _clock: Label
 var _music: CheckButton
+var _weather_row: HBoxContainer
+var _weather: HSlider
+var _weather_label: Label
 var _preset: OptionButton
 var _fps: Label
 var _scale: HSlider
@@ -65,6 +69,30 @@ func _ready() -> void:
 	_clock.custom_minimum_size = Vector2(56, 0)
 	_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	time_row.add_child(_clock)
+
+	# Weather, in worlds that have it: one slider from fair to a storm.
+	_weather_row = HBoxContainer.new()
+	_weather_row.visible = false
+	column.add_child(_weather_row)
+	var weather_name := Label.new()
+	weather_name.text = "Weather"
+	weather_name.custom_minimum_size = Vector2(120, 0)
+	_weather_row.add_child(weather_name)
+	_weather = HSlider.new()
+	_weather.min_value = 0.0
+	_weather.max_value = 1.0
+	_weather.step = 0.01
+	_weather.custom_minimum_size = Vector2(220, 0)
+	_weather.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_weather.value_changed.connect(func(value: float) -> void:
+		_refresh_weather()
+		if on_weather_changed.is_valid():
+			on_weather_changed.call(value))
+	_weather_row.add_child(_weather)
+	_weather_label = Label.new()
+	_weather_label.custom_minimum_size = Vector2(72, 0)
+	_weather_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_weather_row.add_child(_weather_label)
 
 	_music = CheckButton.new()
 	_music.text = "Background music"
@@ -162,6 +190,20 @@ func set_values(hours: float, music_on: bool) -> void:
 	_music.set_pressed_no_signal(music_on)
 	_refresh_clock()
 	refresh()
+
+
+## Shows the weather row with the world's level. Worlds without
+## weather never call this.
+func set_weather(level: float) -> void:
+	_weather_row.visible = true
+	_weather.set_value_no_signal(level)
+	_refresh_weather()
+
+
+func _refresh_weather() -> void:
+	var v := _weather.value
+	var words: Array[String] = ["Fair", "Cloudy", "Overcast", "Rain", "Storm"]
+	_weather_label.text = words[mini(int(v * 5.0), 4)]
 
 
 ## Every graphics control from the values, silently.

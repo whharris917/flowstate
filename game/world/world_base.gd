@@ -41,6 +41,8 @@ var sky_env: Environment = null
 var settings: SettingsPanel
 var music_player: AudioStreamPlayer = null
 var time_of_day := 10.0
+var weather_level := -1.0              # 0 fair to 1 storm; below 0, the world has no weather
+var settings_prefix := ""              # a world that keeps its own clock and weather saves them under its own keys
 var music_on := false
 var graphics := GraphicsSettings.new()   # presets and knobs; see ui/graphics_settings.gd
 var _sun_base_energy := 1.5
@@ -87,6 +89,10 @@ func _ready() -> void:
 	settings.on_time_changed = func(hours: float) -> void:
 		set_time_of_day(hours)
 		_save_settings()
+	if weather_level >= 0.0:
+		settings.on_weather_changed = func(level: float) -> void:
+			set_weather(level)
+			_save_settings()
 	settings.on_music_changed = func(on: bool) -> void:
 		set_music(on)
 		_save_settings()
@@ -479,31 +485,56 @@ func set_music(on: bool) -> void:
 		music_player.stop()
 
 
+## The weather, 0 fair to 1 a storm. A world with weather overrides
+## this; the options slider calls it.
+func set_weather(level: float) -> void:
+	weather_level = clampf(level, 0.0, 1.0)
+
+
+## Every world's keys share one file: what this world does not own is
+## read back and kept.
 func _save_settings() -> void:
+	var saved := _read_settings()
+	saved[settings_prefix + "time_of_day"] = time_of_day
+	if weather_level >= 0.0:
+		saved[settings_prefix + "weather"] = weather_level
+	saved["music"] = music_on
+	saved["graphics"] = graphics.to_dict()
+	saved["hotbar"] = builder.hotbar if builder != null else []
 	var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
 	if file == null:
 		return
-	file.store_string(JSON.stringify({"time_of_day": time_of_day, "music": music_on,
-		"graphics": graphics.to_dict(), "hotbar": builder.hotbar if builder != null else []}))
+	file.store_string(JSON.stringify(saved))
+
+
+func _read_settings() -> Dictionary:
+	if not FileAccess.file_exists(SETTINGS_PATH):
+		return {}
+	var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
+	if file == null:
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	return parsed if parsed is Dictionary else {}
 
 
 func _load_settings() -> void:
 	var hours := time_of_day
 	var on := music_on
-	if FileAccess.file_exists(SETTINGS_PATH):
-		var file := FileAccess.open(SETTINGS_PATH, FileAccess.READ)
-		if file != null:
-			var parsed: Variant = JSON.parse_string(file.get_as_text())
-			if parsed is Dictionary:
-				var saved := parsed as Dictionary
-				hours = float(saved.get("time_of_day", hours))
-				on = bool(saved.get("music", on))
-				if saved.get("graphics") is Dictionary:
-					graphics.from_dict(saved["graphics"])
-				if saved.get("hotbar") is Array and builder != null:
-					builder.set_hotbar(saved["hotbar"])
-				elif bool(saved.get("high_lighting", false)):
-					graphics.set_preset("Ultra")  # a legacy high_lighting setting
+	var saved := _read_settings()
+	if not saved.is_empty():
+		hours = float(saved.get(settings_prefix + "time_of_day", hours))
+		on = bool(saved.get("music", on))
+		if weather_level >= 0.0:
+			weather_level = float(saved.get(settings_prefix + "weather", weather_level))
+		if saved.get("graphics") is Dictionary:
+			graphics.from_dict(saved["graphics"])
+		if saved.get("hotbar") is Array and builder != null:
+			builder.set_hotbar(saved["hotbar"])
+		elif bool(saved.get("high_lighting", false)):
+			graphics.set_preset("Ultra")  # a legacy high_lighting setting
+	if weather_level >= 0.0:
+		set_weather(weather_level)
+		settings.set_weather(weather_level)
 	set_time_of_day(hours)
 	set_music(on)
 	graphics.apply(self)

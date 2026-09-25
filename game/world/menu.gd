@@ -12,6 +12,8 @@ const WORLDS: Array[Dictionary] = [
 		"scene": "res://world/blank.tscn"},
 	{"title": "MAINE COAST", "note": "A graded site on a granite headland over the Gulf of Maine. Everything unlocked.",
 		"scene": "res://world/maine.tscn"},
+	{"title": "HARBOR TOWN", "note": "A 1940s Maine harbour town on the same coast, in whatever weather you choose.",
+		"scene": "res://world/town.tscn"},
 	{"title": "SHOWCASE", "note": "The commissioned plant: Unit 100 to Unit 500, running.",
 		"scene": "res://world/sandbox.tscn"},
 	{"title": "THE HALL", "note": "The manufacturing hall and aseptic annex, parked.",

@@ -14,6 +14,11 @@ render_mode cull_disabled;
 uniform vec3 deep_color : source_color = vec3(0.010, 0.040, 0.055);
 uniform vec3 shallow_color : source_color = vec3(0.06, 0.18, 0.18);
 uniform float swell = 1.0;
+// Weather: the wind's chop, whitecaps on the crests out in open water,
+// and rain dimpling the surface.
+uniform float chop = 1.0;
+uniform float whitecaps = 0.0;
+uniform float rain = 0.0;
 uniform sampler2D depth_tex : hint_depth_texture, filter_linear, repeat_disable;
 
 varying vec3 world_pos;
@@ -30,7 +35,7 @@ vec2 wave_grad(vec2 dir, float len, float amp, vec2 p, float t) {
 	return dir * (k * amp * cos(ph));
 }
 
-vec3 wave_normal(vec2 p, float t, float fade) {
+vec3 wave_normal(vec2 p, float t, float fade, float near) {
 	vec2 g = vec2(0.0);
 	g += wave_grad(normalize(vec2(-0.70, -0.70)), 24.0, 0.32 * swell, p, t);
 	g += wave_grad(normalize(vec2(-1.00, -0.25)), 9.5, 0.14 * swell, p, t);
@@ -42,14 +47,36 @@ vec3 wave_normal(vec2 p, float t, float fade) {
 	float r0 = value_noise(q);
 	float rx = value_noise(q + vec2(e, 0.0));
 	float rz = value_noise(q + vec2(0.0, e));
-	g += vec2(rx - r0, rz - r0) / e * 0.045 * fade;
+	g += vec2(rx - r0, rz - r0) / e * 0.045 * chop * fade;
+	// Rain: fine dimples near the viewer, a new field every tenth of a second.
+	if (rain > 0.0) {
+		vec2 s = p * 9.0 + vec2(floor(t * 10.0) * 17.0, 0.0);
+		float d0 = value_noise(s);
+		float dx = value_noise(s + vec2(0.1, 0.0));
+		float dz = value_noise(s + vec2(0.0, 0.1));
+		g += vec2(dx - d0, dz - d0) * 1.2 * rain * near;
+	}
 	return normalize(vec3(-g.x, 1.0, -g.y));
+}
+
+// How high the swell stands at p, as a share of its greatest height:
+// the crests, where the whitecaps break.
+float crest(vec2 p, float t) {
+	float h = 0.0;
+	vec2 dirs[3] = vec2[](normalize(vec2(-0.70, -0.70)), normalize(vec2(-1.00, -0.25)), normalize(vec2(-0.30, -1.00)));
+	float lens[3] = float[](24.0, 9.5, 4.6);
+	float amps[3] = float[](0.32, 0.14, 0.07);
+	for (int i = 0; i < 3; i++) {
+		float k = 6.2831853 / lens[i];
+		h += amps[i] * sin(dot(dirs[i], p) * k - t * sqrt(9.81 * k));
+	}
+	return h / 0.53;
 }
 
 void fragment() {
 	float dist = length(world_pos - CAMERA_POSITION_WORLD);
 	float fade = clamp(1.0 - dist / 250.0, 0.0, 1.0);
-	vec3 wn = wave_normal(world_pos.xz, TIME, fade);
+	vec3 wn = wave_normal(world_pos.xz, TIME, fade, clamp(1.0 - dist / 40.0, 0.0, 1.0));
 	wn = normalize(mix(vec3(0.0, 1.0, 0.0), wn, 0.25 + 0.75 * fade));
 
 	// How much water is under this pixel: the opaque scene's depth
@@ -68,6 +95,15 @@ void fragment() {
 	// wash, never a sheet.
 	float foam = (1.0 - smoothstep(0.05, 0.45, vertical))
 		* smoothstep(0.50, 0.80, foam_n + 0.20 * (1.0 - smoothstep(0.0, 0.2, vertical))) * 0.7;
+	// Whitecaps: out where the water is deep, on the crests, in streaks
+	// the wind drags downwind, fading with distance.
+	if (whitecaps > 0.0) {
+		float streak = value_noise(world_pos.xz * vec2(0.35, 0.9) + vec2(TIME * 0.6, 0.0)) * 0.6
+			+ value_noise(world_pos.xz * 1.7 - vec2(TIME * 0.3, TIME * 0.5)) * 0.4;
+		float cap = smoothstep(0.55, 0.95, crest(world_pos.xz, TIME)) * smoothstep(0.45, 0.8, streak)
+			* smoothstep(1.5, 4.0, vertical) * whitecaps * (0.35 + 0.65 * fade);
+		foam = max(foam, cap * 0.85);
+	}
 	vec3 color = mix(shallow_color, deep_color, 1.0 - exp(-vertical * 0.45));
 	color = mix(color, lin(vec3(0.75, 0.78, 0.78)), foam);
 	ALBEDO = color;

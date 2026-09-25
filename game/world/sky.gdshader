@@ -13,6 +13,12 @@ uniform vec3 sun_dir = vec3(0.0, 1.0, 0.0);    // toward the sun, unit
 uniform vec3 moon_dir = vec3(0.0, 0.5, -0.87);
 uniform float energy = 1.0;                    // the dome's brightness before tone mapping
 uniform float haze : hint_range(0.0, 1.0) = 0.35;   // coastal air: more haze, softer glow, whiter horizon
+// Weather: a cloud deck that greys and dims the dome and hides the sun
+// and the moon, and the light of a lightning stroke (its direction and
+// strength) lighting the deck from under it.
+uniform float overcast : hint_range(0.0, 1.0) = 0.0;
+uniform float flash = 0.0;
+uniform vec3 flash_dir = vec3(0.0, 0.2, -1.0);
 
 // The colours of the day, in linear light (source_color converts).
 uniform vec4 zenith_day : source_color = vec4(0.19, 0.36, 0.72, 1.0);
@@ -80,7 +86,7 @@ void sky() {
 	vec3 moon = normalize(moon_dir);
 	float cos_moon = dot(eye, moon);
 	float moon_up = sat(moon.y * 4.0);
-	night_sky += moon_color.rgb * (pow(sat(cos_moon), 200.0) * 0.6 + pow(sat(cos_moon), 12.0) * 0.06) * moon_up;
+	night_sky += moon_color.rgb * (pow(sat(cos_moon), 200.0) * 0.6 + pow(sat(cos_moon), 12.0) * 0.06) * moon_up * (1.0 - overcast);
 
 	// ---- put together: day over twilight over night. The twilight is
 	// worth its full weight only while the day is fading.
@@ -96,7 +102,16 @@ void sky() {
 	float disc = smoothstep(cos(SUN_RADIUS * 5.0), cos(SUN_RADIUS * 1.5), cos_sun);
 	float sun_up = smoothstep(-0.02, 0.03, s);
 	vec3 disc_color = mix(twilight_warm.rgb, sun_glow_day.rgb, smoothstep(0.0, 0.3, s));
-	col += disc_color * disc * sun_up * mix(6.0, 3.0, haze) * mix(0.4, 1.0, smoothstep(0.0, 0.25, s));
+	col += disc_color * disc * sun_up * mix(6.0, 3.0, haze) * mix(0.4, 1.0, smoothstep(0.0, 0.25, s)) * (1.0 - overcast);
+
+	// ---- a cloud deck: the dome's light spread flat under it, greyer
+	// and dimmer the thicker it is, a little brighter toward the horizon
+	// where the deck is seen edge on; then a stroke's light under it.
+	float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+	vec3 deck = mix(vec3(luma), col, 0.3) * mix(0.9, 0.38, overcast) * (0.85 + 0.3 * (1.0 - above));
+	col = mix(col, deck, overcast);
+	float toward_flash = sat(dot(eye, normalize(flash_dir)));
+	col += vec3(0.55, 0.60, 0.78) * flash * (0.25 + 1.5 * pow(toward_flash, 6.0));
 
 	// ---- under the horizon: the ground's colour, lit as the dome is.
 	float under = smoothstep(0.0, -0.06, v);

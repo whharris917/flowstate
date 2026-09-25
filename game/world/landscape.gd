@@ -84,6 +84,11 @@ func stream_at(_x: float, _z: float) -> float:
 	return 0.0
 
 
+## Where a boulder may not lie: a street, a wharf. By default nowhere.
+func rock_blocked(_x: float, _z: float) -> bool:
+	return false
+
+
 ## A site's own landmarks: a lighthouse, a wharf, a road.
 func _build_landmarks() -> void:
 	pass
@@ -354,7 +359,7 @@ func _build_rocks() -> void:
 		elif d > 40.0 and _rng.randf() < 0.012:
 			if height_at(x, z) > sea_level + 6.0 and not is_graded(x, z):
 				size = _rng.randf_range(1.6, 3.4)
-		if size <= 0.0:
+		if size <= 0.0 or rock_blocked(x, z):
 			continue
 		var y := height_at(x, z)
 		var sy := size * _rng.randf_range(0.55, 0.85)

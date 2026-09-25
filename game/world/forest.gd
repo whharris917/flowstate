@@ -119,12 +119,19 @@ func _conifer(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> 
 		_cone_colors.append(tint)
 
 
-func _broadleaf(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> void:
+## One broadleaf where it is wanted, in a leaf colour of its own: a
+## street tree, a maple turning in a yard.
+func plant_broadleaf(at: Vector3, h: float, leaf: Color, rng: RandomNumberGenerator) -> void:
+	_broadleaf(at, h, rng.randf_range(0.0, TAU), rng, leaf)
+
+
+func _broadleaf(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator,
+		leaf: Color = BROADLEAF_COLOR) -> void:
 	var trunk_h := h * 0.48
 	var trunk_r := h * 0.04
 	_trunk_xforms.append(_xform(at + Vector3(0, trunk_h / 2.0, 0), yaw, Vector3(trunk_r, trunk_h, trunk_r)))
 	_trunk_colors.append(TRUNK_COLOR)
-	var tint := BROADLEAF_COLOR.lightened(rng.randf_range(-0.03, 0.06))
+	var tint := leaf.lightened(rng.randf_range(-0.03, 0.06))
 	var crown_r := h * rng.randf_range(0.17, 0.22)
 	# A crown of four lobes: one on top, three around it.
 	_ball_xforms.append(_xform(at + Vector3(0, h * 0.72, 0), yaw, Vector3(crown_r, crown_r * 0.9, crown_r)))

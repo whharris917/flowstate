@@ -166,6 +166,7 @@ func _build_environment() -> void:
 	# Stars on a dome that follows the player; visibility follows the clock.
 	_stars_mat = ShaderMaterial.new()
 	_stars_mat.shader = load("res://world/stars.gdshader")
+	_stars_mat.render_priority = -2   # behind any cloud a world draws over them
 	# The dome sits just inside the camera's far plane (4 km), so its
 	# stars stay behind the far end of the heighliner, which hangs out
 	# past two.
@@ -228,6 +229,7 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 		# The first stars wait for the afterglow to go: the brightest at
 		# the end of civil twilight, the field once it is dark.
 		_stars_mat.set_shader_parameter("visibility", pow(1.0 - twilight, 1.8))
+		_stars_mat.set_shader_parameter("sky_rotation", sky_rotation(time_of_day))
 		# The dome covers the whole sky; by day it draws nothing and still
 		# costs the fill.
 		_stars.visible = twilight < 0.999
@@ -240,6 +242,18 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 		light.visible = twilight < 0.999
 	if _hall_lamp_mat != null:
 		_hall_lamp_mat.emission_energy_multiplier = lerpf(4.5, 1.5, twilight)
+
+
+## World to celestial at a clock hour: the sky turns about the pole,
+## which stands 44 degrees up in the north (-z) at the latitude of
+## Maine. Local sidereal time is taken as the clock hour, as it is
+## near the autumn equinox, so the Milky Way stands where it does on a
+## September evening.
+static func sky_rotation(hours: float) -> Basis:
+	var lat := deg_to_rad(44.0)
+	var pole := Vector3(0.0, sin(lat), -cos(lat))
+	var turned := deg_to_rad(hours * 15.0 - 270.0)
+	return Basis(Vector3.RIGHT, PI / 2.0 - lat) * Basis(pole, turned)
 
 
 ## ---- the hall -------------------------------------------------------------

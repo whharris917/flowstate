@@ -20,6 +20,8 @@ uniform vec3 grass_color : source_color = vec3(0.15, 0.26, 0.09);
 uniform vec3 grass_dry : source_color = vec3(0.23, 0.32, 0.11);
 uniform vec3 grass_dark : source_color = vec3(0.09, 0.17, 0.06);
 uniform vec3 heath_color : source_color = vec3(0.22, 0.20, 0.09);
+// Rain: wet rock goes dark and glossy, wet grass a little of both.
+uniform float wet = 0.0;
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -56,6 +58,9 @@ void fragment() {
 		ALBEDO = mix(veg, rock, rockness);
 		ROUGHNESS = mix(0.96, 0.78, rockness);
 		SPECULAR = mix(0.08, 0.25, rockness);
+		float soak = wet * (0.35 + 0.65 * rockness);
+		ALBEDO *= 1.0 - 0.35 * soak;
+		ROUGHNESS = mix(ROUGHNESS, mix(0.7, 0.3, rockness), soak);
 	} else {
 		float near = clamp(1.0 - dist / 25.0, 0.0, 1.0);
 
@@ -91,6 +96,10 @@ void fragment() {
 		ALBEDO = color;
 		ROUGHNESS = mix(0.96, mix(rough, 0.85, cobble), rockness);
 		SPECULAR = mix(0.08, 0.25, rockness);
+		float soak = wet * (0.35 + 0.65 * rockness);
+		ALBEDO *= 1.0 - 0.35 * soak;
+		ROUGHNESS = mix(ROUGHNESS, mix(0.7, 0.3, rockness), soak);
+		SPECULAR = mix(SPECULAR, 0.5, soak);
 
 		// Relief: the clumps and blades of the field near the camera, the
 		// grain of the rock a little further, both fading with distance so

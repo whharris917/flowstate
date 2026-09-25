@@ -7,6 +7,7 @@ class_name MaineMap
 ## clock, and what the camera sees under water.
 
 var coast: MaineCoast
+var with_exercises := true      # the routing exercises, the drip demo, the filling line and the bench
 var _fog_density := 0.0
 var _underwater := false
 
@@ -166,6 +167,8 @@ func _self_check() -> void:
 ## The routing reports, then what the drip demo is doing.
 func _headless_reports() -> void:
 	super._headless_reports()
+	if not with_exercises:
+		return
 	for line in RoutingExercises.report(plant):
 		print(line)
 	for line in FillLineDemo.report(plant):
