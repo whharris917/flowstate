@@ -16,13 +16,10 @@ extends Node3D
 ## throws the lightning: strokes at random through a storm, three to
 ## eleven kilometres out, most seen only as the cloud lighting, the odd
 ## channel showing low on the horizon, each one's thunder arriving at
-## the speed of sound from where it struck. In thick weather the light station's foghorn
-## sounds on its cycle, and now and then a ship's horn answers from the
-## sea.
+## the speed of sound from where it struck.
 
 const CLOUD_DOME := 3500.0
 const SOUND := 343.0            # m/s
-const HORN_PERIOD := 30.0       # the light station's fog signal: one blast every thirty seconds
 const TOWN_CENTRE := Vector2(15.0, 10.0)
 
 var level := 0.0
@@ -37,7 +34,6 @@ var wet := 0.0                  # how wet the surfaces are: follows the rain, dr
 var night := 0.0                # 0 daylight to 1 dark, cloud included
 var wind_dir := Vector2(-0.7071, -0.7071)   # where it blows toward: in off the sea
 var strikes := 0
-var horns := 0
 var lamps_on := false
 
 var world: WorldBase
@@ -63,10 +59,6 @@ var _sky_lit := false
 var _thunder: Array[Dictionary] = []        # {at, file, volume, dir}
 var _rain_audio: AudioStreamPlayer
 var _gale_audio: AudioStreamPlayer
-var _horn_audio: AudioStreamPlayer3D
-var _ship_audio: AudioStreamPlayer3D
-var _next_horn := 3.0
-var _next_ship := 40.0
 var _lamps_since := 1000.0
 var _sun_color := Color.WHITE
 var _sun_energy := 1.0
@@ -194,7 +186,6 @@ func _switch_lamps() -> void:
 func _update_lamps() -> void:
 	town.lamp_mat.set_shader_parameter("since", _lamps_since)
 	for lamp: Dictionary in town.lamps:
-		var light: Light3D = lamp["light"]
 		var k: float
 		if lamp.has("thr"):
 			var thr: float = lamp["thr"]
@@ -202,8 +193,12 @@ func _update_lamps() -> void:
 		else:
 			var ramp := clampf((_lamps_since - float(lamp["delay"]) * 8.0) / 0.5, 0.0, 1.0)
 			k = ramp if lamps_on else 1.0 - ramp
-		light.light_energy = float(lamp["energy"]) * k
-		light.visible = k > 0.002
+		if lamp.has("light"):
+			var light: Light3D = lamp["light"]
+			light.light_energy = float(lamp["energy"]) * k
+			light.visible = k > 0.002
+		if lamp.has("mat"):
+			(lamp["mat"] as StandardMaterial3D).emission_energy_multiplier = float(lamp["glow"]) * k
 	if clouds_mat != null:
 		var glow := Color(1.0, 0.62, 0.32).srgb_to_linear()
 		var g := 0.04 * smoothstep(0.5, 0.9, night) * (1.0 if lamps_on else 0.0) * (0.5 + 0.5 * scud)
@@ -305,21 +300,6 @@ func _build_sound() -> void:
 		return
 	_rain_audio = _loop("res://audio/rain_loop.wav")
 	_gale_audio = _loop("res://audio/gale_loop.wav")
-	_horn_audio = AudioStreamPlayer3D.new()
-	_horn_audio.stream = load("res://audio/foghorn.wav")
-	_horn_audio.position = Vector3(MaineCoast.LIGHTHOUSE.x, MaineCoast.LIGHT_Y + 6.0, MaineCoast.LIGHTHOUSE.y)
-	_horn_audio.unit_size = 90.0
-	_horn_audio.max_distance = 4000.0
-	_horn_audio.volume_db = 2.0
-	_horn_audio.bus = "Master"
-	add_child(_horn_audio)
-	_ship_audio = AudioStreamPlayer3D.new()
-	_ship_audio.stream = load("res://audio/foghorn.wav")
-	_ship_audio.pitch_scale = 0.62
-	_ship_audio.unit_size = 250.0
-	_ship_audio.max_distance = 5000.0
-	_ship_audio.bus = "Master"
-	add_child(_ship_audio)
 
 
 func _loop(path: String) -> AudioStreamPlayer:
@@ -497,18 +477,3 @@ func _step_sound(delta: float, eye: Vector3) -> void:
 		return
 	_rain_audio.volume_db = linear_to_db(maxf(rain, 0.0001)) - 10.0
 	_gale_audio.volume_db = linear_to_db(maxf(smoothstep(0.35, 1.0, wind), 0.0001)) - 15.0
-	# The fog signal: while the air is thick, one blast on its cycle.
-	if fog > 0.3 or rain > 0.6:
-		_next_horn -= delta
-		if _next_horn <= 0.0:
-			_next_horn = HORN_PERIOD
-			horns += 1
-			_horn_audio.play()
-		_next_ship -= delta
-		if _next_ship <= 0.0:
-			_next_ship = _rng.randf_range(70.0, 200.0)
-			var a := atan2(0.7071, 0.7071) + _rng.randf_range(-1.0, 1.0)
-			_ship_audio.position = eye + Vector3(cos(a), 0.0, sin(a)) * _rng.randf_range(1500.0, 2600.0)
-			_ship_audio.play()
-	else:
-		_next_horn = 3.0

@@ -25,6 +25,10 @@ func _run(world: TownMap) -> void:
 	world.set_time_of_day(18.1)
 	world.weather.wet = 1.0
 	world.weather._next_strike = 1000.0
+	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "house":
+		await _house(world, player)
+		get_tree().quit()
+		return
 	# The showpiece: Main Street in the storm, east to the church.
 	await _view(player, Vector3(-6.0, 0.4, 17.5), -PI / 2.0, 0.02, "storm_main")
 	# Down the harbour road over the waterfront to the boats and the light.
@@ -85,6 +89,25 @@ func _run(world: TownMap) -> void:
 	await _view_zoom(player, Vector3(15.0, 0.4, 10.0), -2.35, -0.8, 2.3, "storm_aerial")
 	print("[probe] screenshots written to user://")
 	get_tree().quit()
+
+
+## The Cape at number 14, whose front is at (21, 51.5) facing north:
+## outside in the storm, the rooms, the back from the harbour side, and
+## the front on a fair afternoon.
+func _house(world: TownMap, player: Player) -> void:
+	await _view(player, Vector3(18.0, 0.4, 45.0), PI + 0.1, 0.08, "cape_front")
+	await _view(player, Vector3(22.8, 1.0, 53.4), -PI / 2.0, -0.05, "cape_living")
+	await _view(player, Vector3(21.5, 1.0, 55.6), PI / 2.0 + 0.3, -0.1, "cape_living_back")
+	await _view(player, Vector3(19.2, 1.0, 56.1), PI / 2.0, -0.1, "cape_kitchen")
+	await _view(player, Vector3(20.6, 1.0, 52.0), PI, 0.35, "cape_stair")
+	await _view(player, Vector3(22.5, 3.7, 57.0), -0.95, -0.2, "cape_bedroom")
+	await _view(player, Vector3(19.0, 3.7, 55.5), PI / 2.0 - 0.2, -0.1, "cape_boys_room")
+	var y := world.coast.height_at(21.0, 66.0)
+	await _view(player, Vector3(21.0, y + 0.4, 66.0), 0.0, 0.12, "cape_back")
+	world.set_weather(0.0)
+	world.set_time_of_day(14.0)
+	await _view(player, Vector3(16.0, 0.4, 45.5), PI + 0.35, 0.1, "cape_front_day")
+	await _view(player, Vector3(22.8, 1.0, 53.4), -PI / 2.0, -0.05, "cape_living_day")
 
 
 func _view(player: Player, at: Vector3, yaw: float, pitch: float, name_: String) -> void:

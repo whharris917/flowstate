@@ -6,6 +6,10 @@ shader_type spatial;
 //   0 paint or trim      1 clapboard        2 brick
 //   3 cedar shingle      4 granite ashlar   5 roof shingle
 //   6 plank decking      7 rough timber     8 tar paper, cloth
+//   9 wallpaper         10 oak floor       11 linoleum checker
+//  12 plaster           13 glazed tile      14 indoor paint, enamel
+//  15 upholstery        16 varnished wood
+// Kinds 9 and up are indoors: the rain never reaches them.
 // The courses, bricks, shingles and boards are drawn in world space
 // from the surface's own direction, so nothing needs UVs and nothing
 // swims. Rain wets it all: darker, glossier, most on what faces up.
@@ -26,7 +30,7 @@ float h21(vec2 p) {
 }
 
 void fragment() {
-	int kind = int(round(COLOR.a * 10.0));
+	int kind = int(round(COLOR.a * 20.0));
 	vec3 base = lin(COLOR.rgb);
 	vec3 wn = normalize(world_normal);
 	// Across the face: the horizontal direction in the surface.
@@ -108,6 +112,57 @@ void fragment() {
 		col *= 0.8 + 0.3 * value_noise(vec2(u * 12.0, v * 0.8));
 		rough = 0.9;
 		spec = 0.2;
+	} else if (kind == 9) {
+		// Wallpaper: a soft stripe with a small sprig in every other band.
+		float su = u / 0.09;
+		float band = step(0.5, fract(su * 0.5));
+		col *= 0.93 + 0.07 * band;
+		vec2 cell = vec2(fract(su * 0.5) * 2.0, fract(v / 0.16));
+		float sprig = smoothstep(0.16, 0.08, length((cell - vec2(1.5, 0.5)) * vec2(1.0, 1.6))) * band;
+		col = mix(col, col * vec3(0.72, 0.62, 0.55), sprig * 0.7 * detail);
+		rough = 0.85;
+		spec = 0.25;
+	} else if (kind == 10) {
+		// Oak strip flooring: boards 6 cm wide down the house, joints
+		// staggered, varnished.
+		float bw = world_pos.x / 0.06;
+		float row = floor(bw);
+		float len = world_pos.z / 1.4 + h21(vec2(row, 2.0));
+		vec2 f = vec2(fract(bw), fract(len));
+		float joint = smoothstep(0.0, 0.05, f.x) * smoothstep(0.0, 0.01, f.y);
+		col *= (0.85 + 0.25 * h21(vec2(row, floor(len)))) * (0.9 + 0.12 * value_noise(vec2(bw * 0.4, world_pos.z * 9.0)));
+		col = mix(col * 0.6, col, joint);
+		rough = 0.35;
+		spec = 0.5;
+	} else if (kind == 11) {
+		// Linoleum in a checker: the colour and a cream.
+		vec2 c = floor(world_pos.xz / 0.23);
+		col = mod(c.x + c.y, 2.0) < 1.0 ? col : lin(vec3(0.86, 0.84, 0.76));
+		rough = 0.4;
+		spec = 0.5;
+	} else if (kind == 12) {
+		col *= 0.97 + 0.04 * value_noise(world_pos.xz * 2.0 + v);
+		rough = 0.9;
+		spec = 0.3;
+	} else if (kind == 13) {
+		// Glazed tile, 11 cm squares, a grey joint.
+		vec2 f = vec2(fract(u / 0.108), fract(v / 0.108));
+		float joint = 1.0 - smoothstep(0.0, 0.05, f.x) * smoothstep(1.0, 0.95, f.x) * smoothstep(0.0, 0.05, f.y) * smoothstep(1.0, 0.95, f.y);
+		col = mix(col, lin(vec3(0.6, 0.6, 0.58)), joint);
+		rough = mix(0.15, 0.8, joint);
+		spec = 0.6;
+	} else if (kind == 14) {
+		rough = 0.35;
+		spec = 0.5;
+	} else if (kind == 15) {
+		// Upholstery: a fine weave, no sheen.
+		col *= 0.9 + 0.12 * value_noise(vec2(u, v) * 90.0);
+		rough = 0.95;
+		spec = 0.15;
+	} else if (kind == 16) {
+		col *= 0.85 + 0.2 * value_noise(vec2(u * 3.0, v * 40.0));
+		rough = 0.3;
+		spec = 0.5;
 	} else if (kind == 8) {
 		col *= 0.9 + 0.15 * value_noise(world_pos.xz * 2.0 + v);
 		rough = 0.95;
@@ -120,7 +175,7 @@ void fragment() {
 	// Rain: everything darkens a little and slicks over; what faces up
 	// holds a film of water.
 	float up = smoothstep(0.3, 0.9, wn.y);
-	float soak = wet * (0.55 + 0.45 * up);
+	float soak = kind >= 9 ? 0.0 : wet * (0.55 + 0.45 * up);
 	col *= 1.0 - 0.25 * soak;
 	rough = mix(rough, mix(0.35, 0.12, up), soak);
 	spec = mix(spec, 0.5, soak);

@@ -28,7 +28,6 @@ Writes to game/audio/:
   thunder_near.wav, thunder_1..3.wav  a close stroke's crack and roll;
                   three distant rolls, darker with distance
   bell_1..2.wav   a bell buoy's bronze bell, struck hard and soft
-  foghorn.wav     a diaphone blast and its falling grunt
 
 Loops are made seamless by quantizing every sustained frequency to an
 integer number of cycles per loop and forcing envelopes to zero at the
@@ -962,32 +961,6 @@ def make_bells() -> None:
     make_bell(OUT_DIR / "bell_2.wav", 392.0, 0.6)
 
 
-def make_foghorn() -> None:
-    """A diaphone foghorn: a reedy blast, the piston's buzz full of
-    harmonics, then the grunt, the pitch dropping as the air runs out.
-    The blast swells in over a fifth of a second. Pure sines, no RNG."""
-    duration = 5.0
-    n = int(duration * SR)
-    blast = 2.6
-    grunt = 0.9
-    buf = [0.0] * n
-    phase = 0.0
-    for i in range(n):
-        t = i / SR
-        if t < blast:
-            f = 176.0
-        else:
-            u = min(1.0, (t - blast) / grunt)
-            f = 176.0 - 70.0 * u ** 0.6
-        phase += 2.0 * math.pi * f / SR
-        on = min(1.0, t / 0.2) * (1.0 if t < blast + grunt else math.exp(-(t - blast - grunt) / 0.08))
-        tone = 0.0
-        for h in range(1, 14):
-            tone += math.sin(h * phase) / h ** 1.1 * (1.0 if h < 6 else 0.7)
-        buf[i] = tone * on
-    write_wav(OUT_DIR / "foghorn.wav", [buf], normalize_to=0.55)
-
-
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -1022,7 +995,6 @@ def main() -> None:
     make_gale()
     make_thunders()
     make_bells()
-    make_foghorn()
     print("done")
 
 

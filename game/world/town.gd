@@ -115,11 +115,14 @@ func _town_check() -> void:
 	if not weather.lamps_on:
 		problems.append("lamps off in a storm at dusk (darkness %.2f)" % weather.night)
 	var lit := 0
+	var lights := 0
 	for lamp: Dictionary in town.lamps:
-		if (lamp["light"] as Light3D).visible:
-			lit += 1
-	if lit < town.lamps.size() / 2:
-		problems.append("only %d of %d lamps lit in the storm" % [lit, town.lamps.size()])
+		if lamp.has("light"):
+			lights += 1
+			if (lamp["light"] as Light3D).visible:
+				lit += 1
+	if lit < lights / 2:
+		problems.append("only %d of %d lamps lit in the storm" % [lit, lights])
 	# A stroke, and its thunder after the sound has come the distance.
 	weather._strike(player.global_position)
 	var queued := weather._thunder.size()

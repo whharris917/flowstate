@@ -26,6 +26,14 @@ const K_ROOF := 5
 const K_PLANK := 6
 const K_TIMBER := 7
 const K_TAR := 8
+const K_PAPER := 9
+const K_OAK := 10
+const K_LINO := 11
+const K_PLASTER := 12
+const K_TILE := 13
+const K_ENAMEL := 14
+const K_CLOTH := 15
+const K_WOOD := 16
 
 const TRIM := Color(0.91, 0.90, 0.86)
 const GRANITE := Color(0.58, 0.56, 0.53)
@@ -71,6 +79,8 @@ var _signs := 0
 var _houses := 0
 var _marquee_bulb := 0
 var stats_trees := 0
+var cape: CapeHouse
+var _keep_clear: Array[Rect2] = []
 
 
 func build(c: TownCoast) -> void:
@@ -126,7 +136,7 @@ func _make_materials() -> void:
 
 ## A colour and what the surface is made of, for the wall shader.
 static func kc(color: Color, kind: int) -> Color:
-	return Color(color.r, color.g, color.b, kind / 10.0)
+	return Color(color.r, color.g, color.b, kind / 20.0)
 
 
 static func at(pos: Vector3, yaw: float = 0.0) -> Transform3D:
@@ -655,9 +665,15 @@ func _houses_all() -> void:
 		# Water Street: the north side behind the diner and the grocery,
 		# the south side over the harbour.
 		[Vector2(-2.0, 37.5), yaw_s], [Vector2(22.0, 37.5), yaw_s], [Vector2(38.0, 37.5), yaw_s],
-		[Vector2(9.0, 51.5), yaw_n], [Vector2(21.0, 51.5), yaw_n], [Vector2(33.0, 51.5), yaw_n],
+		[Vector2(7.5, 51.5), yaw_n], [Vector2(34.0, 51.5), yaw_n],
 		[Vector2(45.0, 51.5), yaw_n], [Vector2(57.0, 51.5), yaw_n], [Vector2(69.0, 51.5), yaw_n],
 	]
+	# One house modelled whole, inside and out: the Cape at number 14,
+	# its back to the harbour.
+	cape = CapeHouse.new()
+	add_child(cape)
+	cape.build(self, Vector3(21.0, 0.0, 51.5), yaw_n)
+	_keep_clear.append(Rect2(Vector2(14.0, 47.5), Vector2(14.0, 14.0)))
 	for lot: Array in lots:
 		var p: Vector2 = lot[0]
 		var shallow := p.y > 30.0 and p.y < 40.0 or (p.y < -15.0 and p.y > -20.0)
@@ -1103,6 +1119,9 @@ func _street_trees() -> void:
 func _clear_for_tree(p: Vector2) -> bool:
 	if coast.street_distance(p.x, p.y) < 1.5:
 		return false
+	for r in _keep_clear:
+		if r.has_point(p):
+			return false
 	for body in _solids.get_children():
 		var b := body as StaticBody3D
 		var shape := (b.get_child(0) as CollisionShape3D).shape as BoxShape3D
