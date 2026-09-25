@@ -36,13 +36,19 @@ func set_running(running: bool) -> void:
 
 
 ## Fire-and-forget positional one-shot; the player node frees itself
-## when the sample ends.
+## when the sample ends. make() sets looping on the shared stream it
+## loads, so a one-shot of a file some loop also uses plays a copy with
+## the loop off, or it would never end.
 static func play_once(parent: Node3D, stream_path: String, at: Vector3,
 		volume_db_: float = -8.0, pitch: float = 1.0) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	var node := AudioStreamPlayer3D.new()
-	node.stream = load(stream_path) as AudioStreamWAV
+	var stream := load(stream_path) as AudioStreamWAV
+	if stream.loop_mode != AudioStreamWAV.LOOP_DISABLED:
+		stream = stream.duplicate() as AudioStreamWAV
+		stream.loop_mode = AudioStreamWAV.LOOP_DISABLED
+	node.stream = stream
 	node.position = at
 	node.volume_db = volume_db_
 	node.pitch_scale = pitch
