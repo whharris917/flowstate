@@ -386,8 +386,9 @@ static func _oak(rng: RandomNumberGenerator) -> ArrayMesh:
 	return mesh
 
 
-## A white pine: a straight trunk, bare below, then whorls of level
-## branches ending in soft tufts, irregular.
+## A white pine: a straight trunk bare below, then whorls of level
+## boughs far apart and irregular, some missing, each a flat spray of
+## needles, the crown open and ragged, flattening at the top.
 static func _pine(rng: RandomNumberGenerator) -> ArrayMesh:
 	_ensure_materials()
 	var bark := SurfaceTool.new()
@@ -395,31 +396,34 @@ static func _pine(rng: RandomNumberGenerator) -> ArrayMesh:
 	var needles := SurfaceTool.new()
 	needles.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var col := Color(0.30, 0.25, 0.20)
-	_limb(bark, Vector3.ZERO, Vector3(0, REF_H, 0), 0.3, 0.04, 7, col)
-	var y := REF_H * 0.3
-	while y < REF_H * 0.98:
+	_limb(bark, Vector3.ZERO, Vector3(0, REF_H * 0.97, 0), 0.3, 0.05, 7, col)
+	var y := REF_H * rng.randf_range(0.3, 0.38)
+	while y < REF_H * 0.95:
 		var up := y / REF_H
-		var count := 5 + rng.randi() % 3
+		var count := 4 + rng.randi() % 2
+		var turn := rng.randf_range(0.0, TAU)
 		for k in count:
-			if rng.randf() < 0.15:
+			if rng.randf() < 0.25:
 				continue
-			var az := TAU * k / count + rng.randf_range(-0.3, 0.3)
-			var reach := (1.1 - up) * REF_H * 0.3 + 0.4
-			var out := Vector3(cos(az), rng.randf_range(0.02, 0.15), sin(az)).normalized()
-			var tip := Vector3(0, y, 0) + out * reach
-			_limb(bark, Vector3(0, y, 0), tip, 0.06, 0.02, 4, col)
-			# Brushes of needles along the branch: short cards turned every
-			# way, thickest toward the tip, so each tuft is a soft mass.
-			var tufts := 1 + int(reach / 1.2)
-			for t in tufts:
-				var p := Vector3(0, y, 0).lerp(tip, 0.35 + 0.65 * float(t + 1) / tufts)
-				for q in 3:
-					var basis := Basis.from_euler(Vector3(rng.randf_range(-0.6, 0.6), rng.randf_range(0.0, TAU), rng.randf_range(-0.6, 0.6)))
-					var shade := Color.WHITE * rng.randf_range(0.8, 1.05)
-					shade.a = 1.0
-					var size := rng.randf_range(0.32, 0.45)
-					_card(needles, p + Vector3(0, 0.08, 0), basis.x * size, basis.z * size, (out * 0.3 + Vector3.UP).normalized(), shade)
-		y += REF_H * rng.randf_range(0.055, 0.08)
+			var az := turn + TAU * k / count + rng.randf_range(-0.35, 0.35)
+			var out := Vector3(cos(az), 0, sin(az))
+			var reach := ((1.05 - up) * REF_H * 0.3 + 0.6) * rng.randf_range(0.7, 1.2)
+			var lift := deg_to_rad(rng.randf_range(-6.0, 10.0))
+			var dir := (out * cos(lift) + Vector3.UP * sin(lift)).normalized()
+			var root := Vector3(0, y, 0)
+			_limb(bark, root, root + dir * reach * 0.8, 0.07, 0.02, 4, col)
+			var side := Vector3(-out.z, 0, out.x)
+			var shade := Color.WHITE * rng.randf_range(0.8, 1.05)
+			shade.a = 1.0
+			var n := (out * 0.3 + Vector3.UP * 0.7).normalized()
+			var mid := root + dir * reach * 0.55
+			_card(needles, mid, side * reach * 0.38, dir * reach * 0.48, n, shade)
+			_card(needles, mid + Vector3(0, 0.12, 0), (side * 0.7 + Vector3.UP * 0.7).normalized() * reach * 0.26, dir * reach * 0.45, n, shade * 0.9)
+		y += REF_H * rng.randf_range(0.08, 0.12)
+	var top := Vector3(0, REF_H * 0.95, 0)
+	for k in 3:
+		var a := TAU * k / 3.0
+		_card(needles, top, Vector3(cos(a), 0, sin(a)) * 0.9, Vector3(-sin(a), 0.2, cos(a)) * 0.9, Vector3.UP, Color.WHITE)
 	var mesh := bark.commit()
 	needles.commit(mesh)
 	mesh.surface_set_material(0, _bark_mat)
@@ -438,19 +442,22 @@ static func _shrub(rng: RandomNumberGenerator, flowering: bool) -> ArrayMesh:
 	var leaves := SurfaceTool.new()
 	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var col := Color(0.35, 0.3, 0.25)
-	var crown := Vector3(0, REF_H * 0.55, 0)
-	for k in 9:
+	# A rounded mass: leaf clusters through an ellipsoid over a few short
+	# stems, thickest at its skin.
+	var crown := Vector3(0, REF_H * 0.5, 0)
+	var rx := REF_H * 0.42
+	var ry := REF_H * 0.42
+	for k in 7:
 		var az := rng.randf_range(0.0, TAU)
-		var tip := Vector3(cos(az) * REF_H * 0.3, REF_H * rng.randf_range(0.6, 0.95), sin(az) * REF_H * 0.3)
-		_limb(bark, Vector3(cos(az) * 0.3, 0, sin(az) * 0.3), tip, 0.12, 0.05, 4, col)
-		for k2 in 3:
-			var p := tip.lerp(crown, 0.25 * k2) + Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.8, 0.6), rng.randf_range(-1, 1))
-			_cluster(leaves, rng, p, crown, REF_H * 0.3)
-		if flowering:
-			for f in 3:
-				var head := tip + Vector3(rng.randf_range(-1.2, 1.2), rng.randf_range(-0.6, 0.4), rng.randf_range(-1.2, 1.2))
-				var bloom := Color(0.82, 0.62, 0.66).lerp(Color(0.62, 0.66, 0.82), rng.randf()).lerp(Color(0.78, 0.72, 0.6), 0.35)
-				_ball(bark, head, REF_H * 0.09, bloom)
+		var tip := crown + Vector3(cos(az) * rx * 0.5, rng.randf_range(0.0, ry * 0.5), sin(az) * rx * 0.5)
+		_limb(bark, Vector3(cos(az) * 0.2, 0, sin(az) * 0.2), tip, 0.1, 0.04, 4, col)
+	for k in 30:
+		var d := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.8, 1), rng.randf_range(-1, 1)).normalized() * sqrt(rng.randf_range(0.35, 1.0))
+		var p := crown + Vector3(d.x * rx, d.y * ry, d.z * rx)
+		_cluster(leaves, rng, p, crown, REF_H * 0.28)
+		if flowering and k % 3 == 0 and d.y > -0.3:
+			var bloom := Color(0.82, 0.62, 0.66).lerp(Color(0.62, 0.66, 0.82), rng.randf()).lerp(Color(0.78, 0.72, 0.6), 0.35)
+			_ball(bark, crown + Vector3(d.x * rx, d.y * ry, d.z * rx) * 1.02, REF_H * 0.1, bloom)
 	var mesh := bark.commit()
 	leaves.commit(mesh)
 	mesh.surface_set_material(0, _bark_mat)
