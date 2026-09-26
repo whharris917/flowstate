@@ -288,3 +288,10 @@ A second search found a set of 2008 photographs (courthouses.co): the courtroom 
 - **North hall.** The old courthouse bell on a panelled pedestal, the bronze commissioners' plaque, a notice board with papers pinned to it, a wall case. The plaster is a warmer cream.
 - **Outside.** The government centre is a tan tower striped with its window bands over a white low block, not brick.
 
+## 2026-09-26: "The Clock Tower Ghost", a comic at the courthouse
+
+The director asked for a family-friendly spooky audiovisual comic set at the courthouse: the ghost of a carpenter who fell from the clock tower during its building, the director and their twin brother Kyle as red-haired six-year-olds in the back of their mom Juli's silver 1989 Accord, trying to spot him.
+
+- **Backgrounds** are rendered by `world/comic_probe.tscn` from cameras of its own at blue hour (18:45, the town lit, a blue fill light): the Accord (`world/accord_89.gd`, art only, built to a photograph of the third generation) on North Main, a traffic signal at West Jefferson, a green glow at the cupola's vents, and scaffolding round the cupola for the 1886 flashback. The clock shows the story's time, four minutes to seven and then seven.
+- **The comic** is a published page (claude.ai artifact): seventeen panels with the people, the ghost, the car's inside and the lettering drawn over the renders, readable as a page or played as a movie with a slow camera drift, the beats arriving in turn, synthesized sound (crickets, the engine, the clock's tick and its bell striking seven, the ghost, wind, a music box) and optional read-aloud voices.
+
