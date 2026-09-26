@@ -8,6 +8,9 @@ class_name CourthouseMap
 
 var courthouse: UnionCourthouse
 var square: CourthouseSquare
+## Claude's body here, and the line that brings him his scripts.
+var clerk: Clerk
+var clerk_link: ClerkLink
 
 
 func _init() -> void:
@@ -57,6 +60,13 @@ func _on_time_of_day(horizon: float, twilight: float) -> void:
 
 
 func _after_plant() -> void:
+	# The clerk waits on the west plaza by the monument, facing the porch.
+	clerk = Clerk.new()
+	add_child(clerk)
+	clerk.place(Vector3(-19.0, 0.3, 2.2), -PI / 2.0)
+	clerk_link = ClerkLink.new()
+	clerk_link.clerk = clerk
+	add_child(clerk_link)
 	if not FileAccess.file_exists(plant_save_path):
 		# On North Main Street's walk before the courthouse, looking east
 		# up the brick path to the west porch.

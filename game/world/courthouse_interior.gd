@@ -343,7 +343,7 @@ static func _ground_floor() -> void:
 		_portrait(UnionCourthouse.face(Vector3(-1, 0, 0), Vector3(HALL - 0.08, 0, e * 3.2)), y0 + 2.1, 0.8, 1.0, -e)
 	# A glass case of the county's things in the cross hall.
 	for s: float in [-1.0, 1.0]:
-		_case(Transform3D(Basis(), Vector3(s * 5.5, y0, -1.1)), 1.6, 0.5, 1.0)
+		_case(Transform3D(Basis(), Vector3(s * 7.8, y0, -1.1)), 1.6, 0.5, 1.0)
 	_heritage_room()
 	# The other three rooms of the main block: offices.
 	_office(Transform3D(Basis(Vector3.UP, PI), Vector3(5.3, y0, -4.8)), 0)
@@ -1151,7 +1151,7 @@ static func _chambers(xf: Transform3D) -> void:
 	for z: float in [-2.2, -0.4, 1.4]:
 		_bookcase(xf * Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(-3.1, 0, z)), 1.7, 2.4)
 	var hide := c(LEATHER, CourthouseKit.K_CLOTH)
-	var sofa := xf * Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, 0, 2.6))
+	var sofa := xf * Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, 0, -2.6))
 	k.box("wall", sofa, Vector3(0, 0.22, 0), Vector3(2.0, 0.44, 0.8), hide)
 	k.box("wall", sofa, Vector3(0, 0.6, 0.32), Vector3(2.0, 0.5, 0.2), hide)
 	for s: float in [-1.0, 1.0]:
