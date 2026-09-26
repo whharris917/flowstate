@@ -10,7 +10,7 @@ All requests and answers are JSON. Use `curl`. Examples below use the actor name
 
     curl -s -X POST http://127.0.0.1:47886/actors/NAME/do -d '{"commands":[ ... ], "view": false}'
 
-The call returns when you have finished, with what you now perceive. Set `"view": true` to also get a picture of what you see (the answer's `view` is a PNG file path; open it to look). Pictures cost time, so use them when words aren't enough.
+The call returns when you have finished, with what you now perceive. Set `"view": true` to also get a picture of what you see (the answer's `view` is a PNG file path; open it to look). To see an action while it happens, add `"view_at": 1.2` (seconds after the start) and `"view_cam": "front"` (or `follow`, `eyes`): the answer's `view_mid` is that picture. Pictures cost time, so use them when words aren't enough. Lines spoken aloud never appear in your pictures.
 
 What you perceive:
 - `you`: what you are doing, what you sit on, where you look, how high up you are, how your last move went (`moved_m`, `blocked`, `climbed_m`, or `failed` with the reason).
@@ -26,11 +26,13 @@ Perceive without acting: `curl -s "http://127.0.0.1:47886/actors/NAME/perceive?v
 By intention. Use the ids you perceive; the world finds the way, round corners and up stairs:
 - `{"do":"go","to":"<id or actor name>"}`: walk to a thing, door, seat, stair, or person.
 - `{"do":"climb","stairs":"<id>","to":0.74}`: up or down stairs to that share of their height (0 the bottom, 1 the top).
-- `{"do":"sit","on":"<seat id>"}` and `{"do":"stand"}`.
+- `{"do":"sit","on":"<seat id>"}` and `{"do":"stand"}`. A bench or pew seats several (its description says how many); you take the next free place, so two can sit side by side.
 - `{"do":"look_at","target":"<id or actor name>"}`: turn your head and body to it.
 - `{"do":"act","name":"<action>"}`: do one of your actions (below).
 - `{"do":"say","text":"...","to":"<actor, optional>"}`: speak aloud. Heard by everyone within 14 m and shown over your head.
 - `{"do":"message","to":"<actor>","text":"..."}`: a private note, wherever they are.
+
+Walking, you keep to the right of anyone coming the other way, and step aside if someone stands in your path.
 
 By body: `{"do":"forward","m":2}`, `{"do":"back","m":1}`, `{"do":"turn","deg":45}` (positive = left), `{"do":"look","pitch":20}` (positive = up), `{"do":"wait","secs":2}`.
 

@@ -365,7 +365,7 @@ static func _heritage_room() -> void:
 			_chair(Transform3D(Basis(Vector3.UP, s * PI / 2.0), Vector3(-3.0 + s * 0.8, y0, -5.1 + j * 0.8)))
 	_pendant(Vector3(-5.3, C1, -4.8), 1.2, true, 7.0)
 	# An old county map framed on the cross hall's wall.
-	_map(UnionCourthouse.face(Vector3(0, 0, -1), Vector3(-5.0, 0, -1.5 - 0.08)), y0 + 2.2, 1.6, 1.1)
+	_map(UnionCourthouse.face(Vector3(0, 0, -1), Vector3(-7.6, 0, 1.5 - 0.08)), y0 + 1.7, 1.6, 1.1)
 	var label := Label3D.new()
 	label.text = "HERITAGE ROOM"
 	label.font_size = 40

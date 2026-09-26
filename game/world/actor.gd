@@ -41,6 +41,10 @@ var current: Dictionary = {}
 var log_lines: Array[String] = []
 var head_pitch := 0.0
 var sitting := ""
+var sit_spot := 0
+## Speech over heads is drawn on its own layer, left out of the actors'
+## own cameras so a line said close by never fills their view.
+const SPEECH_LAYER := 1 << 19
 var last_walk := {}
 var _targets: Array[Vector3] = []
 var _t := 0.0
@@ -87,6 +91,7 @@ func _ready() -> void:
 	_say.width = 620.0
 	_say.position.y = 2.25
 	_say.no_depth_test = true
+	_say.layers = SPEECH_LAYER
 	_say.visible = false
 	add_child(_say)
 	for i in 4:
@@ -214,17 +219,25 @@ func _begin(c: Dictionary) -> void:
 			if seat.is_empty() or seat["kind"] != "seat":
 				_fail("sit: no seat called '%s'" % c.get("on", ""))
 				return
-			if _occupied(seat["id"]):
-				_fail("sit: someone is already sitting on %s" % seat["id"])
+			var spot := _free_spot(seat)
+			if spot < 0:
+				_fail("sit: %s is full" % seat["id"])
 				return
 			_targets = _plan(seat["approach"], 0.0)
-			queue.push_front({"do": "_settle", "seat": seat["id"]})
+			queue.push_front({"do": "_settle", "seat": seat["id"], "spot": spot})
 		"_settle":
 			var seat := CourthouseAffordances.find(str(c.get("seat", "")))
+			var spot := int(c.get("spot", 0))
+			if _free_spot(seat) < 0 or _spot_taken(seat["id"], spot):
+				spot = _free_spot(seat)
+			if spot < 0:
+				_fail("sit: %s filled up" % seat["id"])
+				return
 			_settle_from = global_position
-			_settle_to = seat["at"]
+			_settle_to = _spot_point(seat, spot)
 			_yaw_goal = float(seat["yaw"])
 			sitting = seat["id"]
+			sit_spot = spot
 			_shape.disabled = true
 			var sit := action_def("sit")
 			if not sit.is_empty():
@@ -369,13 +382,38 @@ func _point_of(target: String) -> Variant:
 	return null
 
 
-func _occupied(seat: String) -> bool:
+## The first free place on a seat, -1 when every place is taken.
+func _free_spot(seat: Dictionary) -> int:
+	for k in int(seat.get("spots", 1)):
+		if not _spot_taken(seat["id"], k):
+			return k
+	return -1
+
+
+func _spot_taken(seat: String, k: int) -> bool:
 	if stage == null:
 		return false
 	for a: Actor in stage.actors.values():
-		if a != self and a.sitting == seat:
+		if a != self and a.sitting == seat and a.sit_spot == k:
 			return true
 	return false
+
+
+func _taken(seat: String) -> int:
+	var n := 0
+	if stage != null:
+		for a: Actor in stage.actors.values():
+			if a != self and a.sitting == seat:
+				n += 1
+	return n
+
+
+## Where place k of a seat is: spread along it, gap apart, round its middle.
+func _spot_point(seat: Dictionary, k: int) -> Vector3:
+	var n := int(seat.get("spots", 1))
+	var yaw := float(seat["yaw"])
+	var right := Vector3(cos(yaw), 0, -sin(yaw))
+	return (seat["at"] as Vector3) + right * (k - (n - 1) / 2.0) * float(seat.get("gap", 0.55))
 
 
 ## The walk to a point: straight when it is in plain sight on this
@@ -406,6 +444,53 @@ func _plan(to: Vector3, short: float) -> Array[Vector3]:
 		if d.length() > short:
 			out.append(end - d.normalized() * short)
 	return out
+
+
+## Stopped by another actor in the way: step aside to the right once
+## and carry on. False when no one is in the way or it has already tried.
+func _sidestep() -> bool:
+	if current.get("_sidestepped", false) or stage == null or _targets.is_empty():
+		return false
+	var d := _targets[0] - global_position
+	d.y = 0.0
+	for other: Actor in stage.actors.values():
+		if other == self:
+			continue
+		var to := other.global_position - global_position
+		to.y = 0.0
+		if to.length() < 1.2 and d.normalized().dot(to.normalized()) > 0.3:
+			current["_sidestepped"] = true
+			var right := Vector3(-d.normalized().z, 0, d.normalized().x)
+			_targets.push_front(global_position + right * 0.8 + d.normalized() * 0.3)
+			_note("stepped aside for " + other.actor_name)
+			return true
+	return false
+
+
+## How near a point on the way counts as reached: the end exactly; a
+## corner on the way loosely, so it is rounded rather than touched; a
+## corner someone else is standing on, from further off. Sitting down,
+## the last stretch to the seat is slid, so near enough will do.
+func _arrive_within(p: Vector3, last: bool, what: String) -> float:
+	var tol := ARRIVE if last else 0.6
+	if last and what == "sit":
+		tol = 0.9
+	if stage != null:
+		for other: Actor in stage.actors.values():
+			if other != self and _flat(other.global_position, p) < 0.8:
+				return maxf(tol, 1.3)
+	return tol
+
+
+## A camera spot pulled in toward the head if a wall stands between.
+func _clear_spot(want: Vector3) -> Vector3:
+	var head := global_position + Vector3(0, 1.5, 0)
+	var q := PhysicsRayQueryParameters3D.create(head, want, 1, _exclude())
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return want
+	var at: Vector3 = hit["position"]
+	return at + (head - at).normalized() * 0.25
 
 
 func _flat(a: Vector3, b: Vector3) -> float:
@@ -500,7 +585,7 @@ func _step(delta: float) -> Vector3:
 	_t += delta
 	var what := str(current.get("do", ""))
 	if what in ["_settle", "_rise"]:
-		var f := clampf(_t / 0.7, 0.0, 1.0)
+		var f := clampf(_t / (0.6 + _settle_from.distance_to(_settle_to) / 1.6), 0.0, 1.0)
 		global_position = _settle_from.lerp(_settle_to, f)
 		if f >= 1.0:
 			if what == "_rise":
@@ -512,7 +597,7 @@ func _step(delta: float) -> Vector3:
 		while not _targets.is_empty():
 			var to := _targets[0] - global_position
 			to.y = 0.0
-			if to.length() > ARRIVE:
+			if to.length() > _arrive_within(_targets[0], _targets.size() == 1, what):
 				break
 			_targets.pop_front()
 			_stuck_check = 0.0
@@ -522,6 +607,10 @@ func _step(delta: float) -> Vector3:
 			return Vector3.ZERO
 		_stuck_check += delta
 		if _stuck_check > (1.0 if what in ["forward", "back"] else 2.0):
+			if global_position.distance_to(_stuck_from) < 0.25 and _sidestep():
+				_stuck_check = 0.0
+				_stuck_from = global_position
+				return Vector3.ZERO
 			if global_position.distance_to(_stuck_from) < 0.25:
 				_blocked = true
 				var t := _targets[0]
@@ -534,7 +623,22 @@ func _step(delta: float) -> Vector3:
 			_stuck_from = global_position
 		var d := _targets[0] - global_position
 		d.y = 0.0
-		return d.normalized() * minf(speed, d.length() / maxf(delta, 0.001))
+		var v := d.normalized() * minf(speed, d.length() / maxf(delta, 0.001))
+		# Keep to the right of anyone close ahead, as people do in a hall;
+		# two who meet both step right and pass.
+		if stage != null and v.length() > 0.05:
+			var dir := v.normalized()
+			var right := Vector3(-dir.z, 0, dir.x)
+			for other: Actor in stage.actors.values():
+				if other == self or other.sitting != "":
+					continue
+				var to := other.global_position - global_position
+				to.y = 0.0
+				var dist := to.length()
+				if dist < 1.6 and absf(other.global_position.y - global_position.y) < 1.0 and dir.dot(to) > 0.0:
+					v += right * speed * (1.6 - dist) * 1.4
+			v = v.normalized() * minf(speed, d.length() / maxf(delta, 0.001))
+		return v
 	if what in ["face", "look", "turn", "look_at"]:
 		if (_t > 0.4 and absf(angle_difference(rotation.y, _yaw_goal)) < 0.03) or _t > 3.0:
 			_finish()
@@ -596,8 +700,9 @@ func perceive() -> Dictionary:
 			"direction": _bearing(fwd, aim - eye), "height": _height(aim.y - global_position.y), "can": a["verbs"]}
 		if sitting == a["id"]:
 			entry["note"] = "you are sitting here"
-		elif a["kind"] == "seat" and _occupied(a["id"]):
-			entry["note"] = "someone is sitting here"
+		elif a["kind"] == "seat" and _taken(a["id"]) > 0:
+			var n := _taken(a["id"])
+			entry["note"] = ("%d of its %d places taken" % [n, int(a.get("spots", 1))]) if int(a.get("spots", 1)) > 1 else "someone is sitting here"
 		seen.append(entry)
 	seen.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["distance_m"]) < float(y["distance_m"]))
 	var people: Array[Dictionary] = []
@@ -605,7 +710,7 @@ func perceive() -> Dictionary:
 		for other: Actor in stage.actors.values():
 			if other == self:
 				continue
-			var aim := other.global_position + Vector3(0, 1.5, 0)
+			var aim := other.global_position + Vector3(0, 1.0 if other.sitting != "" else 1.5, 0)
 			if eye.distance_to(aim) > SEE_M or not _sees(eye, aim):
 				continue
 			var their := -other.global_transform.basis.z
@@ -723,6 +828,7 @@ func capture(which: String, path: String) -> Error:
 		var cam := Camera3D.new()
 		cam.fov = 70.0 if which == "eyes" else 55.0
 		cam.near = 0.3 if which == "eyes" else 0.05
+		cam.cull_mask &= ~SPEECH_LAYER
 		v.add_child(cam)
 		add_child(v)
 		_cams[which] = cam
@@ -733,10 +839,10 @@ func capture(which: String, path: String) -> Error:
 		cam.global_transform = Transform3D(Basis(), head)
 		cam.look_at(head + fwd.rotated(global_transform.basis.x, deg_to_rad(head_pitch)), Vector3.UP)
 	elif which == "front":
-		cam.global_transform = Transform3D(Basis(), global_position + Vector3(0, 1.6, 0) + fwd * 2.6)
+		cam.global_transform = Transform3D(Basis(), _clear_spot(global_position + Vector3(0, 1.6, 0) + fwd * 2.6))
 		cam.look_at(global_position + Vector3(0, 1.25, 0), Vector3.UP)
 	else:
-		cam.global_transform = Transform3D(Basis(), global_position + Vector3(0, 3.0, 0) - fwd * 5.0)
+		cam.global_transform = Transform3D(Basis(), _clear_spot(global_position + Vector3(0, 3.0, 0) - fwd * 5.0))
 		cam.look_at(global_position + Vector3(0, 1.2, 0), Vector3.UP)
 	var vp := cam.get_parent() as SubViewport
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE

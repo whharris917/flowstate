@@ -8,8 +8,9 @@ extends RefCounted
 ## the ones in their line of sight; the stage walks them to one by name.
 ##
 ## Each: {id, kind: door|stairs|seat|thing|window, desc, at, verbs}, and
-## a seat's facing (yaw, radians, 0 north, pi/2 west) and the floor spot
-## to approach it from, a stair's path from its foot to its head.
+## a seat's facing (yaw, radians, 0 north, pi/2 west), the floor spot to
+## approach it from and how many it seats (spots, gap metres apart along
+## it), a stair's path from its foot to its head.
 
 const F1 := UnionCourthouse.F1
 const F2 := UnionCourthouse.F2
@@ -40,8 +41,10 @@ static func _add(id: String, kind: String, desc: String, at: Vector3, verbs: Arr
 	_all.append(a)
 
 
-static func _seat(id: String, desc: String, at: Vector3, yaw: float, approach: Vector3) -> void:
-	_add(id, "seat", desc, at, ["sit", "look_at"], {"yaw": yaw, "approach": approach})
+static func _seat(id: String, desc: String, at: Vector3, yaw: float, approach: Vector3, spots := 1, gap := 0.55) -> void:
+	if spots > 1:
+		desc += "; seats %d" % spots
+	_add(id, "seat", desc, at, ["sit", "look_at"], {"yaw": yaw, "approach": approach, "spots": spots, "gap": gap})
 
 
 static func _stairs(id: String, desc: String, path: Array[Vector3]) -> void:
@@ -63,7 +66,7 @@ static func _build() -> void:
 		for e: float in [-1.0, 1.0]:
 			k += 1
 			_seat("park_bench_%d" % k, "a wooden park bench on iron legs", Vector3(s * 22.0, 0.0, e * 7.4 + e * 0.05),
-				0.0 if e > 0.0 else PI, Vector3(s * 22.0, 0.0, e * 7.4 - e * 0.8))
+				0.0 if e > 0.0 else PI, Vector3(s * 22.0, 0.0, e * 7.4 - e * 0.8), 3, 0.62)
 	# The doors.
 	_add("west_doors", "door", "the building's west doors, standing open", Vector3(-10.0, F1, 0), ["go_through", "look_at"])
 	_add("east_doors", "door", "the building's east doors, standing open", Vector3(10.0, F1, 0), ["go_through", "look_at"])
@@ -89,11 +92,11 @@ static func _build() -> void:
 	_add("bell", "thing", "a big bronze bell hung on a panelled pedestal", Vector3(0, F1, -16.4), ["approach", "look_at"])
 	_add("plaque", "thing", "a bronze plaque listing county commissioners", Vector3(-1.3, F1 + 1.8, -16.9), ["approach", "look_at"])
 	_add("notice_board", "thing", "a notice board with papers pinned to it", Vector3(1.3, F1 + 1.65, -18.6), ["approach", "look_at"])
-	_add("map", "thing", "a framed old map of the county", Vector3(-5.0, F1 + 2.2, -1.4), ["approach", "look_at"])
+	_add("map", "thing", "a framed old map of the county", Vector3(-7.6, F1 + 1.7, 1.42), ["approach", "look_at"])
 	_add("display_cases", "thing", "glass display cases of old things: a ledger, a gavel, papers", Vector3(-7.8, F1 + 0.8, -1.1), ["approach", "look_at"])
 	for e: float in [-1.0, 1.0]:
 		_seat("hall_bench_%s" % ("north" if e < 0.0 else "south"), "a slatted wooden bench against the hall wall",
-			Vector3(-1.05, F1, e * 6.3), -PI / 2.0, Vector3(-0.4, F1, e * 6.3))
+			Vector3(-1.05, F1, e * 6.3), -PI / 2.0, Vector3(-0.4, F1, e * 6.3), 3, 0.55)
 	# The courtroom.
 	_add("judges_bench", "thing", "a raised panelled bench, a tall navy leather chair behind it", Vector3(0, F2 + 0.6, -IZ + 2.1), ["approach", "look_at"])
 	_seat("judges_chair", "the judge's tall navy leather chair", Vector3(0, F2 + 0.55, -IZ + 0.75), PI, Vector3(-2.4, F2 + 0.55, -IZ + 0.7))
@@ -116,14 +119,14 @@ static func _build() -> void:
 		var pz := 1.9 + row * 0.92
 		for s: float in [-1.0, 1.0]:
 			_seat("pew_%d_%s" % [row + 1, "west" if s < 0.0 else "east"], "a public pew, row %d" % (row + 1),
-				Vector3(s * 2.4, F2, pz + 0.04), 0.0, Vector3(s * 0.7, F2, pz + 0.1))
+				Vector3(s * 4.7, F2, pz + 0.04), 0.0, Vector3(s * 0.7, F2, pz + 0.1), 6, 1.05)
 	_add("gallery", "thing", "a gallery over the back of the courtroom, a brass rail along its front", Vector3(0, F2 + 3.0, 3.6), ["approach", "look_at"])
 	for t in 4:
 		for s: float in [-1.0, 1.0]:
 			var gy := F2 + 3.0 + 0.3 * t
 			var gz := 3.4 + 0.95 * t + 0.37
 			_seat("gallery_pew_%d_%s" % [t + 1, "west" if s < 0.0 else "east"], "a pew in the gallery, row %d" % (t + 1),
-				Vector3(s * 3.0, gy, gz), 0.0, Vector3(s * 0.8, gy, gz))
+				Vector3(s * 4.9, gy, gz), 0.0, Vector3(s * 0.8, gy, gz), 6, 1.2)
 	_add("frieze", "thing", "a frieze of green garlands and gilt bows round the top of the walls", Vector3(0, 12.9, -IZ), ["look_at"])
 	_add("charter", "thing", "a framed document hung in an arched niche behind the bench", Vector3(0, F2 + 2.7, -IZ), ["approach", "look_at"])
 	for s: float in [-1.0, 1.0]:

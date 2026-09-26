@@ -213,11 +213,19 @@ func _actor(a: Actor, m: String, rest: PackedStringArray, req: Dictionary) -> Va
 				return {"error": "send {\"commands\": [...]}"}
 			a.last_walk = {}
 			a.run(cmds, append)
+			# A picture part-way through, to see an action as it happens.
+			var mid := {}
+			if b is Dictionary and (b as Dictionary).has("view_at"):
+				_mid_shot(a, float(b["view_at"]), str((b as Dictionary).get("view_cam", "front")), mid)
 			if wait:
 				await _until_idle(a)
+			while b is Dictionary and (b as Dictionary).has("view_at") and not mid.has("path"):
+				await get_tree().create_timer(0.1).timeout
 			var out := a.perceive()
 			if view:
 				out["view"] = await _actor_shot(a, "eyes")
+			if mid.has("path"):
+				out["view_mid"] = mid["path"]
 			return out
 		["POST", "stop"]:
 			a.stop()
@@ -276,6 +284,11 @@ func _spawn(b: Variant) -> Dictionary:
 			p = af.get("approach", af["at"])
 	var a := stage.spawn(n, str(b.get("preset", "plain")), p + Vector3(0, 0.15, 0), deg_to_rad(float(b.get("yaw_deg", 0.0))))
 	return {"spawned": a.actor_name, "handbook": "/handbook"}
+
+
+func _mid_shot(a: Actor, after: float, cam: String, into: Dictionary) -> void:
+	await get_tree().create_timer(clampf(after, 0.0, 30.0)).timeout
+	into["path"] = await _actor_shot(a, cam)
 
 
 func _until_idle(a: Actor) -> void:
