@@ -8,9 +8,11 @@ class_name CourthouseMap
 
 var courthouse: UnionCourthouse
 var square: CourthouseSquare
-## Claude's body here, and the line that brings him his scripts.
-var clerk: Clerk
-var clerk_link: ClerkLink
+## The actors here (the clerk, Claude's own body, first among them),
+## the director's camera, and the line that brings them their scripts.
+var stage: Stage
+var stage_camera: StageCamera
+var stage_link: StageLink
 
 
 func _init() -> void:
@@ -60,13 +62,18 @@ func _on_time_of_day(horizon: float, twilight: float) -> void:
 
 
 func _after_plant() -> void:
+	stage = Stage.new(self)
+	add_child(stage)
 	# The clerk waits on the west plaza by the monument, facing the porch.
-	clerk = Clerk.new()
-	add_child(clerk)
-	clerk.place(Vector3(-19.0, 0.3, 2.2), -PI / 2.0)
-	clerk_link = ClerkLink.new()
-	clerk_link.clerk = clerk
-	add_child(clerk_link)
+	stage.spawn("clerk", "clerk", Vector3(-19.0, 0.3, 2.2), -PI / 2.0)
+	stage_camera = StageCamera.new()
+	stage_camera.stage = stage
+	stage_camera.player_cam = player.camera
+	add_child(stage_camera)
+	stage_link = StageLink.new()
+	stage_link.stage = stage
+	stage_link.camera = stage_camera
+	add_child(stage_link)
 	if not FileAccess.file_exists(plant_save_path):
 		# On North Main Street's walk before the courthouse, looking east
 		# up the brick path to the west porch.

@@ -17,10 +17,15 @@ const GAL := F2 + 3.9
 const NODES := {
 	# The square.
 	"west_walk": Vector3(-29.4, GROUND, 0.0),
-	"monument_w": Vector3(-26.0, GROUND, 0.0),
-	"monument_n": Vector3(-22.5, GROUND, -3.6),
-	"monument_e": Vector3(-19.0, GROUND, 0.0),
-	"monument_s": Vector3(-22.5, GROUND, 3.6),
+	# Eight points round the monument, clear of its railing's corners.
+	"monument_w": Vector3(-26.6, GROUND, 0.0),
+	"monument_nw": Vector3(-25.4, GROUND, -2.9),
+	"monument_n": Vector3(-22.5, GROUND, -4.1),
+	"monument_ne": Vector3(-19.6, GROUND, -2.9),
+	"monument_e": Vector3(-18.4, GROUND, 0.0),
+	"monument_se": Vector3(-19.6, GROUND, 2.9),
+	"monument_s": Vector3(-22.5, GROUND, 4.1),
+	"monument_sw": Vector3(-25.4, GROUND, 2.9),
 	"west_steps": Vector3(-16.9, GROUND, 0.0),
 	"west_porch": Vector3(-12.2, F1, 0.0),
 	"east_porch": Vector3(12.2, F1, 0.0),
@@ -72,8 +77,10 @@ const NODES := {
 }
 
 const LEGS := [
-	["west_walk", "monument_w"], ["monument_w", "monument_n"], ["monument_n", "monument_e"],
-	["monument_e", "monument_s"], ["monument_s", "monument_w"], ["monument_e", "west_steps"],
+	["west_walk", "monument_w"], ["monument_w", "monument_nw"], ["monument_nw", "monument_n"],
+	["monument_n", "monument_ne"], ["monument_ne", "monument_e"], ["monument_e", "monument_se"],
+	["monument_se", "monument_s"], ["monument_s", "monument_sw"], ["monument_sw", "monument_w"],
+	["monument_e", "west_steps"],
 	["west_steps", "west_porch"], ["west_porch", "west_hall"], ["west_hall", "crossing"],
 	["crossing", "east_hall"], ["east_hall", "east_porch"], ["east_porch", "east_steps"],
 	["east_steps", "east_plaza"], ["east_plaza", "east_walk"],

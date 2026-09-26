@@ -660,7 +660,7 @@ static func _courtroom() -> void:
 		var rx := jx + 0.1 + row * 0.95
 		k.block("wall", g, Vector3(rx, y + ry / 2.0, -3.4), Vector3(0.95, ry, 5.6), wood)
 		for j in 6:
-			_chair(Transform3D(Basis(Vector3.UP, -PI / 2.0), Vector3(rx + 0.1, y + ry, -5.6 + j * 0.88)))
+			_chair(Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(rx + 0.1, y + ry, -5.6 + j * 0.88)))
 	_panelled(Transform3D(Basis(Vector3.UP, -PI / 2.0), Vector3(jx - 0.45, y, -3.4)), 5.6, 1.0, wood, panel, 6)
 	k.block("wall", g, Vector3(jx - 0.45, y + 1.02, -3.4), Vector3(0.14, 0.05, 5.7), wood)
 	_panelled(Transform3D(Basis(), Vector3(jx + 0.5, y, -0.55)), 2.1, 1.0, wood, panel, 2)
@@ -668,7 +668,7 @@ static func _courtroom() -> void:
 	for s: float in [-1.0, 1.0]:
 		_table(Transform3D(Basis(), Vector3(s * 2.6, y, -1.7)), 2.4, 1.0, 0.78, WALNUT)
 		for j in 3:
-			_chair(Transform3D(Basis(Vector3.UP, PI), Vector3(s * 2.6 - 0.8 + j * 0.8, y, -0.95)))
+			_chair(Transform3D(Basis(), Vector3(s * 2.6 - 0.8 + j * 0.8, y, -0.95)))
 	_lectern(Transform3D(Basis(), Vector3(0, y, -2.9)))
 	# The bar across the room, its gate in the aisle.
 	var bar_z := 0.6
