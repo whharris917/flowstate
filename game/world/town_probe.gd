@@ -29,6 +29,10 @@ func _run(world: TownMap) -> void:
 	world.set_time_of_day(18.1)
 	world.weather.wet = 1.0
 	world.weather._next_strike = 1000.0
+	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "main":
+		await _main_street(world, player)
+		get_tree().quit()
+		return
 	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "trees":
 		await _trees(world, player)
 		get_tree().quit()
@@ -125,6 +129,25 @@ func _trees(world: TownMap, player: Player) -> void:
 	await _view(player, Vector3(30.0, 0.4, 47.5), -PI / 2.0 + 0.2, 0.12, "trees_water")
 	await _view(player, Vector3(-14.0, 0.4, -38.0), 0.0, 0.08, "trees_woods")
 	await _view_zoom(player, Vector3(-20.0, 0.4, -35.0), -2.5, -0.35, 1.6, "trees_aerial")
+
+
+## Main Street by day and at dusk in the storm: down the street from the
+## corner of Harbor Street, the north row close to, the city hall, the
+## domed hall from the street's end, and from above.
+func _main_street(world: TownMap, player: Player) -> void:
+	world.set_weather(0.1)
+	world.weather.wet = 0.0
+	world.set_time_of_day(14.0)
+	await _view(player, Vector3(-9.0, 0.4, 12.5), -PI / 2.0, 0.1, "main_down")
+	await _view(player, Vector3(8.0, 0.4, 15.5), -PI / 2.0 - 0.9, 0.3, "main_north_row")
+	await _view(player, Vector3(30.0, 0.4, 9.0), PI / 2.0 + 0.9, 0.3, "main_south_row")
+	await _view(player, Vector3(2.0, 0.4, 9.0), PI - 0.2, 0.45, "main_city_hall")
+	await _view(player, Vector3(64.0, 0.4, 12.0), -PI / 2.0, 0.12, "main_dome")
+	await _view_zoom(player, Vector3(10.0, 30.0, -25.0), -PI * 0.75, -0.55, 0.0, "main_aerial")
+	world.set_weather(0.9)
+	world.weather.wet = 1.0
+	world.set_time_of_day(18.4)
+	await _view(player, Vector3(-9.0, 0.4, 12.5), -PI / 2.0, 0.1, "main_storm")
 
 
 ## Every house on the harbour side of Water Street, outside and in, at

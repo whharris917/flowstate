@@ -66,6 +66,9 @@ var street_mat: ShaderMaterial
 var lamp_mat: ShaderMaterial
 var iron_mat: StandardMaterial3D
 var steel_mat: StandardMaterial3D
+var gold_mat: StandardMaterial3D
+## The city hall clock's hands: [hour, minute] per dial, turned by set_clock.
+var clock_hands: Array[Array] = []
 ## The lights the lamps throw. A street lamp's is {light, energy,
 ## delay}: its photocell's delay, as a share of eight seconds, the same
 ## as its glass's. A lit room's is {light, energy, thr}: the darkness at
@@ -104,10 +107,7 @@ func build(c: TownCoast) -> void:
 	_make_materials()
 	var t0 := Time.get_ticks_msec()
 	_streets()
-	_main_street_north()
-	_diner(Vector2(2.0, 21.0))
-	_gas_station(Vector2(22.0, 19.5))
-	_grocery(Vector2(37.0, 19.0))
+	MainStreet.build(self)
 	_church(Vector2(60.0, 19.5))
 	_houses_all()
 	_main_lamps()
@@ -116,7 +116,7 @@ func build(c: TownCoast) -> void:
 	WaterStreet.dress(self)
 	_street_trees()
 	m.commit(self, {"wall": wall_mat, "glass": glass_mat, "street": street_mat, "lamp": lamp_mat, "clear": clear_mat,
-		"iron": iron_mat, "steel": steel_mat}, ["wall", "iron", "steel"])
+		"iron": iron_mat, "steel": steel_mat, "gold": gold_mat}, ["wall", "iron", "steel", "gold"])
 	_trees.finish(true, false, true)
 	add_child(_trees)
 	stats = {"trees": stats_trees, "houses": _houses, "lamps": lamps.size(), "signs": _signs, "triangles": m.triangles,
@@ -142,6 +142,10 @@ func _make_materials() -> void:
 	iron_mat.clearcoat_enabled = true
 	iron_mat.clearcoat = 0.3
 	steel_mat = ViewUtil.steel(Color(0.74, 0.76, 0.78))
+	gold_mat = StandardMaterial3D.new()
+	gold_mat.albedo_color = Color(1.0, 0.77, 0.34)
+	gold_mat.metallic = 1.0
+	gold_mat.roughness = 0.28
 	shade_mat = ShaderMaterial.new()
 	shade_mat.shader = load("res://world/town_shade.gdshader")
 	clear_mat = StandardMaterial3D.new()
@@ -189,6 +193,42 @@ func _sign(xf: Transform3D, text: String, size: int, color: Color, lit := false)
 	add_child(lbl)
 	_signs += 1
 	return lbl
+
+
+## A clock's two hands on a dial whose face is xf (+z out), turned to
+## the world's time by set_clock.
+func add_clock(xf: Transform3D) -> void:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.05, 0.05, 0.05)
+	mat.roughness = 0.6
+	var pair: Array = []
+	for len_: float in [0.6, 0.9]:
+		var pivot := Node3D.new()
+		pivot.transform = xf
+		var hand := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.08 if len_ < 0.8 else 0.05, len_, 0.03)
+		bm.material = mat
+		hand.mesh = bm
+		hand.position = Vector3(0, len_ / 2.0 - 0.08, 0)
+		hand.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		pivot.add_child(hand)
+		add_child(pivot)
+		pair.append(pivot)
+	clock_hands.append(pair)
+
+
+## The clock's hands to the hour (0 to 24).
+func set_clock(hours: float) -> void:
+	for pair: Array in clock_hands:
+		var hour := pair[0] as Node3D
+		var minute := pair[1] as Node3D
+		var base_xf: Transform3D = hour.get_meta("xf", hour.transform)
+		hour.set_meta("xf", base_xf)
+		minute.set_meta("xf", minute.get_meta("xf", minute.transform))
+		hour.transform = base_xf * Transform3D(Basis(Vector3.BACK, -TAU * fmod(hours, 12.0) / 12.0), Vector3.ZERO)
+		var mxf: Transform3D = minute.get_meta("xf")
+		minute.transform = mxf * Transform3D(Basis(Vector3.BACK, -TAU * fmod(hours, 1.0)), Vector3.ZERO)
 
 
 ## ---- streets -------------------------------------------------------------
@@ -301,91 +341,9 @@ func _ribbon(points: Array, width: float, kind: float, centre_line: bool, lift: 
 
 ## ---- Main Street ----------------------------------------------------------
 
-## The north side's row of storefronts, shoulder to shoulder, facing
-## the street.
-func _main_street_north() -> void:
-	var z := TownCoast.MAIN_Z - 4.5 - 2.4 - 0.1
-	# [centre x, width, height, facade, kind, sign, awning or null, kind of front]
-	var row: Array = [
-		[-2.0, 10.0, 7.6, Color(0.50, 0.25, 0.18), K_BRICK, "HARDWARE", Color(0.20, 0.36, 0.22), "shop"],
-		[7.5, 9.0, 7.6, Color(0.56, 0.30, 0.20), K_BRICK, "DRUGS", Color(0.55, 0.12, 0.10), "shop"],
-		[18.5, 13.0, 9.6, Color(0.60, 0.44, 0.30), K_BRICK, "", null, "theatre"],
-		[29.5, 9.0, 7.0, Color(0.64, 0.62, 0.58), K_GRANITE, "SAVINGS BANK", null, "bank"],
-		[39.5, 11.0, 7.6, Color(0.66, 0.50, 0.32), K_BRICK, "5 AND 10", Color(0.62, 0.14, 0.12), "shop"],
-		[50.5, 11.0, 5.4, Color(0.48, 0.24, 0.17), K_BRICK, "U.S. POST OFFICE", null, "post"],
-	]
-	for spec: Array in row:
-		_store(Vector3(float(spec[0]), coast.height_at(float(spec[0]), z - 1.0), z), 0.0, float(spec[1]), 14.0, float(spec[2]),
-			spec[3], int(spec[4]), str(spec[5]), spec[6], str(spec[7]))
-
-
-## A two-storey commercial block: brick or stone, a pressed-metal
-## cornice, a flat roof behind a parapet, the storefront (plate glass
-## over a kickplate, a door, the sign band, an awning), flats above.
-func _store(front: Vector3, yaw: float, w: float, d: float, h: float, facade: Color, kind: int,
-		sign: String, awning: Variant, front_kind: String) -> void:
-	var base := at(front, yaw)
-	var fc := kc(facade, kind)
-	m.box("wall", base * at(Vector3(0, h / 2.0, -d / 2.0)), Vector3(w, h, d), fc)
-	_solid(base * at(Vector3(0, h / 2.0, -d / 2.0)), Vector3(w, h, d))
-	m.box("wall", base * at(Vector3(0, h + 0.02, -d / 2.0)), Vector3(w - 0.5, 0.04, d - 0.5), kc(Color(0.14, 0.14, 0.14), K_TAR))
-	var cornice := kc(Color(0.30, 0.28, 0.25) if kind == K_BRICK else TRIM, K_PAINT)
-	m.box("wall", base * at(Vector3(0, h - 0.35, 0.18)), Vector3(w + 0.1, 0.45, 0.36), cornice)
-	m.box("wall", base * at(Vector3(0, h - 0.62, 0.08)), Vector3(w, 0.1, 0.16), cornice)
-	var ground := 3.9
-	if front_kind == "theatre":
-		_theatre_front(base, w, h)
-	elif front_kind == "bank":
-		_bank_front(base, w, h, sign)
-	elif front_kind == "post":
-		_post_front(base, w, h, sign)
-	else:
-		_shopfront(base, w, ground, sign, awning)
-	# The flats upstairs: sash windows with stone sills and lintels.
-	if h > 6.5 and front_kind != "bank":
-		var n := int(w / 2.3)
-		for k in n:
-			var x := -w / 2.0 + w * (k + 0.5) / n
-			var y := ground + 1.9 + (1.0 if front_kind == "theatre" else 0.0)
-			_window(base, Vector3(x, y, 0.0), 0.95, 1.6, _upstairs_threshold(), null, 0.0, true)
-
-
 ## Whether and when someone upstairs puts a light on.
 func _upstairs_threshold() -> float:
 	return 1.0 if _rng.randf() < 0.3 else _rng.randf_range(0.25, 0.8)
-
-
-func _shopfront(base: Transform3D, w: float, ground: float, sign: String, awning: Variant) -> void:
-	var dark := kc(Color(0.12, 0.14, 0.13), K_PAINT)
-	# Pilasters either side, the kickplate, the plate glass either side
-	# of the door, the sign band over it all.
-	for s: float in [-1.0, 1.0]:
-		m.box("wall", base * at(Vector3(s * (w / 2.0 - 0.2), ground / 2.0, 0.06)), Vector3(0.4, ground, 0.12), kc(TRIM, K_PAINT))
-	m.box("wall", base * at(Vector3(0, 0.3, 0.05)), Vector3(w - 0.8, 0.6, 0.1), dark)
-	var shop := _rng.randf_range(0.12, 0.2)
-	for s: float in [-1.0, 1.0]:
-		var x0 := s * 0.75
-		var x1 := s * (w / 2.0 - 0.45)
-		_pane(base, Vector3(minf(x0, x1), 0.6, 0.02), Vector3(maxf(x0, x1), 3.0, 0.02), Color(shop, _rng.randf(), 0.5, 0.6))
-	m.box("wall", base * at(Vector3(0, 1.2, 0.03)), Vector3(1.3, 2.4, 0.06), dark)
-	_pane(base, Vector3(-0.45, 1.3, 0.065), Vector3(0.45, 2.25, 0.065), Color(shop, _rng.randf(), 0.5, 0.6))
-	m.box("wall", base * at(Vector3(0, 3.35, 0.07)), Vector3(w - 0.8, 0.7, 0.14), dark)
-	if sign != "":
-		_sign(base * at(Vector3(0, 3.35, 0.15)), sign, 96, Color(0.85, 0.72, 0.38))
-	if awning is Color:
-		var canvas := kc(awning as Color, K_TAR)
-		var tilt := Basis(Vector3.RIGHT, deg_to_rad(22.0))
-		m.box("wall", base * Transform3D(tilt, Vector3(0, 2.95, 0.8)), Vector3(w - 1.0, 0.04, 1.7), canvas)
-		m.box("wall", base * at(Vector3(0, 2.52, 1.58)), Vector3(w - 1.0, 0.28, 0.03), canvas)
-	# A lamp in the window: the shop's light spills on the walk.
-	var light := OmniLight3D.new()
-	light.transform = base * at(Vector3(0, 2.4, 1.2))
-	light.omni_range = 7.0
-	light.omni_attenuation = 1.2
-	light.light_color = Color(1.0, 0.74, 0.46)
-	light.shadow_enabled = false
-	add_child(light)
-	lamps.append({"light": light, "thr": shop, "energy": 0.9})
 
 
 ## One pane of glass from lo to hi (facade frame corners, z the face).
@@ -462,18 +420,6 @@ func _bulb(pos: Vector3, r: float, chase: bool, delay: float = 0.0) -> void:
 	m.box("lamp", at(pos), Vector3(r, r, r) * 2.0, col, true)
 
 
-func _bank_front(base: Transform3D, w: float, h: float, sign: String) -> void:
-	var stone := kc(Color(0.70, 0.68, 0.64), K_GRANITE)
-	for s: float in [-1.0, 1.0]:
-		m.cylinder("wall", base * at(Vector3(s * 1.6, 2.6, 0.55)), 0.28, 0.24, 4.6, 12, kc(Color(0.78, 0.76, 0.72), K_PAINT))
-	m.box("wall", base * at(Vector3(0, 5.1, 0.55)), Vector3(4.4, 0.5, 1.1), stone, true)
-	m.box("wall", base * at(Vector3(0, 0.15, 0.6)), Vector3(4.6, 0.3, 1.2), stone)
-	m.box("wall", base * at(Vector3(0, 1.4, 0.03)), Vector3(1.6, 2.8, 0.06), kc(Color(0.20, 0.15, 0.10), K_PAINT))
-	for s: float in [-1.0, 1.0]:
-		_window(base, Vector3(s * 3.3, 2.6, 0.0), 1.1, 2.8, 1.0, null, 0.5, true)
-	_sign(base * at(Vector3(0, 5.95, 0.12)), sign, 80, Color(0.18, 0.18, 0.18))
-
-
 func _post_front(base: Transform3D, w: float, h: float, sign: String) -> void:
 	m.box("wall", base * at(Vector3(0, 0.15, 0.9)), Vector3(4.0, 0.3, 1.8), kc(GRANITE, K_GRANITE))
 	m.box("wall", base * at(Vector3(0, 1.45, 0.03)), Vector3(1.8, 2.6, 0.06), kc(Color(0.14, 0.2, 0.15), K_PAINT))
@@ -488,118 +434,7 @@ func _post_front(base: Transform3D, w: float, h: float, sign: String) -> void:
 	m.box("wall", flag, Vector3(1.5, 0.9, 0.02), kc(Color(0.62, 0.12, 0.12), K_TAR), true)
 
 
-## ---- the south side -------------------------------------------------------
-
-## A stainless diner, the kind built in a factory and trucked to its
-## lot: a long car on a brick base, a barrel roof, a band of windows,
-## red enamel stripes, a neon sign on the roof.
-func _diner(front: Vector2) -> void:
-	var base := at(Vector3(front.x, coast.height_at(front.x, front.y + 1.0), front.y), PI)
-	var w := 16.0
-	var d := 5.6
-	m.box("wall", base * at(Vector3(0, 0.35, -d / 2.0)), Vector3(w - 0.3, 0.7, d - 0.3), kc(BRICK, K_BRICK))
-	m.box("steel", base * at(Vector3(0, 2.0, -d / 2.0)), Vector3(w, 2.6, d), Color.WHITE)
-	m.cylinder("steel", base * Transform3D(Basis(Vector3(0, 0, 1), PI / 2.0) * Basis.from_scale(Vector3(0.22, 1.0, 1.0)),
-		Vector3(0, 3.3, -d / 2.0)), d / 2.0 + 0.05, d / 2.0 + 0.05, w + 0.1, 20, Color.WHITE)
-	_solid(base * at(Vector3(0, 1.8, -d / 2.0)), Vector3(w, 3.6, d))
-	var red := kc(Color(0.62, 0.10, 0.09), K_PAINT)
-	for y: float in [1.05, 2.95]:
-		m.box("wall", base * at(Vector3(0, y, 0.01)), Vector3(w + 0.02, 0.16, 0.04), red)
-	var n := 9
-	for k in n:
-		var x := -w / 2.0 + 0.6 + (w - 1.2) * (k + 0.5) / n
-		if absf(x) < 1.0:
-			continue
-		_pane(base, Vector3(x - 0.72, 1.3, 0.03), Vector3(x + 0.72, 2.7, 0.03), Color(0.08, _rng.randf(), 0.5, 0.9))
-	# The vestibule and its door.
-	m.box("steel", base * at(Vector3(0, 1.4, 0.8)), Vector3(2.0, 2.8, 1.6), Color.WHITE)
-	_pane(base, Vector3(-0.5, 0.3, 1.61), Vector3(0.5, 2.3, 1.61), Color(0.08, 0.2, 0.5, 0.9))
-	m.box("wall", base * at(Vector3(0, 0.1, 1.9)), Vector3(2.4, 0.2, 0.8), kc(GRANITE, K_GRANITE))
-	# The sign: DINER in red neon on a frame over the roof.
-	var frame := base * at(Vector3(0, 4.6, -d / 2.0 + 0.4))
-	m.box("iron", frame, Vector3(5.2, 1.1, 0.12), Color(0.12, 0.12, 0.12))
-	for s: float in [-1.0, 1.0]:
-		m.bar("iron", frame * Vector3(s * 2.2, -0.5, 0), frame * Vector3(s * 2.2, -1.4, -0.6), 0.04, 6, Color(0.12, 0.12, 0.12))
-	_sign(frame * at(Vector3(0, 0, 0.08)), "DINER", 150, Color(4.0, 0.35, 0.25), true)
-	var neon := OmniLight3D.new()
-	neon.transform = frame * at(Vector3(0, 0, 1.0))
-	neon.omni_range = 9.0
-	neon.light_color = Color(1.0, 0.25, 0.2)
-	add_child(neon)
-	lamps.append({"light": neon, "delay": 0.02, "energy": 1.2})
-	var inside := OmniLight3D.new()
-	inside.transform = base * at(Vector3(0, 2.2, 1.6))
-	inside.omni_range = 8.0
-	inside.light_color = Color(1.0, 0.8, 0.55)
-	add_child(inside)
-	lamps.append({"light": inside, "thr": 0.08, "energy": 1.4})
-
-
-## A gas station: a white office and one service bay under a parapet,
-## two pumps with lit globes on an island in the forecourt, a round
-## sign on a post.
-func _gas_station(front: Vector2) -> void:
-	var base := at(Vector3(front.x, coast.height_at(front.x, front.y + 5.5), front.y + 4.5), PI)
-	var white := kc(Color(0.88, 0.88, 0.85), K_PAINT)
-	var green := kc(Color(0.14, 0.34, 0.20), K_PAINT)
-	m.box("wall", base * at(Vector3(0, 1.9, -2.5)), Vector3(9.0, 3.8, 5.0), white)
-	_solid(base * at(Vector3(0, 1.9, -2.5)), Vector3(9.0, 3.8, 5.0))
-	m.box("wall", base * at(Vector3(0, 3.95, 0.02)), Vector3(9.2, 0.4, 0.2), green)
-	m.box("wall", base * at(Vector3(2.0, 1.5, 0.03)), Vector3(3.6, 3.0, 0.06), kc(Color(0.75, 0.75, 0.72), K_PAINT))
-	_pane(base, Vector3(0.4, 1.6, 0.065), Vector3(3.6, 2.8, 0.065), Color(0.15, 0.2, 0.5, 0.6))
-	_pane(base, Vector3(-3.9, 1.0, 0.02), Vector3(-1.6, 2.6, 0.02), Color(0.1, 0.5, 0.5, 0.6))
-	m.box("wall", base * at(Vector3(-0.9, 1.1, 0.03)), Vector3(0.95, 2.2, 0.06), green)
-	_sign(base * at(Vector3(-1.2, 3.95, 0.14)), "GARAGE", 64, Color(0.92, 0.9, 0.84))
-	# The pump island and its two pumps.
-	var island := base * at(Vector3(0, 0.1, 3.2))
-	m.box("wall", island, Vector3(4.2, 0.2, 1.1), kc(Color(0.6, 0.59, 0.56), K_PAINT))
-	for s: float in [-1.0, 1.0]:
-		var pump := island * at(Vector3(s * 1.2, 0.95, 0))
-		m.box("iron", pump, Vector3(0.55, 1.7, 0.42), Color(0.62, 0.10, 0.08))
-		m.box("iron", pump * at(Vector3(0, 0.35, 0.215)), Vector3(0.36, 0.36, 0.01), Color(0.9, 0.88, 0.8))
-		m.cylinder("iron", pump * at(Vector3(0, 0.95, 0)), 0.08, 0.08, 0.2, 8, Color(0.62, 0.10, 0.08))
-		m.sphere("lamp", pump * Transform3D(Basis.from_scale(Vector3(1.0, 0.8, 0.45)), Vector3(0, 1.25, 0)), 0.26, 12, Color(0.03, 0, 0, 1))
-		_solid(pump, Vector3(0.55, 1.7, 0.42))
-	# The sign on its post.
-	var post := base * at(Vector3(-4.8, 0, 4.4))
-	m.cylinder("iron", post * at(Vector3(0, 2.8, 0)), 0.09, 0.09, 5.6, 8, Color(0.85, 0.85, 0.82))
-	m.cylinder("iron", post * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(0, 6.0, 0)), 0.95, 0.95, 0.14, 24, Color(0.85, 0.85, 0.82))
-	for s: float in [-1.0, 1.0]:
-		var face := post * Transform3D(Basis(Vector3.UP, 0.0 if s > 0.0 else PI), Vector3(0, 6.0, s * 0.08))
-		_sign(face, "GASOLINE", 64, Color(0.62, 0.10, 0.08))
-	var light := OmniLight3D.new()
-	light.transform = base * at(Vector3(0, 3.3, 2.2))
-	light.omni_range = 10.0
-	light.light_color = Color(1.0, 0.86, 0.66)
-	add_child(light)
-	lamps.append({"light": light, "delay": 0.04, "energy": 1.6})
-
-
-## A grocery: two storeys of clapboard behind a square false front, a
-## porch across it with a bench.
-func _grocery(front: Vector2) -> void:
-	var base := at(Vector3(front.x, coast.height_at(front.x, front.y + 3.0), front.y + 1.9), PI)
-	var w := 10.0
-	var d := 10.0
-	var clap := kc(Color(0.86, 0.80, 0.60), K_CLAP)
-	m.box("wall", base * at(Vector3(0, 0.3, -d / 2.0)), Vector3(w + 0.1, 0.6, d + 0.1), kc(GRANITE, K_GRANITE))
-	m.box("wall", base * at(Vector3(0, 3.6, -d / 2.0)), Vector3(w, 6.0, d), clap)
-	_solid(base * at(Vector3(0, 3.6, -d / 2.0)), Vector3(w, 7.2, d))
-	_roof(base, Vector3(0, 6.6, -d / 2.0), w, d, deg_to_rad(28.0), false, clap, kc(ROOFS[0], K_ROOF), 0.3)
-	m.box("wall", base * at(Vector3(0, 7.6, 0.05)), Vector3(w, 2.0, 0.1), clap)
-	m.box("wall", base * at(Vector3(0, 8.65, 0.1)), Vector3(w + 0.2, 0.12, 0.3), kc(TRIM, K_PAINT))
-	_sign(base * at(Vector3(0, 7.5, 0.12)), "GROCERIES", 96, Color(0.25, 0.12, 0.08))
-	_shopfront(base, w, 3.4, "", null)
-	for k in 3:
-		_window(base, Vector3(-3.0 + 3.0 * k, 5.0, 0.0), 0.9, 1.5, _upstairs_threshold(), null)
-	# The porch: floor, posts, a roof.
-	var wood := kc(Color(0.55, 0.50, 0.44), K_PLANK)
-	m.box("wall", base * at(Vector3(0, 0.45, 1.3)), Vector3(w, 0.2, 2.6), wood)
-	_solid(base * at(Vector3(0, 0.25, 1.3)), Vector3(w, 0.5, 2.6))
-	for k in 4:
-		m.box("wall", base * at(Vector3(-w / 2.0 + 0.2 + (w - 0.4) * k / 3.0, 1.95, 2.45)), Vector3(0.14, 2.8, 0.14), kc(TRIM, K_PAINT))
-	m.box("wall", base * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(8.0)), Vector3(0, 3.45, 1.3)), Vector3(w + 0.3, 0.1, 3.0), kc(ROOFS[1], K_ROOF), true)
-	m.box("wall", base * at(Vector3(2.5, 0.8, 0.5)), Vector3(1.6, 0.08, 0.4), wood)
+## ---- the church ---------------------------------------------------------
 
 
 ## A white church: a clapboard nave under a steep roof, tall windows, a

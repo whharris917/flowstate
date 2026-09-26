@@ -60,8 +60,12 @@ void fragment() {
 		vec2 f = vec2(fract(bu), fract(v / 0.0762));
 		float mortar = 1.0 - (smoothstep(0.0, 0.05, f.x) * smoothstep(1.0, 0.95, f.x)
 			* smoothstep(0.0, 0.13, f.y) * smoothstep(1.0, 0.87, f.y));
-		vec3 brick = base * (0.82 + 0.3 * h21(cell)) * (0.92 + 0.12 * value_noise(world_pos.xz * 3.0 + v * 2.0));
-		col = mix(brick, lin(vec3(0.62, 0.60, 0.56)), mortar * detail);
+		// Where a course is under a pixel or two the joints would beat
+		// into waves: they give way to the wall's average there.
+		float fine = 1.0 - smoothstep(0.3, 0.7, max(fwidth(v / 0.0762), fwidth(bu)));
+		float tone = mix(0.92, 0.82 + 0.3 * h21(cell), fine);
+		vec3 brick = base * tone * (0.92 + 0.12 * value_noise(world_pos.xz * 3.0 + v * 2.0));
+		col = mix(brick, lin(vec3(0.62, 0.60, 0.56)), mix(0.2, mortar, fine) * mix(0.5, 1.0, detail));
 		rough = 0.9;
 		spec = 0.25;
 	} else if (kind == 3) {
@@ -83,7 +87,8 @@ void fragment() {
 		vec2 f = vec2(fract(bu), fract(v / 0.35));
 		float joint = 1.0 - smoothstep(0.0, 0.02, f.x) * smoothstep(1.0, 0.98, f.x) * smoothstep(0.0, 0.04, f.y) * smoothstep(1.0, 0.96, f.y);
 		col *= (0.88 + 0.2 * h21(vec2(floor(bu), row))) * (0.85 + 0.3 * value_noise(world_pos.xz * 9.0 + v * 9.0));
-		col = mix(col, col * 0.6, joint * detail);
+		float fine_g = 1.0 - smoothstep(0.3, 0.7, max(fwidth(v / 0.35), fwidth(bu)));
+		col = mix(col, col * 0.6, joint * detail * fine_g);
 		rough = 0.8;
 		spec = 0.3;
 	} else if (kind == 5) {

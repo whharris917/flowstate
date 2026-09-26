@@ -61,6 +61,8 @@ func _on_time_of_day(horizon: float, twilight: float) -> void:
 	if weather == null:
 		return
 	weather.apply_light(horizon, twilight)
+	if town != null:
+		town.set_clock(time_of_day)
 	# Cloud hides the stars.
 	if _stars_mat != null:
 		var o := weather.overcast()

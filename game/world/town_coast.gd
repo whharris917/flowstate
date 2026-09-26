@@ -56,12 +56,17 @@ const STREET_PLAN: Array = [
 # Where the town's larger buildings stand, as ground rects [x0, z0, x1, z1]
 # and the point whose ground height their terrace takes.
 const BUILDINGS: Array = [
-	[Vector2(-7.0, -9.5), Vector2(-2.0, 7.5)], [Vector2(3.0, -9.5), Vector2(12.0, 7.5)],
+	[Vector2(-8.0, -9.5), Vector2(3.0, 7.5)], [Vector2(3.0, -9.5), Vector2(12.0, 7.5)],
 	[Vector2(12.0, -9.5), Vector2(25.0, 7.5)], [Vector2(25.0, -9.5), Vector2(34.0, 7.5)],
-	[Vector2(34.0, -9.5), Vector2(45.0, 7.5)], [Vector2(45.0, -9.5), Vector2(52.5, 7.5)],
-	[Vector2(-6.5, 16.5), Vector2(10.5, 27.0)], [Vector2(15.5, 16.5), Vector2(28.5, 29.5)],
-	[Vector2(31.5, 16.5), Vector2(42.5, 29.5)], [Vector2(54.0, 16.5), Vector2(66.5, 42.0)],
+	[Vector2(34.0, -9.5), Vector2(46.0, 7.5)], [Vector2(46.0, -9.5), Vector2(52.5, 7.5)],
+	[Vector2(-6.5, 16.5), Vector2(10.5, 27.0)], [Vector2(11.5, 16.5), Vector2(19.5, 27.0)],
+	[Vector2(19.5, 16.5), Vector2(28.5, 29.5)], [Vector2(30.5, 16.5), Vector2(43.0, 29.5)],
+	[Vector2(43.5, 16.5), Vector2(53.0, 26.5)], [Vector2(54.0, 16.5), Vector2(66.5, 42.0)],
 ]
+# The domed hall's grounds at the head of Main Street: a lawn graded
+# level a little above the street's end, the building standing on it.
+const CIVIC := Vector2(98.0, 12.0)
+const CIVIC_HALF := Vector2(14.0, 25.0)
 
 var beam_mat: ShaderMaterial
 ## The streets as dense centre lines: {name, pts, width, line, lift, lo, hi (bounds)}.
@@ -72,6 +77,7 @@ var lots: Array[Dictionary] = []
 ## Graded terraces: {c, along (unit), half (along, across), y}.
 var pads: Array[Dictionary] = []
 var ramp_top_y := 0.0
+var civic_y := 0.0
 # The terraces packed flat for the ground's hot loop, seven numbers
 # each: centre x, z, across x, z, half along, half across, height.
 var _pad_data := PackedFloat32Array()
@@ -91,6 +97,7 @@ func _init() -> void:
 	_plan_lots()
 	_plan_pads()
 	ramp_top_y = relief(RAMP_TOP.x, RAMP_TOP.z)
+	civic_y = bed_height(75.0, MAIN_Z) + 1.4
 
 
 ## ---- the plan ------------------------------------------------------------------
@@ -373,7 +380,18 @@ func height_at(x: float, z: float) -> float:
 	var w := _apron_weight(x, z)
 	if w > 0.0:
 		h = lerpf(h, APRON_Y, w)
+	var civic := civic_weight(x, z)
+	if civic > 0.0:
+		h = lerpf(h, civic_y, civic)
 	return h
+
+
+## How strongly the domed hall's lawn holds (x, z): whole on the lawn,
+## easing out over seven metres, clear of the street's end.
+func civic_weight(x: float, z: float) -> float:
+	var q := Vector2(absf(x - CIVIC.x), absf(z - CIVIC.y)) - CIVIC_HALF
+	var outside := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0)
+	return 1.0 - smoothstep(0.0, 7.0, outside)
 
 
 ## Every street's bed: level across, at the height of the ground under
@@ -446,16 +464,17 @@ func _apron_weight(x: float, z: float) -> float:
 
 
 func graded_at(x: float, z: float) -> float:
-	return maxf(super.graded_at(x, z), maxf(_ramp_at(x, z).y, _apron_weight(x, z)))
+	return maxf(maxf(super.graded_at(x, z), civic_weight(x, z)), maxf(_ramp_at(x, z).y, _apron_weight(x, z)))
 
 
 func is_graded(x: float, z: float) -> bool:
-	return super.is_graded(x, z) or _ramp_at(x, z).y > 0.0 or _apron_weight(x, z) > 0.0
+	return super.is_graded(x, z) or _ramp_at(x, z).y > 0.0 or _apron_weight(x, z) > 0.0 or civic_weight(x, z) > 0.0
 
 
-## No tree in a street or at its edge, nor on the waterfront.
+## No tree in a street or at its edge, on the waterfront, or on the
+## domed hall's lawn.
 func tree_ground(x: float, z: float) -> float:
-	if street_distance(x, z) < 5.0:
+	if street_distance(x, z) < 5.0 or civic_weight(x, z) > 0.2:
 		return -INF
 	return super.tree_ground(x, z)
 
@@ -465,7 +484,7 @@ func tree_ground(x: float, z: float) -> float:
 func rock_blocked(x: float, z: float) -> bool:
 	if x > -60.0 and x < 10.0 and z > 66.0 and z < 150.0:
 		return true
-	return street_distance(x, z) < 6.0
+	return street_distance(x, z) < 6.0 or civic_weight(x, z) > 0.0
 
 
 ## How far (x, z) is from the edge of the nearest street (negative on

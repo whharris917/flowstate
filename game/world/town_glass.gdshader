@@ -3,7 +3,7 @@ shader_type spatial;
 // with UV 0..1 (v up) and a vertex colour that says how it lives:
 //   r  the darkness at which someone switches its light on (1: never)
 //   g  the curtains' hue
-//   b  the window: 0 a six-over-six sash, 0.5 a storefront's plate
+//   b  the window: 0 a six-over-six sash, 0.15 two over two, 0.5 a storefront's plate
 //      glass, 1 a church's tall window
 //   a  how warm its bulb burns
 // Unlit, the glass is dark and takes the sky; lit, the room behind it
@@ -31,6 +31,11 @@ void fragment() {
 		float sy = fract(uv.y * 2.0);
 		float mullion = (1.0 - step(w, abs(uv.x - 0.3333))) + (1.0 - step(w, abs(uv.x - 0.6667)));
 		float transom = 1.0 - step(w * 1.6, abs(sy - 0.5));
+		if (style > 0.1) {
+			// Two over two: one upright bar in each sash.
+			mullion = 1.0 - step(w, abs(uv.x - 0.5));
+			transom = 0.0;
+		}
 		bar = clamp(frame + rail + mullion + transom, 0.0, 1.0);
 	} else if (style < 0.75) {
 		float frame = 1.0 - step(0.02, uv.x) * step(uv.x, 0.98) * step(0.02, uv.y) * step(uv.y, 0.98);
