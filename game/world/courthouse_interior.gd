@@ -254,8 +254,8 @@ static func _outside_wainscot() -> void:
 			court_side.append(CourthouseKit.opening(-5.2, 1.1, F2, F2 + 2.7, "flat"))
 			court_side.append(CourthouseKit.opening(0.0, 2.6, F2 + 0.7, F2 + 2.8, "round"))
 		else:
-			wing_side.append(CourthouseKit.opening(0.0, 1.9, F2, F2 + 3.0, "flat"))
-			court_side.append(CourthouseKit.opening(0.0, 1.9, F2, F2 + 3.0, "flat"))
+			wing_side.append(CourthouseKit.opening(0.0, 1.9, F2, F2 + 2.6, "flat"))
+			court_side.append(CourthouseKit.opening(0.0, 1.9, F2, F2 + 2.6, "flat"))
 		_wainscot(to_wing, -WIX, WIX, F1, [hall_arch])
 		_wainscot(to_wing, -WIX, WIX, F2, wing_side)
 		_wainscot(to_main, -IX, IX, F1, [hall_arch])
@@ -556,19 +556,106 @@ static func _courtroom() -> void:
 		# The gate leaf, swung shut.
 		k.box("wall", g, Vector3(s * 0.33, y + 0.5, bar_z), Vector3(0.6, 0.8, 0.05), panel)
 		k.box("wall", g, Vector3(s * 0.33, y + 0.93, bar_z), Vector3(0.62, 0.06, 0.08), wood)
-	# The public's pews, two blocks either side of the aisle.
-	for j in 7:
+	# The public's pews, two blocks either side of the aisle, running
+	# back under the balcony.
+	_balcony()
+	for j in 6:
 		var pz := 1.9 + j * 0.92
 		for s: float in [-1.0, 1.0]:
 			_pew(Transform3D(Basis(), Vector3(s * 4.7, y, pz)), 7.0)
 	# The lamps: four pendants over the room, and their light after dark.
 	for sx: float in [-1.0, 1.0]:
 		for sz: float in [-1.0, 1.0]:
-			_chandelier(Vector3(sx * 4.2, C2, sz * 3.8))
+			_chandelier(Vector3(sx * 4.2, C2, -4.6 if sz < 0.0 else 0.8))
 	# Radiators under the side windows.
 	for s: float in [-1.0, 1.0]:
 		for e: float in [-1.0, 1.0]:
 			_radiator(Transform3D(Basis(Vector3.UP, -s * PI / 2.0), Vector3(s * (IX - 0.18), y, e * 6.6)), 1.1)
+
+
+## The gallery across the courtroom's south end: four tiers of pews
+## rising to an aisle along the back wall, a panelled front with a pipe
+## rail on posts over it, iron columns under its front, a sloping aisle
+## down its middle; a stair in each back corner rising along the south
+## wall, under the gallery, to the back aisle.
+static func _balcony() -> void:
+	var y := F2
+	var g := Transform3D()
+	var wood := c(WALNUT, CourthouseKit.K_WOOD)
+	var panel := c(WALNUT.darkened(0.15), CourthouseKit.K_WOOD)
+	var oak := c(OAK, CourthouseKit.K_OAK)
+	var soffit := c(CEILING, CourthouseKit.K_PLASTER)
+	var front := 3.4          # the gallery's front, z
+	var under := y + 2.7      # its soffit
+	var tier := 0.95
+	var aisle_x := 0.6
+	var well := Vector2(2.5, 7.4)    # each stair's opening in the back aisle, |x|
+	var back := front + 4.0 * tier   # the back aisle, z
+	# The tiers, each side of the middle aisle.
+	for t in 4:
+		var top := y + 3.0 + 0.3 * t
+		var z0 := front + tier * t
+		for sx: float in [-1.0, 1.0]:
+			var cx := sx * (aisle_x + IX) / 2.0
+			var cen := Vector3(cx, (under + top) / 2.0, z0 + tier / 2.0)
+			var size := Vector3(IX - aisle_x, top - under, tier)
+			k.block("wall", g, cen, size, wood)
+			k.box("wall", g, Vector3(cx, top + 0.003, z0 + tier / 2.0), Vector3(IX - aisle_x, 0.006, tier), oak)
+			_pew(Transform3D(Basis(), Vector3(cx, top, z0 + 0.35)), IX - aisle_x - 0.3)
+	# The back aisle along the south wall, open over each stair.
+	var top_b := y + 3.9
+	for seg: Vector2 in [Vector2(-IX, -well.y), Vector2(-well.x, well.x), Vector2(well.y, IX)]:
+		var cen := Vector3((seg.x + seg.y) / 2.0, (under + top_b) / 2.0, (back + IZ) / 2.0)
+		var size := Vector3(seg.y - seg.x, top_b - under, IZ - back)
+		k.block("wall", g, cen, size, wood)
+		k.box("wall", g, Vector3(cen.x, top_b + 0.003, cen.z), Vector3(size.x, 0.006, size.z), oak)
+	# The middle aisle: a slope underfoot, shallow steps to the eye.
+	k.ramp(g, Vector3(0, y + 3.0, front), Vector3(0, top_b, back), 2.0 * aisle_x)
+	for j in 8:
+		var z := front + (back - front) * (j + 0.5) / 8.0
+		var st := y + 3.0 + 0.9 * (j + 1) / 8.0
+		k.box("wall", g, Vector3(0, (under + st) / 2.0, z), Vector3(2.0 * aisle_x, st - under, (back - front) / 8.0), oak)
+	# The soffit under it all.
+	k.box("wall", g, Vector3(0, under - 0.03, (front + back) / 2.0), Vector3(2.0 * IX, 0.06, back - front), soffit)
+	# The front: panels, a moulded cap, the pipe rail on posts.
+	var fy := y + 3.0
+	_panelled(Transform3D(Basis(Vector3.UP, PI), Vector3(0, fy, front)), 2.0 * IX, 1.0, wood, panel, 14)
+	k.box("wall", g, Vector3(0, (under + fy) / 2.0, front - 0.02), Vector3(2.0 * IX, fy - under, 0.06), panel)
+	k.box("wall", g, Vector3(0, fy + 1.03, front), Vector3(2.0 * IX, 0.07, 0.2), wood)
+	var brass := GILT.darkened(0.35)
+	for j in 11:
+		var x := -IX + 0.3 + (2.0 * IX - 0.6) * j / 10.0
+		k.m.bar("iron", Vector3(x, fy + 1.06, front), Vector3(x, fy + 1.34, front), 0.02, 6, brass)
+	k.m.bar("iron", Vector3(-IX + 0.1, fy + 1.34, front), Vector3(IX - 0.1, fy + 1.34, front), 0.028, 8, brass)
+	# Iron columns under the front.
+	for x: float in [-7.2, -3.4, 3.4, 7.2]:
+		k.m.cylinder("iron", Transform3D(Basis(), Vector3(x, (y + under) / 2.0, front + 0.15)), 0.08, 0.08, under - y, 10, IRON)
+		k.m.cylinder("iron", Transform3D(Basis(), Vector3(x, under - 0.1, front + 0.15)), 0.16, 0.09, 0.2, 10, IRON)
+		k.m.cylinder("iron", Transform3D(Basis(), Vector3(x, y + 0.08, front + 0.15)), 0.12, 0.14, 0.16, 10, IRON)
+		k.solid(g, Vector3(x, y + 1.3, front + 0.15), Vector3(0.18, 2.6, 0.18))
+	# The stairs: from the foot by each side wall, east or west along the
+	# south wall to the back aisle, a balustrade on their open side, and
+	# round each opening in the aisle.
+	var sz := Vector2(back, IZ)
+	for sx: float in [-1.0, 1.0]:
+		var x0 := sx * (IX - 1.0)
+		var x1 := sx * well.x
+		var n := 22
+		var run := absf(x1 - x0) / n
+		for j in n:
+			var rise := (top_b - y) * (j + 1) / n
+			var x := x0 - sx * run * (j + 0.5)
+			k.box("wall", g, Vector3(x, y + rise - 0.02, (sz.x + sz.y) / 2.0), Vector3(run + 0.03, 0.05, sz.y - sz.x), oak)
+			k.box("wall", g, Vector3(x + sx * run / 2.0, y + rise - (top_b - y) / n / 2.0, (sz.x + sz.y) / 2.0),
+				Vector3(0.02, (top_b - y) / n, sz.y - sz.x), c(PLASTER, CourthouseKit.K_PLASTER))
+		k.ramp(g, Vector3(x0, y, (sz.x + sz.y) / 2.0), Vector3(x1, top_b, (sz.x + sz.y) / 2.0), sz.y - sz.x)
+		_flight_rail(g, Vector3(x0, y, sz.x - 0.04), Vector3(x1, top_b, sz.x - 0.04), n)
+		_newel(g, Vector3(x0, y, sz.x - 0.04))
+		# The opening's rail on the gallery, along the back tier.
+		_balustrade(g, Vector3(sx * well.y, top_b, sz.x - 0.05), Vector3(sx * (well.x + 0.3), top_b, sz.x - 0.05))
+	# Lamps under the gallery.
+	for x: float in [-4.5, 4.5]:
+		_pendant(Vector3(x, under - 0.06, (front + IZ) / 2.0), 0.4, false)
 
 
 ## A pilaster on a wall at base (x, z on the wall's face) standing out

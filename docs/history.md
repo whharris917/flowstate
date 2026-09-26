@@ -265,3 +265,11 @@ The director set a challenge: a highly detailed model, inside and out, of the hi
 - **The square and town.** Brick plazas before the porches (the 1910 monument in the western one, modelled without its inscriptions), walks to the end doors and out from the main block's corners, granite posts and chain, magnolias and oaks, lamps; the four streets with angled parking and brick crossings; shopfronts round the square, the government centre's tower and the judicial centre to the north.
 - **Found and fixed.** Glass was not solid: the stair landings let the player out through a window. A 3 cm lip where a flight met the floor above stopped the player; a flight's ramp must end flush with the floor. The porch steps had been built under the porch.
 - **Cost.** The rooms are their own meshes, casting no sun shadow and not drawn past 150 m; about 1.4 M triangles a frame outside, 45 to 60 fps on Medium on the development machine.
+
+## 2026-09-26: the cupola to a close photograph; the courtroom's gallery
+
+The director sent a close photograph of the cupola and one taken from a gallery at the courtroom's back, which the first model lacked.
+
+- **Cupola**, measured on the photograph against the vane's height: a broad plinth splaying in to the first stage; larger paired windows; a shorter main stage (22.9 to 26.7 m) with a rusticated corner and a fluted pilaster at each side of every face; the entablature broken out over the pilasters; a low pediment on each face and eight urn finials over the pilasters; clock dormers 2.7 m wide under round hoods with a spike, dials 1.7 m across with minute marks and radial numerals; the bell roof upright at first and rounding over to its point at 35 m, nearly as wide as the stage below, with a pale band and a lozenge on each face; a solid fan over each vent's louvres.
+- **Gallery** across the south end: four tiers of pews to an aisle along the back wall, a sloping aisle down the middle, a panelled front with a brass pipe rail on posts, iron columns under it, a stair in each back corner along the south wall. The south door is lowered under it and the chandeliers moved clear. Walked with real input up both stairs and down the aisle.
+

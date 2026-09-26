@@ -26,6 +26,17 @@ func _run(world: CourthouseMap) -> void:
 	world.graphics.apply(world)
 	world.set_time_of_day(15.5)
 	var which := OS.get_environment("FLOWSTATE_CH_SHOTS")
+	if which == "detail":
+		# The cupola as in the photograph from a height to its south-west,
+		# and the courtroom from the gallery, as in the photograph taken
+		# there.
+		player._fov_target = 30.0
+		await _view(player, Vector3(-10.0, 30.5, 32.0), -0.30, -0.1, "tower")
+		player._fov_target = 70.0
+		await _view(player, Vector3(3.5, UnionCourthouse.F2 + 3.95, 7.7), 0.35, -0.55, "gallery_view")
+		await _view(player, Vector3(0.0, UnionCourthouse.F2 + 0.1, -5.0), PI, 0.25, "gallery_from_bench")
+		get_tree().quit()
+		return
 	if which == "walk":
 		# With real input: in from North Main up the west porch and
 		# through the hall; up each stair in its two flights; into the
@@ -38,6 +49,11 @@ func _run(world: CourthouseMap) -> void:
 		await _walk(player, Vector3(-7.0, CourthouseInterior.LANDING + 0.1, 11.4), -PI / 2.0, 2.5)
 		await _walk(player, Vector3(0.0, UnionCourthouse.F2 + 0.1, 12.0), 0.0, 4.0)
 		await _walk(player, Vector3(0.0, 0.3, 34.0), 0.0, 4.0)
+		# Up each gallery stair from under the gallery.
+		await _walk(player, Vector3(-8.8, UnionCourthouse.F2 + 0.1, 6.0), PI, 0.8)
+		await _walk(player, Vector3(-8.8, UnionCourthouse.F2 + 0.1, 7.7), -PI / 2.0, 3.0)
+		await _walk(player, Vector3(8.8, UnionCourthouse.F2 + 0.1, 7.7), PI / 2.0, 3.0)
+		await _walk(player, Vector3(0.0, UnionCourthouse.F2 + 4.0, 7.7), 0.0, 2.0)
 		get_tree().quit()
 		return
 	if which == "match":

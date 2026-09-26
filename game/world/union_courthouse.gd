@@ -46,8 +46,6 @@ const WING_ROOF := 11.4
 const BAND := 6.3        # between the storeys' openings
 const PED_RISE := 3.4
 const ROOF_SLOPE := 0.5
-const CUPOLA_X := 2.6    # the cupola's first stage, half size
-const CUPOLA_Z := 2.75
 
 const BRICK := Color(0.60, 0.30, 0.22)
 const TRIM := Color(0.92, 0.90, 0.84)
@@ -429,7 +427,7 @@ func _main_end_wall(e: float) -> void:
 		# u runs west here).
 		opens.append(CourthouseKit.opening(5.2, 1.1, F2, F2 + 2.7, "flat"))
 	else:
-		opens.append(CourthouseKit.opening(0.0, 1.9, F2, F2 + 3.0, "flat"))
+		opens.append(CourthouseKit.opening(0.0, 1.9, F2, F2 + 2.6, "flat"))
 	# The whole wall is one thickness here; its face to the wing is the
 	# wing's rooms' wall below the wing's roof.
 	k.wall("wall", f, -MX + SKIN, MX - SKIN, 0.0, BAND, T, inner, opens, 4.5)
@@ -622,84 +620,114 @@ func _roofs() -> void:
 		k.box("wall", g, Vector3(0, WING_ROOF + 0.06, e * (MZ + WZ) / 2.0), Vector3(2.0 * WX - 0.3, 0.12, WZ - MZ - 0.3), tar)
 
 
-## The cupola over the crossing of the roof.
+## The cupola over the crossing of the roof, square in plan, from the
+## roof up: a broad plinth that splays in to the first stage; the first
+## stage with a pair of small segmental windows on each face; a sill
+## course; the main stage, each face between a rusticated corner and a
+## fluted pilaster at either side with the round-arched louvred vent in
+## the middle; the entablature breaking out over the pilasters; a low
+## pediment on each face, an urn finial on a pedestal over each
+## pilaster; the bell roof, straight-sided at first and closing to a
+## point, in slate with a light band and a lozenge on each face; a clock
+## in a round-hooded dormer on each face; the finial and the vane.
 func _cupola() -> void:
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
-	var dark := c(TRIM.darkened(0.28), CourthouseKit.K_PAINT)
+	var dark := c(TRIM.darkened(0.3), CourthouseKit.K_PAINT)
 	var slate := c(SLATE.darkened(0.1), CourthouseKit.K_SLATE)
 	var g := Transform3D()
-	var y0 := 17.3
-	var y1 := 18.1    # the first stage
-	var y2 := 20.6    # its cornice
-	var y3 := 21.0    # the main stage
-	var y4 := 25.6    # its entablature
-	var y5 := 26.2    # the roof's eave
-	# The curb and the first stage.
-	k.box("wall", g, Vector3(0, (y0 + y1) / 2.0, 0), Vector3(2.0 * CUPOLA_X + 0.3, y1 - y0, 2.0 * CUPOLA_Z + 0.3), trim)
-	k.box("wall", g, Vector3(0, (y1 + y2) / 2.0, 0), Vector3(2.0 * CUPOLA_X, y2 - y1, 2.0 * CUPOLA_Z), trim)
-	k.box("wall", g, Vector3(0, y2 + 0.1, 0), Vector3(2.0 * CUPOLA_X + 0.35, 0.2, 2.0 * CUPOLA_Z + 0.35), trim)
-	k.box("wall", g, Vector3(0, y2 + 0.28, 0), Vector3(2.0 * CUPOLA_X + 0.2, 0.16, 2.0 * CUPOLA_Z + 0.2), trim)
-	var hx := CUPOLA_X - 0.1
-	var hz := CUPOLA_Z - 0.1
-	k.box("wall", g, Vector3(0, (y3 + y4) / 2.0, 0), Vector3(2.0 * hx, y4 - y3, 2.0 * hz), trim)
+	var base0 := 17.4     # the plinth, from inside the roof
+	var base1 := 19.6     # its top, where the splay begins
+	var s0 := 20.3        # the first stage
+	var s1 := 22.55       # the sill course
+	var m0 := 22.9        # the main stage
+	var m1 := 26.7        # the entablature
+	var e1 := 27.6        # the cornice's top
+	var half := 2.7       # the main stage's half width at its corners
+	var core := 2.45      # its wall between the pilasters
+	k.box("wall", g, Vector3(0, (base0 + base1) / 2.0, 0), Vector3(6.6, base1 - base0, 6.6), trim)
+	k.box("wall", g, Vector3(0, base1 + 0.06, 0), Vector3(6.75, 0.12, 6.75), trim)
+	k.curb(g, Vector2(-3.3, -3.3), Vector2(3.3, 3.3), base1 + 0.12, s0 - 0.05, 0.65, trim)
+	k.box("wall", g, Vector3(0, (s0 + s1) / 2.0, 0), Vector3(2.0 * core, s1 - s0, 2.0 * core), trim)
+	k.box("wall", g, Vector3(0, s1 + 0.1, 0), Vector3(2.0 * half + 0.3, 0.2, 2.0 * half + 0.3), trim)
+	k.box("wall", g, Vector3(0, s1 + 0.27, 0), Vector3(2.0 * half + 0.15, 0.14, 2.0 * half + 0.15), trim)
+	k.box("wall", g, Vector3(0, (m0 + m1) / 2.0, 0), Vector3(2.0 * core, m1 - m0, 2.0 * core), trim)
 	for dir: Vector3 in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
-		var half := hz if absf(dir.x) > 0.5 else hx
-		var depth := hx if absf(dir.x) > 0.5 else hz
-		var f := face(dir, dir * depth)
-		var f1 := face(dir, dir * (CUPOLA_X if absf(dir.x) > 0.5 else CUPOLA_Z))
-		# The pair of small windows in the first stage.
-		for u: float in [-0.42, 0.42]:
-			var o := CourthouseKit.opening(u, 0.55, 19.25, 20.05, "segment", 0.1)
-			k.glass(f1, o, 0.01, c(Color(0.07, 0.07, 0.08), CourthouseKit.K_PAINT), "wall")
-			k.sash(f1, o, 0.03, trim, 19.65, 1, false)
-			k.hood(f1, o, trim, 0.08, false, true, true)
-		# The main stage: rusticated corners, fluted pilasters.
+		var f := face(dir, dir * core)
+		# The first stage: blocks under the corners and pilasters, the pair
+		# of windows between them.
 		for side: float in [-1.0, 1.0]:
-			var pu := side * (half - 0.2)
-			var row := y3
-			while row < y4 - 0.05:
-				k.box("wall", f, Vector3(pu, row + 0.19, 0.08), Vector3(0.52, 0.34, 0.16), trim)
-				row += 0.4
-			var fu := side * (half - 0.78)
-			k.box("wall", f, Vector3(fu, (y3 + y4) / 2.0, 0.06), Vector3(0.36, y4 - y3, 0.12), trim)
-			for fl: float in [-0.1, 0.0, 0.1]:
-				k.box("wall", f, Vector3(fu + fl, (y3 + y4) / 2.0, 0.121), Vector3(0.035, y4 - y3 - 0.5, 0.004), dark)
-			k.box("wall", f, Vector3(fu, y4 - 0.12, 0.1), Vector3(0.46, 0.24, 0.2), trim)
-			k.box("wall", f, Vector3(fu, y3 + 0.1, 0.1), Vector3(0.46, 0.2, 0.2), trim)
-		# The louvred vent in its arch.
-		var vent := CourthouseKit.opening(0.0, 1.3, 21.6, 23.3, "round")
+			k.box("wall", f, Vector3(side * (half - 0.45), (s0 + s1) / 2.0, 0.1), Vector3(0.9, s1 - s0, 0.2), trim)
+			k.box("wall", f, Vector3(side * (half - 0.45), s0 + 0.12, 0.14), Vector3(0.98, 0.24, 0.28), trim)
+		for u: float in [-0.66, 0.66]:
+			var o := CourthouseKit.opening(u, 0.86, 20.75, 21.7, "segment", 0.14)
+			k.glass(f, o, 0.005, c(Color(0.07, 0.07, 0.08), CourthouseKit.K_PAINT), "wall")
+			k.sash(f, o, 0.04, trim, 21.22, 1, false)
+			k.hood(f, o, trim, 0.1, false, true, true)
+		# The main stage: at each side a rusticated corner and a fluted
+		# pilaster, bases on the sill course and capitals under the
+		# entablature.
+		for side: float in [-1.0, 1.0]:
+			var ru := side * (half - 0.175)
+			var row := m0
+			while row < m1 - 0.1:
+				k.box("wall", f, Vector3(ru, row + 0.17, 0.125), Vector3(0.35, 0.32, 0.25), trim)
+				row += 0.38
+			var fu := side * (half - 0.35 - 0.28)
+			k.box("wall", f, Vector3(fu, (m0 + m1) / 2.0, 0.075), Vector3(0.52, m1 - m0, 0.15), trim)
+			for fl in 5:
+				k.box("wall", f, Vector3(fu - 0.18 + fl * 0.09, (m0 + m1) / 2.0, 0.151), Vector3(0.035, m1 - m0 - 0.7, 0.004), dark)
+			k.box("wall", f, Vector3(fu, m0 + 0.12, 0.1), Vector3(0.62, 0.24, 0.2), trim)
+			k.box("wall", f, Vector3(fu, m1 - 0.2, 0.1), Vector3(0.62, 0.3, 0.2), trim)
+			k.box("wall", f, Vector3(fu, m1 - 0.4, 0.12), Vector3(0.56, 0.08, 0.24), trim)
+		# The louvred vent in its arch, a keystone up to the architrave.
+		var vent := CourthouseKit.opening(0.0, 1.3, 23.25, 25.5, "round")
 		k.glass(f, vent, 0.005, c(Color(0.05, 0.05, 0.05), CourthouseKit.K_PAINT), "wall")
-		var slat := 21.72
-		while slat < 23.3:
+		var slat := 23.37
+		while slat < 25.5:
 			k.m.box("wall", f * Transform3D(Basis(Vector3.RIGHT, -0.7), Vector3(0, slat, 0.04)), Vector3(1.24, 0.16, 0.02), trim)
 			slat += 0.14
+		k.box("wall", f, Vector3(0, (23.25 + 25.5) / 2.0, -0.01), Vector3(1.3, 25.5 - 23.25, 0.02), c(Color(0.05, 0.05, 0.05), CourthouseKit.K_PAINT))
+		# The fan over the louvres: a solid panel in the arch.
+		k.glass(f, CourthouseKit.opening(0.0, 1.3, 25.5 - 0.001, 25.5, "round"), 0.03, trim, "wall")
+		k.box("wall", f, Vector3(0, 25.5, 0.05), Vector3(1.3, 0.08, 0.06), trim)
 		_arched_trim(f, vent, trim, false)
+		k.box("wall", f, Vector3(0, 26.45, 0.1), Vector3(0.36, 0.5, 0.2), trim)
+		# The entablature, broken out over the pilasters.
+		k.box("wall", f, Vector3(0, m1 + 0.1, 0.1), Vector3(2.0 * half, 0.2, 0.2), trim)
+		k.box("wall", f, Vector3(0, m1 + 0.38, 0.12), Vector3(2.0 * half, 0.36, 0.24), trim)
 		for side: float in [-1.0, 1.0]:
-			k.box("wall", f, Vector3(side * 0.75, (21.6 + 23.3) / 2.0, 0.03), Vector3(0.16, 1.7, 0.06), trim)
-		# Entablature and a low pediment over the face.
-		k.cornice(f, -half - 0.15, half + 0.15, y5, 0.32, trim, 0.8, 0.3, 0.35, true)
-		k.pediment(f, Vector3(0, y5, 0.1), 2.8, 1.3, 0.2, trim, trim, 0.2)
-		# The clock in its dormer, standing out of the bell roof.
-		_clock_dormer(face(dir, dir * 2.35), y5)
-	# Urns at the corners of the entablature.
-	for sx: float in [-1.0, 1.0]:
-		for sz: float in [-1.0, 1.0]:
-			var p := Vector3(sx * (hx - 0.1), y5, sz * (hz - 0.1))
-			k.box("wall", g, p + Vector3(0, 0.25, 0), Vector3(0.46, 0.5, 0.46), trim)
-			k.box("wall", g, p + Vector3(0, 0.53, 0), Vector3(0.52, 0.06, 0.52), trim)
-			k.m.cylinder("wall", g * Transform3D(Basis(), p + Vector3(0, 0.72, 0)), 0.1, 0.2, 0.32, 10, trim)
-			k.m.cylinder("wall", g * Transform3D(Basis(), p + Vector3(0, 0.98, 0)), 0.2, 0.08, 0.2, 10, trim)
-			k.m.cylinder("wall", g * Transform3D(Basis(), p + Vector3(0, 1.25, 0)), 0.07, 0.0, 0.36, 8, trim)
+			k.box("wall", f, Vector3(side * (half - 0.45), m1 + 0.38, 0.22), Vector3(0.95, 0.36, 0.44), trim)
+			for bk: float in [-0.25, 0.0, 0.25]:
+				k.box("wall", f, Vector3(side * (half - 0.45) + bk, m1 + 0.47, 0.45), Vector3(0.08, 0.16, 0.08), trim)
+		k.box("wall", f, Vector3(0, e1 - 0.15, 0.3), Vector3(2.0 * half + 0.5, 0.18, 0.6), trim)
+		k.box("wall", f, Vector3(0, e1 - 0.03, 0.34), Vector3(2.0 * half + 0.6, 0.08, 0.68), trim)
+		# The low pediment between the finials.
+		k.pediment(f, Vector3(0, e1, 0.3), 3.6, 0.7, 0.3, trim, trim, 0.25)
+		# An urn finial on a pedestal over each pilaster.
+		for side: float in [-1.0, 1.0]:
+			var p := Vector3(side * 2.0, e1, 0.3)
+			k.box("wall", f, p + Vector3(0, 0.28, 0), Vector3(0.4, 0.56, 0.4), trim)
+			k.box("wall", f, p + Vector3(0, 0.59, 0), Vector3(0.46, 0.06, 0.46), trim)
+			k.m.cylinder("wall", f * Transform3D(Basis(), p + Vector3(0, 0.7, 0)), 0.1, 0.16, 0.16, 10, trim)
+			k.m.sphere("wall", f * Transform3D(Basis().scaled(Vector3(1.0, 1.3, 1.0)), p + Vector3(0, 0.9, 0)), 0.17, 10, trim)
+			k.m.cylinder("wall", f * Transform3D(Basis(), p + Vector3(0, 1.12, 0)), 0.05, 0.09, 0.1, 8, trim)
+			k.m.cylinder("wall", f * Transform3D(Basis(), p + Vector3(0, 1.55, 0)), 0.06, 0.0, 0.76, 8, trim)
+		# The clock in its dormer, out of the bell roof.
+		_clock_dormer(face(dir, dir * 2.6), e1)
 	# The bell roof, and the finial and vane at its point.
-	k.bell(g, Vector3(0, y5 + 0.06, 0), 2.35, 2.35, 8.8, slate)
-	var tip := y5 + 8.8
-	k.m.cylinder("wall", g * Transform3D(Basis(), Vector3(0, tip - 0.1, 0)), 0.28, 0.18, 0.4, 10, trim)
-	k.m.sphere("wall", g * Transform3D(Basis(), Vector3(0, tip + 0.22, 0)), 0.18, 10, trim)
-	k.m.bar("iron", Vector3(0, tip + 0.3, 0), Vector3(0, tip + 2.8, 0), 0.03, 6, IRON)
+	var eave := e1 + 0.3
+	var tip := 35.0
+	_dome(Vector3(0, eave, 0), 2.42, tip - eave, slate)
+	k.m.cylinder("wall", g * Transform3D(Basis(), Vector3(0, tip - 0.05, 0)), 0.3, 0.16, 0.3, 10, trim)
+	k.m.cylinder("wall", g * Transform3D(Basis(), Vector3(0, tip + 0.2, 0)), 0.14, 0.2, 0.2, 10, trim)
+	k.m.sphere("wall", g * Transform3D(Basis(), Vector3(0, tip + 0.45, 0)), 0.17, 10, trim)
+	k.m.cylinder("wall", g * Transform3D(Basis(), Vector3(0, tip + 0.68, 0)), 0.03, 0.09, 0.14, 8, trim)
+	k.m.bar("iron", Vector3(0, tip + 0.7, 0), Vector3(0, tip + 2.8, 0), 0.03, 6, IRON)
+	k.m.sphere("iron", Transform3D(Basis(), Vector3(0, tip + 1.0, 0)), 0.08, 8, IRON)
 	# The cross, the compass arms, the arrow.
-	k.m.bar("iron", Vector3(0, tip + 0.65, -0.22), Vector3(0, tip + 0.65, 0.22), 0.03, 6, IRON)
+	k.m.bar("iron", Vector3(0, tip + 1.3, -0.22), Vector3(0, tip + 1.3, 0.22), 0.03, 6, IRON)
 	for dir: Vector3 in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
-		k.m.bar("iron", Vector3(0, tip + 1.45, 0), dir * 0.6 + Vector3(0, tip + 1.45, 0), 0.015, 4, IRON)
+		k.m.bar("iron", Vector3(0, tip + 1.6, 0), dir * 0.6 + Vector3(0, tip + 1.6, 0), 0.015, 4, IRON)
 	var letters := {"N": Vector3(0, 0, -1), "S": Vector3(0, 0, 1), "E": Vector3(1, 0, 0), "W": Vector3(-1, 0, 0)}
 	for l: String in letters:
 		var d: Vector3 = letters[l]
@@ -709,7 +737,7 @@ func _cupola() -> void:
 		lb.pixel_size = 0.0035
 		lb.modulate = Color(0.05, 0.05, 0.05)
 		lb.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-		lb.position = d * 0.66 + Vector3(0, tip + 1.45, 0)
+		lb.position = d * 0.66 + Vector3(0, tip + 1.6, 0)
 		add_child(lb)
 	k.m.bar("iron", Vector3(-0.7, tip + 2.25, 0), Vector3(0.7, tip + 2.25, 0), 0.02, 4, IRON)
 	k.box("iron", g, Vector3(0.75, tip + 2.25, 0), Vector3(0.2, 0.2, 0.02), IRON)
@@ -717,52 +745,108 @@ func _cupola() -> void:
 	k.m.sphere("iron", Transform3D(Basis(), Vector3(0, tip + 2.8, 0)), 0.06, 8, IRON)
 
 
+## The bell roof over a square of half side a from c, h high: each side
+## rises almost upright and rounds over to the point, s(t) = (1 - t^2.2)^0.8; its
+## slates dark with a band of pale ones and a lozenge on each face.
+func _dome(cen: Vector3, a: float, h: float, slate: Color) -> void:
+	var pale := c(Color(0.47, 0.41, 0.41), CourthouseKit.K_SLATE)
+	var rings := 18
+	var prev: Array[Vector3] = []
+	for j in rings + 1:
+		var t := float(j) / rings
+		var s := pow(maxf(1.0 - pow(t, 2.2), 0.0), 0.8)
+		var y := cen.y + h * t
+		var ring: Array[Vector3] = [Vector3(cen.x - a * s, y, cen.z - a * s), Vector3(cen.x + a * s, y, cen.z - a * s),
+			Vector3(cen.x + a * s, y, cen.z + a * s), Vector3(cen.x - a * s, y, cen.z + a * s)]
+		if not prev.is_empty():
+			var mid_t := (j - 0.5) / rings
+			var col := pale if mid_t > 0.74 and mid_t < 0.8 else slate
+			for q in 4:
+				var p0 := prev[q]
+				var p1 := prev[(q + 1) % 4]
+				var p2 := ring[(q + 1) % 4]
+				var p3 := ring[q]
+				var m := (p0 + p1 + p2 + p3) / 4.0
+				var out := Vector3(m.x - cen.x, 0.0, m.z - cen.z)
+				var n := (p1 - p0).cross(p3 - p0).normalized()
+				if n.dot(out) < 0.0:
+					n = -n
+				if j == rings:
+					k.m.tri("wall", p0, p1, p2, n, col)
+				else:
+					k.m.quad("wall", p0, p1, p2, p3, n, col)
+		prev = ring
+	# The lozenges: four pale diamonds in a diamond on each face, laid on
+	# the slope.
+	var t := 0.58
+	var s := pow(1.0 - pow(t, 2.2), 0.8)
+	var slope := 0.8 * pow(1.0 - pow(t, 2.2), -0.2) * 2.2 * pow(t, 1.2) * a / h
+	for dir: Vector3 in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
+		var f := face(dir, cen + dir * (a * s + 0.02) + Vector3(0, h * t, 0)) * Transform3D(Basis(Vector3.RIGHT, -atan(slope)), Vector3.ZERO)
+		for p: Vector2 in [Vector2(0, 0.3), Vector2(0, -0.3), Vector2(0.3, 0), Vector2(-0.3, 0)]:
+			k.box_rz("wall", f, Vector3(p.x, p.y, 0.0), Vector3(0.28, 0.28, 0.02), PI / 4.0, pale)
+
+
 ## A clock dormer on a cupola face f (its face plane at the frame's
-## origin): a round-topped frame out of the bell, the dial, its hands.
-func _clock_dormer(f: Transform3D, y5: float) -> void:
+## origin), rising from behind the pediment at y0: pilaster strips up
+## its sides, a round hood with a spike over it, the dial in the arch,
+## a panel under the dial.
+func _clock_dormer(f: Transform3D, y0: float) -> void:
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
-	var slate := c(SLATE.darkened(0.1), CourthouseKit.K_SLATE)
-	var cy := y5 + 3.3
-	var w := 2.0
-	var top := y5 + 4.2
-	# The body back into the roof, its round top a slate hood.
-	k.box("wall", f, Vector3(0, (y5 + top) / 2.0, -0.7), Vector3(w, top - y5, 1.4), trim)
-	var o := CourthouseKit.opening(0.0, w, y5, top, "segment", 0.6)
-	k.glass(f, o, 0.02, trim, "wall")
+	var w := 2.7
+	var r := w / 2.0
+	var spring := 30.45
+	var cy := 30.4
+	# The body back into the roof, square below the spring, round above.
+	k.box("wall", f, Vector3(0, (y0 + spring) / 2.0, -0.7), Vector3(w, spring - y0, 1.4), trim)
+	var o := CourthouseKit.opening(0.0, w, spring - 0.01, spring, "round")
+	k.glass(f, o, 0.0, trim, "wall")
 	var circ := CourthouseKit.head_circle(o)
-	k.arc_band("wall", f, circ, 0.0, PI, 0.18, 1.5, 0.14, slate, 12)
-	k.arc_band("wall", f, circ, atan2(top - circ.y, -w / 2.0), atan2(top - circ.y, w / 2.0), 0.12, 0.12, 0.2, trim, 10)
-	# Pilaster strips down its sides.
+	for z: float in [-0.35, -0.7, -1.05, -1.4]:
+		k.glass(f * Transform3D(Basis(), Vector3(0, 0, z)), o, 0.0, trim, "wall")
+	k.arc_band("wall", f, circ, 0.0, PI, 0.22, 1.5, 0.12, trim, 16)
+	k.arc_band("wall", f, Vector3(circ.x, circ.y, circ.z + 0.22), 0.0, PI, 0.08, 1.4, 0.16, trim, 16)
 	for s: float in [-1.0, 1.0]:
-		k.box("wall", f, Vector3(s * (w / 2.0 - 0.08), (y5 + top) / 2.0, 0.06), Vector3(0.16, top - y5, 0.12), trim)
-	k.arc_band("wall", f, Vector3(circ.x, circ.y, circ.z + 0.1), 0.0, PI, 0.1, 0.1, 0.2, trim, 12)
-	# The dial: a white face in a black ring, the hours in numerals.
+		k.box("wall", f, Vector3(s * (r - 0.12), (y0 + spring) / 2.0, 0.06), Vector3(0.24, spring - y0, 0.12), trim)
+		k.box("wall", f, Vector3(s * (r - 0.12), spring - 0.08, 0.1), Vector3(0.32, 0.16, 0.2), trim)
+	# The spike over the hood.
+	k.m.cylinder("wall", f * Transform3D(Basis(), Vector3(0, spring + r + 0.3, 0.05)), 0.09, 0.14, 0.14, 8, trim)
+	k.m.cylinder("wall", f * Transform3D(Basis(), Vector3(0, spring + r + 0.75, 0.05)), 0.06, 0.0, 0.8, 8, trim)
+	# A panel under the dial.
+	k.box("wall", f, Vector3(0, y0 + 0.75, 0.03), Vector3(1.2, 0.5, 0.06), trim)
+	# The dial: a white face in a black ring, the hours in numerals, the
+	# minutes marked round its edge.
+	var dr := 0.86
 	var df := f * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(0, cy, 0.1))
-	k.m.cylinder("iron", df, 0.8, 0.8, 0.06, 32, IRON)
-	k.m.cylinder("dial", df * Transform3D(Basis(), Vector3(0, 0.035, 0)), 0.72, 0.72, 0.02, 32, Color(1, 1, 1))
+	k.m.cylinder("iron", df, dr + 0.08, dr + 0.08, 0.06, 40, IRON)
+	k.m.cylinder("dial", df * Transform3D(Basis(), Vector3(0, 0.035, 0)), dr, dr, 0.02, 40, Color(1, 1, 1))
+	for mk in 60:
+		var a := TAU * mk / 60.0
+		var long := mk % 5 == 0
+		var p := Vector3(sin(a) * (dr - 0.07), cy + cos(a) * (dr - 0.07), 0.148)
+		k.box_rz("iron", f, p, Vector3(0.03 if long else 0.012, 0.1 if long else 0.05, 0.004), -a, IRON)
 	for h in 12:
 		var a := TAU * h / 12.0
-		var p := Vector3(sin(a) * 0.66, cy + cos(a) * 0.66, 0.15)
-		k.box_rz("iron", f, p, Vector3(0.02, 0.07, 0.01), -a, IRON)
 		var num := Label3D.new()
 		num.text = ["XII", "I", "II", "III", "IIII", "V", "VI", "VII", "VIII", "IX", "X", "XI"][h]
-		num.font_size = 40
-		num.pixel_size = 0.0038
+		num.font_size = 44
+		num.pixel_size = 0.0042
 		num.modulate = Color(0.03, 0.03, 0.03)
 		num.shaded = true
 		num.double_sided = false
-		num.transform = f * Transform3D(Basis(Vector3.BACK, 0.0), Vector3(sin(a) * 0.52, cy + cos(a) * 0.52, 0.152))
+		num.transform = f * Transform3D(Basis(Vector3.BACK, -a), Vector3(sin(a) * 0.62, cy + cos(a) * 0.62, 0.152))
 		add_child(num)
-	_hands(f * Transform3D(Basis(), Vector3(0, cy, 0.16)))
+	_hands(f * Transform3D(Basis(), Vector3(0, cy, 0.16)), dr)
 
 
 ## A clock's hour and minute hands on a dial whose face is xf (+z out).
-func _hands(xf: Transform3D) -> void:
+func _hands(xf: Transform3D, dial := 0.72) -> void:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.03, 0.03, 0.03)
 	mat.roughness = 0.5
 	var pair: Array = []
-	for spec: Array in [[0.4, 0.05], [0.6, 0.03]]:
+	var sc := dial / 0.72
+	for spec: Array in [[0.4 * sc, 0.06 * sc], [0.6 * sc, 0.035 * sc]]:
 		var pivot := Node3D.new()
 		pivot.transform = xf * Transform3D(Basis(), Vector3(0, 0, 0.012 * pair.size()))
 		var piece := MeshInstance3D.new()
