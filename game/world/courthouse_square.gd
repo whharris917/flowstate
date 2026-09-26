@@ -262,18 +262,18 @@ func _monument(at: Vector3) -> void:
 	var h := 6.0
 	var n := 6
 	for j in n:
-		var w0 := lerpf(0.95, 0.62, float(j) / n)
-		var w1 := lerpf(0.95, 0.62, float(j + 1) / n)
+		var w0 := lerpf(0.78, 0.5, float(j) / n)
+		var w1 := lerpf(0.78, 0.5, float(j + 1) / n)
 		k.box("wall", g, Vector3(0, y + h * (j + 0.5) / n, 0), Vector3((w0 + w1) / 2.0, h / n - 0.01, (w0 + w1) / 2.0), stone)
 	y += h
-	k.box("wall", g, Vector3(0, y + 0.12, 0), Vector3(0.82, 0.24, 0.82), stone)
-	k.m.sphere("wall", g * Transform3D(Basis(), Vector3(0, y + 0.6, 0)), 0.36, 12, stone)
+	k.box("wall", g, Vector3(0, y + 0.12, 0), Vector3(0.66, 0.24, 0.66), stone)
+	k.m.sphere("wall", g * Transform3D(Basis(), Vector3(0, y + 0.52, 0)), 0.3, 12, stone)
 	# Relief: crossed sabres on the die, crossed rifles on the shaft.
 	for d: Vector3 in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
 		var f := g * UnionCourthouse.face(d, d * 0.8)
 		for s: float in [-1.0, 1.0]:
 			k.box_rz("wall", f, Vector3(0, 1.05 + 0.75, 0.02), Vector3(0.05, 1.0, 0.04), s * 0.7, stone)
-		var f2 := g * UnionCourthouse.face(d, d * 0.46)
+		var f2 := g * UnionCourthouse.face(d, d * 0.37)
 		for s: float in [-1.0, 1.0]:
 			k.box_rz("wall", f2, Vector3(0, 4.3, 0.03), Vector3(0.06, 1.6, 0.05), s * 0.35, stone)
 	# The railing: iron pipe on posts round the base.
@@ -294,7 +294,7 @@ func _monument(at: Vector3) -> void:
 ## ---- trees, hedges, lawns ----------------------------------------------
 
 func _planting() -> void:
-	var magnolia := Color(0.13, 0.27, 0.10)
+	var magnolia := Color(0.20, 0.36, 0.13)
 	# [where, height, species, leaf]
 	for t: Array in [[Vector3(-21.5, 0.12, -13.0), 17.0, "oak", Color(0.72, 0.42, 0.10)],
 			[Vector3(-19.0, 0.12, 15.5), 15.0, "oak", magnolia],
