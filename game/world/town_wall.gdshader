@@ -8,8 +8,9 @@ shader_type spatial;
 //   6 plank decking      7 rough timber     8 tar paper, cloth
 //   9 wallpaper         10 oak floor       11 linoleum checker
 //  12 plaster           13 glazed tile      14 indoor paint, enamel
-//  15 upholstery        16 varnished wood
-// Kinds 9 and up are indoors: the rain never reaches them.
+//  15 upholstery        16 varnished wood  17 slate
+//  18 beaded boards     19 brick paving    20 lawn
+// Kinds 9 to 16 and 18 are indoors: the rain never reaches them.
 // The courses, bricks, shingles and boards are drawn in world space
 // from the surface's own direction, so nothing needs UVs and nothing
 // swims. Rain wets it all: darker, glossier, most on what faces up.
@@ -168,6 +169,50 @@ void fragment() {
 		col *= 0.85 + 0.2 * value_noise(vec2(u * 3.0, v * 40.0));
 		rough = 0.3;
 		spec = 0.5;
+	} else if (kind == 17) {
+		// Slate: courses 15 cm by height, slates 30 cm wide, each its
+		// own blue-grey, a dark gap under each course's butt.
+		float row = floor(v / 0.15);
+		float su = u / 0.3 + 0.5 * mod(row, 2.0);
+		float f = fract(su);
+		float slot = smoothstep(0.0, 0.04, f) * smoothstep(1.0, 0.96, f);
+		float lap = smoothstep(0.0, 0.12, fract(v / 0.15));
+		col *= (0.82 + 0.3 * h21(vec2(floor(su), row))) * mix(1.0, mix(0.5, 1.0, slot * lap), detail);
+		rough = 0.6;
+		spec = 0.45;
+	} else if (kind == 18) {
+		// Beaded boards standing upright, 9 cm, a shadowed bead at each
+		// joint: wainscot and porch ceilings.
+		float f = fract(u / 0.09);
+		float bead = smoothstep(0.0, 0.08, f) * smoothstep(1.0, 0.9, f);
+		col *= mix(1.0, mix(0.6, 1.0, bead), detail) * (0.9 + 0.12 * value_noise(vec2(u * 11.0, v * 1.5)));
+		rough = 0.35;
+		spec = 0.5;
+	} else if (kind == 19) {
+		// Brick paving laid flat in running bond, 20 by 10 cm, sanded
+		// joints.
+		vec2 p = world_pos.xz;
+		float row = floor(p.y / 0.1);
+		float bu = p.x / 0.2 + 0.5 * mod(row, 2.0);
+		vec2 f = vec2(fract(bu), fract(p.y / 0.1));
+		float joint = 1.0 - smoothstep(0.0, 0.04, f.x) * smoothstep(1.0, 0.96, f.x) * smoothstep(0.0, 0.08, f.y) * smoothstep(1.0, 0.92, f.y);
+		float fine_p = 1.0 - smoothstep(0.3, 0.7, max(fwidth(p.y / 0.1), fwidth(bu)));
+		col *= (0.82 + 0.3 * h21(vec2(floor(bu), row))) * (0.9 + 0.15 * value_noise(p * 0.7));
+		col = mix(col, lin(vec3(0.55, 0.52, 0.46)), joint * 0.8 * fine_p * detail);
+		rough = 0.85;
+		spec = 0.3;
+	} else if (kind == 20) {
+		// Mown lawn: blades too fine to draw, so a mottle at three scales,
+		// thin patches browner, a darker green where the grass is thick.
+		vec2 p = world_pos.xz;
+		float n1 = value_noise(p * 0.35);
+		float n2 = value_noise(p * 2.3);
+		float n3 = value_noise(p * 17.0);
+		col *= 0.75 + 0.35 * n1;
+		col = mix(col, col * vec3(1.25, 1.1, 0.7), smoothstep(0.62, 0.9, n2) * 0.5);
+		col *= mix(1.0, 0.8 + 0.4 * n3, detail);
+		rough = 0.95;
+		spec = 0.2;
 	} else if (kind == 8) {
 		col *= 0.9 + 0.15 * value_noise(world_pos.xz * 2.0 + v);
 		rough = 0.95;
@@ -180,7 +225,8 @@ void fragment() {
 	// Rain: everything darkens a little and slicks over; what faces up
 	// holds a film of water.
 	float up = smoothstep(0.3, 0.9, wn.y);
-	float soak = kind >= 9 ? 0.0 : wet * (0.55 + 0.45 * up);
+	bool indoor = kind >= 9 && kind != 17 && kind != 19 && kind != 20;
+	float soak = indoor ? 0.0 : wet * (0.55 + 0.45 * up);
 	col *= 1.0 - 0.25 * soak;
 	rough = mix(rough, mix(0.35, 0.12, up), soak);
 	spec = mix(spec, 0.5, soak);
