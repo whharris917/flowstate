@@ -13,8 +13,9 @@ const COL_PAD := Color(0.47, 0.47, 0.45)
 const COL_SAFETY := Color(0.95, 0.78, 0.05)
 
 var _ground: MeshInstance3D
-var _stars: MeshInstance3D
-var _stars_mat: ShaderMaterial
+var _stars: NightSky
+## The faintest star the eye reaches here on a clear moonless night.
+var star_limit := 6.3
 var _hall_lights: Array[OmniLight3D] = []
 var _hall_lamp_mat: StandardMaterial3D = null
 
@@ -163,22 +164,9 @@ func _build_environment() -> void:
 	sun.shadow_blur = 1.5
 	sun.light_angular_distance = 0.5   # the sun's half-degree: soft penumbrae, a real disc in the sky
 
-	# Stars on a dome that follows the player; visibility follows the clock.
-	_stars_mat = ShaderMaterial.new()
-	_stars_mat.shader = load("res://world/stars.gdshader")
-	_stars_mat.render_priority = -2   # behind any cloud a world draws over them
-	# The dome sits just inside the camera's far plane (4 km), so its
-	# stars stay behind the far end of the heighliner, which hangs out
-	# past two.
-	var dome := SphereMesh.new()
-	dome.radius = 3800.0
-	dome.height = 7600.0
-	dome.radial_segments = 32
-	dome.rings = 16
-	_stars = MeshInstance3D.new()
-	_stars.mesh = dome
-	_stars.material_override = _stars_mat
-	_stars.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The night sky: the stars of the catalogue and the Milky Way,
+	# turning with the clock.
+	_stars = NightSky.new(star_limit)
 	add_child(_stars)
 	sun.directional_shadow_split_1 = 0.08
 	sun.directional_shadow_split_2 = 0.2
@@ -220,19 +208,19 @@ func _process(delta: float) -> void:
 		_ground.position = Vector3(snappedf(player.global_position.x, 2.0), 0.0,
 			snappedf(player.global_position.z, 2.0))
 	if _stars != null:
-		_stars.position = player.global_position
+		_stars.follow(player.global_position)
 
 
 ## Stars come out as twilight goes; the hall lights come up with it.
 func _on_time_of_day(_horizon: float, twilight: float) -> void:
-	if _stars_mat != null:
+	if _stars != null:
 		# The first stars wait for the afterglow to go: the brightest at
-		# the end of civil twilight, the field once it is dark.
-		_stars_mat.set_shader_parameter("visibility", pow(1.0 - twilight, 1.8))
-		_stars_mat.set_shader_parameter("sky_rotation", sky_rotation(time_of_day))
-		# The dome covers the whole sky; by day it draws nothing and still
-		# costs the fill.
-		_stars.visible = twilight < 0.999
+		# the end of civil twilight, the field once it is dark. Cloud
+		# hides them; the moon's light drowns the faint ones.
+		var cover := _sky_cover()
+		var moon := SkyClock.moon_world(time_of_day)
+		var moon_light := pow(SkyClock.moon_lit(time_of_day), 1.5) * clampf(moon.y * 5.0, 0.0, 1.0)
+		_stars.update(time_of_day, pow(1.0 - twilight, 1.8) * pow(1.0 - cover, 2.0), moon_light * (1.0 - cover))
 	# Night level: 3 is too dim, 9 too bright; 5.5 is a lit night shift.
 	for light in _hall_lights:
 		light.light_energy = lerpf(5.5, 1.2, twilight)
@@ -244,16 +232,9 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 		_hall_lamp_mat.emission_energy_multiplier = lerpf(4.5, 1.5, twilight)
 
 
-## World to celestial at a clock hour: the sky turns about the pole,
-## which stands 44 degrees up in the north (-z) at the latitude of
-## Maine. Local sidereal time is taken as the clock hour, as it is
-## near the autumn equinox, so the Milky Way stands where it does on a
-## September evening.
-static func sky_rotation(hours: float) -> Basis:
-	var lat := deg_to_rad(44.0)
-	var pole := Vector3(0.0, sin(lat), -cos(lat))
-	var turned := deg_to_rad(hours * 15.0 - 270.0)
-	return Basis(Vector3.RIGHT, PI / 2.0 - lat) * Basis(pole, turned)
+## How much of the sky cloud hides, 0 to 1: a world with weather says.
+func _sky_cover() -> float:
+	return 0.0
 
 
 ## ---- the hall -------------------------------------------------------------

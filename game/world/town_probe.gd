@@ -29,6 +29,10 @@ func _run(world: TownMap) -> void:
 	world.set_time_of_day(18.1)
 	world.weather.wet = 1.0
 	world.weather._next_strike = 1000.0
+	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "sky":
+		await _sky(world, player)
+		get_tree().quit()
+		return
 	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "main":
 		await _main_street(world, player)
 		get_tree().quit()
@@ -129,6 +133,25 @@ func _trees(world: TownMap, player: Player) -> void:
 	await _view(player, Vector3(30.0, 0.4, 47.5), -PI / 2.0 + 0.2, 0.12, "trees_water")
 	await _view(player, Vector3(-14.0, 0.4, -38.0), 0.0, 0.08, "trees_woods")
 	await _view_zoom(player, Vector3(-20.0, 0.4, -35.0), -2.5, -0.35, 1.6, "trees_aerial")
+
+
+## The night sky on a clear night from the head of the wharf: the
+## crescent moon at dusk, then the sky at ten round the compass and
+## overhead, and the moon close to.
+func _sky(world: TownMap, player: Player) -> void:
+	world.set_weather(0.0)
+	world.weather.wet = 0.0
+	var at := Vector3(-30.0, TownCoast.DECK_Y + 0.4, 114.0)
+	world.set_time_of_day(18.75)
+	var m := SkyClock.moon_world(18.75)
+	print("[probe] moon at dusk: %.0f deg up, bearing %.0f, %.0f%% lit" % [rad_to_deg(asin(m.y)),
+		fposmod(rad_to_deg(atan2(m.x, -m.z)), 360.0), SkyClock.moon_lit(18.75) * 100.0])
+	await _view(player, at, atan2(-m.x, -m.z), asin(m.y) - 0.05, "sky_dusk")
+	await _view_zoom(player, at, atan2(-m.x, -m.z), asin(m.y), 1.0, "sky_moon")
+	world.set_time_of_day(22.0)
+	for view: Array in [["north", 0.0, 0.55], ["east", -PI / 2.0, 0.45], ["south", PI, 0.5], ["west", PI / 2.0, 0.5],
+			["zenith", PI, 1.45]]:
+		await _view(player, at, float(view[1]), float(view[2]), "sky_" + str(view[0]))
 
 
 ## Main Street by day and at dusk in the storm: down the street from the

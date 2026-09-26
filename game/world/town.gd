@@ -18,6 +18,8 @@ func _init() -> void:
 	plant_save_path = "user://save_town.json"
 	with_exercises = false
 	settings_prefix = "town_"
+	# A small town's lamps: the faintest stars are a little lost.
+	star_limit = 5.9
 	time_of_day = 18.1
 	weather_level = 0.9
 
@@ -63,10 +65,14 @@ func _on_time_of_day(horizon: float, twilight: float) -> void:
 	weather.apply_light(horizon, twilight)
 	if town != null:
 		town.set_clock(time_of_day)
-	# Cloud hides the stars.
-	if _stars_mat != null:
-		var o := weather.overcast()
-		_stars_mat.set_shader_parameter("visibility", pow(1.0 - twilight, 1.8) * pow(1.0 - o, 2.0))
+	# The town's lamps light the air low over it after dark.
+	if sky_mat is ShaderMaterial:
+		(sky_mat as ShaderMaterial).set_shader_parameter("town_glow", 1.0 - twilight)
+
+
+## Cloud hides the stars.
+func _sky_cover() -> float:
+	return weather.overcast() if weather != null else 0.0
 
 
 func _after_plant() -> void:

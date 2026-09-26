@@ -245,3 +245,13 @@ The director asked for the row of houses nearest the harbour to be detailed rele
 - Street signs at the corners of Main, Harbor, Elm and Water Streets: an iron post, a green blade per street, the name in white.
 - Found and fixed: rebuilding Main Street had changed the Water Street houses' colours and furnishings, since the houses draw from the same random sequence after it. The houses now start from the state they had in the approved version (`HarborTown.HOUSE_DRAWS`), checked equal through the lamps and poles; street trees take their kind and size from their own position.
 
+## 2026-09-26: the sun in the south, the real night sky
+
+- **The sun** had crossed the northern sky at noon (the world's -z is north; its yaw ran from 90 through 180). It now runs from 90 through 0 to -90: east at dawn, south at noon, west at dusk, in every world.
+- **The night sky** was hashed dots in random places, the brightest many times over white and blooming into blobs, on a saturated blue dome, with a moon that was a glow fixed in the north. Now:
+  - `SkyClock` fixes one night of the year (28 October, the town's season) at latitude 44: sidereal time, the sun's and moon's places on the ecliptic, the moon's phase. Its transform was checked against standard altitude and azimuth for Vega, Sirius, Deneb and Capella, and Deneb's galactic longitude.
+  - `NightSky` draws the 9,096 stars of the Yale Bright Star Catalogue (public domain; `tools/build_sky.py` packs it into `game/data/stars.bin`), each a point a pixel or two wide sized in screen pixels, brightness from magnitude against the eye's limit (6.3 on the coast, 5.9 in the town), colour from temperature shown in the bright stars only, dimmed and reddened by the air toward the horizon, twinkling more low down.
+  - The Milky Way is a picture in galactic coordinates painted by the same tool from a model of the Galaxy (the centre and the Cygnus swell, the star clouds, the Great Rift and other dust), faint, the first thing twilight and moonlight take; airglow low down.
+  - The moon is a disc lit on its sunward side with its seas where they are on the real face and earthshine on the dark part, drawn 2.2 times its true size since a screen shows the camera's ninety degrees in about forty of the eye's. On the night chosen it is a crescent of four and a half days, low in the south-west at dusk and set by nine. The night light comes from the moon while it is up, as bright as its phase allows, and from the whole sky, faintly, once it has set.
+  - The night dome is darker and nearly neutral; a town's lamps warm the air low over it.
+

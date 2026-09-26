@@ -77,7 +77,7 @@ func _run(world: WorldBase) -> void:
 	for child in coast.find_child("Terrain", false, false).get_children():
 		if child is MeshInstance3D:
 			terrain_mesh = child as MeshInstance3D
-	var stars: MeshInstance3D = (world as Object).get("_stars") as MeshInstance3D
+	var stars: Node3D = (world as Object).get("_stars") as Node3D
 	var parts: Array = [
 		["everything", func(on: bool) -> void: pass],
 		["without the far wood", func(on: bool) -> void: forests[1].visible = on],

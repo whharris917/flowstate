@@ -388,11 +388,20 @@ func set_time_of_day(hours: float) -> void:
 	var day_frac := (time_of_day - 6.0) / 12.0          # 0 at sunrise, 1 at sunset
 	var elevation := 60.0 * sin(clampf(day_frac, 0.0, 1.0) * PI)
 	var up := day_frac >= 0.0 and day_frac <= 1.0
-	var azimuth := 90.0 + clampf(day_frac, 0.0, 1.0) * 180.0
-	# Below the horizon the same light is the moon: thirty degrees up in
-	# the south, dim and blue, so night has shadows and a physical sky
-	# renders a faint moonlit dome instead of black.
-	sun.rotation_degrees = Vector3(-elevation, azimuth, 0) if up else Vector3(-30.0, 180.0, 0)
+	# The light shines from the east at dawn, the south at noon, the west
+	# at dusk (-z is north): its yaw turns from 90 through 0 to -90.
+	var azimuth := 90.0 - clampf(day_frac, 0.0, 1.0) * 180.0
+	# Below the horizon the same light is the moon, from where it stands
+	# (SkyClock), as bright as its phase and height allow; with the moon
+	# down, the faint light of the whole sky from overhead.
+	var moon := SkyClock.moon_world(time_of_day)
+	var moon_light := pow(SkyClock.moon_lit(time_of_day), 1.5) * clampf(moon.y * 5.0, 0.0, 1.0)
+	if up:
+		sun.rotation_degrees = Vector3(-elevation, azimuth, 0)
+	elif moon_light > 0.01:
+		sun.basis = Basis.looking_at(-moon, Vector3.UP if absf(moon.y) < 0.99 else Vector3.FORWARD)
+	else:
+		sun.rotation_degrees = Vector3(-88.0, 0.0, 0.0)
 	# Twilight: an hour either side of the horizon, night fades in and
 	# out instead of switching.
 	var twilight := 1.0
@@ -404,7 +413,8 @@ func set_time_of_day(hours: float) -> void:
 	var warm := Color(1.0, 0.62, 0.35).lerp(_sun_base_color, horizon)
 	var night := Color(0.45, 0.55, 0.80)
 	sun.light_color = night.lerp(warm, twilight)
-	sun.light_energy = lerpf(0.35, _sun_base_energy * (0.25 + 0.75 * horizon), twilight)
+	var night_energy := lerpf(0.05, 0.35, clampf(moon_light / 0.25, 0.0, 1.0))
+	sun.light_energy = lerpf(night_energy, _sun_base_energy * (0.25 + 0.75 * horizon), twilight)
 	if sky_mat is ShaderMaterial:
 		# Our sky (world/sky.gdshader) wants the sun's true direction,
 		# under the horizon too, and the moon's; and with a dome that is
@@ -414,9 +424,12 @@ func set_time_of_day(hours: float) -> void:
 		var true_elevation := 60.0 * sin(day_frac * PI)
 		var sun_basis := Basis.from_euler(Vector3(deg_to_rad(-true_elevation), deg_to_rad(azimuth), 0.0))
 		painted.set_shader_parameter("sun_dir", sun_basis.z)
-		painted.set_shader_parameter("moon_dir", Basis.from_euler(Vector3(deg_to_rad(-30.0), PI, 0.0)).z)
+		painted.set_shader_parameter("moon_dir", moon)
+		painted.set_shader_parameter("moon_up", SkyClock.moon_up(time_of_day))
+		painted.set_shader_parameter("moon_sun", SkyClock.sun_world(time_of_day))
+		painted.set_shader_parameter("moon_lit", SkyClock.moon_lit(time_of_day))
 		var sun_strength := smoothstep(0.0, 1.0, clampf(elevation / 12.0, 0.0, 1.0))
-		sun.light_energy = lerpf(0.3, _sun_base_energy * (0.05 + 0.95 * sun_strength), twilight)
+		sun.light_energy = lerpf(night_energy, _sun_base_energy * (0.05 + 0.95 * sun_strength), twilight)
 	var day_horizon := Color(0.72, 0.78, 0.84)
 	var dusk_horizon := Color(0.95, 0.55, 0.32)
 	var night_horizon := Color(0.10, 0.12, 0.18)
