@@ -380,11 +380,14 @@ func _build_buoy() -> void:
 	_buoy.add_child(_buoy_light)
 	if DisplayServer.get_name() != "headless":
 		_bell_audio = AudioStreamPlayer3D.new()
-		_bell_audio.unit_size = 90.0
+		# Carried as far as a real one: loud alongside, faint from the town,
+		# the high clang lost first with distance.
+		_bell_audio.unit_size = 12.0
 		_bell_audio.max_distance = 1500.0
-		_bell_audio.attenuation_filter_cutoff_hz = 9000.0
+		_bell_audio.attenuation_filter_cutoff_hz = 6000.0
+		_bell_audio.attenuation_filter_db = -18.0
 		_bell_audio.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-		_bell_audio.bus = "Master"
+		_bell_audio.bus = "Bell"
 		_bell_audio.max_polyphony = 3
 		_buoy.add_child(_bell_audio)
 
@@ -504,6 +507,6 @@ func _ring(speed: float) -> void:
 		return
 	var hard := speed > 0.9
 	_bell_audio.stream = load("res://audio/bell_1.wav" if hard else "res://audio/bell_2.wav")
-	_bell_audio.volume_db = linear_to_db(clampf(speed / 1.0, 0.3, 1.0)) + 8.0
+	_bell_audio.volume_db = linear_to_db(clampf(speed / 1.0, 0.3, 1.0)) + 4.0
 	_bell_audio.pitch_scale = 1.0 + randf_range(-0.004, 0.004)
 	_bell_audio.play()

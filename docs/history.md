@@ -214,3 +214,7 @@ The director asked for a new setting after the town in *The Iron Giant*: a small
 - **Trees.** `TreeKit` builds maples, elms and spruces from branches and textured leaf and needle cards (textures drawn at startup), swaying in `foliage.gdshader`; `Forest.finish(..., detailed)` instances them with a leaf colour per tree. On the development machine the storm view held 60 fps on Low and fell from 60 to about 46 on Medium with them, so they stop at 150 m.
 - **Found:** the sun's noon position is at -z, which the Maine coast calls north, so the noon sun stands in the north; left for the director, since the fix changes every world's light.
 
+
+## 2026-09-25: the bell heard from where the player stands; a smaller player in the town
+
+The director found the bell odd in tone, too loud in town, and wanted it muffled indoors or behind buildings; and asked for the town to feel larger and the rooms easier to move through. The bell is regenerated as pairs of close partials with a short clang, at 330 Hz, and carries like a real one (loud alongside, faint in town, the high clang lost first). Two new buses, Outdoor and Bell, each with a low-pass: the town's weather checks for a roof over the player (the Cape's roof is now solid, and stops the rain) and for a clear line to the buoy, and closes the filters. The player can be sized per world (`Player.set_body_scale`: capsule, eye, reach, zoom track, stride, jump); the town sets 0.75, so it and its rooms feel a third larger without rescaling the ground, the water or the harbour.

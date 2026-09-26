@@ -932,33 +932,39 @@ def make_thunders() -> None:
 
 def make_bell(path: Path, f0: float, bright: float) -> None:
     """A bell buoy's bell: bronze, struck by a free clapper as the buoy
-    rolls. The church-bell partials (the hum an octave under the
-    strike, the minor third, the fifth, the octave and above) each ring
-    at their own rate, the hum longest, each beating slowly as a real
-    bell does. bright is how hard the clapper hit. Pure sines, no RNG."""
-    duration = 6.0
+    rolls. The partials of a heavy bell (the hum an octave under the
+    strike, the strike, the minor third, the fifth, the octave, the
+    upper partials) each ring out at their own rate, the hum longest;
+    each is a pair a fraction of a hertz apart, as a cast bell never is
+    quite round, which gives the slow shimmer. Over them, the clang of
+    the clapper: a few hundredths of a second of high, fast-dying
+    partials. bright is how hard it struck. Pure sines, no RNG."""
+    duration = 7.0
     n = int(duration * SR)
-    partials = [(0.5, 0.55, 0.45), (1.0, 1.0, 0.9), (1.183, 0.55, 1.3), (1.506, 0.35, 1.7),
-                (2.0, 0.45 * bright, 2.2), (2.514, 0.25 * bright, 3.0), (2.662, 0.2 * bright, 3.4),
-                (3.011, 0.18 * bright, 4.0), (4.166, 0.10 * bright, 6.0)]
+    partials = [(0.5, 0.45, 0.35, 0.21), (1.0, 1.0, 0.7, 0.37), (1.19, 0.5, 1.0, 0.53),
+                (1.50, 0.28, 1.4, 0.61), (2.0, 0.40 * bright, 1.9, 0.83), (2.51, 0.22 * bright, 2.6, 0.97),
+                (3.01, 0.14 * bright, 3.4, 1.21), (4.07, 0.07 * bright, 5.0, 1.43)]
+    clang = [(5.3, 0.30), (6.9, 0.22), (8.4, 0.16), (10.2, 0.10)]
     buf = [0.0] * n
     for i in range(n):
         t = i / SR
         v = 0.0
-        for ratio, amp, decay in partials:
-            beat = 1.0 + 0.08 * math.sin(2.0 * math.pi * 0.7 * ratio * t)
-            v += amp * beat * math.sin(2.0 * math.pi * f0 * ratio * t) * math.exp(-t * decay)
-        strike = math.sin(2.0 * math.pi * f0 * 5.4 * t) * math.exp(-t * 60.0) * 0.4 * bright
-        buf[i] = (v + strike) * min(1.0, t / 0.002)
-    tail = int(0.3 * SR)
+        for ratio, amp, decay, split in partials:
+            f = f0 * ratio
+            env = math.exp(-t * decay)
+            v += amp * env * 0.5 * (math.sin(2.0 * math.pi * f * t) + math.sin(2.0 * math.pi * (f + split) * t + 0.7))
+        for ratio, amp in clang:
+            v += amp * bright * math.sin(2.0 * math.pi * f0 * ratio * t) * math.exp(-t * 45.0)
+        buf[i] = v * min(1.0, t / 0.0015)
+    tail = int(0.4 * SR)
     for i in range(tail):
         buf[n - tail + i] *= 1.0 - i / tail
     write_wav(path, [buf], normalize_to=0.45)
 
 
 def make_bells() -> None:
-    make_bell(OUT_DIR / "bell_1.wav", 392.0, 1.0)
-    make_bell(OUT_DIR / "bell_2.wav", 392.0, 0.6)
+    make_bell(OUT_DIR / "bell_1.wav", 330.0, 1.0)
+    make_bell(OUT_DIR / "bell_2.wav", 330.0, 0.55)
 
 
 def main() -> None:

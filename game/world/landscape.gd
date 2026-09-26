@@ -493,13 +493,13 @@ func _build_sound() -> void:
 		p.unit_size = 14.0
 		p.max_distance = 170.0
 		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-		p.bus = "Master"
+		p.bus = "Outdoor"
 		add_child(p)
 		p.play(_rng.randf() * surf.get_length())
 	var wind := AudioStreamPlayer.new()
 	wind.stream = _loop_stream("res://audio/wind_loop.wav")
 	wind.volume_db = -22.0
-	wind.bus = "Master"
+	wind.bus = "Outdoor"
 	add_child(wind)
 	wind.play()
 
@@ -519,7 +519,7 @@ func _one_shot(path: String, at: Vector3, volume_db: float, pitch: float) -> voi
 	node.position = at
 	node.volume_db = volume_db
 	node.pitch_scale = pitch
-	node.bus = "Master"
+	node.bus = "Outdoor"
 	node.unit_size = 20.0
 	node.max_distance = 220.0
 	node.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE

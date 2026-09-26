@@ -35,6 +35,8 @@ var night := 0.0                # 0 daylight to 1 dark, cloud included
 var wind_dir := Vector2(-0.7071, -0.7071)   # where it blows toward: in off the sea
 var strikes := 0
 var lamps_on := false
+var indoors := false            # a roof over the player: the weather and the sea heard through it
+var bell_blocked := false       # no clear line from the player to the bell buoy
 
 var world: WorldBase
 var coast: TownCoast
@@ -65,6 +67,9 @@ var _sun_energy := 1.0
 var _ambient_energy := 0.6
 var _rng := RandomNumberGenerator.new()
 var _headless := false
+var _listen_left := 0.0
+var _outdoor_cut := 20000.0
+var _bell_cut := 20000.0
 
 
 func setup(w: WorldBase, c: TownCoast, t: HarborTown, h: Harbor) -> void:
@@ -248,6 +253,8 @@ func _build_rain() -> void:
 	_rain_process.initial_velocity_max = 5.0
 	_rain_process.gravity = Vector3(0, -0.5, 0)
 	_rain_process.particle_flag_align_y = true
+	# Drops stop at a roof that has a shelter box (the Cape's).
+	_rain_process.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
 	_rain.process_material = _rain_process
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -310,7 +317,7 @@ func _loop(path: String) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
 	p.stream = stream
 	p.volume_db = -80.0
-	p.bus = "Master"
+	p.bus = "Outdoor"
 	add_child(p)
 	p.play()
 	return p
@@ -349,6 +356,7 @@ func _process(delta: float) -> void:
 		_update_lamps()
 	_step_lightning(delta, eye)
 	_step_sound(delta, eye)
+	_listen(delta, eye)
 
 
 func _step_lightning(delta: float, eye: Vector3) -> void:
@@ -464,7 +472,7 @@ func _play_thunder(th: Dictionary, eye: Vector3) -> void:
 	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
 	p.volume_db = float(th["volume"])
 	p.pitch_scale = _rng.randf_range(0.9, 1.05)
-	p.bus = "Master"
+	p.bus = "Outdoor"
 	var dir: Vector3 = th["dir"]
 	p.position = eye + Vector3(dir.x, 0.0, dir.z).normalized() * 40.0
 	p.finished.connect(p.queue_free)
@@ -477,3 +485,33 @@ func _step_sound(delta: float, eye: Vector3) -> void:
 		return
 	_rain_audio.volume_db = linear_to_db(maxf(rain, 0.0001)) - 10.0
 	_gale_audio.volume_db = linear_to_db(maxf(smoothstep(0.35, 1.0, wind), 0.0001)) - 15.0
+
+
+## What the player hears through: a roof overhead muffles the rain,
+## the wind and the sea (the Outdoor bus's low-pass closes and it drops
+## a little); anything solid between the player and the bell buoy (a
+## house, the brow of the hill) muffles the bell. Two rays a few times a
+## second; the filters ease over a fraction of a second.
+func _listen(delta: float, eye: Vector3) -> void:
+	_listen_left -= delta
+	if _listen_left <= 0.0:
+		_listen_left = 0.15
+		var space := get_world_3d().direct_space_state
+		var skip: Array[RID] = [world.player.get_rid()]
+		var up := PhysicsRayQueryParameters3D.create(eye, eye + Vector3(0, 12.0, 0), 1)
+		up.exclude = skip
+		indoors = not space.intersect_ray(up).is_empty()
+		var buoy := Vector3(TownCoast.BUOY.x, coast.tide_y + 3.0, TownCoast.BUOY.y)
+		var line := PhysicsRayQueryParameters3D.create(eye, buoy, 1)
+		line.exclude = skip
+		bell_blocked = not space.intersect_ray(line).is_empty()
+	var k := 1.0 - exp(-delta * 5.0)
+	_outdoor_cut = exp(lerpf(log(_outdoor_cut), log(600.0 if indoors else 20000.0), k))
+	_bell_cut = exp(lerpf(log(_bell_cut), log(700.0 if bell_blocked else 20000.0), k))
+	var outdoor := AudioServer.get_bus_index("Outdoor")
+	var bell := AudioServer.get_bus_index("Bell")
+	(AudioServer.get_bus_effect(outdoor, 0) as AudioEffectLowPassFilter).cutoff_hz = _outdoor_cut
+	(AudioServer.get_bus_effect(bell, 0) as AudioEffectLowPassFilter).cutoff_hz = _bell_cut
+	AudioServer.set_bus_volume_db(outdoor, lerpf(-8.0, 0.0, inverse_lerp(log(600.0), log(20000.0), log(_outdoor_cut))))
+	AudioServer.set_bus_volume_db(bell, lerpf(-9.0, 0.0, inverse_lerp(log(700.0), log(20000.0), log(_bell_cut))))
+

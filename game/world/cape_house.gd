@@ -342,7 +342,8 @@ func _end_openings(side: float) -> Array:
 ## A piece of one side's roof between s0 and s1 in from its eaves and
 ## x0 to x1 along the ridge, t thick, its underside on the rafters'
 ## line; under > 0 hangs it that far below (a ceiling).
-func _roof_piece(side: float, x0: float, x1: float, s0: float, s1: float, col: Color, t := 0.15, under := 0.0) -> void:
+func _roof_piece(side: float, x0: float, x1: float, s0: float, s1: float, col: Color, t := 0.15, under := 0.0,
+		solid := false) -> void:
 	var n := Vector3(0, 0.7071, 0.7071 * side)
 	var s_mid := (s0 + s1) / 2.0
 	var z_mid := -s_mid if side > 0.0 else -D + s_mid
@@ -350,6 +351,8 @@ func _roof_piece(side: float, x0: float, x1: float, s0: float, s1: float, col: C
 	var bx := Vector3(1, 0, 0)
 	var bz := bx.cross(n)
 	m.box("wall", Transform3D(Basis(bx, n, bz), centre), Vector3(x1 - x0, t, (s1 - s0) * 1.41421), col, true)
+	if solid:
+		_solid(centre, Vector3(x1 - x0, t, (s1 - s0) * 1.41421), Basis(bx, n, bz))
 
 
 func _roof() -> void:
@@ -359,7 +362,7 @@ func _roof() -> void:
 	var over := 0.35
 	var xw := W / 2.0 + 0.3
 	# The back slope whole; the front round the dormers' openings.
-	_roof_piece(-1.0, -xw, xw, -over, ridge + 0.1, shingle)
+	_roof_piece(-1.0, -xw, xw, -over, ridge + 0.1, shingle, 0.15, 0.0, true)
 	var hole_lo := DORMER_FACE
 	var hole_hi := DORMER_EAVE - E
 	var xs: Array[float] = [-xw]
@@ -368,10 +371,21 @@ func _roof() -> void:
 		xs.append(dx + DORMER_HALF)
 	xs.append(xw)
 	for i in range(0, xs.size(), 2):
-		_roof_piece(1.0, xs[i], xs[i + 1], -over, ridge + 0.1, shingle)
+		_roof_piece(1.0, xs[i], xs[i + 1], -over, ridge + 0.1, shingle, 0.15, 0.0, true)
 	for dx in DORMERS:
-		_roof_piece(1.0, dx - DORMER_HALF, dx + DORMER_HALF, -over, hole_lo, shingle)
-		_roof_piece(1.0, dx - DORMER_HALF, dx + DORMER_HALF, hole_hi, ridge + 0.1, shingle)
+		_roof_piece(1.0, dx - DORMER_HALF, dx + DORMER_HALF, -over, hole_lo, shingle, 0.15, 0.0, true)
+		_roof_piece(1.0, dx - DORMER_HALF, dx + DORMER_HALF, hole_hi, ridge + 0.1, shingle, 0.15, 0.0, true)
+	# The rain stops on the roof: a shelter box under each slope for the
+	# drops to meet.
+	for side: float in [-1.0, 1.0]:
+		var n := Vector3(0, 0.7071, 0.7071 * side)
+		var bx := Vector3(1, 0, 0)
+		var s_mid := (ridge - over) / 2.0
+		var z_mid := -s_mid if side > 0.0 else -D + s_mid
+		var shelter := GPUParticlesCollisionBox3D.new()
+		shelter.size = Vector3(2.0 * xw, 3.0, (ridge + over) * 1.41421 + 0.2)
+		shelter.transform = Transform3D(Basis(bx, n, bx.cross(n)), Vector3(0, rafter(s_mid), z_mid) + n * (0.15 - 1.5))
+		add_child(shelter)
 	# The ridge cap.
 	_box("wall", Vector3(0, rafter(ridge) + 0.2, -ridge), Vector3(2.0 * xw, 0.08, 0.3), shingle)
 	# Upstairs: sloped plaster from the knee walls to the collar ceiling,

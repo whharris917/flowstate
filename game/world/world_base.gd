@@ -557,6 +557,21 @@ func _build_audio() -> void:
 	reverb.wet = reverb_wet
 	reverb.damping = 0.55
 	AudioServer.add_bus_effect(bus, reverb)
+	# The weather and the sea play through Outdoor, a harbour bell through
+	# Bell into it; each has a low-pass a world closes when the sound is
+	# heard through walls (a world with nothing to muffle leaves them open).
+	for name_: String in ["Outdoor", "Bell"]:
+		if AudioServer.get_bus_index(name_) == -1:
+			var idx := AudioServer.bus_count
+			AudioServer.add_bus(idx)
+			AudioServer.set_bus_name(idx, name_)
+			var cut := AudioEffectLowPassFilter.new()
+			cut.cutoff_hz = 20000.0
+			AudioServer.add_bus_effect(idx, cut)
+		AudioServer.set_bus_send(AudioServer.get_bus_index(name_), "Outdoor" if name_ == "Bell" else "Master")
+		var i := AudioServer.get_bus_index(name_)
+		(AudioServer.get_bus_effect(i, 0) as AudioEffectLowPassFilter).cutoff_hz = 20000.0
+		AudioServer.set_bus_volume_db(i, 0.0)
 
 	# The music is off until the options toggle turns it on: it must not
 	# play for the seconds before the settings load, so it is never told

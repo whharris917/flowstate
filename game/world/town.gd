@@ -23,6 +23,9 @@ func _init() -> void:
 
 
 func _build_ground() -> void:
+	# The player stands three-quarters of full size here: the town and
+	# its rooms feel a third larger, doors and halls roomier.
+	player.set_body_scale(0.75)
 	var c := TownCoast.new()
 	coast = c
 	add_child(c)
@@ -141,6 +144,18 @@ func _town_check() -> void:
 		problems.append("the bell buoy never rang in ten seconds of a storm sea")
 	if moved < 0.05:
 		problems.append("the moored boat rode %.2f m in a storm" % moved)
+	# What the player hears through: the bell clear on the wharf and
+	# muffled over the brow of the hill on Main Street; the Cape's roof
+	# overhead in its living room.
+	var spots: Array = [["the wharf", Vector3(-28.0, TownCoast.DECK_Y, 118.0), false, false],
+		["Main Street", Vector3(20.0, 0.0, 12.0), true, false],
+		["the Cape's living room", Vector3(22.8, 0.6, 53.4), true, true]]
+	for spot: Array in spots:
+		weather._listen_left = 0.0
+		weather._listen(0.01, (spot[1] as Vector3) + player.eye)
+		if weather.bell_blocked != bool(spot[2]) or weather.indoors != bool(spot[3]):
+			problems.append("on %s the bell is %s and the roof %s" % [spot[0],
+				"muffled" if weather.bell_blocked else "clear", "over" if weather.indoors else "not over"])
 	# A fair noon: no rain, the lamps off.
 	set_weather(0.0)
 	set_time_of_day(12.0)

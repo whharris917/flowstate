@@ -532,7 +532,7 @@ func _build_river() -> void:
 			p.unit_size = 9.0
 			p.max_distance = 90.0
 			p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-			p.bus = "Master"
+			p.bus = "Outdoor"
 			add_child(p)
 			p.play(_rng.randf() * stream.get_length())
 		s += 35.0

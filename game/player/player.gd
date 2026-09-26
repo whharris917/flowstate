@@ -42,6 +42,11 @@ var _zoom_now: float = 0.0     # smoothed follower
 var _fov_target: float = FOV_DEFAULT
 var _shaft_dir: Vector3 = (ZOOM_TOP - ZOOM_KNEE).normalized()
 var _shaft_speed: float = 2.0 * (ZOOM_TOP - ZOOM_KNEE).length()
+## The player's size against the world's: 1 a full-grown adult. A world
+## that wants to feel bigger sets it smaller (set_body_scale); the body,
+## the eye, the reach, the zoom track, the stride and the jump follow.
+var body_scale := 1.0
+var eye := EYE
 
 var figure: PlayerFigure
 
@@ -53,6 +58,22 @@ var _fall_speed: float = 0.0
 var _off_floor: float = 0.0     # seconds since last on the floor
 var _jump_wanted: float = 0.0   # seconds a jump press stays pending
 var _silent := DisplayServer.get_name() == "headless"
+
+
+## Resize the player: the capsule, the eye, the figure. Everything else
+## reads body_scale as it goes.
+func set_body_scale(s: float) -> void:
+	body_scale = s
+	eye = EYE * s
+	var col := $Collision as CollisionShape3D
+	var cap := (col.shape as CapsuleShape3D).duplicate() as CapsuleShape3D
+	cap.radius = 0.35 * s
+	cap.height = 1.8 * s
+	col.shape = cap
+	col.position = Vector3(0, 0.9 * s, 0)
+	camera.position = eye
+	if figure != null:
+		figure.scale = Vector3(s, s, s)
 
 
 func _ready() -> void:
@@ -140,7 +161,7 @@ func _physics_process(delta: float) -> void:
 	var input := Vector2.ZERO if input_locked else Input.get_vector(
 		"move_left", "move_right", "move_forward", "move_back")
 	var direction := (transform.basis * Vector3(input.x, 0, input.y)).normalized()
-	var wanted := Vector2(direction.x, direction.z) * SPEED
+	var wanted := Vector2(direction.x, direction.z) * SPEED * sqrt(body_scale)
 	var ground := Vector2(velocity.x, velocity.z)
 	if grounded:
 		ground = wanted
@@ -149,7 +170,7 @@ func _physics_process(delta: float) -> void:
 	velocity.x = ground.x
 	velocity.z = ground.y
 	if _jump_wanted > 0.0 and _off_floor < JUMP_GRACE:
-		velocity.y = JUMP_SPEED
+		velocity.y = JUMP_SPEED * sqrt(body_scale)
 		_jump_wanted = 0.0
 		_off_floor = JUMP_GRACE
 		_play(_step_streams[randi() % _step_streams.size()], randf_range(0.78, 0.86))
@@ -162,7 +183,7 @@ func _physics_process(delta: float) -> void:
 ## alternates, and a camera moved in steps looks jumpy.
 func _process(delta: float) -> void:
 	_update_camera(delta)
-	figure.show_head(camera.position.distance_to(EYE) > 0.3)
+	figure.show_head(camera.position.distance_to(eye) > 0.3 * body_scale)
 	var moving := global_basis.inverse() * velocity
 	if figure.pose(delta, moving, is_on_floor(), camera.rotation.x):
 		_play(_step_streams[randi() % _step_streams.size()], randf_range(0.88, 1.12))
@@ -172,7 +193,7 @@ func _process(delta: float) -> void:
 ## floor, or ceiling sits between the head and the desired spot.
 func _update_camera(delta: float) -> void:
 	_zoom_now = lerpf(_zoom_now, zoom_t, 1.0 - exp(-10.0 * delta))
-	var head := to_global(EYE)
+	var head := to_global(eye)
 	var target := to_global(_zoom_point(_zoom_now))
 	var space := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(head, target, 1 | PlantSolids.SOLID_LAYER)
@@ -182,7 +203,7 @@ func _update_camera(delta: float) -> void:
 		target = (hit["position"] as Vector3) + (head - target).normalized() * 0.18
 	camera.position = to_local(target)
 	camera.fov = lerpf(camera.fov, _fov_target, 1.0 - exp(-12.0 * delta))
-	ray.target_position = Vector3(0, 0, -(BASE_REACH + zoom_offset()))
+	ray.target_position = Vector3(0, 0, -(BASE_REACH * body_scale + zoom_offset()))
 	port_ray.target_position = ray.target_position
 
 
@@ -220,18 +241,18 @@ func _zoom_point(t: float) -> Vector3:
 	if t <= 1.0:
 		var a := ZOOM_TIP.lerp(ZOOM_KNEE, t)
 		var b := ZOOM_KNEE.lerp(ZOOM_TOP, t)
-		return EYE + a.lerp(b, t)
+		return eye + a.lerp(b, t) * body_scale
 	# The handle: straight on in the shaft direction, exponentially
 	# faster per notch so the sky is a few clicks away, not a hundred.
 	var dist := (exp(ZOOM_EXT_RATE * (t - 1.0)) - 1.0) * _shaft_speed / ZOOM_EXT_RATE
-	return EYE + ZOOM_TOP + _shaft_dir * dist
+	return eye + ZOOM_TOP * body_scale + _shaft_dir * dist
 
 
 ## How far the camera currently sits from the head. Reach-based systems
 ## (interact ray, build ghost) add this so the crosshair keeps working
 ## from a zoomed-out vantage.
 func zoom_offset() -> float:
-	return camera.position.distance_to(EYE)
+	return camera.position.distance_to(eye)
 
 
 ## A landing from a fall or a jump: the thud, and the knees take it.
