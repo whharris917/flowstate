@@ -280,3 +280,11 @@ The director sent a close photograph of the cupola and one taken from a gallery 
 - **Paint**: the trim white is a warm cream, as in the reference photographs.
 - **Ultra** turns on traced light (SDFGI). It treated the window glass as solid, so no daylight reached the rooms, and every lamp but a few was dark by day. Glass now takes no part in the traced light, and the lamps inside burn by day at half their night brightness: halls, stairs, offices, the Heritage Room, the chambers, jury room and library, under the gallery.
 
+## 2026-09-26: interior details from the 2008 photographs
+
+A second search found a set of 2008 photographs (courthouses.co): the courtroom from the bar and from the jury's side, the north hall, the commissioners' plaque, the cupola. From them:
+
+- **Courtroom.** The frieze is green swags hung between gilt bows on an ochre ground, over an oak architrave with a gilt bead and under an oak cornice with dentils and brackets, coved to the ceiling. No pilasters between the windows, only where the walls step out to the pavilions. Each window has a gilt and green architrave round its head with a keystone ornament up to the frieze, and wooden blinds let down over the arch. White globes on long brass stems in two rows instead of chandeliers; brass sconces with frosted tulip shades between the windows and beside the niche. The oak is a medium golden brown. The judge's chair is navy leather; a framed charter hangs in the niche; a second, shut door east of the niche.
+- **North hall.** The old courthouse bell on a panelled pedestal, the bronze commissioners' plaque, a notice board with papers pinned to it, a wall case. The plaster is a warmer cream.
+- **Outside.** The government centre is a tan tower striped with its window bands over a white low block, not brick.
+

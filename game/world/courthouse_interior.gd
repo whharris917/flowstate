@@ -45,8 +45,10 @@ const OAK := Color(0.52, 0.34, 0.19)
 const PLASTER := UnionCourthouse.PLASTER
 const CEILING := Color(0.93, 0.91, 0.86)
 const STAIN := Color(0.27, 0.16, 0.09)
-const WALNUT := Color(0.33, 0.20, 0.11)
-const FRIEZE := Color(0.33, 0.42, 0.30)
+const WALNUT := Color(0.42, 0.27, 0.14)      # the courtroom's oak and the stairs'
+const FRIEZE := Color(0.80, 0.68, 0.42)      # the frieze's ground, a warm ochre
+const SWAG := Color(0.28, 0.40, 0.22)
+const NAVY := Color(0.10, 0.13, 0.24)
 const GILT := Color(0.78, 0.63, 0.32)
 const LEATHER := Color(0.22, 0.10, 0.07)
 const IRON := UnionCourthouse.IRON
@@ -185,9 +187,9 @@ static func _lining(f: Transform3D, u0: float, u1: float, y0: float, opens: Arra
 ## each field in a moulding, a moulded cap and a base; the runs broken
 ## at the doors and the floor-length windows.
 static func _raised(f: Transform3D, u0: float, u1: float, y0: float, opens: Array) -> void:
-	var stile := c(STAIN, CourthouseKit.K_WOOD)
-	var mould := c(STAIN.darkened(0.25), CourthouseKit.K_WOOD)
-	var field := c(STAIN.lightened(0.07), CourthouseKit.K_WOOD)
+	var stile := c(WALNUT, CourthouseKit.K_WOOD)
+	var mould := c(WALNUT.darkened(0.25), CourthouseKit.K_WOOD)
+	var field := c(WALNUT.lightened(0.06), CourthouseKit.K_WOOD)
 	var ff := f * Transform3D(Basis(), Vector3(0, 0, 0.02))
 	k.wall("wall", ff, u0, u1, y0, y0 + PANEL_H, 0.02, stile, opens, -1.0)
 	var cap := Transform3D(ff.basis, ff * Vector3(0, 0, 0.045))
@@ -429,8 +431,60 @@ static func _wing(w: Transform3D, e: float) -> void:
 		_library(w * Transform3D(Basis(), Vector3(0, F2, -18.2)))
 		_office(w * Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(-4.7, F2, -11.8)), 2)
 		_office(w * Transform3D(Basis(Vector3.UP, -PI / 2.0), Vector3(5.0, F2, -13.7)), 0)
+	if e < 0.0:
+		_hall_exhibits(w)
 	# Benches in the upstairs hall outside the courtroom.
 	_bench(w * Transform3D(Basis(Vector3.UP, -PI / 2.0), Vector3(-HALL + 0.35, F2, -13.2)), 1.6)
+
+
+## The north wing's hall as in the photographs: the courthouse's old
+## bell on a panelled pedestal in the middle, the bronze plaque of the
+## county commissioners, a notice board, a glass case on the wall.
+static func _hall_exhibits(w: Transform3D) -> void:
+	var wood := c(WALNUT.darkened(0.1), CourthouseKit.K_WOOD)
+	var bronze := Color(0.55, 0.40, 0.18)
+	var foot := Vector3(0, F1, -16.4)
+	# The pedestal: a plinth, a panelled body, a moulded top.
+	k.block("wall", w, foot + Vector3(0, 0.08, 0), Vector3(1.0, 0.16, 1.4), wood)
+	k.block("wall", w, foot + Vector3(0, 0.45, 0), Vector3(0.8, 0.6, 1.2), wood)
+	for s: float in [-1.0, 1.0]:
+		k.box("wall", w, foot + Vector3(s * 0.41, 0.45, 0), Vector3(0.01, 0.4, 0.9), c(WALNUT.darkened(0.3), CourthouseKit.K_WOOD))
+	k.box("wall", w, foot + Vector3(0, 0.78, 0), Vector3(0.95, 0.06, 1.35), wood)
+	k.box("wall", w, foot + Vector3(0.25, 0.815, 0.4), Vector3(0.2, 0.01, 0.12), c(Color(0.85, 0.82, 0.7), CourthouseKit.K_PAINT))
+	# The yoke on two iron posts, the bell hung from it.
+	for s: float in [-1.0, 1.0]:
+		k.m.bar("iron", w * (foot + Vector3(0, 0.81, s * 0.28)), w * (foot + Vector3(0, 1.5, s * 0.28)), 0.025, 6, IRON)
+	k.box("iron", w, foot + Vector3(0, 1.52, 0), Vector3(0.12, 0.1, 0.7), IRON)
+	k.m.cylinder("iron", w * Transform3D(Basis(), foot + Vector3(0, 1.36, 0)), 0.12, 0.08, 0.14, 12, bronze)
+	k.m.cylinder("iron", w * Transform3D(Basis(), foot + Vector3(0, 1.18, 0)), 0.22, 0.13, 0.26, 16, bronze)
+	k.m.cylinder("iron", w * Transform3D(Basis(), foot + Vector3(0, 1.0, 0)), 0.3, 0.22, 0.14, 16, bronze)
+	k.m.cylinder("iron", w * Transform3D(Basis(), foot + Vector3(0, 0.91, 0)), 0.32, 0.3, 0.05, 16, bronze.darkened(0.2))
+	# The plaque on the west wall.
+	var pw := UnionCourthouse.face(Vector3(1, 0, 0), Vector3(-HALL + 0.08, 0, 0))
+	pw = w * pw
+	k.box("wall", pw, Vector3(16.9, F1 + 1.8, 0.02), Vector3(0.5, 0.75, 0.03), c(Color(0.24, 0.20, 0.13), CourthouseKit.K_PAINT))
+	k.box("wall", pw, Vector3(16.9, F1 + 1.8, 0.036), Vector3(0.46, 0.71, 0.004), c(bronze.darkened(0.1), CourthouseKit.K_PAINT))
+	for ln in 9:
+		k.box("wall", pw, Vector3(16.9 + (-0.1 if ln < 5 else 0.1), F1 + 2.05 - (ln % 5) * 0.06, 0.04), Vector3(0.16, 0.012, 0.004),
+			c(Color(0.8, 0.7, 0.45), CourthouseKit.K_PAINT))
+	k.m.cylinder("wall", pw * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(16.9 - 0.1, F1 + 1.6, 0.04)), 0.08, 0.08, 0.01, 14,
+		c(Color(0.8, 0.7, 0.45), CourthouseKit.K_PAINT))
+	# The notice board on the east wall, papers pinned on it.
+	var pe := w * UnionCourthouse.face(Vector3(-1, 0, 0), Vector3(HALL - 0.08, 0, 0))
+	k.box("wall", pe, Vector3(-18.6, F1 + 1.65, 0.03), Vector3(1.5, 1.0, 0.04), wood)
+	k.box("wall", pe, Vector3(-18.6, F1 + 1.65, 0.05), Vector3(1.4, 0.9, 0.01), c(Color(0.62, 0.45, 0.28), CourthouseKit.K_CLOTH))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1054
+	for j in 9:
+		var p := Vector3(-18.6 + rng.randf_range(-0.55, 0.55), F1 + 1.65 + rng.randf_range(-0.3, 0.3), 0.057)
+		k.box_rz("wall", pe, p, Vector3(0.21, 0.28, 0.002), rng.randf_range(-0.08, 0.08),
+			c([Color(0.95, 0.94, 0.9), Color(0.95, 0.9, 0.6), Color(0.8, 0.88, 0.95)][j % 3], CourthouseKit.K_PAINT))
+	# The wall case on the west wall, nearer the courtroom.
+	var cf := pw
+	k.box("wall", cf, Vector3(12.8, F1 + 1.5, 0.12), Vector3(1.3, 0.9, 0.24), wood)
+	k.box("wall", cf, Vector3(12.8, F1 + 1.5, 0.245), Vector3(1.2, 0.8, 0.005), c(Color(0.35, 0.12, 0.10), CourthouseKit.K_CLOTH))
+	k.m.quad("glass", cf * Vector3(12.2, F1 + 1.1, 0.25), cf * Vector3(12.2, F1 + 1.9, 0.25), cf * Vector3(13.4, F1 + 1.9, 0.25),
+		cf * Vector3(13.4, F1 + 1.1, 0.25), cf.basis.z, Color(1, 1, 1))
 
 
 ## The stair in a wing (the north one's frame): the first flight east
@@ -546,17 +600,19 @@ static func _courtroom() -> void:
 	var g := Transform3D()
 	var wood := c(WALNUT, CourthouseKit.K_WOOD)
 	var panel := c(WALNUT.darkened(0.15), CourthouseKit.K_WOOD)
-	# Pilasters between the bays down each side, the entablature round the
-	# room, garlands and cartouches in its frieze.
+	# Pilasters where the side walls step out to the pavilions, the
+	# entablature round the room: an oak architrave, the frieze of green
+	# swags on an ochre ground, an oak cornice with dentils and brackets.
 	var ent0 := 12.35
 	for s: float in [-1.0, 1.0]:
-		for u: float in [-7.95, -5.3, -4.35, -1.45, 1.45, 4.35, 5.3, 7.95]:
-			var x := s * (IX if absf(u) > PZ else PX - T)
-			_pilaster(Vector3(x, 0, u), Vector3(-s, 0, 0), y + PANEL_H + 0.08, ent0)
-	for e: float in [-1.0, 1.0]:
-		for x: float in [-7.0, -3.4, 3.4, 7.0]:
-			_pilaster(Vector3(x, 0, e * IZ), Vector3(0, 0, -e), y + PANEL_H + 0.08, ent0)
+		for u: float in [-4.35, 4.35]:
+			_pilaster(Vector3(s * (PX - T), 0, u), Vector3(-s, 0, 0), y + PANEL_H + 0.08, ent0)
 	_entablature(ent0, C2)
+	# Over the pavilions' recesses the entablature is carried on a soffit.
+	for s: float in [-1.0, 1.0]:
+		k.box("wall", g, Vector3(s * (IX + (PX - T - IX) / 2.0), ent0 + 0.02, 0), Vector3(PX - T - IX, 0.04, 2.0 * (PZ - T)),
+			c(CEILING, CourthouseKit.K_PLASTER))
+	_court_windows()
 	# The bench at the north end: a dais, the panelled desk, the chair,
 	# the flags either side of the niche.
 	var dais := 0.55
@@ -569,13 +625,22 @@ static func _courtroom() -> void:
 	k.block("wall", g, Vector3(0, y + dais + 1.22, desk_z - 0.35), Vector3(5.5, 0.06, 0.9), wood)
 	for s: float in [-1.0, 1.0]:
 		k.box("wall", g, Vector3(s * 2.6, y + dais + 0.6, desk_z - 0.4), Vector3(0.08, 1.2, 0.8), wood)
-	_high_chair(Transform3D(Basis(Vector3.UP, PI), Vector3(0, y + dais, -IZ + 0.7)))
+	_high_chair(Transform3D(Basis(Vector3.UP, PI), Vector3(0, y + dais, -IZ + 0.7)), NAVY)
 	for s: float in [-1.0, 1.0]:
 		_flag(Vector3(s * 2.1, y + dais, -IZ + 0.4), s < 0.0)
-	# A seal in the niche.
+	# A framed document in the niche: the county's charter.
 	var nf := UnionCourthouse.face(Vector3(0, 0, 1), Vector3(0, 0, -MZ + 0.15))
-	k.box("wall", nf, Vector3(0, y + 2.6, 0.02), Vector3(0.9, 1.1, 0.04), c(Color(0.12, 0.10, 0.08), CourthouseKit.K_WOOD))
-	k.box("wall", nf, Vector3(0, y + 2.6, 0.045), Vector3(0.75, 0.95, 0.01), c(GILT.darkened(0.3), CourthouseKit.K_PAINT))
+	k.box("wall", nf, Vector3(0, y + 2.7, 0.02), Vector3(0.95, 1.2, 0.04), c(Color(0.16, 0.11, 0.07), CourthouseKit.K_WOOD))
+	k.box("wall", nf, Vector3(0, y + 2.7, 0.045), Vector3(0.82, 1.07, 0.01), c(Color(0.86, 0.80, 0.64), CourthouseKit.K_PAINT))
+	for ln in 12:
+		k.box("wall", nf, Vector3(0, y + 3.1 - ln * 0.07, 0.051), Vector3(0.6 if ln > 0 else 0.4, 0.012, 0.002), c(Color(0.35, 0.28, 0.2), CourthouseKit.K_PAINT))
+	# The door east of the niche, into the jury's rooms, shut.
+	var jd := UnionCourthouse.face(Vector3(0, 0, 1), Vector3(5.2, 0, -IZ))
+	var jo := CourthouseKit.opening(0.0, 1.1, y, y + 2.7, "flat")
+	_casing(jd, jo)
+	k.door_leaf(jd, Vector3(0, y, 0.03), 1.0, DOOR_H, c(WALNUT, CourthouseKit.K_WOOD), false)
+	k.glass(jd, CourthouseKit.opening(0.0, 1.0, y + DOOR_H + 0.08, y + 2.7, "flat"), 0.03, c(Color(0.15, 0.12, 0.08), CourthouseKit.K_PAINT), "wall")
+	k.m.sphere("iron", jd * Transform3D(Basis(), Vector3(0.38, y + 0.95, 0.09)), 0.03, 6, GILT)
 	# The clerk's desk below the bench.
 	_panelled(Transform3D(Basis(), Vector3(0, y, desk_z + 0.9)), 3.6, 1.05, wood, panel, 4)
 	k.block("wall", g, Vector3(0, y + 1.07, desk_z + 0.6), Vector3(3.8, 0.05, 0.75), wood)
@@ -620,10 +685,17 @@ static func _courtroom() -> void:
 		var pz := 1.9 + j * 0.92
 		for s: float in [-1.0, 1.0]:
 			_pew(Transform3D(Basis(), Vector3(s * 4.7, y, pz)), 7.0)
-	# The lamps: four pendants over the room, and their light after dark.
+	# The lamps: white globes on long stems in two rows, brass sconces
+	# on the walls between the windows and beside the niche.
 	for sx: float in [-1.0, 1.0]:
-		for sz: float in [-1.0, 1.0]:
-			_chandelier(Vector3(sx * 4.2, C2, -4.6 if sz < 0.0 else 0.8))
+		for z: float in [-5.4, -1.6, 1.8]:
+			_globe(Vector3(sx * 4.0, C2, z), 3.2)
+	for s: float in [-1.0, 1.0]:
+		for u: float in [-1.45, 1.45]:
+			_sconce(UnionCourthouse.face(Vector3(-s, 0, 0), Vector3(s * (PX - T), 0, u)), y + 3.3)
+		for u: float in [-7.9, 7.9]:
+			_sconce(UnionCourthouse.face(Vector3(-s, 0, 0), Vector3(s * IX, 0, u)), y + 3.3)
+		_sconce(UnionCourthouse.face(Vector3(0, 0, 1), Vector3(s * 2.1 + s * 1.3, 0, -IZ)), y + 3.1)
 	# Radiators under the side windows.
 	for s: float in [-1.0, 1.0]:
 		for e: float in [-1.0, 1.0]:
@@ -733,10 +805,11 @@ static func _pilaster(base: Vector3, n: Vector3, y0: float, y1: float) -> void:
 ## four walls: architrave, the frieze of garlands between cartouches,
 ## the cornice coved to the ceiling.
 static func _entablature(y0: float, y1: float) -> void:
-	var trim := c(PLASTER.lightened(0.15), CourthouseKit.K_PLASTER)
+	var trim := c(WALNUT.darkened(0.15), CourthouseKit.K_WOOD)
 	var frieze := c(FRIEZE, CourthouseKit.K_PAINT)
 	var gilt := c(GILT, CourthouseKit.K_PAINT)
-	var green := c(Color(0.24, 0.34, 0.18), CourthouseKit.K_PAINT)
+	var green := c(SWAG, CourthouseKit.K_PAINT)
+	var cove := c(CEILING, CourthouseKit.K_PLASTER)
 	# The walls: [frame, length]; the frame's x runs along the face.
 	var walls: Array = []
 	for s: float in [-1.0, 1.0]:
@@ -746,26 +819,43 @@ static func _entablature(y0: float, y1: float) -> void:
 	for wl: Array in walls:
 		var f := wl[0] as Transform3D
 		var len := float(wl[1])
-		k.box("wall", f, Vector3(0, y0 + 0.14, 0.08), Vector3(len, 0.28, 0.16), trim)
-		k.box("wall", f, Vector3(0, y0 + 0.6, 0.05), Vector3(len, 0.64, 0.1), frieze)
-		k.box("wall", f, Vector3(0, y0 + 0.95, 0.14), Vector3(len, 0.08, 0.28), trim)
-		k.box("wall", f, Vector3(0, y0 + 1.1, 0.24), Vector3(len, 0.22, 0.48), trim)
-		k.box("wall", f, Vector3(0, (y0 + 1.21 + y1) / 2.0, 0.12), Vector3(len, y1 - y0 - 1.21, 0.24), trim)
-		# Cartouches every 2.3 m, a garland swagged between each pair.
-		var n := int(len / 2.3)
-		for j in n + 1:
-			var u := -len / 2.0 + 0.3 + (len - 0.6) * j / n
-			k.m.sphere("wall", f * Transform3D(Basis().scaled(Vector3(0.7, 1.0, 0.25)), Vector3(u, y0 + 0.6, 0.12)), 0.24, 10, gilt)
-			if j == n:
-				continue
-			var nxt := -len / 2.0 + 0.3 + (len - 0.6) * (j + 1) / n
-			for q in 9:
-				var t := (q + 0.5) / 9.0
-				var gu := lerpf(u + 0.25, nxt - 0.25, t)
-				var sag := 0.18 * sin(PI * t)
-				k.m.sphere("wall", f * Transform3D(Basis(), Vector3(gu, y0 + 0.78 - sag, 0.12)), 0.075, 6, green)
-			for end: float in [u + 0.25, nxt - 0.25]:
-				k.box("wall", f, Vector3(end, y0 + 0.7, 0.13), Vector3(0.05, 0.2, 0.04), gilt)
+		# The architrave in two fasciae, a gilt bead between.
+		k.box("wall", f, Vector3(0, y0 + 0.08, 0.05), Vector3(len, 0.16, 0.1), trim)
+		k.box("wall", f, Vector3(0, y0 + 0.22, 0.07), Vector3(len, 0.12, 0.14), trim)
+		k.box("wall", f, Vector3(0, y0 + 0.3, 0.09), Vector3(len, 0.04, 0.16), gilt)
+		# The frieze.
+		k.box("wall", f, Vector3(0, y0 + 0.62, 0.04), Vector3(len, 0.6, 0.08), frieze)
+		# The cornice: a bed moulding, dentils, brackets in pairs under the
+		# corona, a cyma to the ceiling's cove.
+		k.box("wall", f, Vector3(0, y0 + 0.96, 0.1), Vector3(len, 0.08, 0.2), trim)
+		var nd := int(len / 0.14)
+		for j in nd:
+			k.box("wall", f, Vector3(-len / 2.0 + (j + 0.5) * len / nd, y0 + 1.06, 0.2), Vector3(0.07, 0.1, 0.08), trim)
+		k.box("wall", f, Vector3(0, y0 + 1.18, 0.3), Vector3(len, 0.14, 0.6), trim)
+		k.box("wall", f, Vector3(0, y0 + 1.28, 0.34), Vector3(len, 0.06, 0.68), gilt)
+		var nb := int(len / 1.2)
+		for j in nb:
+			var bu := -len / 2.0 + (j + 0.5) * len / nb
+			k.box("wall", f, Vector3(bu, y0 + 1.07, 0.3), Vector3(0.1, 0.14, 0.34), trim)
+		k.box("wall", f, Vector3(0, (y0 + 1.31 + y1) / 2.0, 0.2), Vector3(len, y1 - y0 - 1.31, 0.4), cove)
+		# The swags: a garland hung in a curve between gilt bows, a ribbon
+		# and a drop falling from each bow.
+		var n := maxi(1, int(len / 1.9))
+		var span := len / n
+		for j in n:
+			var u0 := -len / 2.0 + j * span
+			for q in 12:
+				var t := (q + 0.5) / 12.0
+				var sag := 0.26 * sin(PI * t)
+				var thick := 0.05 + 0.035 * sin(PI * t)
+				k.m.sphere("wall", f * Transform3D(Basis().scaled(Vector3(1.3, 1.0, 0.5)), Vector3(u0 + span * t, y0 + 0.8 - sag, 0.09)),
+					thick, 6, green)
+			var bu := u0
+			k.m.sphere("wall", f * Transform3D(Basis().scaled(Vector3(1.4, 0.8, 0.4)), Vector3(bu, y0 + 0.82, 0.1)), 0.06, 8, gilt)
+			for s: float in [-1.0, 1.0]:
+				k.box_rz("wall", f, Vector3(bu + s * 0.05, y0 + 0.62, 0.09), Vector3(0.025, 0.3, 0.01), s * 0.2, gilt)
+			for q in 3:
+				k.m.sphere("wall", f * Transform3D(Basis(), Vector3(bu, y0 + 0.66 - q * 0.08, 0.09)), 0.035 - q * 0.006, 6, green)
 
 
 ## ---- furniture -------------------------------------------------------------
@@ -780,18 +870,67 @@ static func _pendant(top: Vector3, drop: float, lit: bool, reach := 11.0) -> voi
 		b._light(top - Vector3(0, drop + 0.4, 0), 2.2 if reach > 8.0 else 1.4, reach)
 
 
-## A brass chandelier: a stem, a ring of six arms each with a globe.
-static func _chandelier(top: Vector3) -> void:
-	var brass := GILT.darkened(0.15)
-	var hub := top - Vector3(0, 2.4, 0)
-	k.m.bar("iron", top, hub, 0.02, 6, brass)
-	k.m.sphere("iron", Transform3D(Basis(), hub), 0.12, 10, brass)
-	for j in 6:
-		var a := TAU * j / 6.0
-		var tip := hub + Vector3(cos(a) * 0.6, 0.1, sin(a) * 0.6)
-		k.m.bar("iron", hub, tip, 0.015, 5, brass)
-		k.m.sphere("lamp", Transform3D(Basis(), tip + Vector3(0, 0.15, 0)), 0.11, 10, Color(1, 1, 1))
-	b._light(hub, 3.0, 13.0)
+## A white globe on a long brass stem from the ceiling at top: a
+## canopy, the stem, a gallery holding the globe.
+static func _globe(top: Vector3, drop: float) -> void:
+	var brass := GILT.darkened(0.2)
+	k.m.cylinder("iron", Transform3D(Basis(), top - Vector3(0, 0.04, 0)), 0.1, 0.14, 0.08, 10, brass)
+	k.m.bar("iron", top, top - Vector3(0, drop, 0), 0.014, 6, brass)
+	k.m.cylinder("iron", Transform3D(Basis(), top - Vector3(0, drop + 0.04, 0)), 0.07, 0.11, 0.1, 10, brass)
+	k.m.sphere("lamp", Transform3D(Basis(), top - Vector3(0, drop + 0.3, 0)), 0.24, 14, Color(1, 1, 1))
+	b._light(top - Vector3(0, drop + 0.45, 0), 2.4, 12.0)
+
+
+## A brass sconce on a wall face f (z into the room) at height y: a
+## back plate, a curved arm, a frosted tulip shade.
+static func _sconce(f: Transform3D, y: float) -> void:
+	var brass := GILT.darkened(0.1)
+	k.m.cylinder("iron", f * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(0, y, 0.01)), 0.07, 0.07, 0.02, 10, brass)
+	k.m.bar("iron", f * Vector3(0, y, 0.02), f * Vector3(0, y + 0.05, 0.14), 0.012, 5, brass)
+	k.m.bar("iron", f * Vector3(0, y + 0.05, 0.14), f * Vector3(0, y + 0.12, 0.2), 0.012, 5, brass)
+	k.m.cylinder("lamp", f * Transform3D(Basis(), Vector3(0, y + 0.2, 0.2)), 0.04, 0.08, 0.14, 10, Color(1, 1, 1))
+
+
+## The courtroom's windows from inside: each round head in a gilt and
+## green architrave with a keystone rising to the frieze, the arch filled
+## with wooden blinds let down to below the spring.
+static func _court_windows() -> void:
+	var gilt := c(GILT.darkened(0.1), CourthouseKit.K_PAINT)
+	var green := c(SWAG.darkened(0.1), CourthouseKit.K_PAINT)
+	var slat := c(Color(0.62, 0.48, 0.30), CourthouseKit.K_WOOD)
+	for s: float in [-1.0, 1.0]:
+		var list: Array = []
+		for u: float in [-6.6, 6.6]:
+			list.append([UnionCourthouse.face(Vector3(-s, 0, 0), Vector3(s * IX, 0, 0)), CourthouseKit.opening(-s * u, 1.4, 7.9, 11.0, "round")])
+		for u: float in [-2.9, 0.0, 2.9]:
+			list.append([UnionCourthouse.face(Vector3(-s, 0, 0), Vector3(s * (PX - T), 0, 0)), CourthouseKit.opening(-s * u, 1.55, 6.9, 11.2, "round")])
+		for item: Array in list:
+			var f := item[0] as Transform3D
+			var o: Dictionary = item[1]
+			var circ := CourthouseKit.head_circle(o)
+			var w := float(o["w"])
+			var u := float(o["u"])
+			var ys := float(o["ys"])
+			k.arc_band("wall", f, Vector3(circ.x, circ.y, circ.z + 0.2), 0.0, PI, 0.1, 0.05, 0.06, gilt, 16)
+			k.arc_band("wall", f, Vector3(circ.x, circ.y, circ.z + 0.3), 0.0, PI, 0.05, 0.05, 0.06, green, 16)
+			for side: float in [-1.0, 1.0]:
+				k.box("wall", f, Vector3(u + side * (w / 2.0 + 0.25), (float(o["y0"]) + ys) / 2.0, 0.03), Vector3(0.1, ys - float(o["y0"]), 0.05), gilt)
+			# The keystone ornament: a green leaf-bundle up to the frieze.
+			var top := float(o["yt"]) + 0.35
+			k.box("wall", f, Vector3(u, (top + 12.35) / 2.0, 0.04), Vector3(0.14, 12.35 - top, 0.06), green)
+			k.m.sphere("wall", f * Transform3D(Basis().scaled(Vector3(1.0, 1.4, 0.4)), Vector3(u, top, 0.06)), 0.14, 8, gilt)
+			# The blinds: slats across the arch and down to below the spring.
+			var yb := ys - 1.3
+			var yy := yb
+			while yy < float(o["yt"]) - 0.04:
+				var half := w / 2.0 - 0.06
+				if yy > ys:
+					var dy := yy - circ.y
+					half = minf(half, sqrt(maxf(circ.z * circ.z - dy * dy, 0.0)) - 0.06)
+				if half > 0.05:
+					k.m.box("wall", f * Transform3D(Basis(Vector3.RIGHT, 0.5), Vector3(u, yy, T - 0.12)), Vector3(2.0 * half, 0.05, 0.004), slat)
+				yy += 0.06
+			k.box("wall", f, Vector3(u, yb - 0.02, T - 0.12), Vector3(w - 0.1, 0.03, 0.05), slat)
 
 
 ## A panelled front w wide and h high, its face along the frame's x,
@@ -830,8 +969,8 @@ static func _chair(xf: Transform3D) -> void:
 
 
 ## The judge's chair: high backed, buttoned leather.
-static func _high_chair(xf: Transform3D) -> void:
-	var hide := c(LEATHER, CourthouseKit.K_CLOTH)
+static func _high_chair(xf: Transform3D, leather := LEATHER) -> void:
+	var hide := c(leather, CourthouseKit.K_CLOTH)
 	var wood := c(WALNUT, CourthouseKit.K_WOOD)
 	k.box("wall", xf, Vector3(0, 0.25, 0), Vector3(0.6, 0.5, 0.56), wood)
 	k.box("wall", xf, Vector3(0, 0.55, 0), Vector3(0.58, 0.12, 0.54), hide)

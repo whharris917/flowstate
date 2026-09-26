@@ -52,7 +52,7 @@ const TRIM := Color(0.93, 0.90, 0.79)
 const SLATE := Color(0.25, 0.27, 0.30)
 const GRANITE := Color(0.70, 0.69, 0.66)
 const IRON := Color(0.06, 0.06, 0.065)
-const PLASTER := Color(0.90, 0.84, 0.68)
+const PLASTER := Color(0.91, 0.83, 0.62)
 const DOOR := Color(0.34, 0.20, 0.11)
 const PORCH_FLOOR := Color(0.42, 0.43, 0.42)
 

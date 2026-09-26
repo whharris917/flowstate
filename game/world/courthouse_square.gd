@@ -529,8 +529,8 @@ func _shop(f: Transform3D, w: float) -> void:
 ## white piers up it over a three-storey block, faced on a plaza.
 func _government(at: Vector3, out: Vector3) -> void:
 	var f := Transform3D(Basis(out.cross(Vector3.UP) * -1.0, Vector3.UP, out), at)
-	var brick := c(Color(0.55, 0.28, 0.21), CourthouseKit.K_BRICK)
-	var white := c(Color(0.88, 0.87, 0.83), CourthouseKit.K_PAINT)
+	var brick := c(Color(0.86, 0.85, 0.80), CourthouseKit.K_PAINT)
+	var white := c(Color(0.94, 0.94, 0.92), CourthouseKit.K_PAINT)
 	# The low block along the street.
 	k.block("wall", f, Vector3(0, 6.0, -12.0), Vector3(40.0, 12.0, 24.0), brick)
 	for j in 3:
@@ -543,7 +543,7 @@ func _government(at: Vector3, out: Vector3) -> void:
 				Color(_rng.randf_range(0.4, 0.9), _rng.randf(), 0.5, 0.8), Vector2(0, 0), Vector2(0, 1), Vector2(1, 1), Vector2(1, 0))
 	# The tower behind its east end.
 	var tf := f * Transform3D(Basis(), Vector3(12.0, 0, -18.0))
-	k.block("wall", tf, Vector3(0, 18.0, 0), Vector3(16.0, 36.0, 14.0), brick)
+	k.block("wall", tf, Vector3(0, 18.0, 0), Vector3(16.0, 36.0, 14.0), c(Color(0.66, 0.56, 0.40), CourthouseKit.K_PAINT))
 	for side in 4:
 		var sf := tf * Transform3D(Basis(Vector3.UP, side * PI / 2.0), Vector3.ZERO) * Transform3D(Basis(), Vector3(0, 0, 7.0 if side % 2 == 0 else 8.0))
 		var sw := 16.0 if side % 2 == 0 else 14.0

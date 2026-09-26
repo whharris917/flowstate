@@ -54,6 +54,9 @@ func _run(world: CourthouseMap) -> void:
 		player._fov_target = 70.0
 		await _view(player, Vector3(3.5, UnionCourthouse.F2 + 3.95, 7.7), 0.35, -0.55, "gallery_view")
 		await _view(player, Vector3(0.0, UnionCourthouse.F2 + 0.1, -5.0), PI, 0.25, "gallery_from_bench")
+		await _view(player, Vector3(0.0, UnionCourthouse.F1 + 0.05, -10.0), 0.0, -0.05, "hall_bell")
+		await _view(player, Vector3(-4.0, UnionCourthouse.F2 + 0.1, 5.5), 0.3, 0.1, "courtroom_bench_side")
+		await _view(player, Vector3(5.0, UnionCourthouse.F2 + 0.1, -3.0), -PI / 2.0 - 0.2, 0.55, "courtroom_frieze")
 		get_tree().quit()
 		return
 	if which == "walk":
