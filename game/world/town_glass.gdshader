@@ -62,6 +62,11 @@ void fragment() {
 
 	vec3 glass = lin(vec3(0.07, 0.08, 0.09));
 	vec3 trim = lin(vec3(0.86, 0.85, 0.80));
+	// By day the curtains and a drawn blind show in a sash window's glass.
+	if (style < 0.25) {
+		glass = mix(glass, lin(curtain) * 0.45, side * 0.85);
+		glass = mix(glass, lin(vec3(0.82, 0.76, 0.6)) * 0.45, step(blind_at, uv.y) * 0.9);
+	}
 	ALBEDO = mix(glass, trim, bar);
 	ROUGHNESS = mix(0.04, mix(0.5, 0.25, wet), bar);
 	SPECULAR = mix(0.75, 0.4, bar);

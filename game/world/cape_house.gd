@@ -791,7 +791,7 @@ func _living_room() -> void:
 	_fire.omni_range = 5.0
 	_fire.light_color = Color(1.0, 0.55, 0.25)
 	_fire.light_energy = 0.0
-	_fire.shadow_enabled = true
+	_fire.shadow_enabled = false   # a shadowed point light redraws the whole merged town six times
 	add_child(_fire)
 	# Things on the mantel: a clock, two candlesticks, a vase.
 	_box("wall", Vector3(xw + 0.5, F + 1.46, cz), Vector3(0.12, 0.22, 0.28), wood)

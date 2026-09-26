@@ -111,6 +111,8 @@ func set_level(l: float) -> void:
 		sea.set_shader_parameter("whitecaps", smoothstep(0.55, 1.0, level))
 		sea.set_shader_parameter("rain", rain)
 	harbor.swell = 1.0 + 1.4 * storm
+	for pm in town.smoke:
+		pm.gravity = Vector3(wind_dir.x, 0.0, wind_dir.y) * (0.2 + 1.1 * wind) + Vector3(0, 0.25, 0)
 	for mat in TreeKit.materials():
 		mat.set_shader_parameter("wind", wind)
 		mat.set_shader_parameter("wind_dir", wind_dir)

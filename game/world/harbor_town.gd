@@ -80,6 +80,12 @@ var _houses := 0
 var _marquee_bulb := 0
 var stats_trees := 0
 var cape: CapeHouse
+## Chimney smoke's particle settings: the weather leans them with the wind.
+var smoke: Array[ParticleProcessMaterial] = []
+var clear_mat: StandardMaterial3D
+## Every house as built, for whatever dresses its yard: {base, w, d,
+## style, door_x, found, front_xs, f1, chimney, water, thr, harbour_side}.
+var houses_built: Array[Dictionary] = []
 var _keep_clear: Array[Rect2] = []
 
 
@@ -104,8 +110,9 @@ func build(c: TownCoast) -> void:
 	_main_lamps()
 	_pole_lines()
 	_waterfront()
+	WaterStreet.dress(self)
 	_street_trees()
-	m.commit(self, {"wall": wall_mat, "glass": glass_mat, "street": street_mat, "lamp": lamp_mat,
+	m.commit(self, {"wall": wall_mat, "glass": glass_mat, "street": street_mat, "lamp": lamp_mat, "clear": clear_mat,
 		"iron": iron_mat, "steel": steel_mat}, ["wall", "iron", "steel"])
 	_trees.finish(true, false, true)
 	add_child(_trees)
@@ -132,6 +139,11 @@ func _make_materials() -> void:
 	iron_mat.clearcoat_enabled = true
 	iron_mat.clearcoat = 0.3
 	steel_mat = ViewUtil.steel(Color(0.74, 0.76, 0.78))
+	clear_mat = StandardMaterial3D.new()
+	clear_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	clear_mat.albedo_color = Color(0.85, 0.9, 0.92, 0.25)
+	clear_mat.roughness = 0.05
+	clear_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 
 
 ## A colour and what the surface is made of, for the wall shader.
@@ -737,11 +749,14 @@ func _house(front: Vector3, yaw: float, style: int, shallow: bool) -> void:
 	# Chimneys: one at the ridge for a cape or colonial, at the back of a
 	# gable front.
 	var chim := kc(BRICK, K_BRICK)
+	var chimney_top: Vector3
 	if style == 0 or style == 1:
 		var cx := 0.0 if style == 0 else w / 2.0 - 1.2
 		m.box("wall", base * at(Vector3(cx, eave + rise / 2.0 + 0.6, -d / 2.0)), Vector3(0.8, rise + 1.6, 1.0), chim)
+		chimney_top = base * Vector3(cx, eave + rise + 1.4, -d / 2.0)
 	else:
 		m.box("wall", base * at(Vector3(1.2, eave + rise * 0.4 + 0.8, -d + 1.2)), Vector3(0.7, rise + 1.2, 0.7), chim)
+		chimney_top = base * Vector3(1.2, eave + rise * 0.9 + 1.4, -d + 1.2)
 	# The front: a door and windows on each floor.
 	var f1 := found + 1.55
 	var f2 := found + 2.8 + 1.4
@@ -811,9 +826,14 @@ func _house(front: Vector3, yaw: float, style: int, shallow: bool) -> void:
 		_porch_light(base * Vector3(door_x + 0.8, found + 2.2, 0.15), thr_house)
 	elif _rng.randf() < 0.5:
 		_porch_light(base * Vector3(door_x + 0.75, found + 2.0, 0.1), thr_house)
-	# A picket fence along the front of the lot, a gap for the walk.
-	if _rng.randf() < 0.45:
+	# A picket fence along the front of the lot, a gap for the walk. Water
+	# Street's houses get theirs with the rest of their yards (WaterStreet).
+	var water := absf(front.z - 51.5) < 1.0 or absf(front.z - 37.5) < 1.0
+	if _rng.randf() < 0.45 and not water:
 		_fence(base, -5.5, 5.5, 4.0, door_x)
+	houses_built.append({"base": base, "w": w, "d": d, "style": style, "door_x": door_x, "found": found,
+		"front_xs": xs, "f1": f1, "chimney": chimney_top, "water": water, "thr": thr_house,
+		"harbour_side": absf(front.z - 51.5) < 1.0})
 
 
 ## A room's light: the house's own time plus a little, or never.

@@ -25,6 +25,10 @@ func _run(world: TownMap) -> void:
 	world.set_time_of_day(18.1)
 	world.weather.wet = 1.0
 	world.weather._next_strike = 1000.0
+	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "street":
+		await _water_street(world, player)
+		get_tree().quit()
+		return
 	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "house":
 		await _house(world, player)
 		get_tree().quit()
@@ -89,6 +93,31 @@ func _run(world: TownMap) -> void:
 	await _view_zoom(player, Vector3(15.0, 0.4, 10.0), -2.35, -0.8, 2.3, "storm_aerial")
 	print("[probe] screenshots written to user://")
 	get_tree().quit()
+
+
+## Water Street, the harbour edge, dressed: along it by day, front
+## yards close, the back yards from the slope below, the north side,
+## then the same street at dusk in the storm.
+func _water_street(world: TownMap, player: Player) -> void:
+	world.set_weather(0.2)
+	world.weather.wet = 0.0
+	world.set_time_of_day(15.0)
+	await _view(player, Vector3(0.0, 0.4, 44.0), -1.92, 0.02, "street_along")
+	await _view(player, Vector3(45.0, 0.4, 45.0), PI, 0.0, "street_yard_45")
+	await _view(player, Vector3(57.0, 0.4, 45.0), PI, 0.0, "street_yard_57")
+	await _view(player, Vector3(7.5, 0.4, 45.0), PI, 0.0, "street_yard_8")
+	await _view(player, Vector3(30.0, 0.4, 42.8), 0.0, 0.0, "street_north_side")
+	var y := world.coast.height_at(40.0, 72.0)
+	await _view(player, Vector3(40.0, y + 0.4, 72.0), 0.25, 0.08, "street_backs")
+	y = world.coast.height_at(9.0, 66.5)
+	await _view(player, Vector3(9.0, y + 0.4, 66.5), 0.0, 0.0, "street_back_8")
+	y = world.coast.height_at(45.0, 66.5)
+	await _view(player, Vector3(45.0, y + 0.4, 66.5), 0.0, 0.0, "street_back_45")
+	world.set_weather(0.9)
+	world.weather.wet = 1.0
+	world.set_time_of_day(18.1)
+	await _view(player, Vector3(0.0, 0.4, 44.0), -1.92, 0.05, "street_dusk")
+	await _view(player, Vector3(45.0, 0.4, 45.0), PI, 0.05, "street_yard_45_dusk")
 
 
 ## The Cape at number 14, whose front is at (21, 51.5) facing north:
