@@ -3,13 +3,14 @@ shader_type spatial;
 // star's direction in the celestial frame; to_world turns it into the
 // sky at the hour. Each square is set out far off along that direction
 // and spread across a fixed number of pixels round it, so a star is a
-// point however large the screen: a soft dot about a pixel wide at the
-// eye's limit, a little wider for the bright ones, as the eye's own
-// glare widens them, never a disc.
+// point however large the screen: a soft dot about a pixel wide, never
+// a disc.
 //
 // Brightness follows the magnitude against the faintest the eye reaches
 // here (limit, lowered by twilight through visibility and by the moon's
-// light): each magnitude two and a half times. Through more air toward
+// light): each magnitude two and a half times. It goes into the point's
+// intensity, not its size: the brightest star is barely wider than the
+// faintest. Through more air toward
 // the horizon a star dims (a quarter magnitude an air mass) and reddens,
 // and it scintillates, more the lower it stands. Colour shows in the
 // bright stars only, as it does to the eye at night.
@@ -37,8 +38,8 @@ void vertex() {
 	float tw = 1.0 + amp * (0.6 * sin(TIME * (6.0 + 8.0 * seed) + seed * 41.0)
 		+ 0.4 * sin(TIME * (15.0 + 7.0 * seed) + seed * 97.0));
 	light *= max(tw, 0.0);
-	v_peak = clamp(0.04 * pow(light, 0.72), 0.0, 1.8) * smoothstep(-0.005, 0.02, elev);
-	float r = 0.75 + 0.5 * log(max(light, 1.0)) / log(10.0);
+	v_peak = clamp(0.04 * pow(light, 0.72), 0.0, 2.6) * smoothstep(-0.005, 0.02, elev);
+	float r = 0.7 + 0.1 * log(max(light, 1.0)) / log(10.0);
 	float colour = clamp(0.15 + 0.2 * log(max(light, 1.0)) / log(10.0), 0.0, 0.75);
 	v_col = mix(vec3(1.0), COLOR.rgb, colour) * exp(-vec3(0.0, 0.05, 0.14) * (airmass - 1.0));
 	vec4 clip = PROJECTION_MATRIX * (VIEW_MATRIX * vec4(CAMERA_POSITION_WORLD + w * 3500.0, 1.0));
