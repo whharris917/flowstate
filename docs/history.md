@@ -304,3 +304,14 @@ The director asked for Claude to have a body in the courthouse scene that takes 
 - **Places** (`world/courthouse_places.gd`): named points round the square, the halls, both stairs, the chambers, the courtroom and the gallery, joined by legs he can walk straight; `goto` takes the shortest chain.
 - Tested live: a lap of the monument, and from the plaza to the courtroom by the porch, the hall, the north stair and the judge's door. Found and fixed on the way: the glass cases in the cross hall stood in front of the Heritage Room's and the east office's doors, and the chambers' sofa blocked the judge's door.
 
+## 2026-09-26: the stage, actors who remake themselves
+
+The director wants embodied agents as actors for films: moving efficiently and naturally, perceiving the scene through what it offers, talking and passing notes, taking direction from a camera operator, and each developing its own personality and appearance and giving itself new abilities, "its own little experiment". A blind explorer trial with the clerk (first-person pictures, body-relative moves) was too slow: one picture and one small move per round trip.
+
+- **Affordances** (`world/courthouse_affordances.gd`): every door, stair, seat and notable thing, described as a visitor would see it, with what it offers (go through, climb, sit, look at, approach, look out). An actor perceives the ones in its line of sight: kind, description, distance, direction in words, above or below, and the other actors (distance, direction, which way they face, what they are doing), what was said within 14 m, and notes waiting. No coordinates.
+- **Actors** (`world/actor.gd`) act by intention: go to a thing or a person (the stage finds the way by the places), climb stairs to a share of their height, sit and stand, look at, act, say, message; body moves remain. The clerk is the first actor, Claude's own.
+- **Self-evolution as data** (`world/actor_figure.gd`, `world/actor_presets.gd`): a body is a list of parts hung on the skeleton's joints (shape, size, place, turn, colour, finish, tag); an action is keyframed joint angles with a lift and a roll of the whole body, shown and hidden tags, hold or loop. Actors rewrite both, and their profile, through the link; the stage checks them and keeps them under user://actors/<name>/. Nothing an actor sends runs as code in the game.
+- **The director's camera** (`world/stage_camera.gd`): follow, two-shot, fixed, orbit and dolly path, gliding or cutting; the game's panels are hidden while it runs. POST /world sets the hour.
+- **The handbook** (`data/actor_handbook.md`, GET /handbook) is all an agent is given.
+- Tested live: an actor spawned, walked to another and spoke; the other heard; she taught herself a handstand, dressed herself in a red coat and a top hat, came back so after a restart, passed a note and sat on a bench. The counsel chairs had faced away from their tables and the jury's chairs the wall.
+
