@@ -40,7 +40,7 @@ static func build(t: HarborTown) -> void:
 	# The north side, west to east. Local x runs along the front; side 1
 	# faces south across the street, -1 north.
 	_block(t, rng, -8.0, 3.0, 1, 14.5, {"floors": 4, "shops": 2, "signs": ["HARDWARE", "BOOKS"], "win": "segment",
-		"awnings": [Color(0.20, 0.36, 0.22), null], "oriel": -1, "belt": true, "crest": true})
+		"awnings": [Color(0.20, 0.36, 0.22), null], "oriel": -1, "belt": true, "crest": true, "open_ends": [-1.0]})
 	_block(t, rng, 3.0, 12.0, 1, 14.5, {"floors": 3, "signs": ["DRUGS"], "win": "round_top",
 		"awnings": [Color(0.55, 0.12, 0.10)]})
 	_block(t, rng, 12.0, 25.0, 1, 14.5, {"floors": 3, "front": "theatre", "win": "flat", "face": Color(0.60, 0.44, 0.30)})
@@ -49,7 +49,7 @@ static func build(t: HarborTown) -> void:
 	_block(t, rng, 34.0, 46.0, 1, 14.5, {"floors": 3, "front": "hotel", "win": "segment", "top": "mansard",
 		"face": Color(0.47, 0.24, 0.18), "setback": 2.4, "signs": ["HOTEL"]})
 	_block(t, rng, 46.0, 56.0, 1, 14.5, {"floors": 3, "front": "post", "win": "flat", "kind": HarborTown.K_GRANITE,
-		"face": Color(0.62, 0.61, 0.58), "cornice": Color(0.60, 0.59, 0.56)})
+		"face": Color(0.62, 0.61, 0.58), "cornice": Color(0.60, 0.59, 0.56), "open_ends": [1.0]})
 	# The south side, east to west as seen from the street (local x runs
 	# west on this side).
 	_city_hall(t, rng, -6.5, 10.5)
@@ -59,7 +59,7 @@ static func build(t: HarborTown) -> void:
 		"awnings": [null, Color(0.18, 0.22, 0.40)], "crest": true})
 	_library(t, rng, 30.5, 43.0)
 	_block(t, rng, 43.5, 53.0, -1, 9.0, {"floors": 3, "signs": ["LUNCH"], "win": "segment",
-		"awnings": [Color(0.62, 0.14, 0.12)], "oriel": -1})
+		"awnings": [Color(0.62, 0.14, 0.12)], "oriel": -1, "open_ends": [-1.0]})
 	_domed_hall(t, rng)
 
 
@@ -74,6 +74,51 @@ static func _frame(t: HarborTown, x0: float, x1: float, side: int, setback := 0.
 
 static func _top(floors: int) -> float:
 	return G + U * (floors - 1) + 1.3
+
+
+## No street or yard tree within a crown's reach of a building: its
+## footprint (and a porch before it) grown by five metres.
+static func _clear(t: HarborTown, base: Transform3D, w: float, depth: float, front := 0.0) -> void:
+	var r := Rect2(Vector2(INF, INF), Vector2.ZERO)
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for c: Vector3 in [Vector3(-w / 2.0, 0, -depth), Vector3(w / 2.0, 0, -depth), Vector3(-w / 2.0, 0, front),
+			Vector3(w / 2.0, 0, front)]:
+		var q := base * c
+		lo = Vector2(minf(lo.x, q.x), minf(lo.y, q.z))
+		hi = Vector2(maxf(hi.x, q.x), maxf(hi.y, q.z))
+	r = Rect2(lo, hi - lo).grow(5.0)
+	t._keep_clear.append(r)
+
+
+## Windows on a building's back, a door at one end of it, and on any end
+## that stands open to a street or a yard (ends: -1 or 1 along its front).
+static func _back_and_ends(t: HarborTown, rng: RandomNumberGenerator, base: Transform3D, w: float, depth: float,
+		floors: int, face: Color, kind: int, ends: Array, g := G, u := U) -> void:
+	var back := base * HarborTown.at(Vector3(0, 0, -depth), PI)
+	var bays := maxi(2, int(w / 2.6))
+	for f in floors:
+		var wh := 1.6 if f == 0 else 2.0
+		var y := 1.9 if f == 0 else g + u * (f - 1) + 0.55 + 1.0 + (0.4 if f == 1 else 0.0)
+		for b in bays:
+			var x := -w / 2.0 + w * (b + 0.5) / bays
+			if f == 0 and b == 0:
+				t.m.box("wall", back * HarborTown.at(Vector3(x, 1.15, 0.03)), Vector3(1.0, 2.3, 0.06),
+					HarborTown.kc(Color(0.28, 0.22, 0.16), HarborTown.K_WOOD))
+				t.m.box("wall", back * HarborTown.at(Vector3(x, 2.4, 0.07)), Vector3(1.3, 0.2, 0.14), HarborTown.kc(STONE, HarborTown.K_GRANITE))
+				continue
+			_opening(t, rng, back, Vector3(x, y, 0), 0.9, wh, "flat", face, kind)
+	for e: float in ends:
+		var side := base * HarborTown.at(Vector3(e * w / 2.0, 0, -depth / 2.0), e * PI / 2.0)
+		var n := maxi(2, int(depth / 2.8))
+		for f in floors:
+			var y := 2.2 if f == 0 else g + u * (f - 1) + 0.55 + 1.0 + (0.4 if f == 1 else 0.0)
+			for b in n:
+				var x := -depth / 2.0 + depth * (b + 0.5) / n
+				# Clear of the shopfront's pier at the street end.
+				if f == 0 and absf(x) > depth / 2.0 - 1.8:
+					continue
+				_opening(t, rng, side, Vector3(x, y, 0), 1.0, 1.9 if f > 0 else 2.2, "segment" if f > 0 else "flat", face, kind)
 
 
 ## ---- a commercial block ----------------------------------------------------
@@ -92,6 +137,7 @@ static func _block(t: HarborTown, rng: RandomNumberGenerator, x0: float, x1: flo
 	var cornice: Color = s.get("cornice", CORNICES[rng.randi() % CORNICES.size()])
 	var iron: Color = IRON_FRONT[rng.randi() % IRON_FRONT.size()]
 	depth -= setback
+	_clear(t, base, w, depth, setback)
 	# The body. A shop's ground storey stands back where its doors are
 	# recessed, the storeys above carried over them to the street line.
 	var recess := 1.2 if front == "shop" else 0.0
@@ -144,6 +190,7 @@ static func _block(t: HarborTown, rng: RandomNumberGenerator, x0: float, x1: flo
 			_opening(t, rng, base, Vector3(x, y, 0.0), 1.0, wh, style, face, kind)
 	if oriel != 0:
 		_oriel(t, rng, base, Vector3(oriel * (w / 2.0 - 1.4), 0, 0.0), floors, h, face, kind)
+	_back_and_ends(t, rng, base, w, depth, floors, face, kind, s.get("open_ends", []))
 	# The top: a bracketed cornice over a frieze, and on some a crest
 	# over the middle; the hotel a mansard storey with dormers.
 	_cornice(t, base, w, h, cornice, face, kind)
@@ -390,8 +437,12 @@ static func _hotel_front(t: HarborTown, rng: RandomNumberGenerator, base: Transf
 	for k in spindles:
 		var x := -w / 2.0 + (k + 0.5) * w / spindles
 		t.m.box("wall", base * HarborTown.at(Vector3(x, G + 0.55, porch - 0.2)), Vector3(0.035, 0.75, 0.035), trim)
+	# The name on a board standing on the porch roof's front edge.
 	if signs.size() > 0:
-		t._sign(base * HarborTown.at(Vector3(0, G + 0.55, porch - 0.13)), str(signs[0]), 110, Color(0.25, 0.1, 0.06))
+		t.m.box("wall", base * HarborTown.at(Vector3(0, G + U + 0.3, porch + 0.1)), Vector3(4.2, 0.8, 0.08), trim)
+		t.m.box("wall", base * HarborTown.at(Vector3(0, G + U + 0.3, porch + 0.08)), Vector3(4.4, 0.95, 0.06),
+			HarborTown.kc(Color(0.14, 0.24, 0.18), HarborTown.K_PAINT))
+		t._sign(base * HarborTown.at(Vector3(0, G + U + 0.3, porch + 0.15)), str(signs[0]), 120, Color(0.14, 0.24, 0.18))
 	var light := OmniLight3D.new()
 	light.transform = base * HarborTown.at(Vector3(0, G - 0.4, porch / 2.0))
 	light.omni_range = 8.0
@@ -424,6 +475,8 @@ static func _city_hall(t: HarborTown, rng: RandomNumberGenerator, x0: float, x1:
 	t.m.box("wall", base * HarborTown.at(Vector3(0, h + 0.02, -depth / 2.0)), Vector3(w - 0.6, 0.04, depth - 0.6),
 		HarborTown.kc(Color(0.14, 0.14, 0.14), HarborTown.K_TAR))
 	_cornice(t, base, w, h, Color(0.30, 0.28, 0.25), face, HarborTown.K_BRICK)
+	_clear(t, base, w, depth, 1.0)
+	_back_and_ends(t, rng, base, w, depth, 3, face, HarborTown.K_BRICK, [1.0], g, u)
 	for f in 3:
 		var y := (g * 0.5 + 0.3) if f == 0 else (g + u * (f - 1) + 0.5 + 1.1)
 		for x: float in [-6.8, -4.6, 4.6, 6.8]:
@@ -448,21 +501,18 @@ static func _city_hall(t: HarborTown, rng: RandomNumberGenerator, x0: float, x1:
 	var tbase := base * HarborTown.at(Vector3(0, 0, fz))
 	for y: float in [g + 1.6, g + u + 1.5]:
 		_opening(t, rng, tbase, Vector3(0, y, 0), 1.1, 2.2, "round", face, HarborTown.K_BRICK)
-	# The clock stage: a dial on each face, lit from within at dusk.
+	# The clock stage: a dial on each face in a granite frame under a
+	# pediment, lit from within at dusk.
+	for j in 4:
+		var yaw := PI / 2.0 * j
+		var fx := base * HarborTown.at(Vector3(0, 0, tz)) * HarborTown.at(Vector3.ZERO, yaw) * HarborTown.at(Vector3(0, 15.2, tw / 2.0))
+		_clock_face(t, fx)
+	# The belfry: on each face an arched opening between colonettes,
+	# closed with louvres against the weather.
 	for j in 4:
 		var yaw := PI / 2.0 * j
 		var fx := base * HarborTown.at(Vector3(0, 0, tz)) * HarborTown.at(Vector3.ZERO, yaw) * HarborTown.at(Vector3(0, 0, tw / 2.0))
-		t.m.cylinder("wall", fx * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(0, 15.4, 0.06)), 1.25, 1.25, 0.12, 24,
-			HarborTown.kc(STONE, HarborTown.K_GRANITE))
-		t.m.cylinder("lamp", fx * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(0, 15.4, 0.13)), 1.05, 1.05, 0.04, 24,
-			Color(0.3, 0, 0, 1))
-		t.add_clock(fx * HarborTown.at(Vector3(0, 15.4, 0.17)))
-	# The belfry: an arched opening on each face, dark within.
-	for j in 4:
-		var yaw := PI / 2.0 * j
-		var fx := base * HarborTown.at(Vector3(0, 0, tz)) * HarborTown.at(Vector3.ZERO, yaw) * HarborTown.at(Vector3(0, 0, tw / 2.0))
-		t.m.box("wall", fx * HarborTown.at(Vector3(0, 19.0, 0.01)), Vector3(1.6, 2.6, 0.02), HarborTown.kc(Color(0.05, 0.05, 0.05), HarborTown.K_PAINT))
-		_arc(t, fx, Vector3(0, 20.3, 0), 0.85, 0.0, PI, 9, 0.24, 0.1, stone)
+		_louvred_arch(t, fx, Vector3(0, 17.6, 0), 1.6, 2.5, face, stone)
 	# The roof: a copper pyramid, a lantern, a vane.
 	var roof := base * HarborTown.at(Vector3(0, top + 2.2, tz)) * HarborTown.at(Vector3.ZERO, PI / 4.0)
 	t.m.cylinder("wall", roof, (tw + 0.6) * 0.7071, 0.0, 4.4, 4, HarborTown.kc(COPPER, HarborTown.K_PAINT))
@@ -476,6 +526,104 @@ static func _city_hall(t: HarborTown, rng: RandomNumberGenerator, x0: float, x1:
 	light.shadow_enabled = false
 	t.add_child(light)
 	t.lamps.append({"light": light, "delay": 0.3, "energy": 1.4})
+
+
+## A clock's face at fx (+z out, origin its centre on the wall): a
+## granite frame under a pediment, a bronze bezel, the dial lit from
+## within, its chapter ring, minute marks and Roman hours in black, and
+## the hands.
+static func _clock_face(t: HarborTown, fx: Transform3D) -> void:
+	var stone := HarborTown.kc(STONE, HarborTown.K_GRANITE)
+	var bronze := HarborTown.kc(Color(0.30, 0.24, 0.14), HarborTown.K_PAINT)
+	var ink := HarborTown.kc(Color(0.04, 0.04, 0.04), HarborTown.K_PAINT)
+	t.m.box("wall", fx * HarborTown.at(Vector3(0, 0, 0.07)), Vector3(3.0, 3.0, 0.14), stone)
+	t.m.box("wall", fx * HarborTown.at(Vector3(0, 1.55, 0.12)), Vector3(3.3, 0.14, 0.24), stone)
+	t.m.prism("wall", fx * HarborTown.at(Vector3(0, 1.62, 0.12)), 3.3, 0.7, 0.24, stone)
+	t.m.box("wall", fx * HarborTown.at(Vector3(0, -1.55, 0.12)), Vector3(3.3, 0.14, 0.24), stone)
+	var disc := Basis(Vector3.RIGHT, PI / 2.0)
+	t.m.cylinder("wall", fx * Transform3D(disc, Vector3(0, 0, 0.2)), 1.25, 1.25, 0.12, 32, stone)
+	t.m.cylinder("lamp", fx * Transform3D(disc, Vector3(0, 0, 0.28)), 1.05, 1.05, 0.04, 32, Color(0.3, 0, 0, 1))
+	var z := 0.305
+	for k in 40:
+		var a := TAU * (k + 0.5) / 40.0
+		t.m.box("wall", fx * Transform3D(Basis(Vector3.BACK, a), Vector3(cos(a), sin(a), 0) * 1.1 + Vector3(0, 0, 0.3)),
+			Vector3(0.1, 0.19, 0.08), bronze)
+	for r: float in [0.97, 0.7]:
+		for k in 60:
+			var a := TAU * (k + 0.5) / 60.0
+			t.m.box("wall", fx * Transform3D(Basis(Vector3.BACK, a), Vector3(cos(a), sin(a), 0) * r + Vector3(0, 0, z)),
+				Vector3(0.014, 2.0 * r * sin(PI / 60.0) + 0.01, 0.01), ink)
+	for k in 60:
+		var a := TAU * k / 60.0
+		var long := 0.07 if k % 5 == 0 else 0.04
+		var wide := 0.03 if k % 5 == 0 else 0.012
+		var rr := 0.97 - long / 2.0
+		t.m.box("wall", fx * Transform3D(Basis(Vector3.BACK, a), Vector3(cos(a), sin(a), 0) * rr + Vector3(0, 0, z)),
+			Vector3(long, wide, 0.01), ink)
+	var hours: Array[String] = ["XII", "I", "II", "III", "IIII", "V", "VI", "VII", "VIII", "IX", "X", "XI"]
+	for k in 12:
+		var a := PI / 2.0 - TAU * k / 12.0
+		_numeral(t, fx, hours[k], Vector2(cos(a), sin(a)) * 0.835, a, 0.16, z, ink)
+	t.add_clock(fx * HarborTown.at(Vector3(0, 0, 0.33)))
+
+
+## A Roman numeral in strokes on a dial at c, its foot toward the dial's
+## centre (up along angle a), h tall.
+static func _numeral(t: HarborTown, fx: Transform3D, text: String, c: Vector2, a: float, h: float, z: float, col: Color) -> void:
+	var up := Vector2(cos(a), sin(a))
+	var right := Vector2(sin(a), -cos(a))
+	var strokes := {"I": [[Vector2(0.5, 0), Vector2(0.5, 1)]], "V": [[Vector2(0, 1), Vector2(0.5, 0)], [Vector2(0.5, 0), Vector2(1, 1)]],
+		"X": [[Vector2(0, 0), Vector2(1, 1)], [Vector2(0, 1), Vector2(1, 0)]]}
+	var widths := {"I": 0.22, "V": 0.62, "X": 0.62}
+	var gap := 0.1
+	var total := -gap
+	for ch in text:
+		total += float(widths[ch]) + gap
+	var x := -total / 2.0
+	for ch in text:
+		var cw: float = widths[ch]
+		for st: Array in strokes[ch]:
+			var ga: Vector2 = st[0]
+			var gb: Vector2 = st[1]
+			var pa := c + right * (x + ga.x * cw) * h + up * (ga.y - 0.5) * h
+			var pb := c + right * (x + gb.x * cw) * h + up * (gb.y - 0.5) * h
+			var d := pb - pa
+			t.m.box("wall", fx * Transform3D(Basis(Vector3.BACK, atan2(d.y, d.x)), Vector3((pa.x + pb.x) / 2.0, (pa.y + pb.y) / 2.0, z)),
+				Vector3(d.length() + 0.018, 0.022, 0.01), col)
+		x += cw + gap
+
+
+## An arched opening on a face at c (the foot of its middle), w wide and
+## its sides ht tall to the spring of the arch: deep reveals, a colonette
+## either side, a granite sill, louvres of weathered green paint across
+## it all the way up into the arch, and voussoirs round the head.
+static func _louvred_arch(t: HarborTown, fx: Transform3D, c: Vector3, w: float, ht: float, face: Color, stone: Color) -> void:
+	var r := w / 2.0
+	var shade := HarborTown.kc(Color(0.16, 0.15, 0.14), HarborTown.K_PAINT)
+	var slat := HarborTown.kc(Color(0.32, 0.38, 0.34), HarborTown.K_WOOD)
+	var wall := HarborTown.kc(face, HarborTown.K_BRICK)
+	t.m.box("wall", fx * HarborTown.at(c + Vector3(0, ht / 2.0, 0.005)), Vector3(w, ht, 0.01), shade)
+	for k in 8:
+		var a0 := PI * k / 8.0
+		var a1 := PI * (k + 1) / 8.0
+		var top := c + Vector3(0, ht, 0.005)
+		t.m.tri("wall", fx * top, fx * (top + Vector3(cos(a1), sin(a1), 0) * r), fx * (top + Vector3(cos(a0), sin(a0), 0) * r),
+			(fx.basis * Vector3(0, 0, 1)).normalized(), shade)
+	var y := 0.12
+	while y < ht + r - 0.1:
+		var half := r
+		if y > ht:
+			half = sqrt(maxf(r * r - (y - ht) * (y - ht), 0.0))
+		if half > 0.12:
+			t.m.box("wall", fx * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-35.0)), c + Vector3(0, y, 0.08)),
+				Vector3(half * 2.0 - 0.06, 0.03, 0.2), slat)
+		y += 0.17
+	for e: float in [-1.0, 1.0]:
+		t.m.box("wall", fx * HarborTown.at(c + Vector3(e * (r + 0.1), ht / 2.0, 0.1)), Vector3(0.2, ht, 0.2), wall)
+		t.m.cylinder("wall", fx * HarborTown.at(c + Vector3(e * (r + 0.12), ht / 2.0, 0.26)), 0.09, 0.08, ht - 0.3, 10, stone)
+		t.m.box("wall", fx * HarborTown.at(c + Vector3(e * (r + 0.12), ht - 0.1, 0.26)), Vector3(0.26, 0.2, 0.26), stone)
+	t.m.box("wall", fx * HarborTown.at(c + Vector3(0, -0.06, 0.14)), Vector3(w + 0.7, 0.14, 0.34), stone)
+	_arc(t, fx, c + Vector3(0, ht, 0), r + 0.14, 0.0, PI, 11, 0.28, 0.2, stone)
 
 
 ## ---- the library -----------------------------------------------------------
@@ -496,6 +644,8 @@ static func _library(t: HarborTown, rng: RandomNumberGenerator, x0: float, x1: f
 	t.m.box("wall", base * HarborTown.at(Vector3(0, (h + 0.2) / 2.0 - 0.6, 0.3)), Vector3(4.0, h + 1.4, 0.6), wall)
 	_cornice(t, base, w, h, Color(0.60, 0.59, 0.56), face, HarborTown.K_GRANITE)
 	t.m.box("wall", base * HarborTown.at(Vector3(0, g, 0.08)), Vector3(w, 0.25, 0.16), wall)
+	_clear(t, base, w, depth, 1.6)
+	_back_and_ends(t, rng, base, w, depth, 2, face, HarborTown.K_GRANITE, [], g, 4.2)
 	var roof := base * HarborTown.at(Vector3(0, h + 1.0, -depth / 2.0)) * Transform3D(Basis.from_scale(Vector3(w / depth, 1, 1))
 		* Basis(Vector3.UP, PI / 4.0), Vector3.ZERO)
 	t.m.cylinder("wall", roof, depth * 0.7071, 0.0, 2.0, 4, HarborTown.kc(SLATE, HarborTown.K_ROOF))
@@ -618,7 +768,7 @@ static func _domed_hall(t: HarborTown, rng: RandomNumberGenerator) -> void:
 		var ya := t.coast.height_at(a.x, a.y)
 		var yb := t.coast.height_at(b.x, b.y)
 		var slope := Basis(Vector3.BACK, atan2(yb - ya, b.x - a.x))
-		t.m.box("wall", Transform3D(slope, Vector3((a.x + b.x) / 2.0, (ya + yb) / 2.0, a.y)), Vector3(b.x - a.x + 0.05, 0.1, 3.2),
+		t.m.box("wall", Transform3D(slope, Vector3((a.x + b.x) / 2.0, (ya + yb) / 2.0 - 0.06, a.y)), Vector3(b.x - a.x + 0.05, 0.36, 3.2),
 			HarborTown.kc(STONE, HarborTown.K_GRANITE))
 	for e: float in [-1.0, 1.0]:
 		var p := Vector2(to.x - 1.5, TownCoast.MAIN_Z + e * 2.4)

@@ -41,6 +41,9 @@ const BRICK := Color(0.50, 0.25, 0.18)
 const CREOSOTE := Color(0.22, 0.18, 0.14)
 const IRON := Color(0.07, 0.075, 0.08)
 const POLE := Color(0.30, 0.24, 0.18)
+## Where the town's draws stand when the houses begin: their colours,
+## furnishings and lights are those the director approved.
+const HOUSE_DRAWS := -4403782866774257953
 const LAMP_COLOR := Color(1.0, 0.76, 0.48)
 
 const CLAPBOARDS: Array[Color] = [
@@ -109,9 +112,13 @@ func build(c: TownCoast) -> void:
 	_streets()
 	MainStreet.build(self)
 	_church(Vector2(60.0, 19.5))
+	# The houses draw from where they always have, whatever the streets
+	# built before them drew.
+	_rng.state = HOUSE_DRAWS
 	_houses_all()
 	_main_lamps()
 	_pole_lines()
+	_street_signs()
 	_waterfront()
 	WaterStreet.dress(self)
 	_street_trees()
@@ -196,25 +203,36 @@ func _sign(xf: Transform3D, text: String, size: int, color: Color, lit := false)
 
 
 ## A clock's two hands on a dial whose face is xf (+z out), turned to
-## the world's time by set_clock.
+## the world's time by set_clock: blackened iron, the hour hand short with
+## a spade near its tip, the minute hand long and fine with a small
+## diamond, each with a tail past the centre, a boss over the arbor.
 func add_clock(xf: Transform3D) -> void:
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.05, 0.05, 0.05)
-	mat.roughness = 0.6
+	mat.albedo_color = Color(0.04, 0.04, 0.035)
+	mat.roughness = 0.5
+	mat.metallic = 0.4
 	var pair: Array = []
-	for len_: float in [0.6, 0.9]:
+	# [length, shaft width, diamond size, tail]
+	for spec: Array in [[0.56, 0.05, 0.17, 0.16], [0.86, 0.03, 0.09, 0.22]]:
 		var pivot := Node3D.new()
-		pivot.transform = xf
-		var hand := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.08 if len_ < 0.8 else 0.05, len_, 0.03)
-		bm.material = mat
-		hand.mesh = bm
-		hand.position = Vector3(0, len_ / 2.0 - 0.08, 0)
-		hand.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		pivot.add_child(hand)
+		pivot.transform = xf * at(Vector3(0, 0, 0.025 * pair.size()))
+		var parts: Array = [
+			[Vector3(0, (float(spec[0]) - float(spec[3])) / 2.0, 0), Vector3(float(spec[1]), float(spec[0]) + float(spec[3]), 0.02), 0.0],
+			[Vector3(0, float(spec[0]) * 0.72, 0), Vector3(float(spec[2]), float(spec[2]), 0.02), PI / 4.0],
+			[Vector3(0, -float(spec[3]), 0), Vector3(float(spec[2]) * 0.7, float(spec[2]) * 0.7, 0.02), PI / 4.0],
+		]
+		for part: Array in parts:
+			var piece := MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			bm.size = part[1]
+			bm.material = mat
+			piece.mesh = bm
+			piece.transform = Transform3D(Basis(Vector3.BACK, float(part[2])), part[0])
+			piece.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			pivot.add_child(piece)
 		add_child(pivot)
 		pair.append(pivot)
+	m.cylinder("iron", xf * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(0, 0, 0.03)), 0.06, 0.04, 0.05, 12, IRON)
 	clock_hands.append(pair)
 
 
@@ -235,7 +253,7 @@ func set_clock(hours: float) -> void:
 
 func _streets() -> void:
 	for st in coast.streets:
-		_ribbon(Array(st["pts"]), float(st["width"]), 0.0, bool(st["line"]), float(st["lift"]), true)
+		_ribbon(Array(st["pts"]), float(st["width"]), 0.0, bool(st["line"]), float(st["lift"]), str(st["name"]))
 	# The harbour road, down its ramp to the waterfront.
 	_ribbon([Vector2(TownCoast.RAMP_TOP.x, TownCoast.RAMP_TOP.z), Vector2(TownCoast.RAMP_FOOT.x, TownCoast.RAMP_FOOT.z)],
 		7.0, 0.0, false, 0.05)
@@ -297,9 +315,9 @@ func _walk(points: Array[Vector2], road: Vector2) -> void:
 
 ## A strip of road laid on the ground along points, three vertices
 ## across so a crowned or tilted ground is followed. kind 0 asphalt,
-## 0.5 concrete, 1 gravel. A street's ribbon (level) lies level across
-## on its bed, at the height of its centre line.
-func _ribbon(points: Array, width: float, kind: float, centre_line: bool, lift: float, level := false) -> void:
+## 0.5 concrete, 1 gravel. A street's ribbon (bed names it) lies level
+## across on its bed, at the height of its centre line.
+func _ribbon(points: Array, width: float, kind: float, centre_line: bool, lift: float, bed := "") -> void:
 	var samples: Array[Vector2] = []
 	var dirs: Array[Vector2] = []
 	for k in points.size() - 1:
@@ -321,10 +339,10 @@ func _ribbon(points: Array, width: float, kind: float, centre_line: bool, lift: 
 			d = (dirs[i - 1] + dirs[i]).normalized()
 		var side := Vector2(-d.y, d.x)
 		var row: Array[Vector3] = []
-		var bed := coast.bed_height(samples[i].x, samples[i].y)
+		var level := coast.street_bed(bed, samples[i]) if bed != "" else 0.0
 		for f: float in [-0.5, 0.0, 0.5]:
 			var p := samples[i] + side * width * f
-			row.append(Vector3(p.x, (bed if level else coast.height_at(p.x, p.y)) + lift, p.y))
+			row.append(Vector3(p.x, (level if bed != "" else coast.height_at(p.x, p.y)) + lift, p.y))
 		if i > 0:
 			along += samples[i].distance_to(samples[i - 1])
 			for k in 2:
@@ -894,6 +912,73 @@ func _wire(a: Vector3, b: Vector3) -> void:
 		prev = p
 
 
+## ---- street signs ---------------------------------------------------------
+
+## A sign post at a corner of every crossing: an iron post, a blade for
+## each street turned along it, its name in white on green on both
+## faces, small enough to read from the walk beside it.
+func _street_signs() -> void:
+	var names := {"main": "MAIN ST", "harbor": "HARBOR ST", "elm": "ELM ST", "water": "WATER ST"}
+	var corners: Array = [["main", "harbor", Vector2(TownCoast.HARBOR_X, TownCoast.MAIN_Z)]]
+	for name_: String in ["elm", "water"]:
+		var pts: PackedVector2Array = coast.street(name_)["pts"]
+		corners.append([name_, "harbor", pts[0]])
+	for c: Array in corners:
+		var a := coast.street(c[0])
+		var b := coast.street(c[1])
+		var j: Vector2 = c[2]
+		var da := _street_dir(a, j)
+		var db := _street_dir(b, j)
+		var reach_a := float(a["width"]) / 2.0 + 1.6
+		var reach_b := float(b["width"]) / 2.0 + 1.6
+		# The corner on the first street's side that is clear.
+		var spot := Vector2.INF
+		for sa: float in [1.0, -1.0]:
+			for sb: float in [1.0, -1.0]:
+				var q := j + Vector2(-da.y, da.x) * sa * reach_a + Vector2(-db.y, db.x) * sb * reach_b
+				if spot == Vector2.INF and da.dot(q - j) > 0.0 and _post_room(q):
+					spot = q
+		if spot == Vector2.INF:
+			continue
+		var foot := Vector3(spot.x, coast.height_at(spot.x, spot.y) + 0.17, spot.y)
+		m.cylinder("iron", at(foot + Vector3(0, 1.35, 0)), 0.045, 0.04, 2.7, 8, Color(0.10, 0.18, 0.12))
+		m.sphere("iron", at(foot + Vector3(0, 2.74, 0)), 0.06, 8, Color(0.10, 0.18, 0.12))
+		_solid(at(foot + Vector3(0, 1.35, 0)), Vector3(0.1, 2.7, 0.1))
+		var k := 0
+		for pair: Array in [[c[0], da], [c[1], db]]:
+			var d: Vector2 = pair[1]
+			var xf := at(foot + Vector3(0, 2.5 - 0.19 * k, 0), atan2(-d.y, d.x))
+			m.box("wall", xf, Vector3(0.92, 0.16, 0.025), kc(Color(0.10, 0.26, 0.16), K_PAINT))
+			for side: float in [0.0, PI]:
+				_sign(xf * Transform3D(Basis(Vector3.UP, side), Vector3.ZERO) * at(Vector3(0, 0, 0.0135)), names[pair[0]], 28,
+					Color(0.95, 0.95, 0.9))
+			k += 1
+
+
+## Which way a street runs at the point of it nearest p.
+func _street_dir(st: Dictionary, p: Vector2) -> Vector2:
+	var pts: PackedVector2Array = st["pts"]
+	var best := 0
+	for i in pts.size():
+		if pts[i].distance_squared_to(p) < pts[best].distance_squared_to(p):
+			best = i
+	return (pts[mini(best + 1, pts.size() - 1)] - pts[maxi(best - 1, 0)]).normalized()
+
+
+## Whether a post can stand at p: off every street, clear of buildings.
+func _post_room(p: Vector2) -> bool:
+	if coast.street_distance(p.x, p.y) < 0.4:
+		return false
+	for body in _solids.get_children():
+		var b := body as StaticBody3D
+		var shape := (b.get_child(0) as CollisionShape3D).shape as BoxShape3D
+		var local := b.transform.affine_inverse() * Vector3(p.x, b.transform.origin.y, p.y)
+		var half := shape.size / 2.0 + Vector3(0.4, 0, 0.4)
+		if absf(local.x) < half.x and absf(local.z) < half.z:
+			return false
+	return true
+
+
 ## ---- the waterfront -------------------------------------------------------
 
 ## The granite bulkhead along the apron, the wharf on its piles out to
@@ -1038,11 +1123,15 @@ func _street_trees() -> void:
 		if crowded:
 			continue
 		planted.append(p)
+		# Each tree's kind and size from where it stands, so a change on
+		# one street never reshuffles another's.
+		var own := RandomNumberGenerator.new()
+		own.seed = hash(Vector2i(roundi(p.x * 10.0), roundi(p.y * 10.0)))
 		var foot := Vector3(p.x, coast.height_at(p.x, p.y), p.y)
-		if _rng.randf() < 0.12 and coast.street_distance(p.x, p.y) > 4.0:
-			_trees.plant_conifer(foot, _rng.randf_range(11.0, 17.0), _rng)
+		if own.randf() < 0.12 and coast.street_distance(p.x, p.y) > 4.0:
+			_trees.plant_conifer(foot, own.randf_range(11.0, 17.0), own)
 		else:
-			_trees.plant_broadleaf(foot, _rng.randf_range(10.0, 16.0), LEAVES[_rng.randi() % LEAVES.size()], _rng)
+			_trees.plant_broadleaf(foot, own.randf_range(10.0, 16.0), LEAVES[own.randi() % LEAVES.size()], own)
 	stats_trees = planted.size()
 
 

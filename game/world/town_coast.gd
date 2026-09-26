@@ -435,8 +435,26 @@ func _road_bed(x: float, z: float) -> Vector2:
 			best_w = 1.0 - smoothstep(2.2, 6.5, edge)
 			best_y = y
 	if inside_y < INF:
-		return Vector2(inside_y - 0.02, 1.0)
+		return Vector2(inside_y - 0.05, 1.0)
 	return Vector2(best_y, best_w)
+
+
+## The height of a street's bed at p, measured as the ground's grading
+## measures it (on the street's coarse centre line), so a road's surface
+## lies exactly over its bed.
+func street_bed(name_: String, p: Vector2) -> float:
+	var pts: PackedVector2Array = street(name_)["coarse"]
+	var best := INF
+	var near := p
+	for k in pts.size() - 1:
+		var a := pts[k]
+		var ab := pts[k + 1] - a
+		var q := a + ab * clampf((p - a).dot(ab) / maxf(ab.length_squared(), 1e-6), 0.0, 1.0)
+		var d := p.distance_squared_to(q)
+		if d < best:
+			best = d
+			near = q
+	return bed_height(near.x, near.y)
 
 
 ## The height of a street's bed under a point of its centre line.

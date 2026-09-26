@@ -144,6 +144,11 @@ func _main_street(world: TownMap, player: Player) -> void:
 	await _view(player, Vector3(2.0, 0.4, 9.0), PI - 0.2, 0.45, "main_city_hall")
 	await _view(player, Vector3(64.0, 0.4, 12.0), -PI / 2.0, 0.12, "main_dome")
 	await _view_zoom(player, Vector3(10.0, 30.0, -25.0), -PI * 0.75, -0.55, 0.0, "main_aerial")
+	await _view_zoom(player, Vector3(2.0, 0.4, 7.5), PI, 0.62, 1.5, "main_clock")
+	await _view(player, Vector3(40.0, 0.4, 10.5), 0.0, 0.3, "main_hotel")
+	await _view(player, Vector3(-26.0, 0.4, 12.0), -PI / 2.0, 0.15, "main_west_end")
+	await _view(player, Vector3(-10.6, 0.4, 16.7), -2.05, 0.3, "main_sign")
+	await _view(player, Vector3(71.0, 0.4, 13.0), -PI / 2.0, -0.12, "main_path")
 	world.set_weather(0.9)
 	world.weather.wet = 1.0
 	world.set_time_of_day(18.4)
