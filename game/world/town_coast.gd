@@ -49,9 +49,9 @@ const STREET_PLAN: Array = [
 	["water", [Vector2(-19.0, 42.0), Vector2(0.0, 45.5), Vector2(20.0, 47.5), Vector2(40.0, 46.5),
 		Vector2(58.0, 46.5), Vector2(74.0, 42.0)], 7.0, false, 0.02],
 	["west", [Vector2(-45.0, MAIN_Z), Vector2(-75.0, 10.0), Vector2(-110.0, 0.0), Vector2(-150.0, -24.0),
-		Vector2(-190.0, -60.0), Vector2(-235.0, -112.0), Vector2(-270.0, -170.0)], 6.5, true, 0.05],
+		Vector2(-190.0, -60.0), Vector2(-235.0, -112.0), Vector2(-270.0, -170.0)], 6.5, true, 0.12],
 	["north", [Vector2(-14.0, -40.0), Vector2(-16.0, -80.0), Vector2(-25.0, -128.0), Vector2(-44.0, -185.0),
-		Vector2(-70.0, -240.0)], 6.5, true, 0.05],
+		Vector2(-70.0, -240.0)], 6.5, true, 0.12],
 ]
 # Where the town's larger buildings stand, as ground rects [x0, z0, x1, z1]
 # and the point whose ground height their terrace takes.
@@ -364,6 +364,9 @@ func height_at(x: float, z: float) -> float:
 		var pad := _pad_at(x, z)
 		if pad.y > 0.0:
 			h = lerpf(h, pad.x, pad.y * site)
+	var bed := _road_bed(x, z)
+	if bed.y > 0.0:
+		h = lerpf(h, bed.x, bed.y)
 	var ramp := _ramp_at(x, z)
 	if ramp.y > 0.0:
 		h = lerpf(h, ramp.x, ramp.y)
@@ -371,6 +374,39 @@ func height_at(x: float, z: float) -> float:
 	if w > 0.0:
 		h = lerpf(h, APRON_Y, w)
 	return h
+
+
+## Every street's bed: level across, at the height of the ground under
+## its centre line (the town's hillside in town, the land as it lies out
+## of it), over the terraces beside it, the shoulders easing into the
+## ground on either side.
+func _road_bed(x: float, z: float) -> Vector2:
+	var p := Vector2(x, z)
+	var best_w := 0.0
+	var best_y := 0.0
+	for st in streets:
+		var lo: Vector2 = st["lo"]
+		var hi: Vector2 = st["hi"]
+		if p.x < lo.x - 10.0 or p.x > hi.x + 10.0 or p.y < lo.y - 10.0 or p.y > hi.y + 10.0:
+			continue
+		var pts: PackedVector2Array = st["coarse"]
+		var best := INF
+		var near := Vector2.ZERO
+		for k in pts.size() - 1:
+			var a := pts[k]
+			var ab := pts[k + 1] - a
+			var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 1e-6), 0.0, 1.0)
+			var q := a + ab * t
+			var d := p.distance_to(q)
+			if d < best:
+				best = d
+				near = q
+		var half := float(st["width"]) / 2.0
+		var w := 1.0 - smoothstep(half + 0.8, half + 4.0, best)
+		if w > best_w:
+			best_w = w
+			best_y = super.height_at(near.x, near.y) + relief(near.x, near.y) * _flat_weight(near.x, near.y, _flats[0])
+	return Vector2(best_y, best_w)
 
 
 ## The ramp's height at (x, z) and how strongly it holds there.

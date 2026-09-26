@@ -17,10 +17,24 @@ uniform float wet = 0.0;
 uniform float tex_size = 256.0;
 
 varying vec3 tint;
+varying vec3 local;
+
+float hash3(vec3 p) {
+	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+
+float noise3(vec3 p) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	vec3 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), u.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), u.x), u.y),
+		mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), u.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), u.x), u.y), u.z);
+}
 
 void vertex() {
 	// The tints are picked as screen colours; the light works in linear.
 	tint = pow(INSTANCE_CUSTOM.rgb, vec3(2.2));
+	local = VERTEX;
 	vec3 origin = MODEL_MATRIX[3].xyz;
 	float phase = origin.x * 0.21 + origin.z * 0.17;
 	float h = max(VERTEX.y, 0.0);
@@ -33,7 +47,11 @@ void vertex() {
 
 void fragment() {
 	if (bark) {
-		ALBEDO = pow(COLOR.rgb, vec3(2.2));
+		// Bark: furrows running up the stem, lichen in patches.
+		float furrow = noise3(vec3(local.x * 14.0, local.y * 1.2, local.z * 14.0));
+		float patch = smoothstep(0.62, 0.8, noise3(local * 2.3 + 7.0));
+		vec3 bark_col = pow(COLOR.rgb, vec3(2.2)) * (0.6 + 0.6 * furrow);
+		ALBEDO = mix(bark_col, vec3(0.22, 0.26, 0.16), patch * 0.5);
 		ROUGHNESS = mix(0.95, 0.55, wet);
 		SPECULAR = 0.2;
 	} else {
@@ -46,7 +64,7 @@ void fragment() {
 		ALPHA_SCISSOR_THRESHOLD = 0.5;
 		ALBEDO = t.rgb * tint * COLOR.rgb;
 		ROUGHNESS = mix(0.75, 0.35, wet);
-		SPECULAR = mix(0.25, 0.45, wet);
-		BACKLIGHT = ALBEDO * 0.55;
+		SPECULAR = mix(0.12, 0.4, wet);
+		BACKLIGHT = ALBEDO * 0.25;
 	}
 }
