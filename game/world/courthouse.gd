@@ -37,7 +37,7 @@ func _build_forest() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1886
 	var far := Forest.new()
-	far.plant_ring(Vector3.ZERO, 260.0, 420.0, 7.0, 16.0, rng)
+	far.plant_ring(Vector3.ZERO, 240.0, 380.0, 11.0, 16.0, rng)
 	far.finish(false, true)
 	add_child(far)
 

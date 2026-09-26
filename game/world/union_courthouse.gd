@@ -89,10 +89,20 @@ func build() -> void:
 		_chimneys(e)
 	_roofs()
 	_cupola()
+	# The rooms go in meshes of their own: nothing in them casts the sun's
+	# shadow (the walls and roof do that), and from far off they are not
+	# drawn at all.
+	var outer := k.m
+	k.m = TownMesh.new()
 	CourthouseInterior.build(self)
-	k.m.commit(self, {"wall": wall_mat, "glass": glass_mat, "iron": iron_mat, "lamp": lamp_mat, "dial": dial_mat},
-		["wall", "iron"])
-	stats = {"triangles": k.m.triangles, "solids": k.solid_count, "ms": Time.get_ticks_msec() - t0}
+	var inner := k.m
+	k.m = outer
+	var mats := {"wall": wall_mat, "glass": glass_mat, "iron": iron_mat, "lamp": lamp_mat, "dial": dial_mat}
+	outer.commit(self, mats, ["wall", "iron"])
+	for mi: MeshInstance3D in inner.commit(self, mats, []).values():
+		mi.visibility_range_end = 150.0
+	stats = {"triangles": outer.triangles + inner.triangles, "inside": inner.triangles, "solids": k.solid_count,
+		"ms": Time.get_ticks_msec() - t0}
 
 
 func _materials() -> void:
@@ -184,6 +194,9 @@ func _long_side(s: float) -> void:
 		k.box("wall", Transform3D(), Vector3(rx, MAIN_WALL / 2.0, e * (PZ - 0.25)), Vector3(PX - MX - SKIN, MAIN_WALL, 0.5),
 			c(BRICK, CourthouseKit.K_BRICK))
 		k.solid(Transform3D(), Vector3(rx, 2.5, e * (PZ - 0.25)), Vector3(PX - MX - SKIN, 5.0, 0.5))
+		# Inside, the corner where the pavilion's recess meets the side bay.
+		k.block("wall", Transform3D(), Vector3(s * (MX - T / 2.0), (EAVE - 0.9) / 2.0, e * (PZ - 0.25)), Vector3(T, EAVE - 0.9, 0.5),
+			c(PLASTER, CourthouseKit.K_PLASTER))
 	_ext_wall(fp, -PZ, PZ, pav_open, -PZ + 0.5, PZ - 0.5, MAIN_WALL)
 	# Trim on the main block: hoods and sills below, archivolts above.
 	for o: Dictionary in main_open:
@@ -285,6 +298,9 @@ func _arched_trim(f: Transform3D, o: Dictionary, col: Color, grand: bool) -> voi
 func _window(f: Transform3D, o: Dictionary) -> void:
 	var tall := float(o["ys"]) - float(o["y0"]) > 3.5
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
+	# The sash is as solid as the wall round it.
+	k.solid(f, Vector3(float(o["u"]), (float(o["y0"]) + float(o["yt"])) / 2.0, -SKIN - 0.04),
+		Vector3(float(o["w"]), float(o["yt"]) - float(o["y0"]), 0.08))
 	k.sash(f, o, -SKIN - 0.04, trim, float(o["y0"]) + (float(o["ys"]) - float(o["y0"])) * (0.62 if tall else 0.5), 1)
 	if tall:
 		k.box("wall", f, Vector3(float(o["u"]), float(o["y0"]) + (float(o["ys"]) - float(o["y0"])) * 0.3, -SKIN - 0.04),
@@ -409,15 +425,25 @@ func _main_end_wall(e: float) -> void:
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
 	var opens: Array = [CourthouseKit.opening(0.0, 2.4, F1, 4.9, "round")]
 	if e < 0.0:
-		for u: float in [-5.2, 5.2]:
-			opens.append(CourthouseKit.opening(u, 1.1, F2, F2 + 2.7, "flat"))
+		# The judge's door, behind the bench on its west side (the frame's
+		# u runs west here).
+		opens.append(CourthouseKit.opening(5.2, 1.1, F2, F2 + 2.7, "flat"))
 	else:
 		opens.append(CourthouseKit.opening(0.0, 1.9, F2, F2 + 3.0, "flat"))
 	# The whole wall is one thickness here; its face to the wing is the
 	# wing's rooms' wall below the wing's roof.
 	k.wall("wall", f, -MX + SKIN, MX - SKIN, 0.0, BAND, T, inner, opens, 4.5)
-	k.wall("wall", f, -MX + SKIN, MX - SKIN, BAND, WING_ROOF, T, inner, opens, 10.0)
-	k.wall("wall", f, -MX + SKIN, MX - SKIN, WING_ROOF, MAIN_WALL, T, brick, [], 0.0)
+	if e < 0.0:
+		# Behind the bench, a round-headed niche into the courtroom side.
+		var niche := CourthouseKit.opening(0.0, 2.6, F2 + 0.7, F2 + 2.8, "round")
+		k.wall("wall", f, -MX + SKIN, MX - SKIN, BAND, WING_ROOF, 0.15, inner, opens, 10.0)
+		k.wall("wall", f * Transform3D(Basis(), Vector3(0, 0, -0.15)), -MX + SKIN, MX - SKIN, BAND, WING_ROOF, T - 0.15, inner,
+			opens + [niche], 10.0)
+	else:
+		k.wall("wall", f, -MX + SKIN, MX - SKIN, BAND, WING_ROOF, T, inner, opens, 10.0)
+	# Above the wing's roof: brick to the weather, plaster to the courtroom.
+	k.wall("wall", f, -MX + SKIN, MX - SKIN, WING_ROOF, MAIN_WALL, SKIN, brick, [], 0.0)
+	k.wall("wall", f * Transform3D(Basis(), Vector3(0, 0, -SKIN)), -MX + T, MX - T, WING_ROOF, EAVE - 0.9, T - SKIN, inner, [], 0.0)
 	# Where the main block stands wider than the wing, its corners are
 	# brick outside, face to the weather.
 	for s: float in [-1.0, 1.0]:
@@ -461,7 +487,7 @@ func _porch(s: float) -> void:
 	k.box("wall", f, Vector3(0, F1 - 0.05, depth / 2.0 + 0.03), Vector3(2.0 * half + 0.1, 0.1, depth + 0.06), stone)
 	k.box("wall", f, Vector3(0, F1 + 0.005, depth / 2.0), Vector3(2.0 * half - 0.1, 0.02, depth - 0.1), c(PORCH_FLOOR, CourthouseKit.K_PAINT))
 	k.solid(f, Vector3(0, F1 - 0.1, depth / 2.0), Vector3(2.0 * half, 0.2, depth))
-	_steps(f, 0.0, 2.6, 0.0, F1, 4.0)
+	_steps(f * Transform3D(Basis(), Vector3(0, 0, depth)), 0.0, 2.6, 0.0, F1, 4.0)
 	# Posts: four across the front, one at each back corner against the wall.
 	var posts: Array[Vector2] = []
 	for u: float in [-half + 0.2, -1.42, 1.42, half - 0.2]:

@@ -20,12 +20,26 @@ func _ready() -> void:
 
 
 func _run(world: CourthouseMap) -> void:
-	await get_tree().create_timer(2.5).timeout
+	await get_tree().create_timer(6.0).timeout
 	var player := world.player
 	world.graphics.set_preset("Medium")
 	world.graphics.apply(world)
 	world.set_time_of_day(15.5)
 	var which := OS.get_environment("FLOWSTATE_CH_SHOTS")
+	if which == "walk":
+		# With real input: in from North Main up the west porch and
+		# through the hall; up each stair in its two flights; into the
+		# courtroom from the south hall; in at the south door.
+		await _walk(player, Vector3(-36.0, 0.3, 3.5), -PI / 2.0, 3.0)
+		await _walk(player, Vector3(-18.5, 0.3, 0.3), -PI / 2.0, 7.0)
+		await _walk(player, Vector3(0.5, UnionCourthouse.F1 + 0.1, -9.5), -PI / 2.0, 2.5)
+		await _walk(player, Vector3(7.0, CourthouseInterior.LANDING + 0.1, -11.4), PI / 2.0, 2.5)
+		await _walk(player, Vector3(-0.5, UnionCourthouse.F1 + 0.1, 9.5), PI / 2.0, 2.5)
+		await _walk(player, Vector3(-7.0, CourthouseInterior.LANDING + 0.1, 11.4), -PI / 2.0, 2.5)
+		await _walk(player, Vector3(0.0, UnionCourthouse.F2 + 0.1, 12.0), 0.0, 4.0)
+		await _walk(player, Vector3(0.0, 0.3, 34.0), 0.0, 4.0)
+		get_tree().quit()
+		return
 	if which == "match":
 		# The street imagery's own cameras, turned into the building's
 		# frame (it stands 2.8 degrees west of north): [x, z, heading,
@@ -83,4 +97,27 @@ func _view_zoom(player: Player, at: Vector3, yaw: float, pitch: float, zoom: flo
 	player.global_position = at
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png("user://probe_ch_%s.png" % name_)
-	print("[probe] %s: %.0f fps" % [name_, Engine.get_frames_per_second()])
+	await get_tree().create_timer(1.0).timeout
+	print("[probe] %s: %.0f fps · %.2f M tris · %d draws" % [name_, Engine.get_frames_per_second(),
+		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1.0e6,
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
+
+
+## Stand the player somewhere, face them a way and hold forward: the
+## same input the director gives, so a stair is proven walkable.
+func _walk(player: Player, from: Vector3, facing: float, seconds: float) -> void:
+	player.global_position = from
+	player.velocity = Vector3.ZERO
+	player.rotation.y = facing
+	await get_tree().physics_frame
+	Input.action_press("move_forward")
+	var trail: Array[String] = []
+	var elapsed := 0.0
+	while elapsed < seconds:
+		await get_tree().create_timer(0.5).timeout
+		elapsed += 0.5
+		var p := player.global_position
+		trail.append("(%.1f, %.2f, %.1f)" % [p.x, p.y, p.z])
+	Input.action_release("move_forward")
+	await get_tree().create_timer(0.3).timeout
+	print("[probe] walk from (%.1f, %.1f, %.1f): %s" % [from.x, from.y, from.z, " ".join(trail)])
