@@ -29,6 +29,10 @@ func _run(world: TownMap) -> void:
 	world.set_time_of_day(18.1)
 	world.weather.wet = 1.0
 	world.weather._next_strike = 1000.0
+	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "trees":
+		await _trees(world, player)
+		get_tree().quit()
+		return
 	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "row":
 		await _row(world, player)
 		get_tree().quit()
@@ -104,6 +108,23 @@ func _run(world: TownMap) -> void:
 	await _view_zoom(player, Vector3(15.0, 0.4, 10.0), -2.35, -0.8, 2.3, "storm_aerial")
 	print("[probe] screenshots written to user://")
 	get_tree().quit()
+
+
+## The trees by day: one close to, looking up into its crown; the
+## street trees down Main Street; along Water Street; the edge of the
+## woods up the north road.
+func _trees(world: TownMap, player: Player) -> void:
+	world.set_weather(0.1)
+	world.set_time_of_day(13.0)
+	var plants: Array = world.town._trees._plants
+	for k in 3:
+		var plant: Array = plants[(k * 7) % plants.size()]
+		var at: Vector3 = plant[0]
+		await _view(player, at + Vector3(6.0, 0.0, 6.0), PI / 4.0, 0.35, "trees_close_%d" % k)
+	await _view(player, Vector3(-6.0, 0.4, 17.5), -PI / 2.0, 0.2, "trees_main")
+	await _view(player, Vector3(30.0, 0.4, 47.5), -PI / 2.0 + 0.2, 0.12, "trees_water")
+	await _view(player, Vector3(-14.0, 0.4, -38.0), 0.0, 0.08, "trees_woods")
+	await _view_zoom(player, Vector3(-20.0, 0.4, -35.0), -2.5, -0.35, 1.6, "trees_aerial")
 
 
 ## Every house on the harbour side of Water Street, outside and in, at

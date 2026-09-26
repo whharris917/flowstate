@@ -55,6 +55,12 @@ void fragment() {
 		ROUGHNESS = mix(0.95, 0.55, wet);
 		SPECULAR = 0.2;
 	} else {
+		// A card's two faces share one normal, bent out from the crown's
+		// heart, so the crown is lit as a mass and no card goes dark for
+		// facing inward.
+		if (!FRONT_FACING) {
+			NORMAL = -NORMAL;
+		}
 		vec4 t = texture(leaves, UV);
 		// Far off, where the texture's smaller copies have thinned the
 		// leaves, the cut-out holds more so the crown stays full.
@@ -63,8 +69,10 @@ void fragment() {
 		ALPHA = clamp(t.a * (1.0 + 0.45 * mip), 0.0, 1.0);
 		ALPHA_SCISSOR_THRESHOLD = 0.5;
 		ALBEDO = t.rgb * tint * COLOR.rgb;
-		ROUGHNESS = mix(0.75, 0.35, wet);
-		SPECULAR = mix(0.12, 0.4, wet);
+		// Leaves are matte, wet or dry: a card seen edge-on would otherwise
+		// mirror the sky and turn the crown grey.
+		ROUGHNESS = mix(0.9, 0.6, wet);
+		SPECULAR = mix(0.02, 0.1, wet);
 		BACKLIGHT = ALBEDO * 0.25;
 	}
 }

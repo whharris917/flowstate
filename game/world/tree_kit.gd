@@ -68,7 +68,7 @@ static func _ensure_materials() -> void:
 	_leaf_mat = ShaderMaterial.new()
 	_leaf_mat.shader = shader
 	_leaf_mat.set_shader_parameter("leaves", _leaf_texture())
-	_leaf_mat.set_shader_parameter("tex_size", 256.0)
+	_leaf_mat.set_shader_parameter("tex_size", 512.0)
 	_needle_mat = ShaderMaterial.new()
 	_needle_mat.shader = shader
 	_needle_mat.set_shader_parameter("leaves", _needle_texture())
@@ -77,40 +77,47 @@ static func _ensure_materials() -> void:
 
 ## ---- the pictures -------------------------------------------------------------
 
-## Sprigs of leaves as they hang on a real tree, seen face on: five or
-## six twigs wandering across the picture, each with its leaves along it
-## and at its end, some leaves lobed like a maple's and some plain, each
-## its own size, turn and shade (warmer or cooler, lighter or darker),
-## overlapping here, gaps between there, nothing reaching the edges so
-## no card shows its square. Pale, so the tree's own colour tints them.
+## Four clumps of leaves in the four quarters of the picture, as a
+## spray of a real tree shows against the sky: a ragged outline, no two
+## alike, a few twigs running out through it, the leaves (lobed like a
+## maple's or plain) scattered at their own turns and sizes, the inner
+## ones darker and overlapped by the outer, gaps of sky between. Pale,
+## so the tree's own colour tints them. A card shows one quarter.
 static func _leaf_texture() -> ImageTexture:
-	var n := 256
+	var n := 512
+	var cell := n / 2
 	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0.35, 0.3, 0.25, 0.0))
+	img.fill(Color(0.35, 0.3, 0.22, 0.0))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
-	var twigs := 9
-	for t in twigs:
-		var a := TAU * t / twigs + rng.randf_range(-0.3, 0.3)
-		var start := Vector2(n / 2.0, n / 2.0) + Vector2(cos(a), sin(a)) * rng.randf_range(4.0, 20.0)
-		var heading := a + rng.randf_range(-0.5, 0.5)
-		var p := start
-		var steps := 5 + rng.randi() % 3
-		for k in steps:
-			heading += rng.randf_range(-0.35, 0.35)
-			var q := p + Vector2(cos(heading), sin(heading)) * rng.randf_range(9.0, 14.0)
-			if q.distance_to(Vector2(n / 2.0, n / 2.0)) > n * 0.4:
-				break
-			_line(img, p, q, 0.9, Color(0.28, 0.22, 0.16, 1.0))
-			# A leaf off each side of the twig now and then, at the end
-			# always.
-			for s2: float in [-1.0, 1.0]:
-				if rng.randf() < 0.95 or k == steps - 1:
-					var la := heading + s2 * rng.randf_range(0.5, 1.2)
-					var size := rng.randf_range(13.0, 21.0)
-					var tone := Color(rng.randf_range(0.6, 1.0), 1.0, rng.randf_range(0.7, 1.0)) * rng.randf_range(0.62, 1.0)
-					_leaf_shape(img, q, Vector2(cos(la), sin(la)), size, rng.randf() < 0.6, tone, rng.randf() * TAU)
-			p = q
+	for q in 4:
+		var c := Vector2((q % 2) * cell + cell / 2.0, (q / 2) * cell + cell / 2.0)
+		var ph: Array[float] = [rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU]
+		var reach := func(a: float) -> float:
+			return cell * 0.44 * (0.74 + 0.13 * sin(3.0 * a + ph[0]) + 0.09 * sin(5.0 * a + ph[1]) + 0.05 * sin(9.0 * a + ph[2]))
+		# Twigs from the heart outward, thin, mostly hidden.
+		for t in 6:
+			var a := TAU * t / 6.0 + rng.randf_range(-0.4, 0.4)
+			var from := c + Vector2(cos(a), sin(a)) * rng.randf_range(0.0, 12.0)
+			var to := c + Vector2(cos(a), sin(a)) * float(reach.call(a)) * 0.85
+			_line(img, from, to, 0.9, Color(0.26, 0.2, 0.15, 1.0))
+		# Leaves, heart first, so the outer ones lie over the inner.
+		var spots: Array = []
+		for k in 170:
+			var a := rng.randf() * TAU
+			var r := sqrt(rng.randf()) * float(reach.call(a))
+			spots.append([r / cell, a, r])
+		spots.sort_custom(func(x: Array, y: Array) -> bool: return float(x[0]) < float(y[0]))
+		for spot: Array in spots:
+			var a: float = spot[1]
+			var r: float = spot[2]
+			var at := c + Vector2(cos(a), sin(a)) * r
+			var la := a + rng.randf_range(-1.3, 1.3)
+			var size := rng.randf_range(11.0, 18.0)
+			var depth := clampf(r / (cell * 0.4), 0.0, 1.0)
+			var tone := Color(rng.randf_range(0.8, 1.0), rng.randf_range(0.9, 1.0), rng.randf_range(0.6, 0.85)) \
+				* rng.randf_range(0.7, 0.95) * lerpf(0.72, 1.05, depth)
+			_leaf_shape(img, at - Vector2(cos(la), sin(la)) * size * 0.4, Vector2(cos(la), sin(la)), size, rng.randf() < 0.6, tone, 0.0)
 	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
 
@@ -218,15 +225,20 @@ static func _limb(st: SurfaceTool, a: Vector3, b: Vector3, ra: float, rb: float,
 ## A card: a quad centred at c spanning u and v (half extents), UV over
 ## it, its normal n (bent outward from the crown for soft light).
 static func _card(st: SurfaceTool, c: Vector3, u: Vector3, v: Vector3, n: Vector3, col: Color,
-		uv_flip := false) -> void:
+		uv_flip := false, quarter := -1) -> void:
 	var pts := [c - u - v, c - u + v, c + u + v, c + u - v]
 	var uvs := [Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)]
 	if uv_flip:
 		uvs = [Vector2(1, 1), Vector2(1, 0), Vector2(0, 0), Vector2(0, 1)]
+	var at := Vector2.ZERO
+	var span := 1.0
+	if quarter >= 0:
+		at = Vector2(quarter % 2, quarter / 2) * 0.5
+		span = 0.5
 	for k: int in [0, 1, 2, 0, 2, 3]:
 		st.set_color(col)
 		st.set_normal(n)
-		st.set_uv(uvs[k])
+		st.set_uv(at + (uvs[k] as Vector2) * span)
 		st.add_vertex(pts[k])
 
 
@@ -252,9 +264,9 @@ static func _broadleaf(rng: RandomNumberGenerator, elm: bool) -> ArrayMesh:
 		_branch(bark, leaves, rng, trunk_top + Vector3(0, rng.randf_range(-0.3, 0.3), 0), dir, REF_H * (0.34 if elm else 0.28),
 			0.2, 0, crown, bark_col, elm, crown_r)
 	# The crown filled in toward its heart, shaded.
-	for k in 26:
+	for k in 40:
 		var d := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.6, 0.8), rng.randf_range(-1, 1)).normalized() * rng.randf_range(0.3, 0.95)
-		_cluster(leaves, rng, crown + d * crown_r, crown, rng.randf_range(2.0, 2.8), crown_r)
+		_cluster(leaves, rng, crown + d * crown_r, crown, rng.randf_range(1.6, 2.2), crown_r)
 	var mesh := bark.commit()
 	leaves.commit(mesh)
 	mesh.surface_set_material(0, _bark_mat)
@@ -289,7 +301,7 @@ static func _branch(bark: SurfaceTool, leaves: SurfaceTool, rng: RandomNumberGen
 		for k in range(1, 4):
 			for j in 2:
 				var p: Vector3 = pts[k] + Vector3(rng.randf_range(-0.8, 0.8), rng.randf_range(-0.4, 0.6), rng.randf_range(-0.8, 0.8))
-				_cluster(leaves, rng, p, crown, rng.randf_range(1.8, 2.6), crown_r)
+				_cluster(leaves, rng, p, crown, rng.randf_range(1.3, 1.9), crown_r)
 		return
 	var children := 3 if depth == 0 else 2 + rng.randi() % 2
 	for k in children:
@@ -309,18 +321,19 @@ static func _cluster(leaves: SurfaceTool, rng: RandomNumberGenerator, p: Vector3
 	var out := p - crown
 	var depth := clampf(out.length() / crown_r, 0.0, 1.2)
 	out = out.normalized() if out.length() > 0.1 else Vector3.UP
-	var n := (out * 0.65 + Vector3.UP * 0.35).normalized()
-	var shade := lerpf(0.45, 1.05, smoothstep(0.2, 1.0, depth)) * (0.8 if out.y < -0.3 else 1.0) * rng.randf_range(0.9, 1.1)
-	var warm := rng.randf_range(-0.12, 0.12)
+	var n := (out * 0.8 + Vector3.UP * 0.2).normalized()
+	var shade := lerpf(0.5, 1.05, smoothstep(0.2, 1.0, depth)) * (0.82 if out.y < -0.3 else 1.0) * rng.randf_range(0.9, 1.1)
+	var warm := rng.randf_range(-0.1, 0.1)
 	var col := Color(shade * (1.0 + warm), shade, shade * (1.0 - warm * 0.7), 1.0)
-	for k in 2:
-		var tilt := Basis(Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)).normalized(), rng.randf_range(0.2, 0.7))
+	for k in 3:
+		var tilt := Basis(Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)).normalized(), rng.randf_range(0.3, 1.1))
 		var facing := (tilt * out).normalized()
 		var u := facing.cross(Vector3.UP if absf(facing.y) < 0.95 else Vector3.RIGHT).normalized()
 		u = u.rotated(facing, rng.randf_range(0.0, TAU))
 		var v := facing.cross(u).normalized()
-		var sz := size * rng.randf_range(0.8, 1.15)
-		_card(leaves, p + facing * 0.05 * k, u * sz * 0.5, v * sz * 0.5, n, col)
+		var sz := size * rng.randf_range(0.75, 1.1)
+		var at := p + facing * 0.06 * k + Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.5, 0.5), rng.randf_range(-1, 1)) * size * 0.15
+		_card(leaves, at, u * sz * 0.5, v * sz * 0.5, n, col, rng.randf() < 0.5, rng.randi() % 4)
 
 
 static func _spruce(rng: RandomNumberGenerator) -> ArrayMesh:
@@ -395,14 +408,22 @@ static func _birch(rng: RandomNumberGenerator) -> ArrayMesh:
 			var t := rng.randf_range(0.08, 0.7)
 			var p := foot.lerp(top, t)
 			_limb(bark, p, p + lean * 0.05, 0.125 - 0.09 * t, 0.123 - 0.09 * t, 6, mark)
-		var crown := foot.lerp(top, 0.72)
-		for c in 9:
-			var dir := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.2, 0.8), rng.randf_range(-1, 1)).normalized()
-			var from := foot.lerp(top, rng.randf_range(0.5, 0.9))
-			var tip := from + dir * rng.randf_range(0.8, 1.8)
-			_limb(bark, from, tip, 0.03, 0.01, 3, white)
-			_cluster(leaves, rng, tip, crown, rng.randf_range(1.0, 1.4))
-			_cluster(leaves, rng, tip + Vector3(0, -0.5, 0), crown, 1.0)
+		# An open oval crown over the upper half: fine branches rising
+		# from the stem and arching over, leaves hanging all along them.
+		var crown := foot.lerp(top, 0.7)
+		for c in 16:
+			var t := rng.randf_range(0.42, 0.95)
+			var from := foot.lerp(top, t)
+			var az2 := rng.randf_range(0.0, TAU)
+			var reach := lerpf(2.2, 0.7, (t - 0.42) / 0.53) * rng.randf_range(0.8, 1.2)
+			var out := Vector3(cos(az2), 0, sin(az2))
+			var mid := from + out * reach * 0.55 + Vector3.UP * reach * 0.45
+			var tip := from + out * reach + Vector3.UP * reach * rng.randf_range(-0.1, 0.25)
+			_limb(bark, from, mid, 0.035, 0.018, 3, mark.lerp(white, 0.3))
+			_limb(bark, mid, tip, 0.018, 0.008, 3, mark.lerp(white, 0.2))
+			for j in 3:
+				var at := mid.lerp(tip, j / 2.0) + Vector3(0, -0.25 * j, 0)
+				_cluster(leaves, rng, at, crown, rng.randf_range(0.9, 1.3), 2.2)
 	var mesh := bark.commit()
 	leaves.commit(mesh)
 	mesh.surface_set_material(0, _bark_mat)
@@ -532,7 +553,7 @@ static func _hedge(rng: RandomNumberGenerator) -> ArrayMesh:
 		var shade := Color.WHITE * rng.randf_range(0.8, 1.0)
 		shade.a = 1.0
 		var basis := Basis.from_euler(Vector3(rng.randf_range(0.0, TAU), rng.randf_range(0.0, TAU), rng.randf_range(0.0, TAU)))
-		_card(leaves, p, basis.x * s * 0.22, basis.y * s * 0.22, n, shade)
+		_card(leaves, p, basis.x * s * 0.22, basis.y * s * 0.22, n, shade, false, k % 4)
 	var mesh := bark.commit()
 	leaves.commit(mesh)
 	mesh.surface_set_material(0, _bark_mat)

@@ -272,7 +272,7 @@ static func _autumn(kind: String, pick: int) -> Color:
 			return [Color(0.82, 0.66, 0.15), Color(0.72, 0.6, 0.12)][pick % 2]
 		"elm":
 			return Color(0.6, 0.55, 0.16)
-	return [Color(0.78, 0.2, 0.06), Color(0.8, 0.38, 0.07), Color(0.82, 0.6, 0.12), Color(0.6, 0.12, 0.06), Color(0.3, 0.36, 0.1)][pick % 5]
+	return [Color(0.78, 0.2, 0.06), Color(0.8, 0.38, 0.07), Color(0.82, 0.6, 0.12), Color(0.68, 0.15, 0.06), Color(0.3, 0.36, 0.1)][pick % 5]
 
 
 func _leaf_material() -> StandardMaterial3D:

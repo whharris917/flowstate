@@ -379,11 +379,16 @@ func height_at(x: float, z: float) -> float:
 ## Every street's bed: level across, at the height of the ground under
 ## its centre line (the town's hillside in town, the land as it lies out
 ## of it), over the terraces beside it, the shoulders easing into the
-## ground on either side.
+## ground on either side. The nearest road's edge decides the shoulders,
+## so where one street runs on from another's end the ground follows the
+## one it stands on; where roads overlap the ground takes the lowest of
+## them, a little under, so every road's surface lies on top.
 func _road_bed(x: float, z: float) -> Vector2:
 	var p := Vector2(x, z)
 	var best_w := 0.0
 	var best_y := 0.0
+	var best_edge := INF
+	var inside_y := INF
 	for st in streets:
 		var lo: Vector2 = st["lo"]
 		var hi: Vector2 = st["hi"]
@@ -401,12 +406,24 @@ func _road_bed(x: float, z: float) -> Vector2:
 			if d < best:
 				best = d
 				near = q
-		var half := float(st["width"]) / 2.0
-		var w := 1.0 - smoothstep(half + 0.8, half + 4.0, best)
-		if w > best_w:
-			best_w = w
-			best_y = super.height_at(near.x, near.y) + relief(near.x, near.y) * _flat_weight(near.x, near.y, _flats[0])
+		var edge := best - float(st["width"]) / 2.0
+		if edge > 6.5 and edge > best_edge:
+			continue
+		var y := bed_height(near.x, near.y)
+		if edge < 0.3:
+			inside_y = minf(inside_y, y)
+		if edge < best_edge:
+			best_edge = edge
+			best_w = 1.0 - smoothstep(2.2, 6.5, edge)
+			best_y = y
+	if inside_y < INF:
+		return Vector2(inside_y - 0.02, 1.0)
 	return Vector2(best_y, best_w)
+
+
+## The height of a street's bed under a point of its centre line.
+func bed_height(x: float, z: float) -> float:
+	return super.height_at(x, z) + relief(x, z) * _flat_weight(x, z, _flats[0])
 
 
 ## The ramp's height at (x, z) and how strongly it holds there.

@@ -195,7 +195,7 @@ func _sign(xf: Transform3D, text: String, size: int, color: Color, lit := false)
 
 func _streets() -> void:
 	for st in coast.streets:
-		_ribbon(Array(st["pts"]), float(st["width"]), 0.0, bool(st["line"]), float(st["lift"]))
+		_ribbon(Array(st["pts"]), float(st["width"]), 0.0, bool(st["line"]), float(st["lift"]), true)
 	# The harbour road, down its ramp to the waterfront.
 	_ribbon([Vector2(TownCoast.RAMP_TOP.x, TownCoast.RAMP_TOP.z), Vector2(TownCoast.RAMP_FOOT.x, TownCoast.RAMP_FOOT.z)],
 		7.0, 0.0, false, 0.05)
@@ -257,8 +257,9 @@ func _walk(points: Array[Vector2], road: Vector2) -> void:
 
 ## A strip of road laid on the ground along points, three vertices
 ## across so a crowned or tilted ground is followed. kind 0 asphalt,
-## 0.5 concrete, 1 gravel.
-func _ribbon(points: Array, width: float, kind: float, centre_line: bool, lift: float) -> void:
+## 0.5 concrete, 1 gravel. A street's ribbon (level) lies level across
+## on its bed, at the height of its centre line.
+func _ribbon(points: Array, width: float, kind: float, centre_line: bool, lift: float, level := false) -> void:
 	var samples: Array[Vector2] = []
 	var dirs: Array[Vector2] = []
 	for k in points.size() - 1:
@@ -280,9 +281,10 @@ func _ribbon(points: Array, width: float, kind: float, centre_line: bool, lift: 
 			d = (dirs[i - 1] + dirs[i]).normalized()
 		var side := Vector2(-d.y, d.x)
 		var row: Array[Vector3] = []
+		var bed := coast.bed_height(samples[i].x, samples[i].y)
 		for f: float in [-0.5, 0.0, 0.5]:
 			var p := samples[i] + side * width * f
-			row.append(Vector3(p.x, coast.height_at(p.x, p.y) + lift, p.y))
+			row.append(Vector3(p.x, (bed if level else coast.height_at(p.x, p.y)) + lift, p.y))
 		if i > 0:
 			along += samples[i].distance_to(samples[i - 1])
 			for k in 2:
