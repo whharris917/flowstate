@@ -22,14 +22,33 @@ static var _needle_mat: ShaderMaterial = null
 static var _bark_mat: ShaderMaterial = null
 
 
-## A tree of kind ("maple", "elm", "spruce") and variant, built on
-## first asking.
+## A tree or a plant of kind and variant, built on first asking:
+## "maple", "elm", "oak", "birch" (a clump of white stems), "spruce",
+## "pine" (a white pine, tiers of tufted boughs), "shrub" (a lilac or
+## a burning bush), "hydrangea" (a shrub in flower gone papery),
+## "hedge" (a metre of clipped yew, instanced in a row, stretched).
 static func mesh(kind: String, variant: int) -> ArrayMesh:
 	var key := "%s%d" % [kind, variant]
 	if not _meshes.has(key):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash(key) + 1947
-		_meshes[key] = _spruce(rng) if kind == "spruce" else _broadleaf(rng, kind == "elm")
+		match kind:
+			"spruce":
+				_meshes[key] = _spruce(rng)
+			"pine":
+				_meshes[key] = _pine(rng)
+			"birch":
+				_meshes[key] = _birch(rng)
+			"oak":
+				_meshes[key] = _oak(rng)
+			"shrub":
+				_meshes[key] = _shrub(rng, false)
+			"hydrangea":
+				_meshes[key] = _shrub(rng, true)
+			"hedge":
+				_meshes[key] = _hedge(rng)
+			_:
+				_meshes[key] = _broadleaf(rng, kind == "elm")
 	return _meshes[key]
 
 
@@ -301,3 +320,183 @@ static func _spruce(rng: RandomNumberGenerator) -> ArrayMesh:
 	mesh.surface_set_material(0, _bark_mat)
 	mesh.surface_set_material(1, _needle_mat)
 	return mesh
+
+
+## A clump of paper birches: two or three slender white stems leaning
+## apart, their bark marked with dark bands, a light crown of small
+## leaf clusters.
+static func _birch(rng: RandomNumberGenerator) -> ArrayMesh:
+	_ensure_materials()
+	var bark := SurfaceTool.new()
+	bark.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var leaves := SurfaceTool.new()
+	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var white := Color(0.86, 0.85, 0.80)
+	var mark := Color(0.12, 0.11, 0.10)
+	var stems := 2 + rng.randi() % 2
+	for k in stems:
+		var az := TAU * k / stems + rng.randf_range(-0.3, 0.3)
+		var lean := Vector3(cos(az) * 0.12, 1.0, sin(az) * 0.12).normalized()
+		var foot := Vector3(cos(az) * 0.1, 0, sin(az) * 0.1)
+		var top := foot + lean * REF_H * rng.randf_range(0.85, 1.0)
+		_limb(bark, foot, top, 0.12, 0.03, 6, white)
+		for b in 7:
+			var t := rng.randf_range(0.08, 0.7)
+			var p := foot.lerp(top, t)
+			_limb(bark, p, p + lean * 0.05, 0.125 - 0.09 * t, 0.123 - 0.09 * t, 6, mark)
+		var crown := foot.lerp(top, 0.72)
+		for c in 9:
+			var dir := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.2, 0.8), rng.randf_range(-1, 1)).normalized()
+			var from := foot.lerp(top, rng.randf_range(0.5, 0.9))
+			var tip := from + dir * rng.randf_range(0.8, 1.8)
+			_limb(bark, from, tip, 0.03, 0.01, 3, white)
+			_cluster(leaves, rng, tip, crown, rng.randf_range(1.0, 1.4))
+			_cluster(leaves, rng, tip + Vector3(0, -0.5, 0), crown, 1.0)
+	var mesh := bark.commit()
+	leaves.commit(mesh)
+	mesh.surface_set_material(0, _bark_mat)
+	mesh.surface_set_material(1, _leaf_mat)
+	return mesh
+
+
+## A white oak grown in the open: a short thick trunk, great limbs
+## reaching out more than up, a broad low crown.
+static func _oak(rng: RandomNumberGenerator) -> ArrayMesh:
+	_ensure_materials()
+	var bark := SurfaceTool.new()
+	bark.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var leaves := SurfaceTool.new()
+	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var col := Color(0.34, 0.31, 0.27)
+	var fork := Vector3(rng.randf_range(-0.3, 0.3), REF_H * 0.28, rng.randf_range(-0.3, 0.3))
+	_limb(bark, Vector3.ZERO, fork, 0.5, 0.36, 8, col)
+	var crown := Vector3(0, REF_H * 0.55, 0)
+	for k in 5:
+		var az := TAU * k / 5.0 + rng.randf_range(-0.3, 0.3)
+		var tilt := deg_to_rad(rng.randf_range(48.0, 66.0))
+		var dir := Vector3(sin(tilt) * cos(az), cos(tilt), sin(tilt) * sin(az))
+		_branch(bark, leaves, rng, fork, dir, REF_H * 0.36, 0.24, 0, crown, col, false)
+	for k in 14:
+		var p := crown + Vector3(rng.randf_range(-3.5, 3.5), rng.randf_range(-1.2, 1.6), rng.randf_range(-3.5, 3.5))
+		_cluster(leaves, rng, p, crown, 2.0)
+	var mesh := bark.commit()
+	leaves.commit(mesh)
+	mesh.surface_set_material(0, _bark_mat)
+	mesh.surface_set_material(1, _leaf_mat)
+	return mesh
+
+
+## A white pine: a straight trunk, bare below, then whorls of level
+## branches ending in soft tufts, irregular.
+static func _pine(rng: RandomNumberGenerator) -> ArrayMesh:
+	_ensure_materials()
+	var bark := SurfaceTool.new()
+	bark.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var needles := SurfaceTool.new()
+	needles.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var col := Color(0.30, 0.25, 0.20)
+	_limb(bark, Vector3.ZERO, Vector3(0, REF_H, 0), 0.3, 0.04, 7, col)
+	var y := REF_H * 0.35
+	while y < REF_H * 0.98:
+		var up := y / REF_H
+		var count := 3 + rng.randi() % 3
+		for k in count:
+			if rng.randf() < 0.2:
+				continue
+			var az := rng.randf_range(0.0, TAU)
+			var reach := (1.1 - up) * REF_H * 0.32 + 0.4
+			var out := Vector3(cos(az), rng.randf_range(0.0, 0.2), sin(az)).normalized()
+			var tip := Vector3(0, y, 0) + out * reach
+			_limb(bark, Vector3(0, y, 0), tip, 0.06, 0.02, 4, col)
+			for t in 3:
+				var p := Vector3(0, y, 0).lerp(tip, 0.45 + 0.27 * t)
+				var side := Vector3(-out.z, 0, out.x)
+				var n := (out * 0.3 + Vector3.UP).normalized()
+				var shade := Color.WHITE * rng.randf_range(0.85, 1.05)
+				shade.a = 1.0
+				_card(needles, p + Vector3(0, 0.1, 0), side * 0.55, out * 0.5, n, shade)
+				_card(needles, p + Vector3(0, 0.15, 0), (side * 0.6 + Vector3.UP * 0.8).normalized() * 0.45, out * 0.5, n, shade * 0.9)
+		y += REF_H * rng.randf_range(0.07, 0.1)
+	var mesh := bark.commit()
+	needles.commit(mesh)
+	mesh.surface_set_material(0, _bark_mat)
+	mesh.surface_set_material(1, _needle_mat)
+	return mesh
+
+
+## A shrub: many stems from the ground, leaf clusters round their ends;
+## in flower (a hydrangea at the end of the season), heads of papery
+## bloom among the leaves. Stands REF_H tall like the trees: instance it
+## small.
+static func _shrub(rng: RandomNumberGenerator, flowering: bool) -> ArrayMesh:
+	_ensure_materials()
+	var bark := SurfaceTool.new()
+	bark.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var leaves := SurfaceTool.new()
+	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var col := Color(0.35, 0.3, 0.25)
+	var crown := Vector3(0, REF_H * 0.55, 0)
+	for k in 9:
+		var az := rng.randf_range(0.0, TAU)
+		var tip := Vector3(cos(az) * REF_H * 0.3, REF_H * rng.randf_range(0.6, 0.95), sin(az) * REF_H * 0.3)
+		_limb(bark, Vector3(cos(az) * 0.3, 0, sin(az) * 0.3), tip, 0.12, 0.05, 4, col)
+		for k2 in 3:
+			var p := tip.lerp(crown, 0.25 * k2) + Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.8, 0.6), rng.randf_range(-1, 1))
+			_cluster(leaves, rng, p, crown, REF_H * 0.3)
+		if flowering:
+			for f in 3:
+				var head := tip + Vector3(rng.randf_range(-1.2, 1.2), rng.randf_range(-0.6, 0.4), rng.randf_range(-1.2, 1.2))
+				var bloom := Color(0.82, 0.62, 0.66).lerp(Color(0.62, 0.66, 0.82), rng.randf()).lerp(Color(0.78, 0.72, 0.6), 0.35)
+				_ball(bark, head, REF_H * 0.09, bloom)
+	var mesh := bark.commit()
+	leaves.commit(mesh)
+	mesh.surface_set_material(0, _bark_mat)
+	mesh.surface_set_material(1, _leaf_mat)
+	return mesh
+
+
+## A metre of clipped hedge: a box of leaf cards, dense and level on
+## top, REF_H on a side (instance it scaled to size).
+static func _hedge(rng: RandomNumberGenerator) -> ArrayMesh:
+	_ensure_materials()
+	var bark := SurfaceTool.new()
+	bark.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var leaves := SurfaceTool.new()
+	leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var s := REF_H
+	_limb(bark, Vector3(0, 0, 0), Vector3(0, s * 0.5, 0), s * 0.06, s * 0.04, 4, Color(0.3, 0.25, 0.2))
+	for k in 40:
+		var p := Vector3(rng.randf_range(-0.45, 0.45) * s, rng.randf_range(0.1, 0.92) * s, rng.randf_range(-0.42, 0.42) * s)
+		var n := Vector3(p.x, p.y - 0.5 * s, p.z).normalized()
+		var shade := Color.WHITE * rng.randf_range(0.8, 1.0)
+		shade.a = 1.0
+		var basis := Basis.from_euler(Vector3(rng.randf_range(0.0, TAU), rng.randf_range(0.0, TAU), rng.randf_range(0.0, TAU)))
+		_card(leaves, p, basis.x * s * 0.22, basis.y * s * 0.22, n, shade)
+	var mesh := bark.commit()
+	leaves.commit(mesh)
+	mesh.surface_set_material(0, _bark_mat)
+	mesh.surface_set_material(1, _leaf_mat)
+	return mesh
+
+
+## A rough ball in the bark surface (a flower head), its own colour.
+static func _ball(st: SurfaceTool, c: Vector3, r: float, col: Color) -> void:
+	var rings := 4
+	var sides := 7
+	for j in rings:
+		var a0 := PI * j / rings - PI / 2.0
+		var a1 := PI * (j + 1) / rings - PI / 2.0
+		for k in sides:
+			var b0 := TAU * k / sides
+			var b1 := TAU * (k + 1) / sides
+			var q: Array[Vector3] = [_sph(a0, b0), _sph(a1, b0), _sph(a1, b1), _sph(a0, b0), _sph(a1, b1), _sph(a0, b1)]
+			for v in q:
+				st.set_color(col)
+				st.set_normal(v)
+				st.set_uv(Vector2.ZERO)
+				st.add_vertex(c + v * r)
+
+
+static func _sph(a: float, b: float) -> Vector3:
+	return Vector3(cos(a) * cos(b), sin(a), cos(a) * sin(b))
+

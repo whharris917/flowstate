@@ -125,6 +125,14 @@ func _conifer(at: Vector3, h: float, yaw: float, rng: RandomNumberGenerator) -> 
 		_cone_colors.append(tint)
 
 
+## One tree or plant of a named kind (TreeKit's: "oak", "birch",
+## "pine", "shrub", "hydrangea", "hedge"...), h tall, leaf its colour;
+## stretch scales a hedge to its length and depth.
+func plant_species(at: Vector3, h: float, species: String, leaf: Color, rng: RandomNumberGenerator,
+		yaw := -1.0, stretch := Vector3.ONE) -> void:
+	_plants.append([at, h, yaw if yaw >= 0.0 else rng.randf_range(0.0, TAU), species, leaf, stretch])
+
+
 ## One spruce where it is wanted.
 func plant_conifer(at: Vector3, h: float, rng: RandomNumberGenerator) -> void:
 	_conifer(at, h, rng.randf_range(0.0, TAU), rng)
@@ -197,10 +205,21 @@ func _finish_detailed(cast_shadows: bool) -> void:
 		var at: Vector3 = plant[0]
 		var variant := absi(int(at.x * 7.0 + at.z * 13.0)) % TreeKit.VARIANTS
 		var kind := "spruce"
-		if int(plant[3]) == 1:
-			kind = "elm" if absi(int(at.x * 3.0 - at.z * 5.0)) % 5 == 0 else "maple"
-			if kind == "elm":
-				variant = 0
+		var pick := absi(int(at.x * 3.0 - at.z * 5.0)) % 10
+		if plant[3] is String:
+			kind = plant[3]
+		elif int(plant[3]) == 1:
+			# The broadleaves: maples mostly, oaks, birches, an elm.
+			var kinds: Array[String] = ["maple", "maple", "maple", "maple", "oak", "oak", "birch", "birch", "elm", "maple"]
+			kind = kinds[pick]
+		elif pick < 3:
+			kind = "pine"
+		if kind == "elm" or kind == "hedge":
+			variant = 0
+		# A broadleaf of the wood turns by its kind: maples red to orange
+		# to yellow, oaks russet, birches gold, elms a tired yellow.
+		if plant[3] is int and int(plant[3]) == 1 and _default_leaf(plant[4]):
+			plant[4] = _autumn(kind, pick)
 		var key := "%s%d" % [kind, variant]
 		if not groups.has(key):
 			groups[key] = []
@@ -216,7 +235,8 @@ func _finish_detailed(cast_shadows: bool) -> void:
 		for i in plants.size():
 			var plant: Array = plants[i]
 			var s := float(plant[1]) / TreeKit.REF_H
-			mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, float(plant[2])).scaled(Vector3(s, s, s)), plant[0]))
+			var stretch: Vector3 = plant[5] if plant.size() > 5 else Vector3.ONE
+			mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, float(plant[2])) * Basis.from_scale(stretch * s), plant[0]))
 			mm.set_instance_custom_data(i, plant[4])
 		var inst := MultiMeshInstance3D.new()
 		inst.name = "Trees_" + key
@@ -234,6 +254,23 @@ func _finish_detailed(cast_shadows: bool) -> void:
 	for _x in _snag_xforms:
 		snag_colors.append(SNAG_COLOR)
 	_multimesh(trunk, _snag_xforms, snag_colors, _leaf_material(), cast_shadows)
+
+
+## Whether a broadleaf still wears the wood's summer green (planted
+## by the scatter, not given a colour of its own).
+static func _default_leaf(c: Color) -> bool:
+	return absf(c.r - BROADLEAF_COLOR.r) < 0.08 and absf(c.g - BROADLEAF_COLOR.g) < 0.08 and absf(c.b - BROADLEAF_COLOR.b) < 0.08
+
+
+static func _autumn(kind: String, pick: int) -> Color:
+	match kind:
+		"oak":
+			return [Color(0.48, 0.26, 0.1), Color(0.4, 0.22, 0.08), Color(0.36, 0.3, 0.12)][pick % 3]
+		"birch":
+			return [Color(0.82, 0.66, 0.15), Color(0.72, 0.6, 0.12)][pick % 2]
+		"elm":
+			return Color(0.6, 0.55, 0.16)
+	return [Color(0.78, 0.2, 0.06), Color(0.8, 0.38, 0.07), Color(0.82, 0.6, 0.12), Color(0.6, 0.12, 0.06), Color(0.3, 0.36, 0.1)][pick % 5]
 
 
 func _leaf_material() -> StandardMaterial3D:

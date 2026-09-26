@@ -327,3 +327,57 @@ static func picket_fence(m: TownMesh, xf: Transform3D, x0: float, x1: float, gap
 	for s: float in [-1.0, 1.0]:
 		m.box("wall", xf * _at(Vector3(gap + s * 0.6, 0.6, 0)), Vector3(0.12, 1.2, 0.12), white)
 		m.sphere("wall", xf * _at(Vector3(gap + s * 0.6, 1.25, 0)), 0.07, 8, white)
+
+
+## A coir welcome mat at a door, lettered or plain.
+static func welcome_mat(m: TownMesh, xf: Transform3D, lettered: bool) -> void:
+	m.box("wall", xf * _at(Vector3(0, 0.008, 0)), Vector3(0.75, 0.016, 0.45), c(Color(0.55, 0.4, 0.22), HarborTown.K_CLOTH), true)
+	m.box("wall", xf * _at(Vector3(0, 0.012, 0)), Vector3(0.65, 0.016, 0.35), c(Color(0.62, 0.46, 0.26), HarborTown.K_CLOTH), true)
+	if lettered:
+		for k in 7:
+			m.box("wall", xf * _at(Vector3(-0.24 + 0.08 * k, 0.018, 0.0)), Vector3(0.05, 0.004, 0.09), c(Color(0.25, 0.15, 0.08), HarborTown.K_CLOTH), true)
+
+
+## The milkman's box by the door: an insulated tin chest.
+static func milk_box(m: TownMesh, xf: Transform3D) -> void:
+	m.box("iron", xf * _at(Vector3(0, 0.17, 0)), Vector3(0.4, 0.34, 0.3), Color(0.85, 0.85, 0.82))
+	m.box("iron", xf * _at(Vector3(0, 0.35, 0)), Vector3(0.42, 0.03, 0.32), Color(0.2, 0.3, 0.55))
+	m.box("iron", xf * _at(Vector3(0, 0.2, 0.152)), Vector3(0.24, 0.08, 0.005), Color(0.2, 0.3, 0.55))
+
+
+## A garden hose coiled on the grass, its nozzle out.
+static func hose(m: TownMesh, xf: Transform3D) -> void:
+	var green := Color(0.15, 0.35, 0.15)
+	for ring in 4:
+		var r := 0.22 + 0.04 * ring
+		var prev := Vector3(r, 0.03 + 0.02 * ring, 0)
+		for k in range(1, 17):
+			var a := TAU * k / 16.0
+			var p := Vector3(cos(a) * r, 0.03 + 0.02 * ring, sin(a) * r)
+			m.bar("iron", xf * prev, xf * p, 0.014, 4, green)
+			prev = p
+	m.bar("iron", xf * Vector3(0.34, 0.1, 0), xf * Vector3(0.9, 0.02, 0.3), 0.014, 4, green)
+	m.cylinder("iron", xf * Transform3D(Basis(Vector3(0, 0, 1), PI / 2.0), Vector3(0.95, 0.03, 0.32)), 0.02, 0.012, 0.12, 6, Color(0.7, 0.55, 0.25))
+
+
+## A wooden swing frame: two A-frames, a beam, a board seat on ropes.
+static func swing_frame(m: TownMesh, xf: Transform3D, rng: RandomNumberGenerator) -> void:
+	var wood := c(Color(0.5, 0.42, 0.32), HarborTown.K_TIMBER)
+	for s: float in [-1.0, 1.0]:
+		for f: float in [-1.0, 1.0]:
+			m.bar("wall", xf * Vector3(s * 1.1, 0, f * 0.7), xf * Vector3(s * 1.1, 2.3, 0), 0.05, 5, wood)
+	m.bar("wall", xf * Vector3(-1.2, 2.3, 0), xf * Vector3(1.2, 2.3, 0), 0.07, 6, wood)
+	var sway := rng.randf_range(-0.15, 0.15)
+	for x: float in [-0.3, 0.3]:
+		m.bar("iron", xf * Vector3(x, 2.25, 0), xf * Vector3(x, 0.5, sway), 0.008, 3, Color(0.6, 0.55, 0.45))
+	m.box("wall", xf * _at(Vector3(0, 0.48, sway)), Vector3(0.7, 0.04, 0.22), c(Color(0.62, 0.15, 0.1), HarborTown.K_PAINT), true)
+
+
+## A small bird perched, its tail down, facing along the transform.
+static func bird(m: TownMesh, xf: Transform3D, feathers: Color) -> void:
+	var f := c(feathers, HarborTown.K_CLOTH)
+	m.sphere("wall", xf * Transform3D(Basis.from_scale(Vector3(0.7, 0.8, 1.2)), Vector3(0, 0.05, 0)), 0.045, 6, f)
+	m.sphere("wall", xf * _at(Vector3(0, 0.1, 0.04)), 0.028, 6, f)
+	m.tri("wall", xf * Vector3(-0.012, 0.1, 0.066), xf * Vector3(0.012, 0.1, 0.066), xf * Vector3(0, 0.095, 0.085), (xf.basis * Vector3(0, 1, 0)).normalized(), c(Color(0.7, 0.55, 0.2), HarborTown.K_ENAMEL))
+	m.box("wall", xf * Transform3D(Basis(Vector3.RIGHT, 0.6), Vector3(0, 0.02, -0.07)), Vector3(0.03, 0.01, 0.07), f)
+

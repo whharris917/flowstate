@@ -25,6 +25,10 @@ func _run(world: TownMap) -> void:
 	world.set_time_of_day(18.1)
 	world.weather.wet = 1.0
 	world.weather._next_strike = 1000.0
+	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "row":
+		await _row(world, player)
+		get_tree().quit()
+		return
 	if OS.get_environment("FLOWSTATE_TOWN_SHOTS") == "street":
 		await _water_street(world, player)
 		get_tree().quit()
@@ -93,6 +97,40 @@ func _run(world: TownMap) -> void:
 	await _view_zoom(player, Vector3(15.0, 0.4, 10.0), -2.35, -0.8, 2.3, "storm_aerial")
 	print("[probe] screenshots written to user://")
 	get_tree().quit()
+
+
+## Every house on the harbour side of Water Street, outside and in, at
+## dusk with the rooms lit: from the street, then its rooms by plan.
+func _row(world: TownMap, player: Player) -> void:
+	world.set_weather(0.3)
+	world.set_time_of_day(17.6)
+	for h: Dictionary in world.town.houses_built:
+		if not h.get("detailed", false):
+			continue
+		var base: Transform3D = h["base"]
+		var tag := "row_%d_s%d" % [int(base.origin.x), int(h["style"])]
+		await _local_view(player, base, Vector3(1.5, 0.0, 6.5), Vector3(-0.2, 0, -1), 0.1, tag + "_front")
+		match int(h["style"]):
+			1:
+				await _local_view(player, base, Vector3(1.6, 0.6, -1.2), Vector3(1, 0, -0.5), -0.05, tag + "_living")
+				await _local_view(player, base, Vector3(-1.6, 0.6, -5.0), Vector3(-1, 0, -0.3), -0.1, tag + "_kitchen")
+				await _local_view(player, base, Vector3(-1.5, 0.6, -1.0), Vector3(-1, 0, -0.6), -0.05, tag + "_dining")
+				await _local_view(player, base, Vector3(0.5, 3.5, -6.0), Vector3(-1, 0, 0.6), -0.1, tag + "_upstairs")
+				await _local_view(player, base, Vector3(1.6, 3.5, -1.4), Vector3(1, 0, -0.4), -0.1, tag + "_bedroom")
+			2:
+				await _local_view(player, base, Vector3(-1.9, 0.6, -0.8), Vector3(1, 0, -0.6), -0.05, tag + "_parlor")
+				await _local_view(player, base, Vector3(0.5, 0.6, -5.2), Vector3(0.2, 0, -1), -0.1, tag + "_dining")
+				await _local_view(player, base, Vector3(-2.0, 0.6, -7.8), Vector3(1, 0, -0.4), -0.1, tag + "_kitchen")
+				await _local_view(player, base, Vector3(-2.0, 3.5, -5.9), Vector3(1, 0, -0.5), -0.1, tag + "_upstairs")
+			_:
+				await _local_view(player, base, Vector3(-1.8, 0.6, -2.0), Vector3(-1, 0, 0), -0.05, tag + "_living")
+
+
+## A view from a point in a house's own frame, looking along dir in it.
+func _local_view(player: Player, base: Transform3D, at: Vector3, dir: Vector3, pitch: float, name_: String) -> void:
+	var p := base * at
+	var wd := base.basis * dir
+	await _view(player, p + Vector3(0, 0.05, 0), atan2(-wd.x, -wd.z), pitch, name_)
 
 
 ## Water Street, the harbour edge, dressed: along it by day, front

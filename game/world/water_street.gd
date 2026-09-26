@@ -30,6 +30,8 @@ static func dress(town: HarborTown) -> void:
 		_smoke(town, h["chimney"])
 	_cape(town, rng)
 	_smoke(town, town.cape.transform * Vector3(-5.3, 8.7, -4.0))
+	_side_fences(town, rng)
+	_birds_on_wires(town, rng)
 
 
 ## A transform at a point of a house's frame, set on the ground there.
@@ -110,6 +112,11 @@ static func _front(town: HarborTown, h: Dictionary, rng: RandomNumberGenerator) 
 		YardProps.wagon(m, base * HarborTown.at(Vector3(door_x + rng.randf_range(-3.0, 3.0), 0, 2.0 if not porch else 3.0), rng.randf_range(0.0, TAU)))
 	if rng.randf() < 0.35:
 		YardProps.leaf_pile(m, base * HarborTown.at(Vector3(door_x + (-3.4 if door_x > -1.0 else 2.8), 0, depth - 1.5), rng.randf_range(0.0, TAU)), rng)
+	_front_plants(town, h, rng, base, w, door_x, porch, depth)
+	var mat := base * HarborTown.at(Vector3(door_x, stand_y + 0.005, stand_z + 0.35 if not porch else 1.0))
+	YardProps.welcome_mat(m, mat, rng.randf() < 0.5)
+	if rng.randf() < 0.5:
+		YardProps.milk_box(m, base * HarborTown.at(Vector3(door_x - 0.55, stand_y, stand_z + (0.1 if not porch else 0.4))))
 	var front := base * Vector3(0, 0, depth / 2.0)
 	var span := (base.basis * Vector3(12.0, 0, depth)).abs()
 	town._keep_clear.append(Rect2(Vector2(front.x - span.x / 2.0, front.z - span.z / 2.0), Vector2(span.x, span.z)))
@@ -193,6 +200,19 @@ static func _back_yard(town: HarborTown, h: Dictionary, rng: RandomNumberGenerat
 				HarborTown.kc(buoys[k], HarborTown.K_PAINT))
 	elif rng.randf() < 0.5:
 		town._trees.plant_broadleaf(_ground(town, base, Vector3(3.8, 0, z0 - 5.0)).origin, rng.randf_range(5.0, 6.5), Color(0.45, 0.5, 0.15), rng)
+	# A tree of size at the foot of the yard, and sumac and bayberry on
+	# the slope beyond the rail.
+	var big: String = ["oak", "pine", "maple", "birch"][rng.randi() % 4]
+	var tint: Color = {"oak": Color(0.46, 0.25, 0.1), "pine": Color(0.1, 0.2, 0.1), "maple": Color(0.78, 0.22, 0.06), "birch": Color(0.8, 0.64, 0.14)}[big]
+	town._trees.plant_species(_ground(town, base, Vector3(-4.6, 0, z0 - 7.4)).origin, rng.randf_range(9.0, 14.0), big, tint, rng)
+	for k in 3:
+		town._trees.plant_species(_ground(town, base, Vector3(rng.randf_range(-5.0, 5.0), 0, z0 - 9.2 - rng.randf_range(0.0, 1.5))).origin,
+			rng.randf_range(1.2, 2.2), "shrub", [Color(0.78, 0.18, 0.06), Color(0.3, 0.38, 0.14)][k % 2], rng)
+	# The wash basket under the line, a hose coiled by the stoop, a
+	# swing for the children.
+	if rng.randf() < 0.5:
+		YardProps.swing_frame(m, _ground(town, base, Vector3(2.8, 0, z0 - 5.6), PI / 2.0), rng)
+	YardProps.hose(m, _ground(town, base, Vector3(-w / 2.0 + 0.6, 0, z0 - 1.2)))
 	# A split-rail fence along the foot of the yard.
 	var rail := HarborTown.kc(Color(0.52, 0.48, 0.42), HarborTown.K_TIMBER)
 	var fz := z0 - 8.2
@@ -295,3 +315,97 @@ static func _smoke(town: HarborTown, top: Vector3) -> void:
 	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	town.add_child(smoke)
 	town.smoke.append(pm)
+
+
+## Plants in the front yard: hydrangeas either side of the steps, a
+## clipped hedge along the foundation or inside the fence, a birch clump
+## in a corner, a lilac at the side.
+static func _front_plants(town: HarborTown, h: Dictionary, rng: RandomNumberGenerator, base: Transform3D, w: float,
+		door_x: float, porch: bool, depth: float) -> void:
+	var trees := town._trees
+	var green := Color(0.24, 0.34, 0.14)
+	var sz := 2.9 if porch else 1.0
+	for s2: float in [-1.0, 1.0]:
+		if rng.randf() < 0.8:
+			trees.plant_species(base * Vector3(door_x + s2 * 1.75, 0, sz), rng.randf_range(1.1, 1.5), "hydrangea", green, rng)
+	var yaw := base.basis.get_euler().y
+	if rng.randf() < 0.55:
+		# Along the fence inside, broken at the gate.
+		var fz := depth - 0.9
+		for x0: float in [-5.2, door_x + 1.3]:
+			var x1 := door_x - 1.3 if x0 < door_x else 5.2
+			if x1 - x0 < 1.0:
+				continue
+			var n := int((x1 - x0) / 1.0)
+			for k in n:
+				var x := x0 + (k + 0.5) * (x1 - x0) / n
+				trees.plant_species(base * Vector3(x, 0, fz), 0.95, "hedge", Color(0.16, 0.26, 0.12), rng, yaw, Vector3(1.05 / 0.95, 1.0, 0.7 / 0.95))
+	elif not porch and rng.randf() < 0.6:
+		var x0 := door_x + 1.3
+		var x1 := w / 2.0 - 0.4
+		var n := int((x1 - x0) / 1.0)
+		for k in n:
+			trees.plant_species(base * Vector3(x0 + (k + 0.5) * (x1 - x0) / n, 0, 0.55), 0.8, "hedge", Color(0.16, 0.26, 0.12), rng, yaw, Vector3(1.05 / 0.8, 1.0, 0.6 / 0.8))
+	if rng.randf() < 0.35:
+		var cx := -4.8 if door_x > -1.0 else 4.8
+		trees.plant_species(base * Vector3(cx, 0, depth - 1.6), rng.randf_range(7.0, 9.5), "birch", Color(0.82, 0.66, 0.15), rng)
+	if rng.randf() < 0.5:
+		trees.plant_species(base * Vector3(w / 2.0 + 0.6, 0, -1.5), rng.randf_range(2.4, 3.2), "shrub", Color(0.3, 0.38, 0.16), rng)
+
+
+## Fences between the back yards, down from the houses to the rail at
+## the foot: a board fence, a picket fence, a fieldstone wall, by turns.
+static func _side_fences(town: HarborTown, rng: RandomNumberGenerator) -> void:
+	var xs: Array[float] = []
+	for h: Dictionary in town.houses_built:
+		if h.get("harbour_side", false):
+			xs.append((h["base"] as Transform3D).origin.x)
+	xs.append(town.cape.transform.origin.x)
+	xs.sort()
+	var m := town.m
+	for k in xs.size() - 1:
+		var x := (xs[k] + xs[k + 1]) / 2.0
+		var z0 := 60.3
+		var z1 := 68.5
+		var kind := k % 3
+		var prev := Vector3.ZERO
+		var steps := int((z1 - z0) / 0.5)
+		for i in steps + 1:
+			var z := z0 + (z1 - z0) * i / steps
+			var foot := Vector3(x, town.coast.height_at(x, z), z)
+			match kind:
+				0:
+					# Weathered boards, a cap rail.
+					m.box("wall", HarborTown.at(foot + Vector3(0, 0.75, 0)), Vector3(0.03, 1.5, 0.5), HarborTown.kc(Color(0.5, 0.47, 0.42), HarborTown.K_TIMBER), true)
+				1:
+					for dz: float in [-0.14, 0.0, 0.14]:
+						m.box("wall", HarborTown.at(foot + Vector3(0, 0.45, dz)), Vector3(0.025, 0.9, 0.07), HarborTown.kc(Color(0.92, 0.91, 0.87), HarborTown.K_PAINT), true)
+				_:
+					# Fieldstones laid dry, two and three courses.
+					for c2 in 3:
+						var r := rng.randf_range(0.14, 0.22)
+						m.sphere("wall", Transform3D(Basis.from_scale(Vector3(1.0, 0.7, 1.2)), foot + Vector3(rng.randf_range(-0.1, 0.1), 0.12 + 0.22 * c2, rng.randf_range(-0.1, 0.1))),
+							r, 7, HarborTown.kc(Color(0.55, 0.52, 0.48).lightened(rng.randf_range(-0.12, 0.08)), HarborTown.K_GRANITE))
+			if i > 0 and kind == 1:
+				for y: float in [0.25, 0.7]:
+					m.bar("wall", prev + Vector3(0, y, 0), foot + Vector3(0, y, 0), 0.03, 4, HarborTown.kc(Color(0.92, 0.91, 0.87), HarborTown.K_PAINT))
+			if i > 0 and kind == 0:
+				m.bar("wall", prev + Vector3(0, 1.5, 0), foot + Vector3(0, 1.5, 0), 0.035, 4, HarborTown.kc(Color(0.45, 0.42, 0.38), HarborTown.K_TIMBER))
+			prev = foot
+		var mid := Vector3(x, town.coast.height_at(x, (z0 + z1) / 2.0) + 0.6, (z0 + z1) / 2.0)
+		town._solid(HarborTown.at(mid), Vector3(0.2, 1.2, z1 - z0))
+
+
+## Birds sitting on the wires along Water Street, in ones and twos and
+## a little row.
+static func _birds_on_wires(town: HarborTown, rng: RandomNumberGenerator) -> void:
+	var m := town.m
+	var y := 8.5 + 0.1 - 0.2
+	for k in 14:
+		var x := rng.randf_range(4.0, 66.0)
+		var z: float = TownCoast.WATER_Z + 4.2 + [-0.9, 0.0, 0.9][rng.randi() % 3]
+		var span := fmod(x - 2.0, 22.0) / 22.0
+		var sag := 22.0 * 0.018 * 4.0 * span * (1.0 - span)
+		var at := Vector3(x, y - sag + 0.06, z)
+		YardProps.bird(m, HarborTown.at(at, rng.randf_range(0.0, TAU)), [Color(0.12, 0.11, 0.1), Color(0.3, 0.25, 0.2), Color(0.35, 0.36, 0.38)][rng.randi() % 3])
+

@@ -132,15 +132,18 @@ func _wall(key: String, p0: Vector2, p1: Vector2, y0: float, top: Callable, open
 		var q1 := p0 + d * u1
 		var t0: float = top.call(q0)
 		var t1: float = top.call(q1)
-		var hole: Array = []
+		# Every opening in this column, bottom up: wall below the lowest,
+		# between each and the next, and above the highest.
+		var holes: Array = []
 		for o: Array in openings:
 			if (u0 + u1) / 2.0 > float(o[0]) and (u0 + u1) / 2.0 < float(o[1]):
-				hole = o
-		if hole.is_empty():
-			_slab(key, q0, q1, y0, t0, t1, t, col, solid)
-		else:
-			_slab(key, q0, q1, y0, float(hole[2]), float(hole[2]), t, col, solid)
-			_slab(key, q0, q1, float(hole[3]), maxf(t0, float(hole[3])), maxf(t1, float(hole[3])), t, col, solid)
+				holes.append(o)
+		holes.sort_custom(func(a: Array, b: Array) -> bool: return float(a[2]) < float(b[2]))
+		var bottom := y0
+		for hole: Array in holes:
+			_slab(key, q0, q1, bottom, float(hole[2]), float(hole[2]), t, col, solid)
+			bottom = maxf(bottom, float(hole[3]))
+		_slab(key, q0, q1, bottom, maxf(t0, bottom), maxf(t1, bottom), t, col, solid)
 
 
 func _box(key: String, centre: Vector3, size: Vector3, col: Color, solid := false, yaw := 0.0) -> void:

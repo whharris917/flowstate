@@ -228,7 +228,7 @@ func _outer_walls() -> void:
 		var gabled := (wall == "left" or wall == "right") == ridge_x
 		var breaks: Array = [p0.distance_to(p1) / 2.0]
 		_wall("wall", p0, p1, F - 0.1, gable if gabled else flat, _openings_on(wall, p0, p1), T_OUT, col, true, breaks)
-	_box("wall", Vector3(0, 0.3, -d / 2.0), Vector3(w + 0.06, 0.6, d + 0.06), c(HarborTown.GRANITE, HarborTown.K_GRANITE))
+	_box("wall", Vector3(0, 0.25, -d / 2.0), Vector3(w + 0.06, 0.5, d + 0.06), c(HarborTown.GRANITE, HarborTown.K_GRANITE))   # its top under the floors, or they flicker
 
 
 ## An outer wall's centre line, from its start to its end.

@@ -693,7 +693,8 @@ func _houses_all() -> void:
 		if shallow and style == 2:
 			style = 0
 		if absf(p.y - 51.5) < 0.1:
-			_detailed_house(Vector3(p.x, 0.0, p.y), float(lot[1]), style)
+			var row_styles := {7.5: 1, 33.5: 2, 45.5: 0, 57.5: 1, 69.5: 2}
+			_detailed_house(Vector3(p.x, 0.0, p.y), float(lot[1]), int(row_styles.get(p.x, style)))
 		else:
 			_house(Vector3(p.x, 0.0, p.y), float(lot[1]), style, shallow)
 
@@ -741,7 +742,8 @@ func _detailed_house(front: Vector3, yaw: float, style: int) -> void:
 	var r: Dictionary = houses_built[houses_built.size() - 1]
 	var hw: float = r["w"]
 	var hd: float = r["d"]
-	_keep_clear.append(Rect2(Vector2(front.x - hw / 2.0 - 1.0, front.z - 1.0), Vector2(hw + 2.0, hd + 2.0)))
+	# No tree whose crown would reach through a wall into the rooms.
+	_keep_clear.append(Rect2(Vector2(front.x - hw / 2.0 - 3.5, front.z - 3.5), Vector2(hw + 7.0, hd + 7.0)))
 
 
 ## A house whose front stands at front, facing along yaw. style 0 a
