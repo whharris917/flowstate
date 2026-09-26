@@ -16,6 +16,8 @@ extends CharacterBody3D
 ##   {"do": "wait", "secs": 1}
 ##   {"do": "teleport", "to": [x, y, z]}
 ##   {"do": "speed", "value": 1.3}                metres a second
+##   {"do": "forward", "m": 2}  {"do": "back", "m": 1}  {"do": "turn", "deg": 30}
+##                                                 by his own body: a turn to the left is positive
 ## x and z are the courthouse's own metres (+x east, -z north); a walk
 ## keeps to the floor he is on and climbs by ramps, as the player does.
 ## A walk that makes no headway for two seconds gives up and says so in
@@ -47,6 +49,12 @@ var eyes: SubViewport
 var follow: SubViewport
 var _eye_cam: Camera3D
 var _follow_cam: Camera3D
+## The last walk: how far he was sent and how far he went, and whether
+## something stopped him.
+var last_walk := {}
+var _walk_from := Vector3.ZERO
+var _walk_asked := 0.0
+var _blocked := false
 
 
 func _ready() -> void:
@@ -168,7 +176,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= GRAVITY * delta
 	move_and_slide()
 	# He turns toward where he walks, or where he was told to face.
-	if move.length() > 0.05:
+	if move.length() > 0.05 and str(current.get("do", "")) != "back":
 		_yaw_goal = atan2(-move.x, -move.z)
 	rotation.y = lerp_angle(rotation.y, _yaw_goal, 1.0 - exp(-7.0 * delta))
 	var local := global_transform.basis.inverse() * Vector3(velocity.x, 0, velocity.z)
@@ -189,7 +197,18 @@ func _begin(c: Dictionary) -> void:
 	_stuck_check = 0.0
 	_stuck_from = global_position
 	var what := str(c.get("do", ""))
+	_walk_from = global_position
+	_blocked = false
 	match what:
+		"forward", "back":
+			var m := clampf(float(c.get("m", 1.0)), 0.0, 20.0)
+			var fwd := -global_transform.basis.z
+			fwd.y = 0.0
+			fwd = fwd.normalized() * (1.0 if what == "forward" else -1.0)
+			_walk_asked = m
+			_targets.append(global_position + fwd * m)
+		"turn":
+			_yaw_goal = rotation.y + deg_to_rad(float(c.get("deg", 0.0)))
 		"walk":
 			_targets.append(_xz(c.get("to", [])))
 		"path":
@@ -258,7 +277,7 @@ func _begin(c: Dictionary) -> void:
 func _step(delta: float) -> Vector3:
 	_t += delta
 	var what := str(current.get("do", ""))
-	if what in ["walk", "path", "goto", "circle"]:
+	if what in ["walk", "path", "goto", "circle", "forward", "back"]:
 		while not _targets.is_empty():
 			var to := _targets[0] - global_position
 			to.y = 0.0
@@ -272,8 +291,9 @@ func _step(delta: float) -> Vector3:
 			return Vector3.ZERO
 		# No headway for two seconds: give up this walk.
 		_stuck_check += delta
-		if _stuck_check > 2.0:
+		if _stuck_check > (1.0 if what in ["forward", "back"] else 2.0):
 			if global_position.distance_to(_stuck_from) < 0.25:
+				_blocked = true
 				var t := _targets[0]
 				_note("stuck at (%.1f, %.1f, %.1f) short of (%.1f, %.1f)" % [global_position.x, global_position.y, global_position.z, t.x, t.z])
 				_finish()
@@ -282,10 +302,11 @@ func _step(delta: float) -> Vector3:
 			_stuck_from = global_position
 		var d := _targets[0] - global_position
 		d.y = 0.0
+		# Stepping back he keeps facing the way he was.
 		return d.normalized() * minf(speed, d.length() / maxf(delta, 0.001))
 	var secs := float(current.get("secs", _default_secs(what)))
-	if what in ["face", "look"]:
-		if _t > 0.6:
+	if what in ["face", "look", "turn"]:
+		if _t > 0.6 and absf(angle_difference(rotation.y, _yaw_goal)) < 0.02 or _t > 3.0:
 			_finish()
 	elif what == "say":
 		if not bool(current.get("wait", false)) or _t > secs:
@@ -315,6 +336,12 @@ func _finish() -> void:
 			figure.set_gesture("")
 		if what in ["walk", "path", "goto", "circle"]:
 			_note("%s done at (%.1f, %.1f, %.1f)" % [what, global_position.x, global_position.y, global_position.z])
+		if what in ["forward", "back"]:
+			var flat := global_position - _walk_from
+			var rise := flat.y
+			flat.y = 0.0
+			last_walk = {"asked_m": snappedf(_walk_asked, 0.01), "moved_m": snappedf(flat.length(), 0.01),
+				"blocked": _blocked, "climbed_m": snappedf(rise, 0.01)}
 	current = {}
 	_targets.clear()
 

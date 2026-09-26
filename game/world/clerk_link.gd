@@ -9,7 +9,14 @@ extends Node
 ##   GET  /state                                          where he is, what he is doing, his log
 ##   GET  /places                                         the named places
 ##   GET  /shot?cam=eyes|follow|front|player                    a picture, saved; its path returned
+##   POST /explorer/step {"commands": [...]}  for an explorer who knows
+##        nothing of the place: only forward, back, turn, look, say,
+##        wait and gestures are taken; the answer waits until he has
+##        finished, then gives the picture through his eyes and how far
+##        the last step went, never where he is.
 ## Every answer is JSON.
+
+const EXPLORER_OK := ["forward", "back", "turn", "look", "say", "wait", "wave", "bow", "point", "read"]
 
 const PORT := 47886
 
@@ -117,6 +124,37 @@ func _answer(req: Dictionary) -> Variant:
 				return {"error": "the body is not JSON: a list of commands, or {\"commands\": [...]}"}
 			clerk.run(commands, append)
 			return clerk.state()
+		["POST", "/explorer/step"]:
+			var parsed: Variant = JSON.parse_string(str(req["body"]))
+			var commands: Array = []
+			if parsed is Array:
+				commands = parsed
+			elif parsed is Dictionary:
+				commands = (parsed as Dictionary).get("commands", [])
+			var refused: Array = []
+			var taken: Array = []
+			for c: Variant in commands:
+				if c is Dictionary and str((c as Dictionary).get("do", "")) in EXPLORER_OK:
+					taken.append(c)
+				else:
+					refused.append(c)
+			clerk.last_walk = {}
+			clerk.run(taken, false)
+			var waited := 0.0
+			while (clerk.state()["busy"] as bool) and waited < 40.0:
+				await get_tree().create_timer(0.1).timeout
+				waited += 0.1
+			await get_tree().create_timer(0.25).timeout
+			_shots += 1
+			var path := "user://explorer_%d.png" % _shots
+			var err: Error = await clerk.capture("eyes", path)
+			var out := {"view": ProjectSettings.globalize_path(path), "on_floor": clerk.is_on_floor(),
+				"last_step": clerk.last_walk, "looking_deg": clerk.head_pitch}
+			if not refused.is_empty():
+				out["refused"] = refused
+			if err != OK:
+				out["error"] = "could not save the picture"
+			return out
 		["GET", "/shot"]:
 			var cam := str((req["query"] as Dictionary).get("cam", "follow"))
 			_shots += 1
