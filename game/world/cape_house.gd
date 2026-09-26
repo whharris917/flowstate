@@ -1,5 +1,5 @@
 class_name CapeHouse
-extends Node3D
+extends HouseBase
 ## One house in the town modelled whole, inside and out: a Cape Cod of
 ## the 1930s on Water Street, its back to the harbour. A storey and a
 ## half under a 45-degree roof, pale yellow clapboard and white trim,
@@ -29,8 +29,6 @@ const D := 8.0
 const F := 0.6
 const E := 3.2
 const U := 3.3
-const T_OUT := 0.1           # clapboard and sheathing
-const T_IN := 0.05           # plaster
 const KNEE := 1.3            # knee walls stand this far in from the eaves
 const PLASTER_UNDER := 0.07  # the sloped ceilings hang this far under the rafters
 const COLLAR := 5.5          # the flat ceiling upstairs
@@ -41,158 +39,62 @@ const DORMER_HALF := 0.75
 const DORMER_FACE := 0.45    # the dormers' faces stand this far back from the eaves
 const DORMER_EAVE := 5.35
 
-const CLAP := Color(0.90, 0.82, 0.55)
-const TRIM := Color(0.93, 0.92, 0.88)
-const SHUTTER := Color(0.10, 0.16, 0.12)
-const DOOR := Color(0.50, 0.09, 0.08)
-const ROOF := Color(0.24, 0.27, 0.25)
-const PLASTER := Color(0.90, 0.88, 0.82)
-const OAK := Color(0.62, 0.42, 0.24)
+# The house's colours and furnishings: number 14's by default; another
+# Cape on the street passes its own (build's variant).
+var CLAP := Color(0.90, 0.82, 0.55)
+var SHUTTER := Color(0.10, 0.16, 0.12)
+var DOOR := Color(0.50, 0.09, 0.08)
+var ROOF := Color(0.24, 0.27, 0.25)
+var paper_living := Color(0.62, 0.70, 0.58)
+var paper_dining := Color(0.80, 0.62, 0.58)
+var kitchen_paint := Color(0.92, 0.88, 0.66)
+var paper_bed := Color(0.86, 0.84, 0.90)
+var paper_bed2 := Color(0.88, 0.84, 0.70)
+var sofa_cloth := Color(0.32, 0.40, 0.30)
+var chair_cloth := Color(0.62, 0.48, 0.30)
+var quilt := Color(0.62, 0.25, 0.28)
+var quilt2 := Color(0.3, 0.38, 0.55)
+var curtains := Color(0.85, 0.82, 0.72)
+var number := "14"
+var with_yard := true
+var open_windows: Array[int] = []
+var _window_count := 0
 
-var town: HarborTown
-var m := TownMesh.new()
-var glass_mat: StandardMaterial3D
-var ember_mat: StandardMaterial3D
-var stats: Dictionary = {}
-var _fire: OmniLight3D
-var _t := 0.0
-var _rng := RandomNumberGenerator.new()
-var _lit_fire := 0.0
 
-
-func build(t: HarborTown, front: Vector3, yaw: float) -> void:
-	town = t
+func build(t: HarborTown, front: Vector3, yaw: float, variant: Dictionary = {}) -> void:
 	name = "CapeHouse"
-	transform = HarborTown.at(front, yaw)
-	_rng.seed = 1938
-	glass_mat = StandardMaterial3D.new()
-	glass_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	glass_mat.albedo_color = Color(0.80, 0.86, 0.90, 0.10)
-	glass_mat.roughness = 0.04
-	glass_mat.metallic_specular = 0.9
-	glass_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	ember_mat = ViewUtil.glow(Color(1.0, 0.42, 0.12), 0.0)
+	for key: String in variant:
+		set(key, variant[key])
+	_setup(t, front, yaw, int(variant.get("seed", 1938)))
+	shell()
 	_shell()
 	_roof()
 	_dormers()
 	_chimney()
 	_floors()
-	_stair()
+	_cape_stair()
 	_partitions()
 	_openings()
+	detail()
 	_living_room()
 	_dining_room()
 	_kitchen()
 	_hall()
 	_bath()
 	_bedrooms()
-	_yard()
-	m.commit(self, {"wall": town.wall_mat, "iron": town.iron_mat, "steel": town.steel_mat, "lamp": town.lamp_mat,
-		"clear": glass_mat}, ["wall", "iron"])
-	stats = {"triangles": m.triangles, "lights": _lights}
+	if with_yard:
+		_yard()
+	_commit()
+
+
+## What the street's dressing needs to know of this house.
+func record() -> Dictionary:
+	return {"base": transform, "w": W, "d": D, "style": 0, "door_x": 0.0, "found": F,
+		"front_xs": [-3.4, -1.8, 1.8, 3.4], "f1": F + 1.475, "chimney": transform * Vector3(-5.3, 8.7, -4.0),
+		"water": true, "harbour_side": true, "thr": 0.3, "detailed": true, "step_z": 1.45}
 
 
 ## ---- helpers -----------------------------------------------------------------
-
-static func c(color: Color, kind: int) -> Color:
-	return HarborTown.kc(color, kind)
-
-
-## A slab along the plan segment p0 to p1 (x, z), t thick, from y0 up
-## to a top that runs from top0 over p0 to top1 over p1.
-func _slab(key: String, p0: Vector2, p1: Vector2, y0: float, top0: float, top1: float, t: float, col: Color,
-		solid := false) -> void:
-	if p0.distance_to(p1) < 0.005 or (top0 <= y0 + 0.003 and top1 <= y0 + 0.003):
-		return
-	var d := (p1 - p0).normalized()
-	var n := Vector2(-d.y, d.x) * (t / 2.0)
-	var a0 := p0 - n
-	var a1 := p0 + n
-	var b0 := p1 - n
-	var b1 := p1 + n
-	var v := func(p: Vector2, y: float) -> Vector3: return Vector3(p.x, y, p.y)
-	var n3 := Vector3(n.x, 0, n.y).normalized()
-	var d3 := Vector3(d.x, 0, d.y)
-	m.quad(key, v.call(a0, y0), v.call(a0, top0), v.call(b0, top1), v.call(b0, y0), -n3, col)
-	m.quad(key, v.call(a1, y0), v.call(a1, top0), v.call(b1, top1), v.call(b1, y0), n3, col)
-	var up := (d3 * -(top1 - top0) / p0.distance_to(p1) + Vector3.UP).normalized()
-	m.quad(key, v.call(a0, top0), v.call(a1, top0), v.call(b1, top1), v.call(b0, top1), up, col)
-	m.quad(key, v.call(a0, y0), v.call(a0, top0), v.call(a1, top0), v.call(a1, y0), -d3, col)
-	m.quad(key, v.call(b0, y0), v.call(b0, top1), v.call(b1, top1), v.call(b1, y0), d3, col)
-	m.quad(key, v.call(a0, y0), v.call(a1, y0), v.call(b1, y0), v.call(b0, y0), Vector3.DOWN, col)
-	if solid:
-		var mid := (p0 + p1) / 2.0
-		var low := minf(top0, top1)
-		_solid(Vector3(mid.x, (y0 + low) / 2.0, mid.y), Vector3(t, low - y0, p0.distance_to(p1)),
-			Basis(Vector3.UP, atan2(d.x, d.y)))
-
-
-## A wall along p0 to p1 with openings cut in it: each [from, to, sill,
-## head] in metres along the wall. top(p) gives its top over a plan
-## point; breaks (metres along) are where that top bends.
-func _wall(key: String, p0: Vector2, p1: Vector2, y0: float, top: Callable, openings: Array, t: float,
-		col: Color, solid := false, breaks: Array = []) -> void:
-	var length := p0.distance_to(p1)
-	var d := (p1 - p0) / length
-	var cuts: Array[float] = [0.0, length]
-	for b: float in breaks:
-		if b > 0.0 and b < length:
-			cuts.append(b)
-	for o: Array in openings:
-		cuts.append(clampf(float(o[0]), 0.0, length))
-		cuts.append(clampf(float(o[1]), 0.0, length))
-	cuts.sort()
-	for i in cuts.size() - 1:
-		var u0 := cuts[i]
-		var u1 := cuts[i + 1]
-		if u1 - u0 < 0.002:
-			continue
-		var q0 := p0 + d * u0
-		var q1 := p0 + d * u1
-		var t0: float = top.call(q0)
-		var t1: float = top.call(q1)
-		var hole: Array = []
-		for o: Array in openings:
-			if (u0 + u1) / 2.0 > float(o[0]) and (u0 + u1) / 2.0 < float(o[1]):
-				hole = o
-		if hole.is_empty():
-			_slab(key, q0, q1, y0, t0, t1, t, col, solid)
-		else:
-			_slab(key, q0, q1, y0, float(hole[2]), float(hole[2]), t, col, solid)
-			_slab(key, q0, q1, float(hole[3]), maxf(t0, float(hole[3])), maxf(t1, float(hole[3])), t, col, solid)
-
-
-func _box(key: String, centre: Vector3, size: Vector3, col: Color, solid := false, yaw := 0.0) -> void:
-	m.box(key, HarborTown.at(centre, yaw), size, col, true)
-	if solid:
-		_solid(centre, size, Basis(Vector3.UP, yaw))
-
-
-func _solid(centre: Vector3, size: Vector3, basis := Basis()) -> void:
-	var body := StaticBody3D.new()
-	body.collision_layer = 1
-	body.collision_mask = 0
-	body.transform = Transform3D(basis, centre)
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(maxf(size.x, 0.02), maxf(size.y, 0.02), maxf(size.z, 0.02))
-	shape.shape = box
-	body.add_child(shape)
-	add_child(body)
-
-
-## A ramp for the player's feet from a (low) to b (high), w wide; the
-## player has no step, so every stair and stoop is a slope underfoot.
-func _ramp(a: Vector3, b: Vector3, w: float) -> void:
-	var run := Vector2(b.x - a.x, b.z - a.z)
-	var rise := b.y - a.y
-	var length := sqrt(run.length_squared() + rise * rise)
-	var yaw := atan2(-run.x, -run.y)
-	var tilt := atan2(rise, run.length())
-	var basis := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, tilt)
-	var normal := basis.y
-	_solid((a + b) / 2.0 - normal * 0.05, Vector3(w, 0.1, length), basis)
-
 
 ## Height of the roof's underside over a point s metres in from the
 ## nearer eaves wall.
@@ -215,7 +117,6 @@ static func collar_s() -> float:
 
 ## ---- the shell -------------------------------------------------------------------
 
-var _lights := 0
 
 
 ## Foundation, the four outer walls (clapboard out, plaster or paper in),
@@ -240,10 +141,10 @@ func _shell() -> void:
 	# plaster in the hall, paint in the kitchen, tile in the bath.
 	var zi := -T_OUT - T_IN / 2.0
 	var ceil1 := func(_p: Vector2) -> float: return E - 0.02
-	var paper_living := c(Color(0.62, 0.70, 0.58), HarborTown.K_PAPER)
-	var paper_dining := c(Color(0.80, 0.62, 0.58), HarborTown.K_PAPER)
+	var paper_living := c(self.paper_living, HarborTown.K_PAPER)
+	var paper_dining := c(self.paper_dining, HarborTown.K_PAPER)
 	var hall := c(Color(0.86, 0.82, 0.70), HarborTown.K_PLASTER)
-	var kitchen := c(Color(0.92, 0.88, 0.66), HarborTown.K_ENAMEL)
+	var kitchen := c(kitchen_paint, HarborTown.K_ENAMEL)
 	var xi := W / 2.0 - T_OUT
 	_inner_run(Vector2(-xi, zi), Vector2(xi, zi), front, [[-1.0, paper_living], [1.0, hall], [xi, paper_dining]], F, ceil1)
 	_inner_run(Vector2(-xi, -D - zi), Vector2(xi, -D - zi), back, [[-1.0, paper_living], [1.0, c(Color(0.82, 0.90, 0.88), HarborTown.K_TILE)], [xi, kitchen]], F, ceil1)
@@ -251,8 +152,8 @@ func _shell() -> void:
 	_inner_end(1.0, [[-4.0, paper_dining], [-D + T_OUT, kitchen]], F, ceil1)
 	# Upstairs: the gable ends' plaster between the knee walls, under
 	# the ceiling's profile.
-	var bed := c(Color(0.86, 0.84, 0.90), HarborTown.K_PAPER)
-	var bed2 := c(Color(0.88, 0.84, 0.70), HarborTown.K_PAPER)
+	var bed := c(paper_bed, HarborTown.K_PAPER)
+	var bed2 := c(paper_bed2, HarborTown.K_PAPER)
 	var ceil2 := func(p: Vector2) -> float: return ceiling(-p.y)
 	for s: float in [-1.0, 1.0]:
 		var x := s * (xi - T_IN / 2.0)
@@ -447,7 +348,7 @@ func _dormers() -> void:
 			m.box("wall", Transform3D(Basis(Vector3(0, 0, 1), -s * PI / 4.0), mid), Vector3(span * 0.7071 + 0.2, 0.1, zf - zb + 0.5), shingle, true)
 		for s: float in [-1.0, 1.0]:
 			_box("wall", Vector3(dx + s * (DORMER_HALF - 0.04), (U + DORMER_EAVE) / 2.0 + 0.3, zf + 0.02), Vector3(0.1, DORMER_EAVE - U - 0.6, 0.06), trim)
-		_window_unit(Vector3(dx, U + 1.27, zf), 0.8, 1.1, 0.0, false, T_OUT + 0.06)
+		_window_unit(Vector3(dx, U + 1.27, zf), 0.8, 1.1, 0.0, false, T_OUT + 0.06, curtains.lightened(0.1), _opens())
 	# The dormers' floors: the upstairs floor reaches forward into them.
 	for dx in DORMERS:
 		_box("wall", Vector3(dx, U - 0.045, (zf + -KNEE) / 2.0 - 0.02), Vector3(DORMER_HALF * 2.0 - 0.1, 0.09, KNEE - DORMER_FACE), c(OAK, HarborTown.K_OAK), true)
@@ -500,7 +401,7 @@ func _floors() -> void:
 ## The stair: fourteen risers up a steep straight flight from the hall
 ## to the landing, open to the hall on its right under a handrail, the
 ## underside closed; a rail round the stairwell upstairs.
-func _stair() -> void:
+func _cape_stair() -> void:
 	var rise := (U - F) / 14.0
 	var run := (STAIR_Z.x - STAIR_Z.y) / 14.0
 	var width := STAIR_X.y - STAIR_X.x
@@ -565,80 +466,22 @@ func _partitions() -> void:
 func _openings() -> void:
 	# The front: four windows with shutters, the door between.
 	for x: float in [-3.4, -1.8, 1.8, 3.4]:
-		_window_unit(Vector3(x, F + 1.475, 0.0), 0.9, 1.45, 0.0, true, T_OUT + T_IN)
+		_window_unit(Vector3(x, F + 1.475, 0.0), 0.9, 1.45, 0.0, true, T_OUT + T_IN, curtains, _opens(), true, SHUTTER)
 	for x: float in [-3.0, 2.7]:
 		var sill := F + 0.75 if x < 0.0 else F + 1.0
-		_window_unit(Vector3(x, (sill + F + 2.2) / 2.0, -D), 0.9, F + 2.2 - sill, PI, false, T_OUT + T_IN)
-	_window_unit(Vector3(0.0, F + 1.825, -D), 0.6, 0.75, PI, false, T_OUT + T_IN)
+		_window_unit(Vector3(x, (sill + F + 2.2) / 2.0, -D), 0.9, F + 2.2 - sill, PI, false, T_OUT + T_IN, curtains, _opens(), true)
+	_window_unit(Vector3(0.0, F + 1.825, -D), 0.6, 0.75, PI, false, T_OUT + T_IN, Color(0.9, 0.9, 0.9), _opens())
 	for s: float in [-1.0, 1.0]:
 		var yaw := s * PI / 2.0
 		var first: Array[float] = [1.7, 6.3]
 		if s > 0.0:
 			first = [2.0, 6.6]
 		for z in first:
-			_window_unit(Vector3(s * W / 2.0, F + 1.475, -z), 0.9, 1.45, yaw, false, T_OUT + T_IN)
+			_window_unit(Vector3(s * W / 2.0, F + 1.475, -z), 0.9, 1.45, yaw, false, T_OUT + T_IN, curtains, _opens(), true)
 		for z: float in [2.9, 5.1]:
-			_window_unit(Vector3(s * W / 2.0, U + 1.375, -z), 0.8, 1.15, yaw, false, T_OUT + T_IN)
+			_window_unit(Vector3(s * W / 2.0, U + 1.375, -z), 0.8, 1.15, yaw, false, T_OUT + T_IN, curtains.lightened(0.1), _opens())
 	_front_door()
 	_back_door()
-
-
-## A double-hung window in a wall whose outer face passes through
-## centre, facing out along yaw (0: +z). Casing and sill outside,
-## shutters if asked, the two sashes with six lights each, a stool and
-## casing inside, a radiator under it downstairs.
-func _window_unit(centre: Vector3, w: float, h: float, yaw: float, shutters: bool, depth: float) -> void:
-	var xf := HarborTown.at(centre, yaw)
-	var trim := c(TRIM, HarborTown.K_PAINT)
-	var inner := c(TRIM, HarborTown.K_ENAMEL)
-	# Outside: casing round, a sill, a drip cap.
-	m.box("wall", xf * HarborTown.at(Vector3(0, h / 2.0 + 0.07, 0.03)), Vector3(w + 0.3, 0.14, 0.06), trim, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, h / 2.0 + 0.16, 0.05)), Vector3(w + 0.36, 0.04, 0.1), trim, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, -h / 2.0 - 0.04, 0.05)), Vector3(w + 0.34, 0.06, 0.12), trim, true)
-	for s: float in [-1.0, 1.0]:
-		m.box("wall", xf * HarborTown.at(Vector3(s * (w / 2.0 + 0.07), 0, 0.03)), Vector3(0.14, h, 0.06), trim, true)
-	if shutters:
-		for s: float in [-1.0, 1.0]:
-			var sx := s * (w / 2.0 + 0.14 + w * 0.25)
-			m.box("wall", xf * HarborTown.at(Vector3(sx, 0, 0.04)), Vector3(w * 0.5, h + 0.1, 0.03), c(SHUTTER, HarborTown.K_PAINT), true)
-			for k in 8:
-				m.box("wall", xf * HarborTown.at(Vector3(sx, -h / 2.0 + 0.12 + k * (h - 0.2) / 8.0, 0.058)), Vector3(w * 0.42, 0.02, 0.01), c(SHUTTER * 0.8, HarborTown.K_PAINT), true)
-	# The jambs through the wall's thickness.
-	for s: float in [-1.0, 1.0]:
-		m.box("wall", xf * HarborTown.at(Vector3(s * (w / 2.0 - 0.01), 0, -depth / 2.0)), Vector3(0.02, h, depth), inner, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, h / 2.0 - 0.01, -depth / 2.0)), Vector3(w, 0.02, depth), inner, true)
-	# The sashes: the lower one set in front of the upper, each a frame
-	# with a meeting rail and muntins, six panes of glass.
-	var zs: Array[float] = [-0.05, -0.08]
-	for k in 2:
-		var cy := h / 4.0 if k == 0 else -h / 4.0
-		var sz := zs[k]
-		var sh := h / 2.0
-		var frame := c(TRIM, HarborTown.K_ENAMEL)
-		m.box("wall", xf * HarborTown.at(Vector3(0, cy + sh / 2.0 - 0.025, sz)), Vector3(w, 0.05, 0.04), frame, true)
-		m.box("wall", xf * HarborTown.at(Vector3(0, cy - sh / 2.0 + 0.03, sz)), Vector3(w, 0.06, 0.04), frame, true)
-		for s: float in [-1.0, 1.0]:
-			m.box("wall", xf * HarborTown.at(Vector3(s * (w / 2.0 - 0.025), cy, sz)), Vector3(0.05, sh, 0.04), frame, true)
-		for f: float in [-1.0 / 6.0, 1.0 / 6.0]:
-			m.box("wall", xf * HarborTown.at(Vector3(f * w, cy, sz)), Vector3(0.018, sh - 0.08, 0.025), frame, true)
-		m.box("wall", xf * HarborTown.at(Vector3(0, cy, sz)), Vector3(w - 0.08, 0.018, 0.025), frame, true)
-		var n := (xf.basis * Vector3(0, 0, 1)).normalized()
-		var lo := xf * Vector3(-w / 2.0 + 0.05, cy - sh / 2.0 + 0.05, sz)
-		var hi := xf * Vector3(w / 2.0 - 0.05, cy + sh / 2.0 - 0.04, sz)
-		m.quad("clear", lo, xf * Vector3(-w / 2.0 + 0.05, cy + sh / 2.0 - 0.04, sz), hi,
-			xf * Vector3(w / 2.0 - 0.05, cy - sh / 2.0 + 0.05, sz), n, Color.WHITE)
-	# Inside: the stool, the apron, the casing.
-	m.box("wall", xf * HarborTown.at(Vector3(0, -h / 2.0 - 0.02, -depth - 0.06)), Vector3(w + 0.2, 0.035, 0.14), inner, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, -h / 2.0 - 0.1, -depth - 0.015)), Vector3(w + 0.12, 0.1, 0.03), inner, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, h / 2.0 + 0.06, -depth - 0.015)), Vector3(w + 0.24, 0.12, 0.03), inner, true)
-	for s: float in [-1.0, 1.0]:
-		m.box("wall", xf * HarborTown.at(Vector3(s * (w / 2.0 + 0.05), 0, -depth - 0.015)), Vector3(0.1, h, 0.03), inner, true)
-	# A cast-iron radiator under a first-floor window.
-	if centre.y < E:
-		var rad := xf * HarborTown.at(Vector3(0, -h / 2.0 - 0.45, -depth - 0.14))
-		for k in 9:
-			m.box("iron", rad * HarborTown.at(Vector3(-0.32 + 0.08 * k, 0, 0)), Vector3(0.05, 0.55, 0.14), Color(0.72, 0.72, 0.7))
-		m.cylinder("iron", rad * Transform3D(Basis(Vector3(0, 0, 1), PI / 2.0), Vector3(0, -0.2, 0)), 0.02, 0.02, 0.72, 6, Color(0.72, 0.72, 0.7))
 
 
 func _front_door() -> void:
@@ -704,62 +547,6 @@ func _back_door() -> void:
 		_slab("wall", Vector2(-2.0 + s * 0.72, -D), Vector2(-2.0 + s * 0.72, -D - 1.35), 0.0, 0.85, 0.12, 0.08, c(HarborTown.GRANITE, HarborTown.K_GRANITE))
 
 
-## A lamp: its shade or globe glowing, a light, lighting at the
-## darkness thr. kind names its fixture.
-func _lamp_fixture(pos: Vector3, kind: String, thr: float, energy: float, range_m := 5.0) -> void:
-	var glow := ViewUtil.glow(Color(1.0, 0.78, 0.5), 0.0)
-	glow.albedo_color = Color(0.95, 0.88, 0.72)
-	var shade := MeshInstance3D.new()
-	match kind:
-		"porch":
-			var lantern := CylinderMesh.new()
-			lantern.top_radius = 0.07
-			lantern.bottom_radius = 0.09
-			lantern.height = 0.26
-			shade.mesh = lantern
-			m.box("iron", HarborTown.at(pos + Vector3(0, 0.17, 0)), Vector3(0.2, 0.04, 0.2), Color(0.08, 0.08, 0.08))
-			m.box("iron", HarborTown.at(pos + Vector3(0, 0.0, -0.08)), Vector3(0.04, 0.3, 0.04), Color(0.08, 0.08, 0.08))
-		"ceiling":
-			var bowl := SphereMesh.new()
-			bowl.radius = 0.18
-			bowl.height = 0.18
-			bowl.is_hemisphere = true
-			shade.mesh = bowl
-			shade.rotation.x = PI
-			m.cylinder("iron", HarborTown.at(pos + Vector3(0, 0.06, 0)), 0.04, 0.04, 0.12, 8, Color(0.7, 0.6, 0.35))
-		"pendant":
-			var bowl := SphereMesh.new()
-			bowl.radius = 0.22
-			bowl.height = 0.22
-			bowl.is_hemisphere = true
-			shade.mesh = bowl
-			shade.rotation.x = PI
-			m.bar("iron", pos + Vector3(0, 0.02, 0), pos + Vector3(0, 0.9, 0), 0.008, 4, Color(0.7, 0.6, 0.35))
-		_:
-			# A table or floor lamp's pleated shade.
-			var cone := CylinderMesh.new()
-			cone.top_radius = 0.13
-			cone.bottom_radius = 0.22
-			cone.height = 0.26
-			cone.cap_top = false
-			cone.cap_bottom = false
-			shade.mesh = cone
-			glow.cull_mode = BaseMaterial3D.CULL_DISABLED
-	shade.position = pos
-	shade.material_override = glow
-	shade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(shade)
-	var light := OmniLight3D.new()
-	light.position = pos + Vector3(0, -0.12, 0)
-	light.omni_range = range_m
-	light.omni_attenuation = 1.3
-	light.light_color = Color(1.0, 0.74, 0.45)
-	light.shadow_enabled = false
-	add_child(light)
-	_lights += 1
-	town.lamps.append({"light": light, "thr": thr, "energy": energy, "mat": glow, "glow": 2.5})
-
-
 ## ---- the rooms ---------------------------------------------------------------------
 
 func _living_room() -> void:
@@ -776,23 +563,7 @@ func _living_room() -> void:
 	_box("wall", Vector3(xw + 0.39, F + 1.22, cz), Vector3(0.06, 0.14, 1.9), wood)
 	_box("wall", Vector3(xw + 0.02, F + 1.9, cz), Vector3(0.04, 0.8, 1.2), c(Color(0.55, 0.42, 0.2), HarborTown.K_WOOD))
 	m.box("steel", HarborTown.at(Vector3(xw + 0.045, F + 1.9, cz)), Vector3(0.01, 0.68, 1.08), Color.WHITE)
-	for k in 3:
-		m.cylinder("wall", Transform3D(Basis(Vector3.RIGHT, PI / 2.0).rotated(Vector3.UP, 0.2 * k - 0.2), Vector3(xw + 0.25, F + 0.12 + 0.08 * (k % 2), cz - 0.15 + 0.15 * k)),
-			0.05, 0.05, 0.5, 6, c(Color(0.3, 0.2, 0.12), HarborTown.K_TIMBER))
-	var embers := MeshInstance3D.new()
-	var bed := BoxMesh.new()
-	bed.size = Vector3(0.3, 0.05, 0.55)
-	embers.mesh = bed
-	embers.material_override = ember_mat
-	embers.position = Vector3(xw + 0.25, F + 0.08, cz)
-	add_child(embers)
-	_fire = OmniLight3D.new()
-	_fire.position = Vector3(xw + 0.7, F + 0.45, cz)
-	_fire.omni_range = 5.0
-	_fire.light_color = Color(1.0, 0.55, 0.25)
-	_fire.light_energy = 0.0
-	_fire.shadow_enabled = false   # a shadowed point light redraws the whole merged town six times
-	add_child(_fire)
+	_fire_at(Vector3(xw + 0.25, F + 0.02, cz), PI / 2.0)
 	# Things on the mantel: a clock, two candlesticks, a vase.
 	_box("wall", Vector3(xw + 0.5, F + 1.46, cz), Vector3(0.12, 0.22, 0.28), wood)
 	_box("wall", Vector3(xw + 0.56, F + 1.48, cz), Vector3(0.01, 0.12, 0.12), c(Color(0.9, 0.88, 0.8), HarborTown.K_ENAMEL))
@@ -868,42 +639,6 @@ func _living_room() -> void:
 	_picture(Vector3(-3.0, F + 1.6, -T_OUT - T_IN - 0.02), PI, Vector2(0.3, 0.4), Color(0.55, 0.5, 0.35))
 	# The ceiling light.
 	_lamp_fixture(Vector3(-3.0, E - 0.12, cz), "ceiling", 0.6, 0.6, 6.0)
-
-
-func _armchair(at_: Vector3, yaw: float, cloth: Color) -> void:
-	var xf := HarborTown.at(at_, yaw)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.22, 0)), Vector3(0.75, 0.3, 0.75), cloth, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.62, -0.3)), Vector3(0.75, 0.6, 0.18), cloth, true)
-	for s: float in [-1.0, 1.0]:
-		m.box("wall", xf * HarborTown.at(Vector3(s * 0.32, 0.45, 0.02)), Vector3(0.14, 0.3, 0.7), cloth, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.42, 0.06)), Vector3(0.5, 0.12, 0.55), c(cloth * 1.1, HarborTown.K_CLOTH), true)
-	_solid(xf * Vector3(0, 0.4, -0.05), Vector3(0.7, 0.8, 0.7), xf.basis)
-
-
-func _table(at_: Vector3, top: Vector2, height: float, wood: Color) -> void:
-	_box("wall", at_ + Vector3(0, height - 0.02, 0), Vector3(top.x, 0.04, top.y), wood, true)
-	for sx: float in [-1.0, 1.0]:
-		for sz: float in [-1.0, 1.0]:
-			_box("wall", at_ + Vector3(sx * (top.x / 2.0 - 0.05), (height - 0.04) / 2.0, sz * (top.y / 2.0 - 0.05)), Vector3(0.04, height - 0.04, 0.04), wood)
-
-
-func _chair(at_: Vector3, yaw: float, wood: Color) -> void:
-	var xf := HarborTown.at(at_, yaw)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.45, 0)), Vector3(0.42, 0.04, 0.42), wood, true)
-	for sx: float in [-1.0, 1.0]:
-		for sz: float in [-1.0, 1.0]:
-			m.box("wall", xf * HarborTown.at(Vector3(sx * 0.18, 0.22, sz * 0.18)), Vector3(0.035, 0.45, 0.035), wood, true)
-	for sx: float in [-1.0, 1.0]:
-		m.box("wall", xf * HarborTown.at(Vector3(sx * 0.18, 0.7, -0.19)), Vector3(0.035, 0.5, 0.035), wood, true)
-	for k in 3:
-		m.box("wall", xf * HarborTown.at(Vector3(0, 0.62 + 0.13 * k, -0.19)), Vector3(0.36, 0.05, 0.025), wood, true)
-
-
-func _picture(centre: Vector3, yaw: float, size: Vector2, canvas: Color) -> void:
-	var xf := HarborTown.at(centre, yaw)
-	m.box("wall", xf, Vector3(size.x + 0.08, size.y + 0.08, 0.03), c(Color(0.5, 0.38, 0.18), HarborTown.K_WOOD), true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0, 0.012)), Vector3(size.x, size.y, 0.01), c(canvas, HarborTown.K_CLOTH), true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, -size.y * 0.2, 0.018)), Vector3(size.x, size.y * 0.25, 0.005), c(canvas * 0.6, HarborTown.K_CLOTH), true)
 
 
 func _dining_room() -> void:
@@ -1065,16 +800,6 @@ func _bedrooms() -> void:
 	m.tri("wall", pennant * Vector3(-0.4, 0.1, 0), pennant * Vector3(-0.4, -0.1, 0), pennant * Vector3(0.35, 0.0, 0), pennant.basis.z, c(Color(0.55, 0.1, 0.1), HarborTown.K_CLOTH))
 
 
-func _bed(at_: Vector3, yaw: float, size: Vector2, quilt: Color, wood: Color) -> void:
-	var xf := HarborTown.at(at_, yaw)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.3, 0)), Vector3(size.x, 0.25, size.y), c(Color(0.9, 0.9, 0.86), HarborTown.K_CLOTH), true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.44, 0.1)), Vector3(size.x + 0.04, 0.06, size.y - 0.2), quilt, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.46, -size.y / 2.0 + 0.22)), Vector3(size.x - 0.2, 0.12, 0.32), c(Color(0.94, 0.93, 0.9), HarborTown.K_CLOTH), true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.55, -size.y / 2.0 - 0.03)), Vector3(size.x + 0.08, 1.1, 0.06), wood, true)
-	m.box("wall", xf * HarborTown.at(Vector3(0, 0.35, size.y / 2.0 + 0.03)), Vector3(size.x + 0.08, 0.7, 0.06), wood, true)
-	_solid(xf * Vector3(0, 0.3, 0), Vector3(size.x, 0.6, size.y), xf.basis)
-
-
 ## ---- the yard -----------------------------------------------------------------------
 
 ## A picket fence and gate along the front, the mailbox by the street,
@@ -1131,14 +856,8 @@ func _yard() -> void:
 
 ## ---- every frame -------------------------------------------------------------------
 
-## The fire: lit once it is dusk, flickering on two quick cycles and a
-## slow one, the embers breathing with it.
-func _process(delta: float) -> void:
-	_t += delta
-	var night: float = town.glass_mat.get_shader_parameter("night")
-	var target := 1.0 if night > 0.3 else 0.0
-	_lit_fire = move_toward(_lit_fire, target, delta * 0.2)
-	var flicker := 0.75 + 0.12 * sin(_t * 11.0) + 0.08 * sin(_t * 17.3 + 1.0) + 0.1 * sin(_t * 2.1)
-	_fire.light_energy = 1.6 * flicker * _lit_fire
-	_fire.visible = _lit_fire > 0.01
-	ember_mat.emission_energy_multiplier = (2.5 + 1.5 * flicker) * _lit_fire
+
+## Whether the next window is one left open.
+func _opens() -> bool:
+	_window_count += 1
+	return open_windows.has(_window_count)

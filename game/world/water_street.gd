@@ -66,7 +66,7 @@ static func _front(town: HarborTown, h: Dictionary, rng: RandomNumberGenerator) 
 		YardProps.cat(m, base * HarborTown.at(Vector3(door_x - 0.3, stand_y, stand_z + 0.1), rng.randf_range(-0.6, 0.6)), furs[rng.randi() % furs.size()])
 	# Pumpkins by the steps, some carved; pots of mums.
 	var blooms: Array[Color] = [Color(0.85, 0.55, 0.12), Color(0.75, 0.2, 0.2), Color(0.85, 0.75, 0.25), Color(0.55, 0.3, 0.6)]
-	var step_z := 2.8 if porch else 1.1
+	var step_z: float = h.get("step_z", 2.8 if porch else 1.1)
 	for s: float in [-1.0, 1.0]:
 		var px := door_x + s * (1.0 + rng.randf_range(0.0, 0.3))
 		if rng.randf() < 0.75:
@@ -122,6 +122,9 @@ static func _back(town: HarborTown, h: Dictionary, rng: RandomNumberGenerator) -
 	var d: float = h["d"]
 	var z0 := -d
 	var found: float = h["found"]
+	if h.get("detailed", false):
+		_back_yard(town, h, rng, base, w, z0)
+		return
 	# The kitchen door at the back: a door, its trim, a granite stoop; the
 	# trash can by it, a rain barrel under the downspout at the corner.
 	var bx := 0.0 if int(h["style"]) == 2 else -w / 2.0 + 1.8
@@ -151,6 +154,11 @@ static func _back(town: HarborTown, h: Dictionary, rng: RandomNumberGenerator) -
 		m.prism("wall", dog * HarborTown.at(Vector3(0, 0.7, 0)), 0.95, 0.4, 1.1, HarborTown.kc(Color(0.22, 0.22, 0.22), HarborTown.K_ROOF))
 		m.box("wall", dog * HarborTown.at(Vector3(0, 0.28, 0.505)), Vector3(0.32, 0.42, 0.01), HarborTown.kc(Color(0.05, 0.05, 0.05), HarborTown.K_PAINT), true)
 		m.cylinder("wall", dog * HarborTown.at(Vector3(0.6, 0.04, 0.6)), 0.12, 0.1, 0.08, 10, HarborTown.kc(Color(0.6, 0.62, 0.7), HarborTown.K_ENAMEL))
+	_back_yard(town, h, rng, base, w, z0)
+
+
+static func _back_yard(town: HarborTown, h: Dictionary, rng: RandomNumberGenerator, base: Transform3D, w: float, z0: float) -> void:
+	var m := town.m
 	# The garden, the bird bath and feeder.
 	if rng.randf() < 0.75:
 		YardProps.vegetable_bed(m, _ground(town, base, Vector3(-2.3, 0, z0 - 3.4)), Vector2(3.0, 2.0), rng)

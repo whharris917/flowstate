@@ -26,6 +26,8 @@ func _build_ground() -> void:
 	# The player stands three-quarters of full size here: the town and
 	# its rooms feel a third larger, doors and halls roomier.
 	player.set_body_scale(0.75)
+	# Close work: a cup on a table, a book's spine, from a hand's breadth.
+	player.camera.near = 0.02
 	var c := TownCoast.new()
 	coast = c
 	add_child(c)

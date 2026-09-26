@@ -677,8 +677,8 @@ func _houses_all() -> void:
 		# Water Street: the north side behind the diner and the grocery,
 		# the south side over the harbour.
 		[Vector2(-2.0, 37.5), yaw_s], [Vector2(22.0, 37.5), yaw_s], [Vector2(38.0, 37.5), yaw_s],
-		[Vector2(7.5, 51.5), yaw_n], [Vector2(34.0, 51.5), yaw_n],
-		[Vector2(45.0, 51.5), yaw_n], [Vector2(57.0, 51.5), yaw_n], [Vector2(69.0, 51.5), yaw_n],
+		[Vector2(7.5, 51.5), yaw_n], [Vector2(33.5, 51.5), yaw_n],
+		[Vector2(45.5, 51.5), yaw_n], [Vector2(57.5, 51.5), yaw_n], [Vector2(69.5, 51.5), yaw_n],
 	]
 	# One house modelled whole, inside and out: the Cape at number 14,
 	# its back to the harbour.
@@ -692,7 +692,56 @@ func _houses_all() -> void:
 		var style := _rng.randi() % 3
 		if shallow and style == 2:
 			style = 0
-		_house(Vector3(p.x, 0.0, p.y), float(lot[1]), style, shallow)
+		if absf(p.y - 51.5) < 0.1:
+			_detailed_house(Vector3(p.x, 0.0, p.y), float(lot[1]), style)
+		else:
+			_house(Vector3(p.x, 0.0, p.y), float(lot[1]), style, shallow)
+
+
+## A house on the harbour side of Water Street, modelled whole inside and
+## out: a Cape like number 14 in its own colours, or a colonial, or a
+## gable-front house with a porch.
+func _detailed_house(front: Vector3, yaw: float, style: int) -> void:
+	_houses += 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(front.x * 131.0) + 7
+	var clap: Color = CLAPBOARDS[rng.randi() % CLAPBOARDS.size()]
+	var kind := K_SHAKE if clap.is_equal_approx(CLAPBOARDS[8]) else K_CLAP
+	var papers: Array[Color] = []
+	var paper_pool: Array[Color] = [Color(0.72, 0.66, 0.52), Color(0.58, 0.66, 0.72), Color(0.78, 0.62, 0.58),
+		Color(0.62, 0.70, 0.58), Color(0.86, 0.80, 0.84), Color(0.84, 0.82, 0.66), Color(0.70, 0.72, 0.78), Color(0.82, 0.74, 0.62)]
+	for k in 6:
+		papers.append(paper_pool[rng.randi() % paper_pool.size()])
+	var cloths: Array[Color] = [Color(0.32, 0.40, 0.30), Color(0.55, 0.22, 0.2), Color(0.3, 0.35, 0.5), Color(0.55, 0.45, 0.3), Color(0.45, 0.3, 0.45)]
+	var woods: Array[Color] = [Color(0.42, 0.26, 0.14), Color(0.55, 0.38, 0.22), Color(0.3, 0.18, 0.1)]
+	var curtain_pool: Array[Color] = [Color(0.85, 0.82, 0.72), Color(0.9, 0.9, 0.88), Color(0.8, 0.6, 0.55), Color(0.62, 0.7, 0.62), Color(0.88, 0.8, 0.55)]
+	var opens: Array[int] = []
+	for k in 2:
+		opens.append(1 + rng.randi() % 14)
+	var house: HouseBase
+	if style == 0:
+		var cape_house := CapeHouse.new()
+		add_child(cape_house)
+		cape_house.build(self, front, yaw, {"seed": rng.randi(), "CLAP": clap, "SHUTTER": SHUTTERS[rng.randi() % SHUTTERS.size()],
+			"DOOR": DOORS[rng.randi() % DOORS.size()], "ROOF": ROOFS[rng.randi() % ROOFS.size()],
+			"paper_living": papers[0], "paper_dining": papers[1], "paper_bed": papers[4], "paper_bed2": papers[5],
+			"kitchen_paint": Color(0.9, 0.92, 0.84), "curtains": curtain_pool[rng.randi() % curtain_pool.size()],
+			"number": str(int(front.x)), "with_yard": false, "open_windows": opens})
+		house = cape_house
+	else:
+		var full := FullHouse.new()
+		add_child(full)
+		full.build(self, front, yaw, {"seed": rng.randi(), "style": style, "clap": clap, "clap_kind": kind,
+			"shutter": SHUTTERS[rng.randi() % SHUTTERS.size()], "door_color": DOORS[rng.randi() % DOORS.size()],
+			"roof": ROOFS[rng.randi() % ROOFS.size()], "papers": papers, "cloth": cloths[rng.randi() % cloths.size()],
+			"wood": woods[rng.randi() % woods.size()], "curtains": curtain_pool[rng.randi() % curtain_pool.size()],
+			"open_windows": opens})
+		house = full
+	houses_built.append(house.call("record"))
+	var r: Dictionary = houses_built[houses_built.size() - 1]
+	var hw: float = r["w"]
+	var hd: float = r["d"]
+	_keep_clear.append(Rect2(Vector2(front.x - hw / 2.0 - 1.0, front.z - 1.0), Vector2(hw + 2.0, hd + 2.0)))
 
 
 ## A house whose front stands at front, facing along yaw. style 0 a
