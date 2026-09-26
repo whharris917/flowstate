@@ -26,6 +26,25 @@ func _run(world: CourthouseMap) -> void:
 	world.graphics.apply(world)
 	world.set_time_of_day(15.5)
 	var which := OS.get_environment("FLOWSTATE_CH_SHOTS")
+	if which == "lintels":
+		# Close to the west front either side of the porch, two frames a
+		# step apart, for anything that flickers.
+		player._fov_target = 50.0
+		for k in 2:
+			await _view(player, Vector3(-17.0, 0.0, -6.0 + k * 0.15), -PI / 2.0 + 0.25, 0.25, "lintel_n%d" % k)
+			await _view(player, Vector3(-17.0, 0.0, 6.0 + k * 0.15), -PI / 2.0 - 0.25, 0.25, "lintel_s%d" % k)
+		get_tree().quit()
+		return
+	if which == "ultra":
+		world.graphics.set_preset("Ultra")
+		world.graphics.apply(world)
+		await get_tree().create_timer(4.0).timeout
+		player._fov_target = 75.0
+		await _view(player, Vector3(0.0, UnionCourthouse.F2 + 0.1, 7.0), 0.0, 0.05, "ultra_courtroom")
+		await _view(player, Vector3(0.0, UnionCourthouse.F1 + 0.05, 6.0), 0.0, 0.0, "ultra_hall")
+		await _view(player, Vector3(-6.0, UnionCourthouse.F1 + 0.05, -4.0), PI * 0.25, 0.0, "ultra_heritage")
+		get_tree().quit()
+		return
 	if which == "detail":
 		# The cupola as in the photograph from a height to its south-west,
 		# and the courtroom from the gallery, as in the photograph taken

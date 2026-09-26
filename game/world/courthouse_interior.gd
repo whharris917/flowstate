@@ -37,6 +37,7 @@ const WIZ := WZ - T
 const HALL := 1.4              # the hall's half width
 const LANDING := F1 + (F2 - F1) / 2.0
 const WAINSCOT := 0.95
+const PANEL_H := 1.2             # the courtroom's raised panelling
 const DOOR_H := 2.4
 const OPEN_H := 3.05           # a door's opening, its transom over it
 
@@ -84,7 +85,9 @@ static func _floors() -> void:
 		k.block("wall", g, Vector3(0, F1 / 2.0, e * (MZ + WZ) / 2.0), Vector3(2.0 * WX - 0.02, F1, WZ - MZ), oak)
 	# The courtroom floor over the main block: the ground floor's ceiling
 	# under it.
-	_slab(Rect2(-IX - 0.5, -IZ, 2.0 * IX + 1.0, 2.0 * IZ), oak, ceil)
+	_slab(Rect2(-IX, -IZ, 2.0 * IX, 2.0 * IZ), oak, ceil)
+	for s: float in [-1.0, 1.0]:
+		_slab(Rect2(minf(s * IX, s * (PX - T)), -(PZ - T), T, 2.0 * (PZ - T)), oak, ceil)
 	# The wings' upstairs floors, round each stair's well.
 	for e: float in [-1.0, 1.0]:
 		var sx := -e      # the stair's side: east in the north wing
@@ -103,7 +106,9 @@ static func _floors() -> void:
 		# The wings' upstairs ceilings under the flat roofs.
 		k.box("wall", g, Vector3(0, C3 + 0.05, e * (MZ + WIZ) / 2.0), Vector3(2.0 * WIX, 0.1, WIZ - MZ), ceil)
 	# The courtroom's ceiling.
-	k.box("wall", g, Vector3(0, C2 + 0.05, 0), Vector3(2.0 * IX + 1.0, 0.1, 2.0 * IZ), ceil)
+	k.box("wall", g, Vector3(0, C2 + 0.05, 0), Vector3(2.0 * IX, 0.1, 2.0 * IZ), ceil)
+	for s: float in [-1.0, 1.0]:
+		k.box("wall", g, Vector3(s * (IX + T / 2.0), C2 + 0.05, 0), Vector3(T, 0.1, 2.0 * (PZ - T)), ceil)
 
 
 ## A floor slab over rect (x, z) from C1 to F2: oak on top, ceiling under.
@@ -166,6 +171,56 @@ static func _wainscot(f: Transform3D, u0: float, u1: float, y0: float, opens: Ar
 	k.wall("wall", base, u0, u1, y0, y0 + 0.2, 0.035, c(STAIN.darkened(0.2), CourthouseKit.K_WOOD), opens, -1.0)
 
 
+## The main block's outside walls: beaded boards in the ground floor's
+## rooms and halls, raised panels in the courtroom.
+static func _lining(f: Transform3D, u0: float, u1: float, y0: float, opens: Array) -> void:
+	if y0 >= F2:
+		_raised(f, u0, u1, y0, opens)
+	else:
+		_wainscot(f, u0, u1, y0, opens)
+
+
+## The courtroom's wainscot along a face (frame f: z out of the face into
+## the room) from u0 to u1: raised panels PANEL_H high between stiles,
+## each field in a moulding, a moulded cap and a base; the runs broken
+## at the doors and the floor-length windows.
+static func _raised(f: Transform3D, u0: float, u1: float, y0: float, opens: Array) -> void:
+	var stile := c(STAIN, CourthouseKit.K_WOOD)
+	var mould := c(STAIN.darkened(0.25), CourthouseKit.K_WOOD)
+	var field := c(STAIN.lightened(0.07), CourthouseKit.K_WOOD)
+	var ff := f * Transform3D(Basis(), Vector3(0, 0, 0.02))
+	k.wall("wall", ff, u0, u1, y0, y0 + PANEL_H, 0.02, stile, opens, -1.0)
+	var cap := Transform3D(ff.basis, ff * Vector3(0, 0, 0.045))
+	k.wall("wall", cap, u0, u1, y0 + PANEL_H - 0.03, y0 + PANEL_H + 0.07, 0.07, stile, opens, -1.0)
+	var base := Transform3D(ff.basis, ff * Vector3(0, 0, 0.02))
+	k.wall("wall", base, u0, u1, y0, y0 + 0.22, 0.04, c(STAIN.darkened(0.2), CourthouseKit.K_WOOD), opens, -1.0)
+	# The runs of wall between the openings that come down through it.
+	var cuts: Array[Vector2] = []
+	for o: Dictionary in opens:
+		if float(o["y0"]) < y0 + PANEL_H and float(o["yt"]) > y0:
+			cuts.append(Vector2(float(o["u"]) - float(o["w"]) / 2.0 - 0.16, float(o["u"]) + float(o["w"]) / 2.0 + 0.16))
+	cuts.sort_custom(func(a: Vector2, bb: Vector2) -> bool: return a.x < bb.x)
+	var runs: Array[Vector2] = []
+	var u := u0
+	for cut: Vector2 in cuts:
+		if cut.x > u:
+			runs.append(Vector2(u, cut.x))
+		u = maxf(u, cut.y)
+	if u1 > u:
+		runs.append(Vector2(u, u1))
+	var ph := PANEL_H - 0.5
+	var py := y0 + 0.3 + ph / 2.0
+	for run: Vector2 in runs:
+		var n := maxi(1, int(round((run.y - run.x) / 0.9)))
+		var pw := (run.y - run.x) / n
+		if pw < 0.4:
+			continue
+		for j in n:
+			var uc := run.x + pw * (j + 0.5)
+			k.box("wall", ff, Vector3(uc, py, 0.01), Vector3(pw - 0.16, ph, 0.02), mould)
+			k.box("wall", ff, Vector3(uc, py, 0.025), Vector3(pw - 0.3, ph - 0.14, 0.02), field)
+
+
 ## A door's casing on a face: jambs, the head over the transom.
 static func _casing(f: Transform3D, o: Dictionary) -> void:
 	var wood := c(STAIN, CourthouseKit.K_WOOD)
@@ -212,12 +267,12 @@ static func _outside_wainscot() -> void:
 				for u: float in [-2.9, 2.9]:
 					opens.append(CourthouseKit.opening(u, 1.3, 2.2, 5.0, "segment", 0.25))
 			var fp := UnionCourthouse.face(n, Vector3(s * (PX - T), 0, 0))
-			_wainscot(fp, -PZ + 0.02, PZ - 0.02, y0, opens)
+			_lining(fp, -PZ + 0.02, PZ - 0.02, y0, opens)
 			for e: float in [-1.0, 1.0]:
 				var fm := UnionCourthouse.face(n, Vector3(s * IX, 0, 0))
 				var ua := minf(e * IZ, e * PZ)
 				var ub := maxf(e * IZ, e * PZ)
-				_wainscot(fm, ua, ub, y0, [])
+				_lining(fm, ua, ub, y0, [])
 				var fw := UnionCourthouse.face(n, Vector3(s * WIX, 0, 0))
 				var wopen: Array = []
 				for bay in 5:
@@ -226,7 +281,7 @@ static func _outside_wainscot() -> void:
 				_wainscot(fw, minf(e * MZ, e * WIZ), maxf(e * MZ, e * WIZ), y0, wopen)
 				# The pavilion's returns.
 				var fr := UnionCourthouse.face(Vector3(0, 0, -e), Vector3(s * (IX + PX - T) / 2.0, 0, e * (PZ - T)))
-				_wainscot(fr, -0.25, 0.25, y0, [])
+				_lining(fr, -0.25, 0.25, y0, [])
 	for e: float in [-1.0, 1.0]:
 		var fe := UnionCourthouse.face(Vector3(0, 0, -e), Vector3(0, 0, e * WIZ))
 		for y0: float in [F1, F2]:
@@ -259,7 +314,7 @@ static func _outside_wainscot() -> void:
 		_wainscot(to_wing, -WIX, WIX, F1, [hall_arch])
 		_wainscot(to_wing, -WIX, WIX, F2, wing_side)
 		_wainscot(to_main, -IX, IX, F1, [hall_arch])
-		_wainscot(to_main, -IX, IX, F2, court_side)
+		_raised(to_main, -IX, IX, F2, court_side)
 
 
 ## ---- the ground floor ------------------------------------------------------
@@ -278,7 +333,7 @@ static func _ground_floor() -> void:
 			iwall(Vector2(xa, e * 1.5), Vector2(xb, e * 1.5), y0, y1, [3.8])
 	# Lamps down the halls.
 	for p: Vector3 in [Vector3(0, 0, 0), Vector3(-6.0, 0, 0), Vector3(6.0, 0, 0), Vector3(0, 0, -5.5), Vector3(0, 0, 5.5)]:
-		_pendant(Vector3(p.x, y1, p.z), 1.4, p == Vector3.ZERO)
+		_pendant(Vector3(p.x, y1, p.z), 1.4, true)
 	# Benches along the axial hall, portraits over them.
 	for e: float in [-1.0, 1.0]:
 		_bench(Transform3D(Basis(Vector3.UP, -PI / 2.0), Vector3(-HALL + 0.35, y0, e * 4.8 + 1.5 * e)), 1.8)
@@ -306,6 +361,7 @@ static func _heritage_room() -> void:
 	for j in 3:
 		for s: float in [-1.0, 1.0]:
 			_chair(Transform3D(Basis(Vector3.UP, s * PI / 2.0), Vector3(-3.0 + s * 0.8, y0, -5.1 + j * 0.8)))
+	_pendant(Vector3(-5.3, C1, -4.8), 1.2, true, 7.0)
 	# An old county map framed on the cross hall's wall.
 	_map(UnionCourthouse.face(Vector3(0, 0, -1), Vector3(-5.0, 0, -1.5 - 0.08)), y0 + 2.2, 1.6, 1.1)
 	var label := Label3D.new()
@@ -327,7 +383,8 @@ static func _office(xf: Transform3D, kind: int) -> void:
 	_chair(xf * Transform3D(Basis(Vector3.UP, PI), Vector3(0.3, 0, 0.3)))
 	_cabinet(xf * Transform3D(Basis(), Vector3(-2.2 + kind * 0.3, 0, -2.3)))
 	_bookcase(xf * Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(-3.0, 0, 0.5)), 1.6, 2.1)
-	_pendant(xf * Vector3(0, C1 - F1, 0), 1.0, false)
+	var ceiling := C1 if xf.origin.y < F2 - 0.1 else C3
+	_pendant(xf * Vector3(0, ceiling - xf.origin.y, 0), 1.0, true, 6.5)
 
 
 ## ---- the wings ----------------------------------------------------------
@@ -355,8 +412,8 @@ static func _wing(w: Transform3D, e: float) -> void:
 	_stair(w)
 	# Lamps in the halls.
 	for z: float in [-11.0, -17.5]:
-		_pendant(w * Vector3(0, C1, z), 1.3, z < -12.0)
-	_pendant(w * Vector3(0, C3, -11.5), 1.0, false)
+		_pendant(w * Vector3(0, C1, z), 1.3, true)
+	_pendant(w * Vector3(0, C3, -11.5), 1.0, true)
 	_pendant(w * Vector3(0, C1, -10.6) + (w.basis * Vector3(4.6, 0, 0)), 1.0, false)
 	# Rooms. Ground floor: two offices west, one east.
 	_office(w * Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(-4.8, F1, -11.8)), 0)
@@ -431,7 +488,7 @@ static func _stair(w: Transform3D) -> void:
 		Vector3(x1 - x0 - 1.0, LANDING - F1, 0.12), c(WALNUT, 18))
 	k.solid(w, Vector3((x0 + x1) / 2.0 + 0.5, (F1 + LANDING) / 2.0, (f1z.x + f2z.y) / 2.0), Vector3(x1 - x0 - 1.0, LANDING - F1, 0.12))
 	# A globe over the landing.
-	_pendant(w * Vector3((x1 + WIX) / 2.0, C3, (f1z.x + f2z.x) / 2.0), 3.0, false)
+	_pendant(w * Vector3((x1 + WIX) / 2.0, C3, (f1z.x + f2z.x) / 2.0), 3.0, true)
 
 
 ## A flight's balustrade from a (foot) to b (head): balusters two to a
@@ -495,10 +552,10 @@ static func _courtroom() -> void:
 	for s: float in [-1.0, 1.0]:
 		for u: float in [-7.95, -5.3, -4.35, -1.45, 1.45, 4.35, 5.3, 7.95]:
 			var x := s * (IX if absf(u) > PZ else PX - T)
-			_pilaster(Vector3(x, 0, u), Vector3(-s, 0, 0), y + WAINSCOT + 0.06, ent0)
+			_pilaster(Vector3(x, 0, u), Vector3(-s, 0, 0), y + PANEL_H + 0.08, ent0)
 	for e: float in [-1.0, 1.0]:
 		for x: float in [-7.0, -3.4, 3.4, 7.0]:
-			_pilaster(Vector3(x, 0, e * IZ), Vector3(0, 0, -e), y + WAINSCOT + 0.06, ent0)
+			_pilaster(Vector3(x, 0, e * IZ), Vector3(0, 0, -e), y + PANEL_H + 0.08, ent0)
 	_entablature(ent0, C2)
 	# The bench at the north end: a dais, the panelled desk, the chair,
 	# the flags either side of the niche.
@@ -655,7 +712,7 @@ static func _balcony() -> void:
 		_balustrade(g, Vector3(sx * well.y, top_b, sz.x - 0.05), Vector3(sx * (well.x + 0.3), top_b, sz.x - 0.05))
 	# Lamps under the gallery.
 	for x: float in [-4.5, 4.5]:
-		_pendant(Vector3(x, under - 0.06, (front + IZ) / 2.0), 0.4, false)
+		_pendant(Vector3(x, under - 0.06, (front + IZ) / 2.0), 0.4, true)
 
 
 ## A pilaster on a wall at base (x, z on the wall's face) standing out
@@ -715,12 +772,12 @@ static func _entablature(y0: float, y1: float) -> void:
 
 ## A hanging globe on a chain from a ceiling at top; drop: its chain.
 ## lit: it throws light after dark (the others only glow).
-static func _pendant(top: Vector3, drop: float, lit: bool) -> void:
+static func _pendant(top: Vector3, drop: float, lit: bool, reach := 11.0) -> void:
 	k.m.bar("iron", top, top - Vector3(0, drop, 0), 0.008, 4, GILT.darkened(0.3))
 	k.m.cylinder("iron", Transform3D(Basis(), top - Vector3(0, drop + 0.04, 0)), 0.08, 0.1, 0.08, 10, GILT.darkened(0.2))
 	k.m.sphere("lamp", Transform3D(Basis(), top - Vector3(0, drop + 0.25, 0)), 0.2, 12, Color(1, 1, 1))
 	if lit:
-		b._light(top - Vector3(0, drop + 0.4, 0), 2.2, 11.0)
+		b._light(top - Vector3(0, drop + 0.4, 0), 2.2 if reach > 8.0 else 1.4, reach)
 
 
 ## A brass chandelier: a stem, a ring of six arms each with a globe.
@@ -961,7 +1018,7 @@ static func _chambers(xf: Transform3D) -> void:
 	for s: float in [-1.0, 1.0]:
 		k.box("wall", sofa, Vector3(s * 0.95, 0.5, 0), Vector3(0.14, 0.3, 0.8), hide)
 	k.solid(sofa, Vector3(0, 0.4, 0), Vector3(2.0, 0.8, 0.8))
-	_pendant(xf * Vector3(0, C3 - F2, 0), 1.0, false)
+	_pendant(xf * Vector3(0, C3 - F2, 0), 1.0, true, 6.5)
 
 
 ## The jury room: a long table and its twelve chairs.
@@ -971,7 +1028,7 @@ static func _jury_room(xf: Transform3D) -> void:
 		for s: float in [-1.0, 1.0]:
 			_chair(xf * Transform3D(Basis(Vector3.UP, 0.0 if s > 0.0 else PI), Vector3(-2.1 + j * 0.84, 0, s * 1.0)))
 	for s: float in [-1.0, 1.0]:
-		_pendant(xf * Vector3(s * 1.6, C3 - F2, 0), 1.2, false)
+		_pendant(xf * Vector3(s * 1.6, C3 - F2, 0), 1.2, s > 0.0, 7.0)
 
 
 ## The law library: shelves round the walls, reading tables.
@@ -983,4 +1040,4 @@ static func _library(xf: Transform3D) -> void:
 		for j in 3:
 			_chair(xf * Transform3D(Basis(), Vector3(s * 3.0 - 0.8 + j * 0.8, 0, -1.0)))
 			_chair(xf * Transform3D(Basis(Vector3.UP, PI), Vector3(s * 3.0 - 0.8 + j * 0.8, 0, 0.6)))
-	_pendant(xf * Vector3(0, C3 - F2, 0), 1.2, false)
+	_pendant(xf * Vector3(0, C3 - F2, 0), 1.2, true, 7.0)

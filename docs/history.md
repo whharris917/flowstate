@@ -273,3 +273,10 @@ The director sent a close photograph of the cupola and one taken from a gallery 
 - **Cupola**, measured on the photograph against the vane's height: a broad plinth splaying in to the first stage; larger paired windows; a shorter main stage (22.9 to 26.7 m) with a rusticated corner and a fluted pilaster at each side of every face; the entablature broken out over the pilasters; a low pediment on each face and eight urn finials over the pilasters; clock dormers 2.7 m wide under round hoods with a spike, dials 1.7 m across with minute marks and radial numerals; the bell roof upright at first and rounding over to its point at 35 m, nearly as wide as the stage below, with a pale band and a lozenge on each face; a solid fan over each vent's louvres.
 - **Gallery** across the south end: four tiers of pews to an aisle along the back wall, a sloping aisle down the middle, a panelled front with a brass pipe rail on posts, iron columns under it, a stair in each back corner along the south wall. The south door is lowered under it and the chandeliers moved clear. Walked with real input up both stairs and down the aisle.
 
+## 2026-09-26: raised panels, a flicker, the paint, Ultra indoors
+
+- **Courtroom** walls have raised panels 1.2 m high (stiles, moulded fields, cap and base), as in the photograph from the gallery; the pilasters start above them. The ground floor keeps its beaded boards.
+- **Flicker** beside the porches: the courtroom floor ran half a metre past the main block's inside walls, and its edge lay in the plane of the brick face over the ground-floor window hoods either side of each porch. The floor now stops at the walls; the pavilion's recess has its own piece of floor and ceiling.
+- **Paint**: the trim white is a warm cream, as in the reference photographs.
+- **Ultra** turns on traced light (SDFGI). It treated the window glass as solid, so no daylight reached the rooms, and every lamp but a few was dark by day. Glass now takes no part in the traced light, and the lamps inside burn by day at half their night brightness: halls, stairs, offices, the Heritage Room, the chambers, jury room and library, under the gallery.
+

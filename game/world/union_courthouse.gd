@@ -48,7 +48,7 @@ const PED_RISE := 3.4
 const ROOF_SLOPE := 0.5
 
 const BRICK := Color(0.60, 0.30, 0.22)
-const TRIM := Color(0.92, 0.90, 0.84)
+const TRIM := Color(0.93, 0.90, 0.79)
 const SLATE := Color(0.25, 0.27, 0.30)
 const GRANITE := Color(0.70, 0.69, 0.66)
 const IRON := Color(0.06, 0.06, 0.065)
@@ -96,9 +96,15 @@ func build() -> void:
 	var inner := k.m
 	k.m = outer
 	var mats := {"wall": wall_mat, "glass": glass_mat, "iron": iron_mat, "lamp": lamp_mat, "dial": dial_mat}
-	outer.commit(self, mats, ["wall", "iron"])
+	var drawn: Array = outer.commit(self, mats, ["wall", "iron"]).values()
 	for mi: MeshInstance3D in inner.commit(self, mats, []).values():
 		mi.visibility_range_end = 150.0
+		drawn.append(mi)
+	# Glass lets the sky's light into the rooms when light is traced
+	# through the scene (global illumination): it takes no part in it.
+	for mi: MeshInstance3D in drawn:
+		if mi.name.ends_with("glass"):
+			mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	stats = {"triangles": outer.triangles + inner.triangles, "inside": inner.triangles, "solids": k.solid_count,
 		"ms": Time.get_ticks_msec() - t0}
 
@@ -519,7 +525,7 @@ func _porch(s: float) -> void:
 		k.cornice(sf, -float(side[2]) / 2.0 - 0.3, float(side[2]) / 2.0 + 0.3, ent, 0.35, trim, 0.9, 0.32, 0.3, false)
 		k.box("wall", sf, Vector3(0, top + 0.12, -0.05), Vector3(float(side[2]) + 0.1, 0.24, 0.22), trim)
 	# The ceiling of beaded boards.
-	k.box("wall", f, Vector3(0, top + 0.26, depth / 2.0), Vector3(2.0 * half, 0.04, depth), c(Color(0.86, 0.87, 0.84), CourthouseKit.K_BEAD))
+	k.box("wall", f, Vector3(0, top + 0.26, depth / 2.0), Vector3(2.0 * half, 0.04, depth), c(Color(0.88, 0.86, 0.77), CourthouseKit.K_BEAD))
 	# The slate mansard, its flat top, the cresting.
 	var lo := Vector2(-half - 0.35, -0.05)
 	var hi := Vector2(half + 0.35, depth + 0.35)
@@ -534,7 +540,7 @@ func _porch(s: float) -> void:
 	k.m.bar("iron", f * Vector3(0, top + 0.26, depth / 2.0), f * Vector3(0, top - 0.3, depth / 2.0), 0.012, 4, IRON)
 	k.m.cylinder("lamp", f * Transform3D(Basis(), Vector3(0, top - 0.5, depth / 2.0)), 0.14, 0.18, 0.35, 8, Color(1, 1, 1))
 	k.m.cylinder("iron", f * Transform3D(Basis(), Vector3(0, top - 0.3, depth / 2.0)), 0.2, 0.05, 0.1, 8, IRON)
-	_light(f * Vector3(0, top - 0.6, depth / 2.0), 2.0, 9.0)
+	_light(f * Vector3(0, top - 0.6, depth / 2.0), 2.0, 9.0, false, false)
 
 
 ## One porch arch between two post tops a and b (in the porch frame's
@@ -872,19 +878,23 @@ func set_clock(hours: float) -> void:
 		minute.transform = (minute.get_meta("xf") as Transform3D) * Transform3D(Basis(Vector3.BACK, -TAU * fmod(hours, 1.0)), Vector3.ZERO)
 
 
-## How dark it is, 0 day to 1 night: the dials glow and the lamps come on.
+## How dark it is, 0 day to 1 night: the dials glow after dark. The
+## lamps inside burn all day, as in a building at work, and brighter at
+## night.
 func set_darkness(dark: float) -> void:
 	var on := smoothstep(0.35, 0.6, dark)
 	dial_mat.emission_energy_multiplier = 1.4 * on
-	lamp_mat.emission_energy_multiplier = 3.0 * on
+	lamp_mat.emission_energy_multiplier = 1.5 + 1.5 * on
 	for l: Dictionary in lights:
 		var light := l["light"] as OmniLight3D
-		light.visible = on > 0.01
-		light.light_energy = float(l["energy"]) * on
+		var indoor := bool(l.get("indoor", true))
+		var level := on if not indoor else lerpf(0.55, 1.0, on)
+		light.visible = level > 0.01
+		light.light_energy = float(l["energy"]) * level
 
 
 ## A lamp's light at p, reaching range; off by day.
-func _light(p: Vector3, energy: float, reach: float, shadow := false) -> void:
+func _light(p: Vector3, energy: float, reach: float, shadow := false, indoor := true) -> void:
 	var light := OmniLight3D.new()
 	light.position = p
 	light.omni_range = reach
@@ -893,4 +903,4 @@ func _light(p: Vector3, energy: float, reach: float, shadow := false) -> void:
 	light.shadow_enabled = shadow
 	light.visible = false
 	add_child(light)
-	lights.append({"light": light, "energy": energy})
+	lights.append({"light": light, "energy": energy, "indoor": indoor})
