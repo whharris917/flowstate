@@ -14,7 +14,7 @@ extends RefCounted
 ## foliage, both in foliage.gdshader so the whole tree sways as one.
 
 const REF_H := 12.0
-const VARIANTS := 3
+const VARIANTS := 2
 
 static var _meshes: Dictionary = {}          # "maple0" etc -> ArrayMesh
 static var _leaf_mat: ShaderMaterial = null
@@ -396,27 +396,30 @@ static func _pine(rng: RandomNumberGenerator) -> ArrayMesh:
 	needles.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var col := Color(0.30, 0.25, 0.20)
 	_limb(bark, Vector3.ZERO, Vector3(0, REF_H, 0), 0.3, 0.04, 7, col)
-	var y := REF_H * 0.35
+	var y := REF_H * 0.3
 	while y < REF_H * 0.98:
 		var up := y / REF_H
-		var count := 3 + rng.randi() % 3
+		var count := 5 + rng.randi() % 3
 		for k in count:
-			if rng.randf() < 0.2:
+			if rng.randf() < 0.15:
 				continue
-			var az := rng.randf_range(0.0, TAU)
-			var reach := (1.1 - up) * REF_H * 0.32 + 0.4
-			var out := Vector3(cos(az), rng.randf_range(0.0, 0.2), sin(az)).normalized()
+			var az := TAU * k / count + rng.randf_range(-0.3, 0.3)
+			var reach := (1.1 - up) * REF_H * 0.3 + 0.4
+			var out := Vector3(cos(az), rng.randf_range(0.02, 0.15), sin(az)).normalized()
 			var tip := Vector3(0, y, 0) + out * reach
 			_limb(bark, Vector3(0, y, 0), tip, 0.06, 0.02, 4, col)
-			for t in 3:
-				var p := Vector3(0, y, 0).lerp(tip, 0.45 + 0.27 * t)
-				var side := Vector3(-out.z, 0, out.x)
-				var n := (out * 0.3 + Vector3.UP).normalized()
-				var shade := Color.WHITE * rng.randf_range(0.85, 1.05)
-				shade.a = 1.0
-				_card(needles, p + Vector3(0, 0.1, 0), side * 0.55, out * 0.5, n, shade)
-				_card(needles, p + Vector3(0, 0.15, 0), (side * 0.6 + Vector3.UP * 0.8).normalized() * 0.45, out * 0.5, n, shade * 0.9)
-		y += REF_H * rng.randf_range(0.07, 0.1)
+			# Brushes of needles along the branch: short cards turned every
+			# way, thickest toward the tip, so each tuft is a soft mass.
+			var tufts := 1 + int(reach / 1.2)
+			for t in tufts:
+				var p := Vector3(0, y, 0).lerp(tip, 0.35 + 0.65 * float(t + 1) / tufts)
+				for q in 3:
+					var basis := Basis.from_euler(Vector3(rng.randf_range(-0.6, 0.6), rng.randf_range(0.0, TAU), rng.randf_range(-0.6, 0.6)))
+					var shade := Color.WHITE * rng.randf_range(0.8, 1.05)
+					shade.a = 1.0
+					var size := rng.randf_range(0.32, 0.45)
+					_card(needles, p + Vector3(0, 0.08, 0), basis.x * size, basis.z * size, (out * 0.3 + Vector3.UP).normalized(), shade)
+		y += REF_H * rng.randf_range(0.055, 0.08)
 	var mesh := bark.commit()
 	needles.commit(mesh)
 	mesh.surface_set_material(0, _bark_mat)

@@ -6,12 +6,15 @@ extends Node3D
 ## light at the room's own darkness, fires that flicker from dusk, and a
 ## library of furniture and the small things of a room.
 ##
-## Two meshes per house. The shell (walls, roof, floors, stair, trim,
-## glass) draws at any distance; the detail (furniture, fixtures, the
+## Three meshes per house. The shell (the outer walls, the roof, the
+## trim, the glass) draws at any distance. The detail (the rooms' faces,
+## floors and stair, the sashes, the curtains, the furniture and the
 ## small things) draws only within DETAIL_RANGE, so a house can carry as
-## much as a room holds and the town pays for it only up close. Room
-## lights fade out past LIGHT_RANGE for the same reason. `m` is whichever
-## mesh is being built: shell() and detail() switch it.
+## much as a room holds and the town pays for it only up close. The far
+## mesh stands in for the rooms past that range: a pane in each window
+## showing a room lit at its own time, as the town's plainer houses do.
+## Room lights fade out past LIGHT_RANGE for the same reason. `m` is
+## whichever mesh is being built: shell(), detail() and far() switch it.
 ##
 ## A house's frame: its front face on z = 0 facing +z, x across the
 ## front, the back face at z = -depth; floors at their own heights.
@@ -28,6 +31,7 @@ const OAK := Color(0.62, 0.42, 0.24)
 var town: HarborTown
 var shell_mesh := TownMesh.new()
 var detail_mesh := TownMesh.new()
+var far_mesh := TownMesh.new()
 var m: TownMesh = shell_mesh
 var glass_mat: StandardMaterial3D
 var stats: Dictionary = {}
@@ -57,10 +61,14 @@ func detail() -> void:
 	m = detail_mesh
 
 
+func far() -> void:
+	m = far_mesh
+
+
 ## Both meshes under the house; the detail one draws only near.
 func _commit() -> void:
 	var mats := {"wall": town.wall_mat, "iron": town.iron_mat, "steel": town.steel_mat, "lamp": town.lamp_mat,
-		"clear": glass_mat}
+		"clear": glass_mat, "shade": town.shade_mat}
 	shell_mesh.commit(self, mats, ["wall", "iron"])
 	var near := detail_mesh.commit(self, mats, [])
 	for key: String in near:
@@ -68,6 +76,13 @@ func _commit() -> void:
 		inst.name = "Detail_" + key
 		inst.visibility_range_end = DETAIL_RANGE
 		inst.visibility_range_end_margin = 5.0
+		inst.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	var distant := far_mesh.commit(self, {"glass": town.glass_mat}, [])
+	for key: String in distant:
+		var inst: MeshInstance3D = distant[key]
+		inst.name = "Far_" + key
+		inst.visibility_range_begin = DETAIL_RANGE - 5.0
+		inst.visibility_range_begin_margin = 5.0
 		inst.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	stats = {"triangles": shell_mesh.triangles + detail_mesh.triangles, "detail_triangles": detail_mesh.triangles,
 		"lights": _lights}
@@ -235,11 +250,19 @@ func _window_unit(centre: Vector3, w: float, h: float, yaw: float, shutters: boo
 			m.box("wall", xf * HarborTown.at(Vector3(sx, 0, 0.04)), Vector3(w * 0.5, h + 0.1, 0.03), c(shutter_color, HarborTown.K_PAINT), true)
 			for k in 8:
 				m.box("wall", xf * HarborTown.at(Vector3(sx, -h / 2.0 + 0.12 + k * (h - 0.2) / 8.0, 0.058)), Vector3(w * 0.42, 0.02, 0.01), c(shutter_color * 0.8, HarborTown.K_PAINT), true)
+	# From afar, a pane of the town's lit-room glass just inside.
+	far()
+	var face := (xf.basis * Vector3(0, 0, 1)).normalized()
+	m.quad("glass", xf * Vector3(-w / 2.0, -h / 2.0, -0.04), xf * Vector3(-w / 2.0, h / 2.0, -0.04), xf * Vector3(w / 2.0, h / 2.0, -0.04),
+		xf * Vector3(w / 2.0, -h / 2.0, -0.04), face, Color(_rng.randf_range(0.2, 0.6), _rng.randf(), 0.0, _rng.randf()),
+		Vector2(0, 0), Vector2(0, 1), Vector2(1, 1), Vector2(1, 0))
+	detail()
 	for s: float in [-1.0, 1.0]:
 		m.box("wall", xf * HarborTown.at(Vector3(s * (w / 2.0 - 0.01), 0, -depth / 2.0)), Vector3(0.02, h, depth), inner, true)
 	m.box("wall", xf * HarborTown.at(Vector3(0, h / 2.0 - 0.01, -depth / 2.0)), Vector3(w, 0.02, depth), inner, true)
 	# The sashes: the upper outside, the lower inside; open, the lower
-	# one stands raised in front of the upper.
+	# one stands raised in front of the upper. The glass draws from any
+	# distance, the frames only near.
 	var zs: Array[float] = [-0.05, -0.08]
 	for k in 2:
 		var sh := h / 2.0
@@ -256,14 +279,13 @@ func _window_unit(centre: Vector3, w: float, h: float, yaw: float, shutters: boo
 			m.box("wall", xf * HarborTown.at(Vector3(f * w, cy, sz)), Vector3(0.018, sh - 0.08, 0.025), frame, true)
 		m.box("wall", xf * HarborTown.at(Vector3(0, cy, sz)), Vector3(w - 0.08, 0.018, 0.025), frame, true)
 		var n := (xf.basis * Vector3(0, 0, 1)).normalized()
-		m.quad("clear", xf * Vector3(-w / 2.0 + 0.05, cy - sh / 2.0 + 0.05, sz), xf * Vector3(-w / 2.0 + 0.05, cy + sh / 2.0 - 0.04, sz),
+		shell_mesh.quad("clear", xf * Vector3(-w / 2.0 + 0.05, cy - sh / 2.0 + 0.05, sz), xf * Vector3(-w / 2.0 + 0.05, cy + sh / 2.0 - 0.04, sz),
 			xf * Vector3(w / 2.0 - 0.05, cy + sh / 2.0 - 0.04, sz), xf * Vector3(w / 2.0 - 0.05, cy - sh / 2.0 + 0.05, sz), n, Color.WHITE)
 	m.box("wall", xf * HarborTown.at(Vector3(0, -h / 2.0 - 0.02, -depth - 0.06)), Vector3(w + 0.2, 0.035, 0.14), inner, true)
 	m.box("wall", xf * HarborTown.at(Vector3(0, -h / 2.0 - 0.1, -depth - 0.015)), Vector3(w + 0.12, 0.1, 0.03), inner, true)
 	m.box("wall", xf * HarborTown.at(Vector3(0, h / 2.0 + 0.06, -depth - 0.015)), Vector3(w + 0.24, 0.12, 0.03), inner, true)
 	for s: float in [-1.0, 1.0]:
 		m.box("wall", xf * HarborTown.at(Vector3(s * (w / 2.0 + 0.05), 0, -depth - 0.015)), Vector3(0.1, h, 0.03), inner, true)
-	detail()
 	if radiator:
 		var rad := xf * HarborTown.at(Vector3(0, -h / 2.0 - 0.45, -depth - 0.14))
 		for k in 9:
@@ -286,48 +308,28 @@ func _window_unit(centre: Vector3, w: float, h: float, yaw: float, shutters: boo
 
 ## A lamp: its shade or globe glowing, a light, lighting at the darkness
 ## thr. kind names its fixture: "porch", "ceiling", "pendant", "shade".
+## The glowing parts go into the house's shade mesh, one draw for all.
 func _lamp_fixture(pos: Vector3, kind: String, thr: float, energy: float, range_m := 5.0) -> void:
-	var glow := ViewUtil.glow(Color(1.0, 0.78, 0.5), 0.0)
-	glow.albedo_color = Color(0.95, 0.88, 0.72)
-	var shade := MeshInstance3D.new()
+	var keep := m
+	var glow := Color(thr, 0.8, 0.0, 1.0)
 	match kind:
 		"porch":
-			var lantern := CylinderMesh.new()
-			lantern.top_radius = 0.07
-			lantern.bottom_radius = 0.09
-			lantern.height = 0.26
-			shade.mesh = lantern
-			m.box("iron", HarborTown.at(pos + Vector3(0, 0.17, 0)), Vector3(0.2, 0.04, 0.2), Color(0.08, 0.08, 0.08))
+			shell()
+			m.cylinder("shade", HarborTown.at(pos), 0.09, 0.07, 0.26, 10, glow)
+			m.box("iron", HarborTown.at(pos + Vector3(0, 0.15, 0)), Vector3(0.2, 0.04, 0.2), Color(0.08, 0.08, 0.08))
 			m.box("iron", HarborTown.at(pos + Vector3(0, 0.0, -0.08)), Vector3(0.04, 0.3, 0.04), Color(0.08, 0.08, 0.08))
+			for k in 4:
+				var a := TAU * k / 4.0 + PI / 4.0
+				m.bar("iron", pos + Vector3(cos(a) * 0.09, -0.13, sin(a) * 0.09), pos + Vector3(cos(a) * 0.07, 0.13, sin(a) * 0.07), 0.008, 4, Color(0.08, 0.08, 0.08))
 		"ceiling":
-			var bowl := SphereMesh.new()
-			bowl.radius = 0.18
-			bowl.height = 0.18
-			bowl.is_hemisphere = true
-			shade.mesh = bowl
-			shade.rotation.x = PI
-			m.cylinder("iron", HarborTown.at(pos + Vector3(0, 0.06, 0)), 0.04, 0.04, 0.12, 8, Color(0.7, 0.6, 0.35))
+			m.sphere("shade", Transform3D(Basis.from_scale(Vector3(1.0, 0.5, 1.0)), pos), 0.18, 12, glow)
+			m.cylinder("iron", HarborTown.at(pos + Vector3(0, 0.1, 0)), 0.04, 0.04, 0.12, 8, Color(0.7, 0.6, 0.35))
 		"pendant":
-			var bowl := SphereMesh.new()
-			bowl.radius = 0.22
-			bowl.height = 0.22
-			bowl.is_hemisphere = true
-			shade.mesh = bowl
-			shade.rotation.x = PI
-			m.bar("iron", pos + Vector3(0, 0.02, 0), pos + Vector3(0, 0.9, 0), 0.008, 4, Color(0.7, 0.6, 0.35))
+			m.sphere("shade", Transform3D(Basis.from_scale(Vector3(1.0, 0.5, 1.0)), pos), 0.22, 12, glow)
+			m.bar("iron", pos + Vector3(0, 0.1, 0), pos + Vector3(0, 0.9, 0), 0.008, 4, Color(0.7, 0.6, 0.35))
 		_:
-			var cone := CylinderMesh.new()
-			cone.top_radius = 0.13
-			cone.bottom_radius = 0.22
-			cone.height = 0.26
-			cone.cap_top = false
-			cone.cap_bottom = false
-			shade.mesh = cone
-			glow.cull_mode = BaseMaterial3D.CULL_DISABLED
-	shade.position = pos
-	shade.material_override = glow
-	shade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(shade)
+			m.cylinder("shade", HarborTown.at(pos), 0.22, 0.13, 0.26, 14, glow, false)
+	m = keep
 	var light := OmniLight3D.new()
 	light.position = pos + Vector3(0, -0.12, 0)
 	light.omni_range = range_m
@@ -339,7 +341,7 @@ func _lamp_fixture(pos: Vector3, kind: String, thr: float, energy: float, range_
 	light.distance_fade_length = 15.0
 	add_child(light)
 	_lights += 1
-	town.lamps.append({"light": light, "thr": thr, "energy": energy, "mat": glow, "glow": 2.5})
+	town.lamps.append({"light": light, "thr": thr, "energy": energy})
 
 
 ## A fire burning in a firebox whose mouth faces along yaw: logs, the
@@ -356,6 +358,7 @@ func _fire_at(pos: Vector3, yaw: float) -> void:
 	embers.mesh = bed
 	embers.material_override = ember
 	embers.transform = xf * HarborTown.at(Vector3(0, 0.06, 0))
+	embers.visibility_range_end = DETAIL_RANGE
 	add_child(embers)
 	var light := OmniLight3D.new()
 	light.transform = xf * HarborTown.at(Vector3(0, 0.45, 0.5))
@@ -519,17 +522,7 @@ func _radio(at_: Vector3, yaw: float) -> void:
 	m.box("wall", xf * HarborTown.at(Vector3(0, 0.42, 0.205)), Vector3(0.56, 0.5, 0.01), c(Color(0.55, 0.45, 0.3), HarborTown.K_CLOTH), true)
 	for k in 5:
 		m.box("wall", xf * HarborTown.at(Vector3(0, 0.22 + 0.1 * k, 0.212)), Vector3(0.58, 0.012, 0.012), c(Color(0.3, 0.16, 0.08), HarborTown.K_WOOD), true)
-	var dial := ViewUtil.glow(Color(1.0, 0.72, 0.35), 0.0)
-	var face := MeshInstance3D.new()
-	var disc := CylinderMesh.new()
-	disc.top_radius = 0.09
-	disc.bottom_radius = 0.09
-	disc.height = 0.01
-	face.mesh = disc
-	face.material_override = dial
-	face.transform = xf * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(0, 0.85, 0.205))
-	add_child(face)
-	town.lamps.append({"thr": _rng.randf_range(0.4, 0.6), "mat": dial, "glow": 1.5})
+	m.cylinder("shade", xf * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(0, 0.85, 0.205)), 0.09, 0.09, 0.01, 16, Color(_rng.randf_range(0.4, 0.6), 0.5, 0.0, 1.0))
 	for s: float in [-1.0, 1.0]:
 		m.cylinder("wall", xf * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(s * 0.25, 0.85, 0.215)), 0.025, 0.025, 0.03, 8, c(Color(0.2, 0.12, 0.06), HarborTown.K_WOOD))
 
@@ -721,3 +714,131 @@ func _vase(at_: Vector3, bloom: Color) -> void:
 		var tip := at_ + Vector3(cos(a) * 0.1, 0.35 + 0.04 * (k % 2), sin(a) * 0.1)
 		m.bar("wall", at_ + Vector3(0, 0.18, 0), tip, 0.004, 3, c(Color(0.2, 0.35, 0.15), HarborTown.K_CLOTH))
 		m.sphere("wall", HarborTown.at(tip), 0.035, 6, c(bloom, HarborTown.K_CLOTH))
+
+
+## ---- signs of life -----------------------------------------------------------------
+
+## The evening paper, folded, left where it was read.
+func _newspaper(at_: Vector3, yaw: float) -> void:
+	var xf := HarborTown.at(at_, yaw)
+	m.box("wall", xf * HarborTown.at(Vector3(0, 0.008, 0)), Vector3(0.3, 0.016, 0.42), c(Color(0.86, 0.84, 0.78), HarborTown.K_CLOTH), true)
+	for k in 5:
+		m.box("wall", xf * HarborTown.at(Vector3(-0.06 + 0.04 * (k % 2), 0.017, -0.15 + 0.07 * k)), Vector3(0.16, 0.002, 0.03), c(Color(0.35, 0.35, 0.35), HarborTown.K_CLOTH), true)
+
+
+## A cup on its saucer.
+func _cup(at_: Vector3) -> void:
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.005, 0)), 0.07, 0.06, 0.01, 12, c(Color(0.93, 0.92, 0.88), HarborTown.K_ENAMEL))
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.045, 0)), 0.04, 0.03, 0.07, 12, c(Color(0.93, 0.92, 0.88), HarborTown.K_ENAMEL))
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.078, 0)), 0.036, 0.036, 0.004, 12, c(Color(0.25, 0.15, 0.08), HarborTown.K_ENAMEL))
+
+
+## A book, shut or lying open face down.
+func _book(at_: Vector3, yaw: float, open: bool, cover: Color) -> void:
+	var xf := HarborTown.at(at_, yaw)
+	if open:
+		for s2: float in [-1.0, 1.0]:
+			m.box("wall", xf * Transform3D(Basis(Vector3(0, 0, 1), s2 * 0.25), Vector3(s2 * 0.075, 0.02, 0)), Vector3(0.15, 0.02, 0.22), c(cover, HarborTown.K_CLOTH), true)
+	else:
+		m.box("wall", xf * HarborTown.at(Vector3(0, 0.02, 0)), Vector3(0.16, 0.04, 0.23), c(cover, HarborTown.K_CLOTH), true)
+		m.box("wall", xf * HarborTown.at(Vector3(0.005, 0.02, 0)), Vector3(0.15, 0.03, 0.22), c(Color(0.92, 0.9, 0.82), HarborTown.K_CLOTH), true)
+
+
+## A knitting basket, yarn and needles.
+func _knitting(at_: Vector3) -> void:
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.13, 0)), 0.2, 0.16, 0.26, 12, c(Color(0.6, 0.48, 0.3), HarborTown.K_TIMBER))
+	var yarns: Array[Color] = [Color(0.7, 0.2, 0.2), Color(0.25, 0.35, 0.6), Color(0.85, 0.8, 0.6)]
+	for k in 3:
+		m.sphere("wall", HarborTown.at(at_ + Vector3(-0.07 + 0.07 * k, 0.28, 0.03 * (k - 1))), 0.06, 8, c(yarns[k], HarborTown.K_CLOTH))
+	for s2: float in [-1.0, 1.0]:
+		m.bar("iron", at_ + Vector3(0.0, 0.26, 0.05 * s2), at_ + Vector3(0.12, 0.5, 0.08 * s2), 0.004, 3, Color(0.6, 0.6, 0.6))
+
+
+## A pair of shoes by the door.
+func _shoes(at_: Vector3, yaw: float, leather: Color) -> void:
+	var xf := HarborTown.at(at_, yaw)
+	for s2: float in [-1.0, 1.0]:
+		m.box("wall", xf * HarborTown.at(Vector3(s2 * 0.07, 0.035, 0)), Vector3(0.1, 0.07, 0.28), c(leather, HarborTown.K_WOOD), true)
+		m.box("wall", xf * HarborTown.at(Vector3(s2 * 0.07, 0.075, -0.06)), Vector3(0.09, 0.03, 0.13), c(leather * 1.1, HarborTown.K_WOOD), true)
+
+
+## A man's hat.
+func _hat(at_: Vector3, felt := Color(0.3, 0.26, 0.22)) -> void:
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.01, 0)), 0.17, 0.17, 0.012, 16, c(felt, HarborTown.K_CLOTH))
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.07, 0)), 0.1, 0.11, 0.11, 12, c(felt, HarborTown.K_CLOTH))
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.035, 0)), 0.112, 0.112, 0.025, 12, c(Color(0.12, 0.1, 0.08), HarborTown.K_CLOTH))
+
+
+## A dog asleep, curled, its nose on its paws.
+func _dog(at_: Vector3, yaw: float, fur: Color) -> void:
+	var xf := HarborTown.at(at_, yaw)
+	var f := c(fur, HarborTown.K_CLOTH)
+	m.sphere("wall", xf * Transform3D(Basis.from_scale(Vector3(1.0, 0.55, 1.5)), Vector3(0, 0.14, 0)), 0.24, 10, f)
+	m.sphere("wall", xf * Transform3D(Basis.from_scale(Vector3(0.9, 0.8, 1.2)), Vector3(0.18, 0.1, 0.28)), 0.1, 8, f)
+	m.sphere("wall", xf * HarborTown.at(Vector3(0.2, 0.08, 0.4)), 0.05, 6, c(fur.darkened(0.3), HarborTown.K_CLOTH))
+	for s2: float in [-1.0, 1.0]:
+		m.box("wall", xf * Transform3D(Basis(Vector3(0, 0, 1), s2 * 0.5), Vector3(0.18 + s2 * 0.08, 0.17, 0.24)), Vector3(0.03, 0.12, 0.08), c(fur.darkened(0.2), HarborTown.K_CLOTH), true)
+	m.bar("wall", xf * Vector3(-0.1, 0.06, -0.3), xf * Vector3(0.25, 0.05, -0.25), 0.03, 5, f)
+	m.cylinder("wall", xf * HarborTown.at(Vector3(0, 0.01, 0)), 0.45, 0.45, 0.02, 16, c(Color(0.45, 0.2, 0.2), HarborTown.K_CLOTH))
+
+
+## A pie cooling on a counter.
+func _pie(at_: Vector3) -> void:
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.02, 0)), 0.14, 0.11, 0.04, 16, c(Color(0.85, 0.6, 0.3), HarborTown.K_ENAMEL))
+	m.cylinder("wall", HarborTown.at(at_ + Vector3(0, 0.045, 0)), 0.12, 0.13, 0.015, 16, c(Color(0.8, 0.55, 0.28), HarborTown.K_CLOTH))
+	for k in 4:
+		m.box("wall", HarborTown.at(at_ + Vector3(-0.09 + 0.06 * k, 0.055, 0)), Vector3(0.015, 0.008, 0.22), c(Color(0.88, 0.66, 0.36), HarborTown.K_CLOTH))
+		m.box("wall", HarborTown.at(at_ + Vector3(0, 0.058, -0.09 + 0.06 * k)), Vector3(0.22, 0.008, 0.015), c(Color(0.88, 0.66, 0.36), HarborTown.K_CLOTH))
+
+
+## A loaf of bread on its board.
+func _bread(at_: Vector3, yaw: float) -> void:
+	var xf := HarborTown.at(at_, yaw)
+	m.box("wall", xf * HarborTown.at(Vector3(0, 0.01, 0)), Vector3(0.36, 0.02, 0.22), c(Color(0.6, 0.45, 0.28), HarborTown.K_WOOD), true)
+	m.sphere("wall", xf * Transform3D(Basis.from_scale(Vector3(1.6, 0.7, 0.85)), Vector3(0, 0.06, 0)), 0.09, 8, c(Color(0.75, 0.5, 0.25), HarborTown.K_CLOTH))
+
+
+## An apron hung on a hook on a wall facing along yaw.
+func _apron(at_: Vector3, yaw: float, cloth: Color) -> void:
+	var xf := HarborTown.at(at_, yaw)
+	m.box("iron", xf * HarborTown.at(Vector3(0, 0.02, 0.02)), Vector3(0.02, 0.02, 0.04), Color(0.3, 0.3, 0.3))
+	m.box("wall", xf * HarborTown.at(Vector3(0, -0.3, 0.035)), Vector3(0.36, 0.55, 0.01), c(cloth, HarborTown.K_CLOTH), true)
+	m.box("wall", xf * HarborTown.at(Vector3(0, -0.4, 0.042)), Vector3(0.2, 0.14, 0.005), c(cloth.lightened(0.2), HarborTown.K_CLOTH), true)
+
+
+## A child's things on the floor: blocks, a toy truck.
+func _toys(at_: Vector3) -> void:
+	var colours: Array[Color] = [Color(0.8, 0.2, 0.15), Color(0.2, 0.4, 0.7), Color(0.85, 0.7, 0.2), Color(0.25, 0.55, 0.3)]
+	for k in 7:
+		var p := at_ + Vector3(_rng.randf_range(-0.3, 0.3), 0.03 + (0.06 if k > 4 else 0.0), _rng.randf_range(-0.3, 0.3))
+		m.box("wall", HarborTown.at(p, _rng.randf_range(0.0, 1.0)), Vector3(0.06, 0.06, 0.06), c(colours[k % 4], HarborTown.K_PAINT), true)
+	var truck := HarborTown.at(at_ + Vector3(0.45, 0, 0.1), 0.6)
+	m.box("iron", truck * HarborTown.at(Vector3(0, 0.07, 0)), Vector3(0.12, 0.06, 0.3), Color(0.7, 0.15, 0.1))
+	m.box("iron", truck * HarborTown.at(Vector3(0, 0.12, 0.08)), Vector3(0.11, 0.06, 0.1), Color(0.7, 0.15, 0.1))
+	for sx: float in [-1.0, 1.0]:
+		for sz: float in [-1.0, 1.0]:
+			m.cylinder("iron", truck * Transform3D(Basis(Vector3(0, 0, 1), PI / 2.0), Vector3(sx * 0.065, 0.03, sz * 0.1)), 0.03, 0.03, 0.02, 8, Color(0.1, 0.1, 0.1))
+
+
+## A treadle sewing machine, black and gold on its iron stand.
+func _sewing_machine(at_: Vector3, yaw: float) -> void:
+	var xf := HarborTown.at(at_, yaw)
+	m.box("wall", xf * HarborTown.at(Vector3(0, 0.74, 0)), Vector3(0.9, 0.04, 0.45), c(Color(0.42, 0.26, 0.14), HarborTown.K_WOOD), true)
+	for s2: float in [-1.0, 1.0]:
+		m.box("iron", xf * HarborTown.at(Vector3(s2 * 0.38, 0.36, 0)), Vector3(0.04, 0.72, 0.38), Color(0.1, 0.1, 0.1))
+	m.box("iron", xf * Transform3D(Basis(Vector3.RIGHT, 0.3), Vector3(0, 0.08, 0.05)), Vector3(0.55, 0.02, 0.28), Color(0.1, 0.1, 0.1))
+	m.box("iron", xf * HarborTown.at(Vector3(0.05, 0.82, 0)), Vector3(0.36, 0.1, 0.14), Color(0.05, 0.05, 0.05))
+	m.box("iron", xf * HarborTown.at(Vector3(0.2, 0.95, 0)), Vector3(0.08, 0.24, 0.12), Color(0.05, 0.05, 0.05))
+	m.box("iron", xf * HarborTown.at(Vector3(0.0, 1.05, 0)), Vector3(0.44, 0.08, 0.1), Color(0.05, 0.05, 0.05))
+	m.box("iron", xf * HarborTown.at(Vector3(0.0, 1.05, 0.051)), Vector3(0.3, 0.02, 0.002), Color(0.75, 0.6, 0.25))
+	m.cylinder("iron", xf * Transform3D(Basis(Vector3(0, 0, 1), PI / 2.0), Vector3(0.27, 0.98, 0)), 0.06, 0.06, 0.03, 12, Color(0.4, 0.4, 0.4))
+	m.cylinder("wall", xf * HarborTown.at(Vector3(-0.25, 0.8, 0.1)), 0.03, 0.03, 0.06, 8, c(Color(0.7, 0.2, 0.2), HarborTown.K_CLOTH))
+	_solid(xf * Vector3(0, 0.5, 0), Vector3(0.9, 1.0, 0.45), xf.basis)
+
+
+## A tumbler with two toothbrushes on a basin.
+func _toothbrushes(at_: Vector3) -> void:
+	m.cylinder("clear", HarborTown.at(at_ + Vector3(0, 0.05, 0)), 0.03, 0.028, 0.1, 10, Color.WHITE)
+	for k in 2:
+		m.bar("wall", at_ + Vector3(0.0, 0.02, 0.0), at_ + Vector3(-0.02 + 0.04 * k, 0.17, 0.01), 0.006, 4, c([Color(0.8, 0.2, 0.2), Color(0.2, 0.5, 0.3)][k], HarborTown.K_ENAMEL))
+

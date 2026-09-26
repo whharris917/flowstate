@@ -83,6 +83,7 @@ var cape: CapeHouse
 ## Chimney smoke's particle settings: the weather leans them with the wind.
 var smoke: Array[ParticleProcessMaterial] = []
 var clear_mat: StandardMaterial3D
+var shade_mat: ShaderMaterial   # every lamp shade in the modelled houses: glows at its own darkness
 ## Every house as built, for whatever dresses its yard: {base, w, d,
 ## style, door_x, found, front_xs, f1, chimney, water, thr, harbour_side}.
 var houses_built: Array[Dictionary] = []
@@ -139,6 +140,8 @@ func _make_materials() -> void:
 	iron_mat.clearcoat_enabled = true
 	iron_mat.clearcoat = 0.3
 	steel_mat = ViewUtil.steel(Color(0.74, 0.76, 0.78))
+	shade_mat = ShaderMaterial.new()
+	shade_mat.shader = load("res://world/town_shade.gdshader")
 	clear_mat = StandardMaterial3D.new()
 	clear_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	clear_mat.albedo_color = Color(0.85, 0.9, 0.92, 0.25)

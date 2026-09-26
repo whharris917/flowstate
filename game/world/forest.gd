@@ -212,7 +212,7 @@ func _finish_detailed(cast_shadows: bool) -> void:
 			# The broadleaves: maples mostly, oaks, birches, an elm.
 			var kinds: Array[String] = ["maple", "maple", "maple", "maple", "oak", "oak", "birch", "birch", "elm", "maple"]
 			kind = kinds[pick]
-		elif pick < 3:
+		elif pick < 2:
 			kind = "pine"
 		if kind == "elm" or kind == "hedge":
 			variant = 0
@@ -241,8 +241,10 @@ func _finish_detailed(cast_shadows: bool) -> void:
 		var inst := MultiMeshInstance3D.new()
 		inst.name = "Trees_" + key
 		inst.multimesh = mm
-		inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast_shadows 			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if cast_shadows:
+		# Shrubs and hedges are too low for their shadows to be missed.
+		var casts := cast_shadows and not (kind in ["shrub", "hydrangea", "hedge"])
+		inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if casts 			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if casts:
 			inst.add_to_group("foliage_shadows")
 		add_child(inst)
 	var trunk := CylinderMesh.new()

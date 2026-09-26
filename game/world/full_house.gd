@@ -68,6 +68,7 @@ func build(t: HarborTown, front: Vector3, yaw: float, variant: Dictionary) -> vo
 	_roof()
 	_chimney()
 	_entry()
+	detail()
 	for room in rooms:
 		_room(room)
 	_stair(stair["x0"], stair["x1"], stair["z0"], stair["z1"], F, U, stair["rail_x"], c(OAK * 0.9, HarborTown.K_WOOD), c(TRIM, HarborTown.K_ENAMEL))
@@ -479,10 +480,7 @@ func _room(room: Dictionary) -> void:
 		for o: Array in openings:
 			if float(o[2]) <= y0 + 0.01:
 				cuts.append([o[0], o[1], y0 + 0.15, y0 + 0.15])
-		var keep := m
-		detail()
 		_wall("wall", pa + inward * 0.03, pb + inward * 0.03, y0, func(_p: Vector2) -> float: return y0 + 0.14, cuts, 0.015, base_col)
-		m = keep
 	# The floor and the ceiling, round the stairwell.
 	var rect := Rect2(x0, z1, x1 - x0, z0 - z1)
 	var void_: Rect2 = stair["void"]
@@ -584,6 +582,12 @@ func _furnish_colonial() -> void:
 	_picture(Vector3(1.1 + 0.08, F + 1.7, -d / 2.0), PI / 2.0, Vector2(0.9, 0.6), Color(0.3, 0.42, 0.52))
 	_wall_clock(Vector3(1.1 + 0.08, F + 2.3, -1.9), PI / 2.0)
 	_lamp_fixture(Vector3(3.3, C1 - 0.12, -d / 2.0), "ceiling", 0.6, 0.6, 6.0)
+	_newspaper(Vector3(3.95, F + 0.49, -d / 2.0 + 1.5), 0.4)
+	_cup(Vector3(3.0, F + 0.42, -d / 2.0 - 0.25))
+	_knitting(Vector3(4.2, F, -d / 2.0 - 2.2))
+	_book(Vector3(1.75, F + 0.52, -d / 2.0 + 0.8), 0.3, true, Color(0.2, 0.3, 0.5))
+	if _rng.randf() < 0.7:
+		_dog(Vector3(3.95, F, -d / 2.0 + 0.1), -PI / 2.0, [Color(0.55, 0.38, 0.2), Color(0.12, 0.1, 0.09), Color(0.85, 0.8, 0.7)][_rng.randi() % 3])
 	# The dining room.
 	_dining_set(Vector3(-3.3, F, -2.1), wd, Color(0.93, 0.92, 0.88) if _rng.randf() < 0.5 else null)
 	_lamp_fixture(Vector3(-3.3, C1 - 0.95, -2.1), "pendant", 0.33, 0.9, 5.0)
@@ -599,6 +603,11 @@ func _furnish_colonial() -> void:
 	_kitchen_table(Vector3(-3.0, F, -5.3), Color(0.7, 0.12, 0.1), Color(0.8, 0.8, 0.72))
 	_wall_clock(Vector3(-3.3, F + 2.2, -4.25 - 0.08), PI)
 	_lamp_fixture(Vector3(-3.3, C1 - 0.12, -6.3), "ceiling", 0.25, 0.9, 6.0)
+	_pie(Vector3(-4.0, F + 0.9, zb + 0.3))
+	_bread(Vector3(-2.8, F + 0.77, -5.4), 0.3)
+	_apron(Vector3(-1.1 - 0.05, F + 1.5, -5.4), -PI / 2.0, Color(0.85, 0.75, 0.55))
+	if _rng.randf() < 0.6:
+		YardProps.cat(m, HarborTown.at(Vector3(-3.1, F + 1.15, zb + 0.06), 0.0), Color(0.12, 0.1, 0.09))
 	# The hall: runner, telephone table, coat hooks, a light.
 	_box("wall", Vector3(0.5, F + 0.005, -3.5), Vector3(0.7, 0.01, 5.0), c(Color(0.45, 0.18, 0.15), HarborTown.K_CLOTH))
 	_table(Vector3(0.8, F, -4.6), Vector2(0.4, 0.7), 0.78, c(wd, HarborTown.K_WOOD))
@@ -607,6 +616,9 @@ func _furnish_colonial() -> void:
 		_box("iron", Vector3(0.93, F + 1.7, -7.0 - 0.25 * k), Vector3(0.05, 0.03, 0.03), Color(0.6, 0.5, 0.3))
 	_box("wall", Vector3(0.88, F + 1.35, -7.3), Vector3(0.12, 0.7, 0.45), c(Color(0.3, 0.32, 0.4), HarborTown.K_CLOTH))
 	_lamp_fixture(Vector3(0.45, C1 - 0.12, -1.0), "ceiling", 0.45, 0.5, 5.0)
+	_hat(Vector3(0.93, F + 1.74, -7.0))
+	_shoes(Vector3(-0.55, F, -0.5), PI / 2.0, Color(0.3, 0.18, 0.1))
+	_shoes(Vector3(-0.55, F, -0.85), PI / 2.0, Color(0.15, 0.12, 0.1))
 	_lamp_fixture(Vector3(0.45, E - 0.14, -5.9), "ceiling", 0.5, 0.4, 5.0)
 	# Upstairs: the bedrooms and the bath.
 	_bed(Vector3(-3.3, U, -2.8), PI, Vector2(1.4, 2.0), c(Color(0.62, 0.25, 0.28), HarborTown.K_CLOTH), c(wd, HarborTown.K_WOOD))
@@ -620,14 +632,17 @@ func _furnish_colonial() -> void:
 	_lamp_fixture(Vector3(-1.9, U + 1.05, -7.95), "shade", 0.45, 0.35, 3.5)
 	_toy_chest(Vector3(-3.3, U, -4.6), 0.0)
 	_model_plane(Vector3(-3.3, E - 0.5, -6.3))
+	_toys(Vector3(-3.3, U, -6.0))
 	_bed(Vector3(3.3, U, -2.8), PI, Vector2(1.4, 2.0), c(Color(0.85, 0.82, 0.7), HarborTown.K_CLOTH), c(wd, HarborTown.K_WOOD))
 	_nightstand(Vector3(2.3, U, -2.0), 0.0, wd, 0.55)
 	_dresser(Vector3(xi - 0.3, U, -3.5), -PI / 2.0, wd)
 	_rocker_inside(Vector3(4.5, U, -0.8), PI + 0.5)
+	_sewing_machine(Vector3(1.8, U, -0.5), PI)
 	_bed(Vector3(3.8, U, -6.6), PI / 2.0, Vector2(0.95, 1.9), c(Color(0.55, 0.5, 0.3), HarborTown.K_CLOTH), c(wd, HarborTown.K_WOOD))
 	_dresser(Vector3(2.0, U, -4.6), PI, wd)
 	_bath_fixtures(Vector3(0.0, U, zb + 0.4), 0.0, Vector3(-0.8, U, -7.0), PI / 2.0, Vector3(0.75, U, -6.95), -PI / 2.0)
 	_lamp_fixture(Vector3(0, E - 0.14, -7.4), "ceiling", 0.55, 0.4, 3.5)
+	_toothbrushes(Vector3(-0.8, U + 0.9, -7.0))
 
 
 func _furnish_gable_front() -> void:
@@ -649,6 +664,13 @@ func _furnish_gable_front() -> void:
 	_lamp_fixture(lamp + Vector3(0, 1.55, 0), "shade", 0.3, 0.8, 6.0)
 	_wall_clock(Vector3(1.0, F + 2.3, -4.6 + 0.08), 0.0)
 	_lamp_fixture(Vector3(1.2, C1 - 0.12, -2.3), "ceiling", 0.6, 0.6, 6.0)
+	_newspaper(Vector3(2.4, F + 0.49, -0.8), 0.8)
+	_knitting(Vector3(-0.8, F, -1.3))
+	_book(Vector3(-0.8, F + 0.52, -3.2), 1.2, true, Color(0.5, 0.2, 0.15))
+	_table(Vector3(0.4, F, -2.5), Vector2(0.5, 0.9), 0.42, c(wd, HarborTown.K_WOOD))
+	_cup(Vector3(0.4, F + 0.42, -2.3))
+	if _rng.randf() < 0.7:
+		_dog(Vector3(2.0, F, -2.3), -PI / 2.0, [Color(0.55, 0.38, 0.2), Color(0.12, 0.1, 0.09), Color(0.85, 0.8, 0.7)][_rng.randi() % 3])
 	# The dining room.
 	_dining_set(Vector3(1.2, F, -6.0), wd, Color(0.93, 0.92, 0.88))
 	_lamp_fixture(Vector3(1.2, C1 - 0.95, -6.0), "pendant", 0.33, 0.9, 5.0)
@@ -661,26 +683,36 @@ func _furnish_gable_front() -> void:
 	_fridge(Vector3(-xi + 0.36, F, -7.9), PI / 2.0)
 	_kitchen_table(Vector3(0.6, F, -8.8), Color(0.25, 0.45, 0.6), Color(0.85, 0.85, 0.75))
 	_lamp_fixture(Vector3(0.0, C1 - 0.12, -8.9), "ceiling", 0.25, 0.9, 6.0)
+	_pie(Vector3(-0.6, F + 0.9, zb + 0.3))
+	_bread(Vector3(0.8, F + 0.77, -8.9), 0.3)
+	_apron(Vector3(-xi + 0.01, F + 1.5, -8.2), PI / 2.0, Color(0.7, 0.3, 0.3))
+	if _rng.randf() < 0.6:
+		YardProps.cat(m, HarborTown.at(Vector3(-1.3, F + 1.15, zb + 0.06), 0.0), Color(0.7, 0.45, 0.2))
 	# The hall.
 	_box("wall", Vector3(-2.0, F + 0.005, -3.8), Vector3(0.6, 0.01, 5.5), c(Color(0.45, 0.18, 0.15), HarborTown.K_CLOTH))
 	_table(Vector3(-1.6, F, -4.8), Vector2(0.4, 0.6), 0.78, c(wd, HarborTown.K_WOOD))
 	_telephone(Vector3(-1.6, F + 0.78, -4.7))
 	_lamp_fixture(Vector3(-2.0, C1 - 0.12, -1.0), "ceiling", 0.45, 0.5, 5.0)
+	_shoes(Vector3(-2.55, F, -0.55), -PI / 2.0, Color(0.3, 0.18, 0.1))
+	_hat(Vector3(-1.6, F + 0.82, -4.95))
 	_lamp_fixture(Vector3(-2.0, E - 0.14, -6.0), "ceiling", 0.5, 0.4, 5.0)
 	# Upstairs.
 	_bed(Vector3(1.2, U, -3.5), 0.0, Vector2(1.4, 2.0), c(Color(0.5, 0.55, 0.62), HarborTown.K_CLOTH), c(wd, HarborTown.K_WOOD))
 	_nightstand(Vector3(2.4, U, -4.2), 0.0, wd, 0.55)
 	_dresser(Vector3(xi - 0.3, U, -2.3), -PI / 2.0, wd)
 	_rocker_inside(Vector3(-0.6, U, -0.8), PI - 0.4)
+	_sewing_machine(Vector3(-0.7, U, -3.8), PI / 2.0)
 	_lamp_fixture(Vector3(1.2, E - 0.14, -2.3), "ceiling", 0.62, 0.4, 5.0)
 	_bed(Vector3(0.3, U, -8.9), 0.0, Vector2(0.95, 1.9), c(Color(0.62, 0.3, 0.2), HarborTown.K_CLOTH), c(wd, HarborTown.K_WOOD))
 	_bed(Vector3(2.8, U, -8.9), 0.0, Vector2(0.95, 1.9), c(Color(0.3, 0.45, 0.3), HarborTown.K_CLOTH), c(wd, HarborTown.K_WOOD))
 	_toy_chest(Vector3(1.85, U, -6.2), PI)
 	_dresser(Vector3(-0.9, U, -8.0), PI / 2.0, wd)
 	_model_plane(Vector3(1.8, E - 0.5, -7.5))
+	_toys(Vector3(1.5, U, -7.2))
 	_lamp_fixture(Vector3(1.2, E - 0.14, -7.5), "ceiling", 0.5, 0.4, 5.0)
 	_bath_fixtures(Vector3(-2.5, U, zb + 0.4), 0.0, Vector3(-3.45, U, -7.3), PI / 2.0, Vector3(-1.6, U, -8.4), -PI / 2.0)
 	_lamp_fixture(Vector3(-2.5, E - 0.14, -8.4), "ceiling", 0.55, 0.4, 3.5)
+	_toothbrushes(Vector3(-3.45, U + 0.9, -7.3))
 
 
 ## The candlestick telephone on its table.

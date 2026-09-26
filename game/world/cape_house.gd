@@ -71,11 +71,11 @@ func build(t: HarborTown, front: Vector3, yaw: float, variant: Dictionary = {}) 
 	_roof()
 	_dormers()
 	_chimney()
+	_openings()
+	detail()
 	_floors()
 	_cape_stair()
 	_partitions()
-	_openings()
-	detail()
 	_living_room()
 	_dining_room()
 	_kitchen()
@@ -639,6 +639,13 @@ func _living_room() -> void:
 	_picture(Vector3(-3.0, F + 1.6, -T_OUT - T_IN - 0.02), PI, Vector2(0.3, 0.4), Color(0.55, 0.5, 0.35))
 	# The ceiling light.
 	_lamp_fixture(Vector3(-3.0, E - 0.12, cz), "ceiling", 0.6, 0.6, 6.0)
+	# Signs of the evening: the paper on a chair, a cup, the knitting, a
+	# book face down on the sofa, the dog asleep before the fire.
+	_newspaper(Vector3(-3.4, F + 0.49, cz + 1.5), 0.4)
+	_cup(Vector3(-2.6, F + 0.42, cz - 0.2))
+	_knitting(Vector3(-4.2, F, cz - 2.2))
+	_book(Vector3(-1.55, F + 0.52, cz + 0.6), 0.3, true, Color(0.2, 0.3, 0.5))
+	_dog(Vector3(-3.3, F, cz + 0.1), PI / 2.0, Color(0.55, 0.38, 0.2))
 
 
 func _dining_room() -> void:
@@ -727,6 +734,9 @@ func _kitchen() -> void:
 		_chair(Vector3(tx + s * 0.62, F, tz), -s * PI / 2.0, c(Color(0.8, 0.8, 0.72), HarborTown.K_ENAMEL))
 	m.cylinder("wall", HarborTown.at(Vector3(tx + 0.2, F + 0.82, tz - 0.1)), 0.07, 0.06, 0.1, 10, c(Color(0.25, 0.45, 0.35), HarborTown.K_ENAMEL))
 	_lamp_fixture(Vector3(3.0, E - 0.12, -5.9), "ceiling", 0.25, 0.9, 6.0)
+	_pie(Vector3(1.9, F + 0.9, zb + 0.3))
+	_bread(Vector3(2.8, F + 0.77, -5.5), 0.3)
+	_apron(Vector3(1.0 + 0.06, F + 1.5, -6.6), PI / 2.0, Color(0.85, 0.75, 0.55))
 	# A calendar by the door, a towel on its bar.
 	_box("wall", Vector3(xe - 0.01, F + 1.5, -7.2), Vector3(0.01, 0.4, 0.3), c(Color(0.9, 0.88, 0.8), HarborTown.K_ENAMEL))
 
@@ -745,6 +755,8 @@ func _hall() -> void:
 		_box("iron", Vector3(0.93, F + 1.7, -1.3 - 0.25 * k), Vector3(0.05, 0.03, 0.03), Color(0.6, 0.5, 0.3))
 	_box("wall", Vector3(0.88, F + 1.35, -1.55), Vector3(0.12, 0.7, 0.45), c(Color(0.3, 0.32, 0.4), HarborTown.K_CLOTH))
 	_lamp_fixture(Vector3(0.45, E - 0.12, -1.8), "ceiling", 0.45, 0.5, 5.0)
+	_hat(Vector3(0.93, F + 1.74, -1.3))
+	_shoes(Vector3(-0.5, F, -0.4), PI / 2.0, Color(0.3, 0.18, 0.1))
 	_lamp_fixture(Vector3(0.0, COLLAR - 0.12, -4.9), "ceiling", 0.5, 0.4, 5.0)
 
 

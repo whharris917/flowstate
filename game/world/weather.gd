@@ -161,6 +161,7 @@ func apply_light(horizon: float, twilight: float) -> void:
 	var daylight := twilight * (0.3 + 0.7 * horizon) * (1.0 - 0.65 * o)
 	night = 1.0 - daylight
 	town.glass_mat.set_shader_parameter("night", night)
+	town.shade_mat.set_shader_parameter("night", night)
 	harbor.night = night
 	if clouds_mat != null:
 		var sun_lin := Color(_sun_color.r, _sun_color.g, _sun_color.b).srgb_to_linear()
