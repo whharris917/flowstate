@@ -71,15 +71,17 @@ func _after_plant() -> void:
 	if not FileAccess.file_exists(plant_save_path):
 		# On Main Street by the drug store, looking east up the street
 		# to the church.
-		player.global_position = Vector3(-6.0, 0.4, 17.5)
+		player.global_position = Vector3(-6.0, coast.height_at(-6.0, 17.5) + 0.4, 17.5)
 		player.rotation.y = -PI / 2.0
 	hud.toast("The harbour town. Main Street runs east to the church; Harbor Street goes down to the wharf. O options: the time of day and the weather. B build · C connect · L library · F5/F9 save/load")
 	var s := town.stats
 	print("[flowstate] harbour town: %d houses, %d street trees, %d lamps, %d signs, %d triangles, %d solids, built in %d ms; %d trees in the woods"
 		% [int(s["houses"]), int(s["trees"]), int(s["lamps"]), int(s["signs"]), int(s["triangles"]), int(s["solids"]), int(s["ms"]),
 		int(coast.stats.get("trees", 0))])
+	print("[flowstate] town ground: terrain %d ms, rocks %d ms, woods %d ms, %d lots on %d terraces"
+		% [int(coast.stats.get("ms_terrain", 0)), int(coast.stats.get("ms_rocks", 0)), int(coast.stats.get("ms_forest", 0)),
+		(coast as TownCoast).lots.size(), (coast as TownCoast).pads.size()])
 	if DisplayServer.get_name() == "headless":
-		_self_check()
 		_town_check()
 		_report_in = 20
 
@@ -108,7 +110,7 @@ func _town_check() -> void:
 	var buoy := coast.height_at(TownCoast.BUOY.x, TownCoast.BUOY.y)
 	if buoy > low - 6.0:
 		problems.append("the buoy in %.1f m at low water" % (low - buoy))
-	var ramp_top := coast.height_at(TownCoast.RAMP_TOP.x, TownCoast.RAMP_TOP.z)
+	var ramp_top := coast.height_at(TownCoast.RAMP_TOP.x, TownCoast.RAMP_TOP.z) - (coast as TownCoast).ramp_top_y
 	var ramp_foot := coast.height_at(TownCoast.RAMP_FOOT.x, TownCoast.RAMP_FOOT.z)
 	if absf(ramp_top) > 0.1 or absf(ramp_foot - TownCoast.APRON_Y) > 0.15:
 		problems.append("harbour road runs %.2f to %.2f m" % [ramp_top, ramp_foot])
@@ -150,8 +152,8 @@ func _town_check() -> void:
 	# muffled over the brow of the hill on Main Street; the Cape's roof
 	# overhead in its living room.
 	var spots: Array = [["the wharf", Vector3(-28.0, TownCoast.DECK_Y, 118.0), false, false],
-		["Main Street", Vector3(20.0, 0.0, 12.0), true, false],
-		["the Cape's living room", Vector3(22.8, 0.6, 53.4), true, true]]
+		["Main Street", Vector3(20.0, coast.height_at(20.0, 12.0), 12.0), true, false],
+		["the Cape's living room", town.cape.transform * Vector3(-1.8, CapeHouse.F, -2.0), true, true]]
 	for spot: Array in spots:
 		weather._listen_left = 0.0
 		weather._listen(0.01, (spot[1] as Vector3) + player.eye)

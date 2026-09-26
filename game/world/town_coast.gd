@@ -72,6 +72,14 @@ var lots: Array[Dictionary] = []
 ## Graded terraces: {c, along (unit), half (along, across), y}.
 var pads: Array[Dictionary] = []
 var ramp_top_y := 0.0
+# The terraces packed flat for the ground's hot loop, seven numbers
+# each: centre x, z, across x, z, half along, half across, height.
+var _pad_data := PackedFloat32Array()
+# Which terraces reach each 10 m cell of the town's ground, so a point
+# asks only its neighbours.
+const PAD_GRID_LO := Vector2(-60.0, -55.0)
+const PAD_GRID_N := Vector2(15, 14)
+var _pad_cells: Array = []
 
 
 func _init() -> void:
@@ -260,26 +268,54 @@ func _plan_pads() -> void:
 		var hi: Vector2 = b[1]
 		var front := Vector2((lo.x + hi.x) / 2.0, hi.y if hi.y < MAIN_Z else lo.y)
 		pads.append({"c": (lo + hi) / 2.0, "across": Vector2(0, 1), "half": (hi - lo) / 2.0, "y": relief(front.x, front.y)})
-
-
-## How strongly a terrace holds (x, z), and at what height.
-func _pad_at(x: float, z: float) -> Vector2:
-	var best := Vector2(0.0, 0.0)
-	if x < -60.0 or x > 90.0 or z < -55.0 or z > 85.0:
-		return best
 	for pad in pads:
 		var c: Vector2 = pad["c"]
 		var across: Vector2 = pad["across"]
 		var half: Vector2 = pad["half"]
-		var d := Vector2(x, z) - c
-		if absf(d.x) > 25.0 or absf(d.y) > 25.0:
+		_pad_data.append_array(PackedFloat32Array([c.x, c.y, across.x, across.y, half.x, half.y, float(pad["y"])]))
+	_pad_cells.resize(PAD_GRID_N.x * PAD_GRID_N.y)
+	for k in _pad_cells.size():
+		_pad_cells[k] = PackedInt32Array()
+	for i in pads.size():
+		var c: Vector2 = pads[i]["c"]
+		var half: Vector2 = pads[i]["half"]
+		var reach := half.x + half.y + 3.0
+		for gx in PAD_GRID_N.x:
+			for gz in PAD_GRID_N.y:
+				var lo := PAD_GRID_LO + Vector2(gx, gz) * 10.0
+				if c.x + reach < lo.x or c.x - reach > lo.x + 10.0 or c.y + reach < lo.y or c.y - reach > lo.y + 10.0:
+					continue
+				var cell: PackedInt32Array = _pad_cells[gz * PAD_GRID_N.x + gx]
+				cell.append(i * 7)
+				_pad_cells[gz * PAD_GRID_N.x + gx] = cell
+
+
+## How strongly a terrace holds (x, z), and at what height.
+func _pad_at(x: float, z: float) -> Vector2:
+	var best_y := 0.0
+	var best_w := 0.0
+	var gx := int((x - PAD_GRID_LO.x) / 10.0)
+	var gz := int((z - PAD_GRID_LO.y) / 10.0)
+	if x < PAD_GRID_LO.x or z < PAD_GRID_LO.y or gx >= PAD_GRID_N.x or gz >= PAD_GRID_N.y:
+		return Vector2.ZERO
+	var d := _pad_data
+	var cell: PackedInt32Array = _pad_cells[gz * PAD_GRID_N.x + gx]
+	for i in cell:
+		var dx := x - d[i]
+		var dz := z - d[i + 1]
+		var reach := d[i + 4] + d[i + 5] + 3.0
+		if absf(dx) > reach or absf(dz) > reach:
 			continue
-		var q := Vector2(absf(d.dot(Vector2(across.y, -across.x))), absf(d.dot(across))) - half
-		var outside := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0)
+		var qa := absf(dx * d[i + 3] - dz * d[i + 2]) - d[i + 4]
+		var qc := absf(dx * d[i + 2] + dz * d[i + 3]) - d[i + 5]
+		var outside := Vector2(maxf(qa, 0.0), maxf(qc, 0.0)).length() + minf(maxf(qa, qc), 0.0)
+		if outside >= 3.0:
+			continue
 		var w := 1.0 - smoothstep(0.0, 3.0, outside)
-		if w > best.y:
-			best = Vector2(float(pad["y"]), w)
-	return best
+		if w > best_w:
+			best_w = w
+			best_y = d[i + 6]
+	return Vector2(best_y, best_w)
 
 
 ## ---- the landmarks -------------------------------------------------------------

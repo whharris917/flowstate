@@ -123,7 +123,7 @@ static func collar_s() -> float:
 ## corner boards, water table and frieze.
 func _shell() -> void:
 	var gran := c(HarborTown.GRANITE, HarborTown.K_GRANITE)
-	_box("wall", Vector3(0, 0.25, -D / 2.0), Vector3(W + 0.06, 0.5, D + 0.06), gran)   # its top under the floors, or they flicker
+	_box("wall", Vector3(0, -0.35, -D / 2.0), Vector3(W + 0.06, 1.7, D + 0.06), gran)   # down into the ground; its top under the floors, or they flicker
 	var clap := c(CLAP, HarborTown.K_CLAP)
 	var flat_e := func(_p: Vector2) -> float: return E
 	var gable := func(p: Vector2) -> float: return E + minf(-p.y, D + p.y)

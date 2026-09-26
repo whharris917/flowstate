@@ -80,6 +80,8 @@ var _houses := 0
 var _marquee_bulb := 0
 var stats_trees := 0
 var cape: CapeHouse
+## The telephone wires, as [end, end] pairs, sagging as _wire draws them.
+var wire_spans: Array = []
 ## Chimney smoke's particle settings: the weather leans them with the wind.
 var smoke: Array[ParticleProcessMaterial] = []
 var clear_mat: StandardMaterial3D
@@ -192,36 +194,65 @@ func _sign(xf: Transform3D, text: String, size: int, color: Color, lit := false)
 ## ---- streets -------------------------------------------------------------
 
 func _streets() -> void:
-	var lifts: Array[float] = [0.035, 0.03, 0.02, 0.02, 0.05, 0.05]
-	for k in TownCoast.STREETS.size():
-		var street: Array = TownCoast.STREETS[k]
-		_ribbon(street[0], float(street[1]), 0.0, bool(street[2]), lifts[k])
+	for st in coast.streets:
+		_ribbon(Array(st["pts"]), float(st["width"]), 0.0, bool(st["line"]), float(st["lift"]))
 	# The harbour road, down its ramp to the waterfront.
 	_ribbon([Vector2(TownCoast.RAMP_TOP.x, TownCoast.RAMP_TOP.z), Vector2(TownCoast.RAMP_FOOT.x, TownCoast.RAMP_FOOT.z)],
 		7.0, 0.0, false, 0.05)
-	# Concrete walks on Main Street and Harbor Street, a granite curb
-	# at the road's edge; broken where the streets cross.
-	var mz := TownCoast.MAIN_Z
-	var hx := TownCoast.HARBOR_X
-	for side: float in [-1.0, 1.0]:
-		var z := mz + side * 5.7
-		for run: Vector2 in [Vector2(-45.0, hx - 4.5), Vector2(hx + 4.5, 75.0)]:
-			_walk(Vector2(run.x, z), Vector2(run.y, z), Vector2(0, -side))
-		# Harbor Street's walks stop at the outer edge of Main Street's;
-		# the east walk breaks for Elm and Water Streets too.
-		var x := hx + side * 5.7
-		var runs: Array[Vector2] = [Vector2(-40.0, mz - 6.9), Vector2(mz + 6.9, 60.0)]
-		if side > 0.0:
-			runs = [Vector2(-40.0, TownCoast.ELM_Z - 3.5), Vector2(TownCoast.ELM_Z + 3.5, mz - 6.9),
-				Vector2(mz + 6.9, TownCoast.WATER_Z - 3.5), Vector2(TownCoast.WATER_Z + 3.5, 60.0)]
-		for run in runs:
-			_walk(Vector2(x, run.x), Vector2(x, run.y), Vector2(-side, 0))
+	# Concrete walks along Main Street and Harbor Street, a granite curb
+	# at the road's edge, broken where another street comes in.
+	for name_: String in ["main", "harbor"]:
+		for side: float in [-1.0, 1.0]:
+			_walks_along(coast.street(name_), side)
 	# The waterfront apron: packed gravel down at the harbour.
 	var y := TownCoast.APRON_Y + 0.03
 	var lo := TownCoast.APRON - TownCoast.APRON_HALF
 	var hi := TownCoast.APRON + TownCoast.APRON_HALF
 	m.quad("street", Vector3(lo.x, y, lo.y), Vector3(lo.x, y, hi.y), Vector3(hi.x, y, hi.y), Vector3(hi.x, y, lo.y),
 		Vector3.UP, Color(0, 0, 0, 1.0), Vector2(lo.x, lo.y), Vector2(lo.x, hi.y), Vector2(hi.x, hi.y), Vector2(hi.x, lo.y))
+
+
+## The walk down one side of a street: its centre line 1.2 m out from the
+## road's edge, in runs between the streets that cross it.
+func _walks_along(st: Dictionary, side: float) -> void:
+	var pts: PackedVector2Array = st["pts"]
+	var off := float(st["width"]) / 2.0 + 1.2
+	var run: Array[Vector2] = []
+	for k in pts.size():
+		var d := (pts[mini(k + 1, pts.size() - 1)] - pts[maxi(k - 1, 0)]).normalized()
+		var n := Vector2(-d.y, d.x) * side
+		var q := pts[k] + n * off
+		var clear := coast.street_distance(q.x, q.y, st["name"]) > 1.5
+		if clear:
+			run.append(q)
+		if (not clear or k == pts.size() - 1) and run.size() >= 2:
+			_walk(run, -n)
+			run.clear()
+		elif not clear:
+			run.clear()
+
+
+## A concrete walk 2.4 m wide along points (its centre line), 17 cm
+## over the ground, a granite curb on the road side and a concrete
+## edge on the other, both down to the ground.
+func _walk(points: Array[Vector2], road: Vector2) -> void:
+	_ribbon(points, 2.4, 0.5, false, 0.17)
+	for k in points.size() - 1:
+		var a := points[k]
+		var b := points[k + 1]
+		var dir := (b - a).normalized()
+		var n := Vector2(-dir.y, dir.x)
+		if n.dot(road) < 0.0:
+			n = -n
+		var mid := (a + b) / 2.0
+		var yaw := atan2(dir.x, dir.y)
+		var len_ := a.distance_to(b) + 0.04
+		var curb := mid + n * 1.2
+		var ground := coast.height_at(curb.x, curb.y)
+		m.box("wall", at(Vector3(curb.x, ground + 0.06, curb.y), yaw), Vector3(0.16, 0.26, len_), kc(GRANITE, K_GRANITE))
+		var edge := mid - n * 1.2
+		var g2 := coast.height_at(edge.x, edge.y)
+		m.box("wall", at(Vector3(edge.x, g2 + 0.05, edge.y), yaw), Vector3(0.08, 0.26, len_), kc(Color(0.52, 0.51, 0.48), K_PAINT))
 
 
 ## A strip of road laid on the ground along points, three vertices
@@ -263,27 +294,7 @@ func _ribbon(points: Array, width: float, kind: float, centre_line: bool, lift: 
 		prev_v = along
 
 
-## A concrete walk 2.4 m wide from a to b (its centre line), raised on
-## a granite curb on the side toward the road (road, a unit vector).
-func _walk(a: Vector2, b: Vector2, road: Vector2) -> void:
-	var w := 2.4
-	var side := road * (w / 2.0)
-	var y := 0.17
-	var col := Color(0, 0, 0, 0.5)
-	var len_ := a.distance_to(b)
-	var p0 := a - side
-	var p1 := a + side
-	var p2 := b + side
-	var p3 := b - side
-	m.quad("street", Vector3(p0.x, y, p0.y), Vector3(p1.x, y, p1.y), Vector3(p2.x, y, p2.y), Vector3(p3.x, y, p3.y),
-		Vector3.UP, col, Vector2(-1.2, 0), Vector2(1.2, 0), Vector2(1.2, len_), Vector2(-1.2, len_))
-	# The curb, and the walk's body under its surface.
-	var mid := (a + b) / 2.0
-	var yaw := atan2((b - a).x, (b - a).y)
-	var body := at(Vector3(mid.x, y / 2.0 - 0.005, mid.y), yaw)
-	m.box("wall", body, Vector3(w, y - 0.01, len_), kc(Color(0.52, 0.51, 0.48), K_PAINT))
-	var curb := mid + side
-	m.box("wall", at(Vector3(curb.x, y / 2.0, curb.y), yaw), Vector3(0.16, y + 0.01, len_), kc(GRANITE, K_GRANITE))
+
 
 
 ## ---- Main Street ----------------------------------------------------------
@@ -302,7 +313,7 @@ func _main_street_north() -> void:
 		[50.5, 11.0, 5.4, Color(0.48, 0.24, 0.17), K_BRICK, "U.S. POST OFFICE", null, "post"],
 	]
 	for spec: Array in row:
-		_store(Vector3(float(spec[0]), 0.0, z), 0.0, float(spec[1]), 14.0, float(spec[2]),
+		_store(Vector3(float(spec[0]), coast.height_at(float(spec[0]), z - 1.0), z), 0.0, float(spec[1]), 14.0, float(spec[2]),
 			spec[3], int(spec[4]), str(spec[5]), spec[6], str(spec[7]))
 
 
@@ -481,7 +492,7 @@ func _post_front(base: Transform3D, w: float, h: float, sign: String) -> void:
 ## lot: a long car on a brick base, a barrel roof, a band of windows,
 ## red enamel stripes, a neon sign on the roof.
 func _diner(front: Vector2) -> void:
-	var base := at(Vector3(front.x, 0.0, front.y), PI)
+	var base := at(Vector3(front.x, coast.height_at(front.x, front.y + 1.0), front.y), PI)
 	var w := 16.0
 	var d := 5.6
 	m.box("wall", base * at(Vector3(0, 0.35, -d / 2.0)), Vector3(w - 0.3, 0.7, d - 0.3), kc(BRICK, K_BRICK))
@@ -526,7 +537,7 @@ func _diner(front: Vector2) -> void:
 ## two pumps with lit globes on an island in the forecourt, a round
 ## sign on a post.
 func _gas_station(front: Vector2) -> void:
-	var base := at(Vector3(front.x, 0.0, front.y + 4.5), PI)
+	var base := at(Vector3(front.x, coast.height_at(front.x, front.y + 5.5), front.y + 4.5), PI)
 	var white := kc(Color(0.88, 0.88, 0.85), K_PAINT)
 	var green := kc(Color(0.14, 0.34, 0.20), K_PAINT)
 	m.box("wall", base * at(Vector3(0, 1.9, -2.5)), Vector3(9.0, 3.8, 5.0), white)
@@ -565,7 +576,7 @@ func _gas_station(front: Vector2) -> void:
 ## A grocery: two storeys of clapboard behind a square false front, a
 ## porch across it with a bench.
 func _grocery(front: Vector2) -> void:
-	var base := at(Vector3(front.x, 0.0, front.y + 1.9), PI)
+	var base := at(Vector3(front.x, coast.height_at(front.x, front.y + 3.0), front.y + 1.9), PI)
 	var w := 10.0
 	var d := 10.0
 	var clap := kc(Color(0.86, 0.80, 0.60), K_CLAP)
@@ -592,7 +603,7 @@ func _grocery(front: Vector2) -> void:
 ## A white church: a clapboard nave under a steep roof, tall windows, a
 ## square tower at the front rising to a belfry and a spire.
 func _church(front: Vector2) -> void:
-	var base := at(Vector3(front.x, 0.0, front.y + 2.4), PI)
+	var base := at(Vector3(front.x, coast.height_at(front.x, front.y + 3.5), front.y + 2.4), PI)
 	var white := kc(Color(0.93, 0.92, 0.88), K_CLAP)
 	var w := 11.0
 	var d := 20.0
@@ -661,45 +672,43 @@ func _roof(base: Transform3D, centre: Vector3, span: float, length: float, pitch
 
 ## ---- houses ---------------------------------------------------------------
 
+## A house on every lot of the plan, turned to its street and standing on
+## its terrace. The harbour side of Water Street is modelled whole: two
+## colonials, two gable-fronts, two Capes, number 14 the second house.
 func _houses_all() -> void:
-	var yaw_s := 0.0      # faces +z (south)
-	var yaw_n := PI       # faces -z
-	var yaw_e := PI / 2.0
-	var mz := TownCoast.MAIN_Z
-	var lots: Array = [
-		# Main Street, west of Harbor Street.
-		[Vector2(-38.0, mz - 8.0), yaw_s], [Vector2(-26.0, mz - 8.0), yaw_s],
-		[Vector2(-38.0, mz + 8.0), yaw_n], [Vector2(-26.0, mz + 8.0), yaw_n],
-		# Harbor Street, the west side.
-		[Vector2(-22.5, -34.0), yaw_e], [Vector2(-22.5, -14.0), yaw_e], [Vector2(-22.5, 50.0), yaw_e],
-		# Elm Street.
-		[Vector2(4.0, -31.5), yaw_s], [Vector2(17.0, -31.5), yaw_s], [Vector2(30.0, -31.5), yaw_s],
-		[Vector2(43.0, -31.5), yaw_s], [Vector2(56.0, -31.5), yaw_s], [Vector2(68.0, -31.5), yaw_s],
-		[Vector2(8.0, -17.5), yaw_n], [Vector2(21.0, -17.5), yaw_n], [Vector2(34.0, -17.5), yaw_n],
-		[Vector2(47.0, -17.5), yaw_n], [Vector2(60.0, -17.5), yaw_n],
-		# Water Street: the north side behind the diner and the grocery,
-		# the south side over the harbour.
-		[Vector2(-2.0, 37.5), yaw_s], [Vector2(22.0, 37.5), yaw_s], [Vector2(38.0, 37.5), yaw_s],
-		[Vector2(7.5, 51.5), yaw_n], [Vector2(33.5, 51.5), yaw_n],
-		[Vector2(45.5, 51.5), yaw_n], [Vector2(57.5, 51.5), yaw_n], [Vector2(69.5, 51.5), yaw_n],
-	]
-	# One house modelled whole, inside and out: the Cape at number 14,
-	# its back to the harbour.
-	cape = CapeHouse.new()
-	add_child(cape)
-	cape.build(self, Vector3(21.0, 0.0, 51.5), yaw_n)
-	_keep_clear.append(Rect2(Vector2(14.0, 47.5), Vector2(14.0, 14.0)))
-	for lot: Array in lots:
-		var p: Vector2 = lot[0]
-		var shallow := p.y > 30.0 and p.y < 40.0 or (p.y < -15.0 and p.y > -20.0)
+	var harbour_styles: Array[int] = [1, -1, 2, 0, 1, 2, 0, 1]
+	var h_index := 0
+	for lot: Dictionary in coast.lots:
+		var f: Vector2 = lot["front"]
+		var front := Vector3(f.x, coast.height_at(f.x, f.y), f.y)
+		var yaw: float = lot["yaw"]
+		var depth: float = lot["depth"]
 		var style := _rng.randi() % 3
-		if shallow and style == 2:
+		if style == 2 and depth < 10.6:
 			style = 0
-		if absf(p.y - 51.5) < 0.1:
-			var row_styles := {7.5: 1, 33.5: 2, 45.5: 0, 57.5: 1, 69.5: 2}
-			_detailed_house(Vector3(p.x, 0.0, p.y), float(lot[1]), int(row_styles.get(p.x, style)))
+		var shallow := depth < 8.6
+		if lot["row"] == "harbour":
+			var hs := harbour_styles[h_index % harbour_styles.size()]
+			h_index += 1
+			if hs == 2 and depth < 10.6:
+				hs = 1
+			if hs == -1:
+				cape = CapeHouse.new()
+				add_child(cape)
+				cape.build(self, front, yaw)
+				_clear_round(front, yaw, CapeHouse.W, CapeHouse.D)
+			else:
+				_detailed_house(front, yaw, hs)
 		else:
-			_house(Vector3(p.x, 0.0, p.y), float(lot[1]), style, shallow)
+			_house(front, yaw, style, shallow, lot["row"])
+
+
+## No tree whose crown would reach through a wall into the rooms of a
+## house of w by d whose front stands at front, facing yaw.
+func _clear_round(front: Vector3, yaw: float, w: float, d: float) -> void:
+	var centre := front - Vector3(sin(yaw), 0, cos(yaw)) * d / 2.0
+	var half := maxf(w, d) / 2.0 + 3.5
+	_keep_clear.append(Rect2(Vector2(centre.x - half, centre.z - half), Vector2(half * 2.0, half * 2.0)))
 
 
 ## A house on the harbour side of Water Street, modelled whole inside and
@@ -743,17 +752,14 @@ func _detailed_house(front: Vector3, yaw: float, style: int) -> void:
 		house = full
 	houses_built.append(house.call("record"))
 	var r: Dictionary = houses_built[houses_built.size() - 1]
-	var hw: float = r["w"]
-	var hd: float = r["d"]
-	# No tree whose crown would reach through a wall into the rooms.
-	_keep_clear.append(Rect2(Vector2(front.x - hw / 2.0 - 3.5, front.z - 3.5), Vector2(hw + 7.0, hd + 7.0)))
+	_clear_round(front, yaw, r["w"], r["d"])
 
 
 ## A house whose front stands at front, facing along yaw. style 0 a
 ## cape (a storey and a half under a steep roof), 1 a centre-chimney
 ## colonial (two storeys, five bays, shutters), 2 a gable-front house
 ## with a porch. shallow: a lot too short for the full depth.
-func _house(front: Vector3, yaw: float, style: int, shallow: bool) -> void:
+func _house(front: Vector3, yaw: float, style: int, shallow: bool, row := "") -> void:
 	_houses += 1
 	var base := at(front, yaw)
 	var color: Color = CLAPBOARDS[_rng.randi() % CLAPBOARDS.size()]
@@ -786,7 +792,9 @@ func _house(front: Vector3, yaw: float, style: int, shallow: bool) -> void:
 	# Some are shifted along the lot: the street is not a row of stamps.
 	base = base * at(Vector3(_rng.randf_range(-0.8, 0.8), 0, 0))
 	var body := base * at(Vector3(0, found + walls / 2.0, -d / 2.0))
-	m.box("wall", base * at(Vector3(0, found / 2.0, -d / 2.0)), Vector3(w + 0.12, found, d + 0.12), kc(GRANITE, K_GRANITE))
+	# The foundation runs down into the ground: on a slope its granite
+	# shows more on the downhill side.
+	m.box("wall", base * at(Vector3(0, (found - 1.2) / 2.0, -d / 2.0)), Vector3(w + 0.12, found + 1.2, d + 0.12), kc(GRANITE, K_GRANITE))
 	m.box("wall", body, Vector3(w, walls, d), wall)
 	_solid(base * at(Vector3(0, (found + walls) / 2.0, -d / 2.0)), Vector3(w, found + walls, d))
 	for s: float in [-1.0, 1.0]:
@@ -882,12 +890,12 @@ func _house(front: Vector3, yaw: float, style: int, shallow: bool) -> void:
 		_porch_light(base * Vector3(door_x + 0.75, found + 2.0, 0.1), thr_house)
 	# A picket fence along the front of the lot, a gap for the walk. Water
 	# Street's houses get theirs with the rest of their yards (WaterStreet).
-	var water := absf(front.z - 51.5) < 1.0 or absf(front.z - 37.5) < 1.0
+	var water := row == "harbour" or row == "water_north"
 	if _rng.randf() < 0.45 and not water:
 		_fence(base, -5.5, 5.5, 4.0, door_x)
 	houses_built.append({"base": base, "w": w, "d": d, "style": style, "door_x": door_x, "found": found,
 		"front_xs": xs, "f1": f1, "chimney": chimney_top, "water": water, "thr": thr_house,
-		"harbour_side": absf(front.z - 51.5) < 1.0})
+		"harbour_side": row == "harbour"})
 
 
 ## A room's light: the house's own time plus a little, or never.
@@ -930,7 +938,8 @@ func _main_lamps() -> void:
 	var side := 1.0
 	while x <= 72.0:
 		if absf(x - TownCoast.HARBOR_X) > 7.0:
-			_iron_post(Vector3(x, 0.17, mz + side * 5.0))
+			var z := mz + side * 5.0
+			_iron_post(Vector3(x, coast.height_at(x, z) + 0.17, z))
 		x += 11.0
 		side = -side
 
@@ -957,17 +966,26 @@ func _iron_post(foot: Vector3) -> void:
 
 ## Wooden utility poles down Harbor Street, Elm, Water and the harbour
 ## road, strung with three wires on crossarms, a gooseneck lamp under an
-## enamel shade on each.
+## enamel shade on each: one side of each street, every twenty-two
+## metres, on the verge, clear of the streets that cross.
 func _pole_lines() -> void:
-	var hx := TownCoast.HARBOR_X
-	var lines: Array = [
-		[Vector3(hx - 5.2, 0, -36.0), Vector3(hx - 5.2, 0, -6.0), Vector3(hx - 5.2, 0, 26.0), Vector3(hx - 5.2, 0, 52.0)],
-		[Vector3(2.0, 0, TownCoast.ELM_Z - 4.2), Vector3(24.0, 0, TownCoast.ELM_Z - 4.2), Vector3(46.0, 0, TownCoast.ELM_Z - 4.2),
-			Vector3(68.0, 0, TownCoast.ELM_Z - 4.2)],
-		[Vector3(2.0, 0, TownCoast.WATER_Z + 4.2), Vector3(24.0, 0, TownCoast.WATER_Z + 4.2), Vector3(46.0, 0, TownCoast.WATER_Z + 4.2),
-			Vector3(68.0, 0, TownCoast.WATER_Z + 4.2)],
-		[Vector3(-17.1, 0, 67.6), Vector3(-26.9, 0, 73.8), Vector3(-36.7, 0, 80.2)],
-	]
+	var lines: Array = []
+	for plan: Array in [["harbor", 1.0], ["elm", -1.0], ["water", 1.0]]:
+		var st := coast.street(plan[0])
+		var off := float(st["width"]) / 2.0 + 0.9
+		var line: Array[Vector3] = []
+		var s := 4.0
+		var total := TownCoast.length_of(st)
+		while s < total - 2.0:
+			var a := TownCoast.along(st, s)
+			var p: Vector2 = (a[0] as Vector2) + (a[2] as Vector2) * float(plan[1]) * off
+			if coast.street_distance(p.x, p.y, plan[0]) > 1.0:
+				line.append(Vector3(p.x, 0, p.y))
+				s += 22.0
+			else:
+				s += 2.0
+		lines.append(line)
+	lines.append([Vector3(-24.2, 0, 64.0), Vector3(-25.5, 0, 72.0)])
 	for line: Array in lines:
 		var tops: Array[Transform3D] = []
 		for k in line.size():
@@ -980,8 +998,13 @@ func _pole_lines() -> void:
 			var yaw := atan2(along.x, along.z)
 			tops.append(_pole(p, yaw))
 		for k in tops.size() - 1:
-			for s: float in [-0.9, 0.0, 0.9]:
-				_wire(tops[k] * Vector3(s, 0.1, 0), tops[k + 1] * Vector3(s, 0.1, 0))
+			if tops[k].origin.distance_to(tops[k + 1].origin) > 40.0:
+				continue
+			for s2: float in [-0.9, 0.0, 0.9]:
+				var a := tops[k] * Vector3(s2, 0.1, 0)
+				var b := tops[k + 1] * Vector3(s2, 0.1, 0)
+				_wire(a, b)
+				wire_spans.append([a, b])
 
 
 ## A pole at foot, its crossarm across yaw (the line's direction), the
@@ -1154,18 +1177,15 @@ func _wharf_lamp(foot: Vector3) -> void:
 ## spruces standing among the houses.
 func _street_trees() -> void:
 	var trees: Array[Vector2] = []
-	for k in 4:
-		var street: Array = TownCoast.STREETS[k]
-		var pts: Array = street[0]
-		var a: Vector2 = pts[0]
-		var b: Vector2 = pts[1]
-		var dir := (b - a).normalized()
-		var side := Vector2(-dir.y, dir.x)
-		var off := float(street[1]) / 2.0 + (3.9 if k < 2 else 2.2)
+	for name_: String in ["main", "harbor", "elm", "water"]:
+		var st := coast.street(name_)
+		var off := float(st["width"]) / 2.0 + (3.9 if name_ == "main" or name_ == "harbor" else 2.2)
 		var t := 3.0
-		while t < a.distance_to(b):
-			for s: float in [-1.0, 1.0]:
-				trees.append(a + dir * (t + _rng.randf_range(-1.5, 1.5) + (4.5 if s > 0.0 else 0.0)) + side * s * off)
+		var total := TownCoast.length_of(st)
+		while t < total:
+			for s2: float in [-1.0, 1.0]:
+				var a := TownCoast.along(st, t + _rng.randf_range(-1.5, 1.5) + (4.5 if s2 > 0.0 else 0.0))
+				trees.append((a[0] as Vector2) + (a[2] as Vector2) * s2 * off)
 			t += 10.0
 	for k in 500:
 		trees.append(Vector2(_rng.randf_range(-44.0, 74.0), _rng.randf_range(-40.0, 58.0)))

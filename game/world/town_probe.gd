@@ -16,7 +16,11 @@ func _ready() -> void:
 	_run(world)
 
 
+var _world: TownMap
+
+
 func _run(world: TownMap) -> void:
+	_world = world
 	await get_tree().create_timer(2.5).timeout
 	var player := world.player
 	world.graphics.set_preset("Medium")
@@ -39,6 +43,9 @@ func _run(world: TownMap) -> void:
 		return
 	# The showpiece: Main Street in the storm, east to the church.
 	await _view(player, Vector3(-6.0, 0.4, 17.5), -PI / 2.0, 0.02, "storm_main")
+	await _view_zoom(player, Vector3(-20.0, 0.4, -35.0), -2.5, -0.35, 1.6, "hill_over_town")
+	await _view(player, Vector3(30.0, 0.4, 47.5), -PI / 2.0 + 0.2, 0.0, "water_street_curve")
+	await _view(player, Vector3(-14.0, 0.4, -30.0), PI, -0.05, "harbor_street_down")
 	# Down the harbour road over the waterfront to the boats and the light.
 	await _view(player, Vector3(-12.0, 0.4, 58.0), 2.75, -0.12, "storm_harbor_road")
 	# On the T-head looking out past the boats to the buoy.
@@ -182,6 +189,8 @@ func _view(player: Player, at: Vector3, yaw: float, pitch: float, name_: String)
 
 
 func _view_zoom(player: Player, at: Vector3, yaw: float, pitch: float, zoom: float, name_: String) -> void:
+	# The town stands on a hillside: a view is never below the ground.
+	at.y = maxf(at.y, _world.coast.height_at(at.x, at.z) + 0.3)
 	player.global_position = at
 	player.rotation.y = yaw
 	player.camera.rotation.x = pitch

@@ -355,57 +355,62 @@ static func _front_plants(town: HarborTown, h: Dictionary, rng: RandomNumberGene
 
 ## Fences between the back yards, down from the houses to the rail at
 ## the foot: a board fence, a picket fence, a fieldstone wall, by turns.
+## Each runs from between two neighbours' back corners straight back,
+## the way the two yards run, following the ground.
 static func _side_fences(town: HarborTown, rng: RandomNumberGenerator) -> void:
-	var xs: Array[float] = []
+	var row: Array[Transform3D] = []
 	for h: Dictionary in town.houses_built:
 		if h.get("harbour_side", false):
-			xs.append((h["base"] as Transform3D).origin.x)
-	xs.append(town.cape.transform.origin.x)
-	xs.sort()
+			row.append(h["base"])
+	row.append(town.cape.transform)
+	row.sort_custom(func(a: Transform3D, b: Transform3D) -> bool: return a.origin.x < b.origin.x)
 	var m := town.m
-	for k in xs.size() - 1:
-		var x := (xs[k] + xs[k + 1]) / 2.0
-		var z0 := 60.3
-		var z1 := 68.5
+	for k in row.size() - 1:
+		var a := row[k]
+		var b := row[k + 1]
+		var start := (a * Vector3(0, 0, -9.0) + b * Vector3(0, 0, -9.0)) / 2.0
+		var back := ((a.basis * Vector3(0, 0, -1)) + (b.basis * Vector3(0, 0, -1))).normalized()
 		var kind := k % 3
 		var prev := Vector3.ZERO
-		var steps := int((z1 - z0) / 0.5)
+		var steps := 16
 		for i in steps + 1:
-			var z := z0 + (z1 - z0) * i / steps
-			var foot := Vector3(x, town.coast.height_at(x, z), z)
+			var q := start + back * (8.0 * i / steps)
+			var foot := Vector3(q.x, town.coast.height_at(q.x, q.z), q.z)
+			var yaw := atan2(back.x, back.z)
 			match kind:
 				0:
-					# Weathered boards, a cap rail.
-					m.box("wall", HarborTown.at(foot + Vector3(0, 0.75, 0)), Vector3(0.03, 1.5, 0.5), HarborTown.kc(Color(0.5, 0.47, 0.42), HarborTown.K_TIMBER), true)
+					m.box("wall", HarborTown.at(foot + Vector3(0, 0.75, 0), yaw), Vector3(0.03, 1.5, 0.5), HarborTown.kc(Color(0.5, 0.47, 0.42), HarborTown.K_TIMBER), true)
 				1:
 					for dz: float in [-0.14, 0.0, 0.14]:
-						m.box("wall", HarborTown.at(foot + Vector3(0, 0.45, dz)), Vector3(0.025, 0.9, 0.07), HarborTown.kc(Color(0.92, 0.91, 0.87), HarborTown.K_PAINT), true)
+						m.box("wall", HarborTown.at(foot + back * dz + Vector3(0, 0.45, 0), yaw), Vector3(0.025, 0.9, 0.07), HarborTown.kc(Color(0.92, 0.91, 0.87), HarborTown.K_PAINT), true)
 				_:
-					# Fieldstones laid dry, two and three courses.
 					for c2 in 3:
 						var r := rng.randf_range(0.14, 0.22)
-						m.sphere("wall", Transform3D(Basis.from_scale(Vector3(1.0, 0.7, 1.2)), foot + Vector3(rng.randf_range(-0.1, 0.1), 0.12 + 0.22 * c2, rng.randf_range(-0.1, 0.1))),
+						m.sphere("wall", Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(1.0, 0.7, 1.2)), foot + Vector3(rng.randf_range(-0.1, 0.1), 0.12 + 0.22 * c2, rng.randf_range(-0.1, 0.1))),
 							r, 7, HarborTown.kc(Color(0.55, 0.52, 0.48).lightened(rng.randf_range(-0.12, 0.08)), HarborTown.K_GRANITE))
 			if i > 0 and kind == 1:
 				for y: float in [0.25, 0.7]:
 					m.bar("wall", prev + Vector3(0, y, 0), foot + Vector3(0, y, 0), 0.03, 4, HarborTown.kc(Color(0.92, 0.91, 0.87), HarborTown.K_PAINT))
 			if i > 0 and kind == 0:
 				m.bar("wall", prev + Vector3(0, 1.5, 0), foot + Vector3(0, 1.5, 0), 0.035, 4, HarborTown.kc(Color(0.45, 0.42, 0.38), HarborTown.K_TIMBER))
+			if i > 0:
+				town._solid(HarborTown.at((prev + foot) / 2.0 + Vector3(0, 0.6, 0), atan2(back.x, back.z)), Vector3(0.2, 1.2, 0.55))
 			prev = foot
-		var mid := Vector3(x, town.coast.height_at(x, (z0 + z1) / 2.0) + 0.6, (z0 + z1) / 2.0)
-		town._solid(HarborTown.at(mid), Vector3(0.2, 1.2, z1 - z0))
 
 
 ## Birds sitting on the wires along Water Street, in ones and twos and
 ## a little row.
 static func _birds_on_wires(town: HarborTown, rng: RandomNumberGenerator) -> void:
 	var m := town.m
-	var y := 8.5 + 0.1 - 0.2
-	for k in 14:
-		var x := rng.randf_range(4.0, 66.0)
-		var z: float = TownCoast.WATER_Z + 4.2 + [-0.9, 0.0, 0.9][rng.randi() % 3]
-		var span := fmod(x - 2.0, 22.0) / 22.0
-		var sag := 22.0 * 0.018 * 4.0 * span * (1.0 - span)
-		var at := Vector3(x, y - sag + 0.06, z)
-		YardProps.bird(m, HarborTown.at(at, rng.randf_range(0.0, TAU)), [Color(0.12, 0.11, 0.1), Color(0.3, 0.25, 0.2), Color(0.35, 0.36, 0.38)][rng.randi() % 3])
-
+	if town.wire_spans.is_empty():
+		return
+	for k in 18:
+		var span: Array = town.wire_spans[rng.randi() % town.wire_spans.size()]
+		var a: Vector3 = span[0]
+		var b: Vector3 = span[1]
+		var t := rng.randf_range(0.1, 0.9)
+		var sag := a.distance_to(b) * 0.018 * 4.0 * t * (1.0 - t)
+		var at_ := a.lerp(b, t) + Vector3(0, -sag + 0.02, 0)
+		var dir := (b - a).normalized()
+		YardProps.bird(m, HarborTown.at(at_, atan2(dir.z, -dir.x) + (0.0 if rng.randf() < 0.5 else PI)),
+			[Color(0.12, 0.11, 0.1), Color(0.3, 0.25, 0.2), Color(0.35, 0.36, 0.38)][rng.randi() % 3])
