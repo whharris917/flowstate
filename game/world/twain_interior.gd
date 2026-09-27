@@ -129,11 +129,12 @@ static func _floors() -> void:
 	# The third floor stops at the walls' inner faces, under the eaves.
 	var attic := PackedVector2Array([Vector2(TwainHouse.MX0 + 1.0, TwainHouse.MZ0 + 1.0), Vector2(TwainHouse.MX1 - 1.0, TwainHouse.MZ0 + 1.0),
 		Vector2(TwainHouse.MX1 - 1.0, TwainHouse.MZ1 - 1.0), Vector2(TwainHouse.MX0 + 1.0, TwainHouse.MZ1 - 1.0)])
-	for level: Array in [[F2, p], [F3, attic]]:
+	var third: Array = TwainHouse.meet(hs.roof_higher(F3 + 1.0), attic)
+	for level: Array in [[F2, [p]], [F3, third]]:
 		var y := float(level[0])
-		var shape := level[1] as PackedVector2Array
+		var shapes: Array = level[1]
 		for half: PackedVector2Array in [TwainHouse.under(Vector3(1, 0, -78.9), Vector3.ZERO), TwainHouse.under(Vector3.ZERO, Vector3(1, 0, -78.9))]:
-			for piece: PackedVector2Array in TwainHouse.cut(TwainHouse.meet([shape], half), hole):
+			for piece: PackedVector2Array in TwainHouse.cut(TwainHouse.meet(shapes, half), hole):
 				var pts: Array[Vector2] = []
 				for q: Vector2 in piece:
 					pts.append(q)
@@ -141,12 +142,11 @@ static func _floors() -> void:
 	# Ceilings over the drawing room's bay and the dressing room's round,
 	# under their roofs.
 	var towers := TwainHouse.tower_plans()
-	for t: PackedVector2Array in [towers[2], towers[3]]:
-		# Whole, a little under the third floor's underside where they meet.
-		var pts: Array = []
-		for q: Vector2 in t:
-			pts.append(q)
-		hs.floor_poly(pts, TwainHouse.EAVE - 0.05, ceil, ceil, 0.4)
+	# The dressing room's round, under its cone.
+	var pts: Array = []
+	for q: Vector2 in towers[2]:
+		pts.append(q)
+	hs.floor_poly(pts, TwainHouse.SOUTH_TOP - 0.05, ceil, ceil, 0.4)
 
 
 ## ---- walls between rooms ----------------------------------------------------
@@ -167,10 +167,10 @@ static func part(a: Vector2, b: Vector2, y0: float, y1: float, doors: Array = []
 	var length: float = fr[1]
 	var plaster := c(PLASTER, CourthouseKit.K_PLASTER)
 	var mine := hs.ops_on(fr[0] as Transform3D, length, y0, y0 + DOOR_H + 0.5, 0.4)
-	if y1 > 0.0:
+	if y1 > 0.0 and not _roof_low(a, b, y1):
 		k.wall("wall", f, 0.0, length, h(y0), h(y1), t * FT, plaster, mine, 1000.0)
 	else:
-		_to_roof(f, a, b, length, y0, t * FT, plaster, mine, "wall", true)
+		_to_roof(f, a, b, length, y0, t * FT, plaster, mine, "wall", true, h(y1) if y1 > 0.0 else INF)
 	for o: Dictionary in mine:
 		var kind := str(o["kind"])
 		if kind != "idoor" and kind != "ishut":
@@ -225,6 +225,20 @@ static func _to_roof(f: Transform3D, a: Vector2, b: Vector2, length: float, y0: 
 		k.wall(key, f, u0, u1, h(y0), minf(h(roof) - 0.03, cap), t, col, mine, 1000.0 if solid else -1000.0)
 
 
+## Whether the roof comes lower than y1 feet anywhere along a-b (or just
+## either side of it).
+static func _roof_low(a: Vector2, b: Vector2, y1: float) -> bool:
+	var n := (b - a).normalized().orthogonal() * 0.6
+	var steps := maxi(2, int(a.distance_to(b) / 1.0))
+	for i in steps + 1:
+		var q := a.lerp(b, float(i) / steps)
+		for sd: float in [-1.0, 0.0, 1.0]:
+			var r := hs.roof_y(q + n * sd)
+			if r > -100.0 and r < y1 + 0.3:
+				return true
+	return false
+
+
 static func _partitions() -> void:
 	var X0 := TwainHouse.MX0 + 1.0
 	var X1 := TwainHouse.MX1 - 1.0
@@ -257,16 +271,16 @@ static func _partitions() -> void:
 	part(Vector2(67.7, 70.8), Vector2(67.7, Z1), y2, cy2)
 	part(Vector2(85.65, 70.8), Vector2(85.65, Z1), y2, cy2)
 	part(Vector2(96.95, zp), Vector2(96.95, Z1), y2, cy2, [[Vector2(96.95, 62.6), 3.2, true]])
-	part(Vector2(96.95, 58.5), Vector2(X1, 58.5), y2, cy2, [[Vector2(111.0, 58.5), 2.6, false]])
+	part(Vector2(96.95, 58.5), Vector2(X1, 58.5), y2, cy2, [[Vector2(108.3, 58.5), 2.6, false]])
 	# The third floor: the billiard room's end, its wall to the stair
 	# hall, the hall's walls, each up to the roof; the billiard room's
 	# knee walls under the slopes.
 	var y3 := F3
 	part(Vector2(89.5, Z0), Vector2(89.5, zp), y3, -1.0)
 	part(Vector2(X0, zp), Vector2(97.0, zp), y3, -1.0, [[Vector2(87.4, zp), 2.8, true], [Vector2(93.5, zp), 2.8, false]])
-	part(Vector2(WELL_X0, zp), Vector2(WELL_X0, 72.0), y3, -1.0, [[Vector2(WELL_X0, 69.0), 2.6, false]])
-	part(Vector2(WELL_X0, 72.0), Vector2(97.0, 72.0), y3, -1.0, [[Vector2(88.0, 72.0), 2.8, false]])
-	part(Vector2(97.0, zp), Vector2(97.0, 72.0), y3, -1.0, [[Vector2(97.0, 64.0), 2.8, false]])
+	part(Vector2(WELL_X0, zp), Vector2(WELL_X0, 70.6), y3, -1.0, [[Vector2(WELL_X0, 68.0), 2.6, false]])
+	part(Vector2(WELL_X0, 70.6), Vector2(97.0, 70.6), y3, -1.0, [[Vector2(88.0, 70.6), 2.8, false]])
+	part(Vector2(97.0, zp), Vector2(97.0, 70.6), y3, -1.0, [[Vector2(97.0, 64.0), 2.8, false]])
 	part(Vector2(X0, 41.0), Vector2(89.5, 41.0), y3, -1.0, [], 0.4)
 
 
@@ -295,10 +309,11 @@ static func room(poly: Array, y0: float, y1: float, key: String, wall: Color, da
 		var top := y1
 		# The openings of this storey only: up to the ceiling, or under the roof.
 		var mine := hs.ops_on(f0, length, y0, y1 if y1 > 0.0 else ATTIC, 1.6)
-		if y1 > 0.0:
+		var low := y1 > 0.0 and _roof_low(a, b, y1)
+		if y1 > 0.0 and not low:
 			k.wall(key, f, 0.0, length, h(y0), h(y1), 0.02, wall, mine, -1000.0)
 		else:
-			_to_roof(f, a, b, length, y0, 0.02, wall, mine, key, false)
+			_to_roof(f, a, b, length, y0, 0.02, wall, mine, key, false, h(y1) if y1 > 0.0 else INF)
 			top = ATTIC
 		if dado > 0.0 and y1 < 0.0:
 			# Under the roof the dado follows it down where it is low; its
@@ -323,7 +338,7 @@ static func room(poly: Array, y0: float, y1: float, key: String, wall: Color, da
 		# The skirting and, near the ceiling, a picture moulding.
 		k.wall("wall", f0 * Transform3D(Basis(), Vector3(0, 0, 0.05)), 0.0, length, h(y0), h(y0) + 0.18, 0.04,
 			c(dado_col, CourthouseKit.K_WOOD), mine, -1000.0)
-		if y1 > 0.0:
+		if y1 > 0.0 and not low:
 			k.box("wall", f0, Vector3(length / 2.0, h(y1) - 0.35, 0.03), Vector3(length, 0.05, 0.04), c(GILT.darkened(0.2), CourthouseKit.K_PAINT))
 			k.box("wall", f0, Vector3(length / 2.0, h(y1) - 0.06, 0.05), Vector3(length, 0.12, 0.1), c(dado_col, CourthouseKit.K_WOOD))
 		for o: Dictionary in mine:
@@ -439,7 +454,7 @@ static func _rooms() -> void:
 	# The third floor: the billiard room and the stair hall, under a flat
 	# ceiling where the roof stands higher.
 	var billiard: Array = [Vector2(TwainHouse.MX0 + 1.0, 41.2), Vector2(89.25, 41.2), Vector2(89.25, 55.7), Vector2(TwainHouse.MX0 + 1.0, 55.7)]
-	var hall3: Array = [Vector2(72.9, 56.2), Vector2(96.75, 56.2), Vector2(96.75, 71.75), Vector2(72.9, 71.75)]
+	var hall3: Array = [Vector2(72.9, 56.2), Vector2(96.75, 56.2), Vector2(96.75, 70.35), Vector2(72.9, 70.35)]
 	room(billiard, F3, -1.0, "stencil", TwainHouse.st(Color(0.62, 0.50, 0.30), 3), 3.0, WALNUT, "billiard room")
 	room(hall3, F3, -1.0, "stencil", TwainHouse.st(Color(0.46, 0.10, 0.07), 1), 3.0, WALNUT, "top hall")
 	for r: Array in [billiard, hall3]:
@@ -1085,8 +1100,8 @@ static func _dining_room() -> void:
 		var q := Vector2(100.5 + s * 7.0, 47.5)
 		chair(at(q.x, q.y, 0.0, Vector2(-s, 0)), WALNUT, Color(0.30, 0.10, 0.06), 1.2)
 	k.m.cylinder("wall", Transform3D(Basis(), w(100.5, 47.5, 0.0) + Vector3(0, 0.9, 0)), 0.14, 0.08, 0.25, 12, c(Color(0.75, 0.75, 0.72), CourthouseKit.K_ENAMEL))
-	cabinet(at(103.0, 39.6, 0.0, Vector2(0, 1)), 2.4, 0.6, 1.0, WALNUT, 1.0, 2)
-	fireplace(at(113.2, 47.7, 0.0, Vector2(-1, 0)), 1.9, WALNUT, 0.0, false)
+	cabinet(at(97.5, 55.2, 0.0, Vector2(0, -1)), 2.0, 0.6, 1.0, WALNUT, 1.0, 2)
+	fireplace(at(100.8, 39.6, 0.0, Vector2(0, 1)), 1.6, WALNUT, 0.0, false)
 	rug(100.5, 47.5, 0.0, Vector2(16.0, 11.0), Color(0.30, 0.10, 0.06), Color(0.12, 0.08, 0.06))
 	_gasolier(w(100.5, 47.5, cy), 6, 0.45)
 
@@ -1110,7 +1125,7 @@ static func _drawing_room() -> void:
 	chair(at(109.6, 74.4, 0.0, Vector2(0, 1)), Color(0.05, 0.04, 0.04), Color(0.30, 0.10, 0.08), 0.6)
 	# The pier glass between the east windows.
 	var fe := face(Vector2(96.2, TwainHouse.MZ1 - 1.0), Vector2(113.5, TwainHouse.MZ1 - 1.0), Vector2(105.0, 70.0))
-	var pier := TwainHouse.w2(Vector2(102.9, 82.9))
+	var pier := TwainHouse.w2(Vector2(106.25, 82.9))
 	var u := (Vector3(pier.x, 0, pier.y) - fe.origin).dot(fe.basis.x)
 	item("pier glass", fe, Vector3(u, h(5.5), 0.04), Vector3(0.95, 2.9, 0.06), "wall", true)
 	k.box("wall", fe, Vector3(u, h(5.5), 0.04), Vector3(0.95, 2.9, 0.06), c(GILT, CourthouseKit.K_PAINT))
@@ -1186,14 +1201,13 @@ static func _bedrooms() -> void:
 	rng.seed = 1879
 	# The Clemenses' bedroom: the Venetian bed, carved, its posts crowned;
 	# they slept with their heads at its foot, to face the carving.
-	var vb := at(104.3, 60.0, F2, Vector2(0, 1))
+	var vb := at(105.5, 60.0, F2, Vector2(0, 1))
 	bed(vb, 1.9, 2.3, 2.3, Color(0.22, 0.12, 0.07), Color(0.40, 0.14, 0.12), 2.2)
 	var dark := c(Color(0.22, 0.12, 0.07), CourthouseKit.K_WOOD)
 	for s: float in [-1.0, 1.0]:
 		k.m.sphere("wall", vb * Transform3D(Basis().scaled(Vector3(0.7, 1.2, 0.7)), Vector3(s * 0.5, 2.55, -1.15)), 0.14, 8, c(GILT, CourthouseKit.K_PAINT))
 	fb(vb, Vector3(0, 2.0, -1.12), Vector3(1.4, 0.5, 0.06), dark)
 	fireplace(at(97.3, 69.0, F2, Vector2(1, 0)), 1.7, Color(0.22, 0.12, 0.07), 1.3, true)
-	table(at(99.0, 60.2, F2, Vector2(0, 1)), 0.7, 0.5, 0.74, Color(0.22, 0.12, 0.07), Color(0.92, 0.90, 0.84, 1.0))
 	cabinet(at(104.4, 82.5, F2, Vector2(0, -1)), 1.1, 0.5, 0.9, Color(0.22, 0.12, 0.07), 0.9, 3)
 	sofa(at(117.0, 69.5, F2, Vector2(-1, 0)), 1.6, Color(0.40, 0.20, 0.16))
 	rug(105.0, 72.0, F2, Vector2(14.0, 18.0), Color(0.35, 0.14, 0.10), Color(0.14, 0.12, 0.18))
@@ -1221,9 +1235,6 @@ static func _bedrooms() -> void:
 	# Clara and Jean's: two small beds, a chest of toys.
 	bed(at(55.8, 56.9, F2, Vector2(0, 1)), 1.0, 1.9, 1.3, OAK.darkened(0.15), Color(0.70, 0.62, 0.60))
 	bed(at(68.6, 56.9, F2, Vector2(0, 1)), 1.0, 1.9, 1.3, OAK.darkened(0.15), Color(0.60, 0.66, 0.72))
-	var chest := snap(at(52.0, 64.0, F2, Vector2(1, 0)), 0.25, 0.9, 0.5)
-	item("toy chest", chest, Vector3(0, 0.25, 0), Vector3(0.9, 0.5, 0.5), "floor", true)
-	fs(chest, Vector3(0, 0.25, 0), Vector3(0.9, 0.5, 0.5), c(Color(0.45, 0.20, 0.12), CourthouseKit.K_PAINT))
 	rug(60.0, 64.0, F2, Vector2(10.0, 8.0), Color(0.50, 0.30, 0.24), Color(0.20, 0.24, 0.30))
 	_gasolier(w(61.0, 63.0, cy), 3, 0.3)
 	# The Langdon guest room.
@@ -1231,11 +1242,11 @@ static func _bedrooms() -> void:
 	cabinet(at(96.5, 55.3, F2, Vector2(0, -1)), 1.1, 0.5, 0.9, WALNUT, 0.9)
 	_gasolier(w(90.5, 47.5, cy), 3, 0.3)
 	# The west bath: a tub cased in walnut, a marble basin on its stand.
-	var wt := snap(at(81.0, 41.0, F2, Vector2(0, 1)), 0.375, 1.7, 0.6)
+	var wt := snap(at(86.2, 50.0, F2, Vector2(-1, 0)), 0.375, 1.7, 0.6)
 	item("bath tub", wt, Vector3(0, 0.3, 0), Vector3(1.7, 0.6, 0.75), "floor", true)
 	fs(wt, Vector3(0, 0.3, 0), Vector3(1.7, 0.6, 0.75), c(WALNUT, CourthouseKit.K_WOOD))
 	fb(wt, Vector3(0, 0.58, 0), Vector3(1.5, 0.05, 0.55), c(Color(0.90, 0.90, 0.88), CourthouseKit.K_ENAMEL))
-	var wb := snap(at(86.0, 48.0, F2, Vector2(-1, 0)), 0.25, 0.8, 0.9)
+	var wb := snap(at(80.0, 51.0, F2, Vector2(1, 0)), 0.25, 0.8, 0.9)
 	item("wash stand", wb, Vector3(0, 0.44, 0), Vector3(0.8, 0.88, 0.5), "floor", true)
 	fs(wb, Vector3(0, 0.4, 0), Vector3(0.8, 0.8, 0.5), c(MARBLE, CourthouseKit.K_TILE))
 	k.m.cylinder("wall", wb * Transform3D(Basis(), Vector3(0, 0.84, 0)), 0.2, 0.15, 0.08, 12, c(Color(0.94, 0.94, 0.92), CourthouseKit.K_ENAMEL))
@@ -1289,7 +1300,7 @@ static func _billiard_room() -> void:
 	var paper := c(Color(0.92, 0.90, 0.82), HarborTown.K_PAPER)
 	for i in 5:
 		k.box("wall", at(61.5, 44.0, F3, Vector2(1, 0.3 + i * 0.1)), Vector3(-0.2 + i * 0.1, 0.77 + i * 0.004, 0.05 * i - 0.1), Vector3(0.21, 0.004, 0.28), paper)
-	sofa(at(63.0, 52.3, F3, Vector2(0, -1)), 1.7, Color(0.26, 0.20, 0.14))
+	sofa(at(67.0, 52.3, F3, Vector2(0, -1)), 1.7, Color(0.26, 0.20, 0.14))
 	bookcase(at(88.0, 44.0, F3, Vector2(-1, 0)), 1.2, 1.05, rng)
 	rug(73.0, 47.6, F3, Vector2(16.0, 10.0), Color(0.34, 0.20, 0.10), Color(0.14, 0.10, 0.08))
 	# The stair hall at the top.

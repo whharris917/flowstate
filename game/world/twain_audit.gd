@@ -159,7 +159,9 @@ static func where(p: Vector3) -> String:
 func room_top(r: Dictionary, q: Vector2) -> float:
 	var y1 := float(r["y1"])
 	if y1 > 0.0:
-		return TwainHouse.h(y1)
+		# The roof's underside is the ceiling where it comes lower.
+		var roof := house.roof_y(q)
+		return TwainHouse.h(minf(y1, roof) if roof > -100.0 else y1)
 	return TwainHouse.h(minf(house.roof_y(q), TwainInterior.ATTIC))
 
 
