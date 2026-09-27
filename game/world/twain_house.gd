@@ -257,16 +257,16 @@ func _openings() -> void:
 	# The service wing.
 	for x: float in [118.5, 126.5, 132.5]:
 		_op(x, 22.3, 2.8, 2.5, 9.5)
-		_op(x, 22.3, 2.8, 14.5, 20.0)
+		_op(x, 22.3, 2.8, 13.8, 17.2)
 	for x: float in [142.0, 150.0]:
 		_op(x, 19.8, 3.0, 2.5, 9.5)
-		_op(x, 19.8, 3.0, 14.5, 20.0)
+		_op(x, 19.8, 3.0, 13.8, 17.2)
 	for z: float in [26.5, 37.0]:
 		_op(155.5, z, 2.8, 2.5, 9.5)
-		_op(155.5, z, 2.8, 14.5, 20.0)
+		_op(155.5, z, 2.8, 13.8, 17.2)
 	for x: float in [120.0, 128.0, 150.5]:
 		_op(x, 43.8, 2.8, 2.5, 9.5)
-		_op(x, 43.8, 2.8, 14.5, 20.0)
+		_op(x, 43.8, 2.8, 13.8, 17.2)
 	_op(142.5, 43.8, 3.0, 0.0, 8.0, "door")
 	# The third floor: the billiard room's balcony door in the south
 	# gable, the small windows of carved marble either side; the east
@@ -287,6 +287,10 @@ const DRESS_R := 6.6
 const PANTRY_C := Vector2(112.8, 38.3)
 const PANTRY_R := 15.5
 const CONS_C := Vector2(52.3, 47.0)
+## The service wing's plan: from the pantry's wall round to the main
+## block's north wall.
+const WING_PLAN: Array[Vector2] = [Vector2(113.0, 22.3), Vector2(137.0, 22.3), Vector2(137.0, 19.8), Vector2(155.5, 19.8),
+	Vector2(155.5, 43.8), Vector2(MX1, 43.8), Vector2(MX1, MZ0), Vector2(113.0, MZ0)]
 const CONS_R := 8.5
 
 
@@ -368,7 +372,12 @@ func ops_on(f: Transform3D, length: float, y0: float, y1: float, tol: float) -> 
 		var shape := str(o["shape"])
 		var head := h(float(o["head"]))
 		var spring := head - wd / 2.0 if shape == "round" else (head - 0.25 if shape == "segment" else head)
-		var op := CourthouseKit.opening(u, wd, h(float(o["sill"])), spring, shape, 0.25)
+		# A doorway's wall stops under the floor, clear of it.
+		var sill := h(float(o["sill"]))
+		var kind0 := str(o["kind"])
+		if (kind0 == "door" or kind0 == "open" or kind0 == "french" or kind0 == "idoor" or kind0 == "ishut"):
+			sill -= 0.03
+		var op := CourthouseKit.opening(u, wd, sill, spring, shape, 0.25)
 		op["kind"] = o["kind"]
 		op["hood"] = o["hood"]
 		out.append(op)
@@ -440,7 +449,7 @@ func _dress(f: Transform3D, o: Dictionary) -> void:
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
 	if kind == "win":
 		k.sash(f, o, -0.14, sash, -1.0, 0, false)
-		k.box("wall", f, Vector3(u, y0 - 0.05, 0.02), Vector3(wd + 0.2, 0.1, 0.2), c(STONE, CourthouseKit.K_STONE))
+		k.box("wall", f, Vector3(u, y0 - 0.04, 0.02), Vector3(wd + 0.2, 0.1, 0.2), c(STONE, CourthouseKit.K_STONE))
 	elif kind == "french":
 		k.glass(f, o, -0.16)
 		for s: float in [-1.0, 1.0]:
@@ -455,10 +464,10 @@ func _dress(f: Transform3D, o: Dictionary) -> void:
 			var leaf := wd / 2.0 if wd > 1.1 else wd
 			if wd <= 1.1 and s > 0.0:
 				continue
-			var hinge := Vector3(u + s * (wd / 2.0 - 0.03), y0, -T * FT + 0.05)
+			var hinge := Vector3(u + s * (wd / 2.0 - 0.07), y0, -T * FT + 0.05)
 			var xf := f * Transform3D(Basis(Vector3.UP, s * PI / 2.0), hinge)
 			k.door_leaf(xf, Vector3(-s * leaf / 2.0, 0, 0), leaf - 0.02, yt - y0 - 0.02, c(Color(0.28, 0.14, 0.08), CourthouseKit.K_WOOD), false)
-		k.box("wall", f, Vector3(u, y0 - 0.03, -0.05), Vector3(wd + 0.1, 0.06, T * FT * 0.8), c(STONE, CourthouseKit.K_STONE))
+		k.box("wall", f, Vector3(u, y0 + 0.02, -0.05), Vector3(wd + 0.1, 0.05, T * FT * 0.8), c(STONE, CourthouseKit.K_STONE))
 	# The casing round the opening, standing a little proud.
 	if str(o["head"]) == "flat":
 		for s: float in [-1.0, 1.0]:
@@ -502,19 +511,19 @@ func _walls() -> void:
 	# The octagon rises a foot more, to the Texas deck.
 	var octa := [Vector2(MX0, 55.8), Vector2(52.3, 55.8), Vector2(47.5, 60.4), Vector2(47.5, 66.8), Vector2(52.5, 71.1)]
 	for i in octa.size() - 1:
-		run(octa[i], octa[i + 1], Vector2(54.0, 64.0), EAVE, F3 + 0.6, false)
+		run(octa[i], octa[i + 1], Vector2(54.0, 64.0), EAVE, F3 + 0.55, false)
 	# The alcove likewise, to the tower's deck.
 	var alcove := [Vector2(66.5, MZ0), Vector2(66.5, 33.6), Vector2(70.5, 29.7), Vector2(75.9, 29.7), Vector2(79.9, 33.6), Vector2(79.9, MZ0)]
 	for i in alcove.size() - 1:
-		run(alcove[i], alcove[i + 1], Vector2(73.2, 36.0), EAVE, F3 + 0.6, false)
+		run(alcove[i], alcove[i + 1], Vector2(73.2, 36.0), EAVE, F3 + 0.55, false)
 	# The butler's pantry: a quarter round of one storey, a balcony on it.
 	var prev := _arc_point(PANTRY_C, PANTRY_R, 180.0)
 	for i in range(1, 10):
 		var q := _arc_point(PANTRY_C, PANTRY_R, 180.0 + 90.0 * i / 9.0)
-		run(prev, q, PANTRY_C, GRADE, 12.0)
+		run(prev, q, PANTRY_C, GRADE, 11.95)
 		_eave(prev, q, PANTRY_C, 12.0, 0.8)
 		prev = q
-	run(prev, Vector2(113.0, 22.3), PANTRY_C + Vector2(0, -5), GRADE, 12.0)
+	run(prev, Vector2(113.0, 22.3), PANTRY_C + Vector2(0, -5), GRADE, 11.95)
 	# The service wing: two storeys, lower than the house.
 	var wing := [Vector2(113.0, 22.3), Vector2(137.0, 22.3), Vector2(137.0, 19.8), Vector2(155.5, 19.8), Vector2(155.5, 43.8),
 		Vector2(MX1, 43.8)]
@@ -548,8 +557,8 @@ func _eave(a: Vector2, b: Vector2, inside: Vector2, y: float, out: float) -> voi
 ## block, the dining room's on the north front split round the window
 ## over its fireplace, the Langdon room's on the west front, the kitchen's.
 func _chimneys() -> void:
-	_chimney(Vector2(71.5, 55.6), Vector2(5.0, 3.2), F3, 48.5)
-	_chimney(Vector2(96.0, 69.0), Vector2(3.2, 5.0), F3, 47.5)
+	_chimney(Vector2(71.5, 55.6), Vector2(5.0, 3.2), TOP - 1.0, 48.5)
+	_chimney(Vector2(96.0, 69.0), Vector2(3.2, 5.0), TOP - 1.0, 47.5)
 	_chimney(Vector2(101.2, 38.6), Vector2(3.0, 3.2), 24.0, 45.0)
 	_chimney(Vector2(133.0, 31.0), Vector2(3.0, 3.0), 20.0, 38.0)
 	# The dining room's: two flues up the outside of the north wall either
@@ -562,7 +571,7 @@ func _chimneys() -> void:
 	var j0 := w(MX1 + 1.0, 47.7, 10.8)
 	var j1 := w(MX1 + 1.0, 47.7, EAVE + 1.0)
 	k.box("wall", Transform3D(), (j0 + j1) / 2.0, Vector3(6.6 * FT, j1.y - j0.y, 2.0 * FT), brick)
-	k.box("wall", Transform3D(), w(MX1 + 1.0, 47.7, 11.1), Vector3(7.2 * FT, 0.6 * FT, 2.4 * FT), c(BLACK, CourthouseKit.K_BRICK))
+	k.box("wall", Transform3D(), w(MX1 + 1.0, 47.7, 11.05), Vector3(7.2 * FT, 0.7 * FT, 2.4 * FT), c(BLACK, CourthouseKit.K_BRICK))
 	_chimney(Vector2(MX1 + 0.5, 47.7), Vector2(3.0, 5.4), EAVE + 1.0, 45.5)
 
 
@@ -794,10 +803,21 @@ func _roofs() -> void:
 		for p: PackedVector2Array in pieces:
 			roof_piece(p, g["plane"] as Vector3, false)
 	# The eaves' fascia round the hip.
-	_fascia([w(xa, za, ye), w(xb, za, ye), w(xb, zb, ye), w(xa, zb, ye)])
+	var eave_line := PackedVector2Array([Vector2(xa, za), Vector2(xb, za), Vector2(xb, zb), Vector2(xa, zb), Vector2(xa, za)])
+	var runs: Array = [eave_line]
+	for t: PackedVector2Array in towers:
+		var next: Array = []
+		for line: PackedVector2Array in runs:
+			next.append_array(Geometry2D.clip_polyline_with_polygon(line, t))
+		runs = next
+	var trim := c(TRIM, CourthouseKit.K_PAINT)
+	for line: PackedVector2Array in runs:
+		for i in line.size() - 1:
+			k.m.bar("wall", w(line[i].x, line[i].y, ye) - Vector3(0, 0.1, 0), w(line[i + 1].x, line[i + 1].y, ye) - Vector3(0, 0.1, 0), 0.09, 4, trim)
 	# The dressing room's round and the drawing room's bay: half cones
 	# leaning on the main walls.
-	_half_cone(DRESS_C, DRESS_R + 1.4, 90.0, 250.0, 12, Vector2(58.5, 77.3), 33.0)
+	# Its ring runs on under the main roof, so the two meet with no gap.
+	_half_cone(DRESS_C, DRESS_R + 1.4, 40.0, 320.0, 18, Vector2(58.5, 77.3), 33.0)
 	_half_cone(Vector2(MX1, 69.5), 7.9, -90.0, 90.0, 8, Vector2(MX1 + 0.5, 69.5), 33.0)
 	# The service wing's hip, and the pantry's flat with its railing.
 	hip(113.0, 155.5, 20.5, 43.8, 18.0, 1.4, 40.0)
@@ -1261,8 +1281,8 @@ func _porches() -> void:
 	k.ramp(Transform3D(), Vector3(s1.x, 0.0, s1.z), Vector3(s0.x, s0.y, s0.z), 10.0 * FT)
 	_porte_cochere()
 	# The steps from the ombra down to the lawn, south.
-	var o0 := w(24.0, 79.0, deck)
-	var o1 := w(19.5, 79.0, GRADE)
+	var o0 := w(22.6, 79.0, deck)
+	var o1 := w(18.6, 79.0, GRADE)
 	k.ramp(Transform3D(), Vector3(o1.x, 0.0, o1.z), o0, 5.0 * FT)
 	for i in 4:
 		var p := o0.lerp(o1, (i + 0.5) / 4.0)
@@ -1330,7 +1350,11 @@ func _porch_edge(edge: Array, deck: float, top: float, gaps: Array) -> void:
 ## A porch's roof: flat, boarded under, a deep fascia with a fret of
 ## sticks along it, over the outline at y feet.
 func _porch_roof(poly: Array, y: float) -> void:
-	floor_poly(poly, y + 0.6, c(Color(0.30, 0.29, 0.29), CourthouseKit.K_TAR), c(Color(0.60, 0.50, 0.38), CourthouseKit.K_WOOD), 0.6, false)
+	for piece: PackedVector2Array in Geometry2D.clip_polygons(PackedVector2Array(poly), perimeter()):
+		var pts: Array = []
+		for q: Vector2 in piece:
+			pts.append(q)
+		floor_poly(pts, y + 0.6, c(Color(0.30, 0.29, 0.29), CourthouseKit.K_TAR), c(Color(0.60, 0.50, 0.38), CourthouseKit.K_WOOD), 0.6, false)
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
 	for i in poly.size():
 		var a := w(poly[i].x, poly[i].y, y)

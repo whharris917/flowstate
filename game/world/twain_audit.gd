@@ -34,7 +34,10 @@ const L_ARCH := 1 << 19
 const L_FURN := 1 << 20
 const L_ITEM := 1 << 21
 const FT := TwainHouse.FT
-const CELL := 0.35
+const CELL := 0.2
+## Rooms the walk is not expected to reach, and why.
+const NOT_VISITED := {"servants' rooms": "the back stair from the kitchen is not modelled",
+	"the office": "its door is kept shut", "south-east bath": "its door is kept shut", "the small room": "its door is kept shut"}
 
 var world: TwainMap
 var house: TwainHouse
@@ -321,8 +324,7 @@ func _surface_word(p: Vector3, r: Dictionary) -> String:
 
 func _footprints() -> Array[PackedVector2Array]:
 	var out: Array[PackedVector2Array] = [TwainHouse.perimeter()]
-	var wing := PackedVector2Array([Vector2(113.0, 22.3), Vector2(137.0, 22.3), Vector2(137.0, 19.8), Vector2(155.5, 19.8),
-		Vector2(155.5, 43.8), Vector2(113.0, 43.8)])
+	var wing := PackedVector2Array(TwainHouse.WING_PLAN)
 	out.append(wing)
 	var pantry := PackedVector2Array()
 	for i in 10:
@@ -434,7 +436,8 @@ func _pokes() -> void:
 						var r := room_at(p, 0.12)
 						if not r.is_empty():
 							var s := survey(p)
-							if p.y > TwainHouse.h(float(r["y0"])) + 0.05 and p.y < room_top(r, Vector2(s.x, s.y)) - 0.05:
+							# The roof's plastered underside is the room's ceiling.
+							if p.y > TwainHouse.h(float(r["y0"])) + 0.05 and p.y < room_top(r, Vector2(s.x, s.y)) - 0.2:
 								var k := cell_key(p, 0.6)
 								if not in_found.has(k):
 									in_found[k] = [p, r, key, 0]
@@ -477,7 +480,7 @@ func _label(i: int) -> String:
 func _clashes() -> void:
 	for i in house.items.size():
 		var it: Dictionary = house.items[i]
-		if str(it["kind"]) == "rug":
+		if str(it["kind"]) == "rug" or str(it["kind"]) == "door":
 			continue
 		# A piece's back may touch its wall, a lamp its ceiling.
 		var q := _box_query(it, Vector3(0.03, 0.03, 0.03), L_ARCH, [])
@@ -643,14 +646,17 @@ func _reach() -> void:
 				continue
 			seen[key] = y
 			open.append([i, j, y])
-	# Each room: the free places the walk never came to.
+	# Each room: the free places the walk never came to. The servants' rooms
+	# over the kitchen are reached by a back stair the model does not have.
 	for r: Dictionary in house.rooms:
+		if NOT_VISITED.has(r["name"]):
+			continue
 		var free := 0
 		var got := 0
 		var missed: Array[Vector3] = []
 		for p: Vector3 in room_samples(r, CELL, 0.36):
 			var fy := _floor_at(p.x, p.z, p.y + 0.5, p.y - 0.5)
-			if fy < -100.0 or not _capsule_clear(Vector3(p.x, fy + 0.32 + 0.75, p.z), 0.3, 1.5):
+			if fy < -100.0 or absf(fy - p.y) > 0.12 or not _capsule_clear(Vector3(p.x, fy + 0.32 + 0.75, p.z), 0.3, 1.5):
 				continue
 			free += 1
 			var i := floori(p.x / CELL)
@@ -667,10 +673,10 @@ func _reach() -> void:
 			issue("reach", "%s has no floor the player can stand on" % r["name"], TwainHouse.w(0, 0), Vector3.INF)
 		elif got == 0:
 			issue("reach", "%s cannot be walked to from the front door" % r["name"], missed[0], eye_toward(missed[0], r), free)
-		elif missed.size() > 6:
+		elif missed.size() * CELL * CELL > 1.0:
 			# The largest cut-off patch.
 			var p := missed[0]
-			issue("reach", "%s: %d of %d places cannot be walked to (cut off by furniture or a wall)" % [r["name"], missed.size(), free],
+			issue("reach", "%s: %.1f m² of floor cannot be walked to (cut off by furniture or a wall)" % [r["name"], missed.size() * CELL * CELL],
 				p, eye_toward(p, r), missed.size())
 	print("[audit] reach: walked %d places" % seen.size())
 	_reach_maps(seen)
@@ -698,7 +704,9 @@ func _reach_maps(seen: Dictionary) -> void:
 				var z := (j + 0.5) * CELL
 				var y := _floor_at(x, z, fy + 0.6, fy - 0.6)
 				var col := Color(0.1, 0.12, 0.15)
-				if y > -100.0:
+				if y > -100.0 and absf(y - fy) > 0.12:
+					col = Color(0.35, 0.3, 0.28)
+				elif y > -100.0:
 					if seen.has(Vector3i(i, j, roundi(y / 0.25))) or seen.has(Vector3i(i, j, roundi(y / 0.25) - 1)) or seen.has(Vector3i(i, j, roundi(y / 0.25) + 1)):
 						col = Color(0.3, 0.75, 0.35)
 					elif _capsule_clear(Vector3(x, y + 0.32 + 0.75, z), 0.3, 1.5):
@@ -740,6 +748,9 @@ func _reach_maps(seen: Dictionary) -> void:
 				if y < -100.0:
 					continue
 				var state := 2
+				if absf(y - fy) > 0.12:
+					geo["cells"].append([snappedf(survey(Vector3(x, y, z)).x, 0.01), snappedf(survey(Vector3(x, y, z)).y, 0.01), fl, 2])
+					continue
 				if seen.has(Vector3i(i, j, roundi(y / 0.25))) or seen.has(Vector3i(i, j, roundi(y / 0.25) - 1)) or seen.has(Vector3i(i, j, roundi(y / 0.25) + 1)):
 					state = 0
 				elif _capsule_clear(Vector3(x, y + 0.32 + 0.75, z), 0.3, 1.5):
@@ -768,12 +779,12 @@ func _fights() -> void:
 				var c := sf.v[sf.i[t + 2]]
 				var nn := (b - a).cross(c - a)
 				var area := nn.length() / 2.0
-				if area < 0.002:
+				# Under the lawn nothing is seen.
+				if area < 0.002 or maxf(a.y, maxf(b.y, c.y)) < 0.02:
 					continue
+				# Faces that look the same way: a face against the back of another
+				# is never seen.
 				nn = nn.normalized()
-				# A plane is the same either way it faces.
-				if nn.x < -0.001 or (absf(nn.x) <= 0.001 and (nn.y < -0.001 or (absf(nn.y) <= 0.001 and nn.z < 0.0))):
-					nn = -nn
 				var d := nn.dot(a)
 				var bk := [roundi(nn.x * 40.0), roundi(nn.y * 40.0), roundi(nn.z * 40.0), roundi(d / 0.003)]
 				var col := sf.c[sf.i[t]]
@@ -801,44 +812,97 @@ func _fights() -> void:
 		var n: Vector3 = tris[list[0]][3]
 		var u := n.cross(Vector3.UP if absf(n.y) < 0.9 else Vector3.RIGHT).normalized()
 		var v := n.cross(u)
+		# Each face into the half-metre patches its bounds cover.
+		var patches := {}
 		var flat := {}
-		var boxes := {}
 		for idx: int in list:
-			var t: Array = tris[idx]
-			var p2 := PackedVector2Array([Vector2((t[0] as Vector3).dot(u), (t[0] as Vector3).dot(v)),
-				Vector2((t[1] as Vector3).dot(u), (t[1] as Vector3).dot(v)), Vector2((t[2] as Vector3).dot(u), (t[2] as Vector3).dot(v))])
+			var t3: Array = tris[idx]
+			var p2 := PackedVector2Array([Vector2((t3[0] as Vector3).dot(u), (t3[0] as Vector3).dot(v)),
+				Vector2((t3[1] as Vector3).dot(u), (t3[1] as Vector3).dot(v)), Vector2((t3[2] as Vector3).dot(u), (t3[2] as Vector3).dot(v))])
 			flat[idx] = p2
-			var r := Rect2(p2[0], Vector2.ZERO).expand(p2[1]).expand(p2[2])
-			boxes[idx] = r
-		for ai in list.size():
-			var ia: int = list[ai]
-			for bi in range(ai + 1, list.size()):
-				var ib: int = list[bi]
-				if tris[ia][4] == tris[ib][4] and tris[ia][5] == tris[ib][5]:
-					continue
-				var ra: Rect2 = boxes[ia]
-				var rb: Rect2 = boxes[ib]
-				if not ra.grow(-0.01).intersects(rb.grow(-0.01)):
-					continue
-				var inter := Geometry2D.intersect_polygons(flat[ia], flat[ib])
-				var area := 0.0
-				for poly: PackedVector2Array in inter:
-					area += absf(TwainHouse.signed_area(poly)) / 2.0
-				if area < 0.0025:
-					continue
-				var p: Vector3 = (tris[ia][0] + tris[ia][1] + tris[ia][2]) / 3.0
-				var key := cell_key(p, 0.8)
-				if not found.has(key):
-					found[key] = [p, tris[ia][5], tris[ib][5], n, 0.0]
-				found[key][4] += area
-	for key: Vector3i in found:
+			var r := Rect2(p2[0], Vector2.ZERO).expand(p2[1]).expand(p2[2]).grow(-0.01)
+			if r.size.x <= 0.0 or r.size.y <= 0.0:
+				continue
+			for pi in range(floori(r.position.x / 0.5), floori(r.end.x / 0.5) + 1):
+				for pj in range(floori(r.position.y / 0.5), floori(r.end.y / 0.5) + 1):
+					var pk := Vector2i(pi, pj)
+					if not patches.has(pk):
+						patches[pk] = []
+					patches[pk].append(idx)
+		var done := {}
+		for pk: Vector2i in patches:
+			var here: Array = patches[pk]
+			if here.size() < 2:
+				continue
+			for ai in here.size():
+				var ia: int = here[ai]
+				for bi in range(ai + 1, here.size()):
+					var ib: int = here[bi]
+					if tris[ia][4] == tris[ib][4] and tris[ia][5] == tris[ib][5]:
+						continue
+					var pair := Vector2i(mini(ia, ib), maxi(ia, ib))
+					if done.has(pair):
+						continue
+					done[pair] = true
+					var inter := Geometry2D.intersect_polygons(flat[ia], flat[ib])
+					var area := 0.0
+					for poly: PackedVector2Array in inter:
+						area += absf(TwainHouse.signed_area(poly)) / 2.0
+					if area < 0.01:
+						continue
+					# Where the two overlap, and whether anything stands right in
+					# front of it: a face pressed against another is never seen.
+					var seen_pts := 0
+					var at := Vector3.ZERO
+					for poly: PackedVector2Array in inter:
+						var cen := Vector2.ZERO
+						for q: Vector2 in poly:
+							cen += q
+						cen /= poly.size()
+						var p3 := n * (tris[ia][0] as Vector3).dot(n) + u * cen.x + v * cen.y
+						if _visible_face(p3, n):
+							seen_pts += 1
+							at = p3
+					if seen_pts == 0:
+						continue
+					var key := cell_key(at, 0.8)
+					if not found.has(key) or float(found[key][4]) < area:
+						found[key] = [at, tris[ia][5], tris[ib][5], n, area, [tris[ia], tris[ib]]]
+	var keys := found.keys()
+	keys.sort_custom(func(ka: Vector3i, kb: Vector3i) -> bool: return float(found[ka][4]) > float(found[kb][4]))
+	for key: Vector3i in keys:
 		var f: Array = found[key]
+		if float(f[4]) < 0.01:
+			continue
+		if OS.get_environment("FLOWSTATE_TW_AUDIT_DEBUG") != "" and issues.size() < 30:
+			for tr: Array in f[5]:
+				print("[audit]   face %s col %s: %s | %s | %s  (%.3f %.3f %.3f)" % [tr[5], str(tr[4]), where(tr[0]), where(tr[1]), where(tr[2]), (tr[0] as Vector3).x, (tr[0] as Vector3).y, (tr[0] as Vector3).z])
 		var p := f[0] as Vector3
 		var r := room_at(p + (f[3] as Vector3) * 0.1)
 		if r.is_empty():
 			r = room_at(p - (f[3] as Vector3) * 0.1)
 		var eye := eye_toward(p, r) if not r.is_empty() else p + (f[3] as Vector3) * 3.0 + Vector3(0, 0.5, 0)
 		issue("fight", "two surfaces (%s, %s) lie in one plane over %.2f m²; they flicker" % [f[1], f[2], float(f[4])], p, eye)
+
+
+## Whether a face at p looking along n can be seen: the point just in
+## front of it must not be enclosed (rays from it in the six directions
+## meet the backs of surfaces in at least five) nor pressed against
+## something within 2 cm along n.
+func _visible_face(p: Vector3, n: Vector3) -> bool:
+	var o := p + n * 0.004
+	var front := ray(o, o + n * 2.5, L_ARCH | L_FURN)
+	if not front.is_empty() and (front["position"] as Vector3).distance_to(p) < 0.02:
+		return false
+	# Looking out of the face it meets the inside of a solid: the face is in it.
+	if not front.is_empty() and (front["normal"] as Vector3).dot(n) > 0.0:
+		return false
+	var backs := 0
+	for d: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.FORWARD, Vector3.BACK]:
+		var hit := ray(o, o + d * 30.0, L_ARCH | L_FURN)
+		if not hit.is_empty() and (hit["normal"] as Vector3).dot(d) > 0.0:
+			backs += 1
+	return backs < 5
 
 
 ## ---- the report --------------------------------------------------------------------
