@@ -734,13 +734,17 @@ func slope(a: Vector3, b: Vector3, cc: Vector3, d: Vector3, under := true) -> vo
 ## at slope s (rise over run), cut off flat at y1 if it would rise past
 ## it; eaves standing out `out` feet.
 func hip(x0: float, x1: float, z0: float, z1: float, y0: float, s: float, y1: float, out := 1.4,
-		hole := PackedVector2Array(), crest := true) -> void:
+		hole := PackedVector2Array(), crest := true, s_end := -1.0) -> void:
+	# The ends (across x) may be pitched differently from the sides.
+	if s_end < 0.0:
+		s_end = s
 	var xa := x0 - out
 	var xb := x1 + out
 	var za := z0 - out
 	var zb := z1 + out
 	var ye := y0 - out * s
-	var planes: Array[Vector3] = [Vector3(s, 0, ye - s * xa), Vector3(-s, 0, ye + s * xb), Vector3(0, s, ye - s * za),
+	var ye_end := y0 - out * s_end
+	var planes: Array[Vector3] = [Vector3(s_end, 0, ye_end - s_end * xa), Vector3(-s_end, 0, ye_end + s_end * xb), Vector3(0, s, ye - s * za),
 		Vector3(0, -s, ye + s * zb), Vector3(0, 0, y1)]
 	var rect := PackedVector2Array([Vector2(xa, za), Vector2(xb, za), Vector2(xb, zb), Vector2(xa, zb)])
 	# Each face where it is the lowest of the planes, less any hole (where
@@ -895,7 +899,7 @@ func _roofs() -> void:
 	# The west half of the main block is one long roof from the south
 	# gable to the north one, its ridge the gables' peaks (the roof plan's
 	# line at 48.7 ft); each gable runs its ridge to the middle.
-	cross_gable(Vector2(MX0, 38.9), Vector2(MX0, 54.5), Vector2(70.0, 47.0), 41.7, 0.4, 19.5, SOUTH_TOP, 29.0, 4.8)
+	cross_gable(Vector2(MX0, 38.9), Vector2(MX0, 54.5), Vector2(70.0, 47.0), 41.7, 0.4, 19.5, SOUTH_TOP, 29.0, 3.0)
 	# The two great east gables throw their roofs forward over their
 	# balconies: the southern 0.9 ft, the northern 3.6 (the south and north
 	# elevations' edges).
@@ -955,8 +959,9 @@ func _roofs() -> void:
 	_dormer7()
 	# The service wing's hip, stopping at the house; the pantry's roof,
 	# falling from the house's corner to its round's eave.
-	hip(113.0, 155.5, 19.8, 43.8, 17.0, 1.08, 31.2, 1.4,
-		PackedVector2Array([Vector2(MX0, MZ0), Vector2(MX1, MZ0), Vector2(MX1, MZ1 + 2.0), Vector2(MX0, MZ1 + 2.0)]))
+	# Pitched at 1.17 all round (the west elevation).
+	hip(113.0, 155.5, 19.8, 43.8, 17.0, 1.17, 29.5, 1.4,
+		PackedVector2Array([Vector2(MX0, MZ0), Vector2(MX1, MZ0), Vector2(MX1, MZ1 + 2.0), Vector2(MX0, MZ1 + 2.0)]), true, 1.17)
 	for dz: Array in [[122.0, 22.3, -1.0], [147.0, 19.8, -1.0], [125.0, 43.8, 1.0]]:
 		_wing_dormer(float(dz[0]), float(dz[1]), float(dz[2]))
 	_pantry_roof()
