@@ -16,6 +16,8 @@ const WORLDS: Array[Dictionary] = [
 		"scene": "res://world/town.tscn"},
 	{"title": "MONROE COURTHOUSE", "note": "The Union County courthouse of 1886 on its square in Monroe, North Carolina, outside and in.",
 		"scene": "res://world/courthouse.tscn"},
+	{"title": "MARK TWAIN HOUSE", "note": "The Clemens house of 1874 on Farmington Avenue in Hartford, Connecticut, outside and in, as the family knew it in the 1880s.",
+		"scene": "res://world/twain.tscn"},
 	{"title": "SHOWCASE", "note": "The commissioned plant: Unit 100 to Unit 500, running.",
 		"scene": "res://world/sandbox.tscn"},
 	{"title": "THE HALL", "note": "The manufacturing hall and aseptic annex, parked.",
