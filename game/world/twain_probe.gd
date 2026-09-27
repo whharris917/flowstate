@@ -33,6 +33,10 @@ func _run(world: TwainMap) -> void:
 	world.set_time_of_day(10.0)
 	var which := OS.get_environment("FLOWSTATE_TW_SHOTS")
 	player._fov_target = 70.0
+	if OS.get_environment("FLOWSTATE_TW_ORTHO") != "":
+		await _orthos(world)
+		get_tree().quit()
+		return
 	var views := OS.get_environment("FLOWSTATE_TW_VIEWS")
 	if views != "":
 		# Pictures for comparison: no panels, hotbar or crosshair over them.
@@ -106,6 +110,72 @@ func _run(world: TwainMap) -> void:
 		await _walk(player, s(40.0, 79.0, 0.0) + Vector3(0, 0.3, 0), s(10.0, 79.0, 0.0), 4.0)
 	print("[probe] screenshots written to user://")
 	get_tree().quit()
+
+
+## The survey's elevation sheets: how a sheet's horizontal (in the
+## drawing's feet) maps to the house, [sheet, which survey axis, sign,
+## offset]: sheet_x = sign * survey + offset. The first floor lies at
+## sheet y FF on every sheet.
+const SHEETS := {"east": [8, "x", 1.0, -1.7], "north": [9, "z", -1.0, 155.8], "west": [10, "x", -1.0, 176.5],
+	"south": [11, "z", 1.0, 23.0]}
+const ORTHO_X := Vector2(10.0, 170.0)    # the sheet's horizontal range drawn
+const ORTHO_Y := Vector2(-12.0, 52.0)    # heights over the first floor, feet
+const ORTHO_PX := 16                     # pixels to the foot
+
+
+## Straight-on orthographic pictures of each front at the survey sheets'
+## scale, trees and grounds hidden, for tools/twain_overlay.py to lay
+## over the drawings: user://ortho_<front>.png.
+func _orthos(world: TwainMap) -> void:
+	for layer: Node in get_tree().root.find_children("*", "CanvasLayer", true, false):
+		(layer as CanvasLayer).visible = false
+	for f: Node in get_tree().root.find_children("*", "", true, false):
+		if f is Forest:
+			(f as Node3D).visible = false
+	world.grounds.visible = false
+	world.player.visible = false
+	var only := OS.get_environment("FLOWSTATE_TW_ORTHO")
+	for front: String in SHEETS:
+		if only != "all" and not only.split(",").has(front):
+			continue
+		var s: Array = SHEETS[front]
+		var vp := SubViewport.new()
+		vp.size = Vector2i(int((ORTHO_X.y - ORTHO_X.x) * ORTHO_PX), int((ORTHO_Y.y - ORTHO_Y.x) * ORTHO_PX))
+		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		vp.msaa_3d = Viewport.MSAA_4X
+		add_child(vp)
+		var cam := Camera3D.new()
+		cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+		cam.keep_aspect = Camera3D.KEEP_HEIGHT
+		cam.size = (ORTHO_Y.y - ORTHO_Y.x) * TwainHouse.FT
+		cam.far = 400.0
+		vp.add_child(cam)
+		# The survey coordinate under the picture's middle.
+		var mid_sheet := (ORTHO_X.x + ORTHO_X.y) / 2.0
+		var along := (mid_sheet - float(s[3])) / float(s[2])
+		var hy := (ORTHO_Y.x + ORTHO_Y.y) / 2.0
+		var target: Vector3
+		var eye: Vector3
+		match front:
+			"east":
+				target = TwainHouse.w(along, 70.0, hy)
+				eye = target + Vector3(120, 0, 0)
+			"west":
+				target = TwainHouse.w(along, 70.0, hy)
+				eye = target + Vector3(-120, 0, 0)
+			"north":
+				target = TwainHouse.w(85.0, along, hy)
+				eye = target + Vector3(0, 0, -120)
+			"south":
+				target = TwainHouse.w(85.0, along, hy)
+				eye = target + Vector3(0, 0, 120)
+		cam.look_at_from_position(eye, target, Vector3.UP)
+		cam.current = true
+		for i in 12:
+			await RenderingServer.frame_post_draw
+		vp.get_texture().get_image().save_png("user://ortho_%s.png" % front)
+		print("[probe] ortho %s written" % front)
+		vp.queue_free()
 
 
 ## Stand the camera at `from` and aim it at `to`, then photograph.
