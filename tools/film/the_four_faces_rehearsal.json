@@ -1,0 +1,1225 @@
+{
+  "camera": {
+    "mode": "auto"
+  },
+  "cast": [
+    {
+      "at": [
+        -14.03,
+        1.32,
+        -1.83
+      ],
+      "name": "clerk",
+      "sitting_on": "",
+      "yaw_deg": -90.0
+    },
+    {
+      "at": [
+        -19.6,
+        0.0,
+        3.8
+      ],
+      "name": "wren",
+      "sitting_on": "",
+      "yaw_deg": 150.0
+    },
+    {
+      "at": [
+        -29.4,
+        0.0,
+        0.0
+      ],
+      "name": "rosalind",
+      "sitting_on": "",
+      "yaw_deg": -90.0
+    }
+  ],
+  "events": [
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "wave"
+        },
+        {
+          "do": "say",
+          "text": "Rosalind. You came back. I half feared the hill road had kept you.",
+          "to": "rosalind"
+        }
+      ],
+      "t": 1.0
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "go",
+          "to": "wren"
+        },
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "act",
+          "name": "flourish"
+        },
+        {
+          "do": "say",
+          "text": "Wren, darling! The player returns, and the wager stands unpaid.",
+          "to": "wren"
+        }
+      ],
+      "t": 3.09
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "wait",
+          "secs": 4.0
+        },
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        }
+      ],
+      "t": 10.87
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "The hill road tried, darling. But I owed you a clock face and a guinea.",
+          "to": "wren"
+        },
+        {
+          "do": "wait",
+          "secs": 4.0
+        }
+      ],
+      "t": 16.69
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clock_tower"
+        },
+        {
+          "do": "look",
+          "pitch": 25.0
+        },
+        {
+          "do": "say",
+          "text": "Unpaid, and unsettled. I still say the north face drags. Four minutes, by my watch.",
+          "to": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "read"
+        }
+      ],
+      "t": 19.15
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clock_tower"
+        },
+        {
+          "do": "look",
+          "pitch": 25.0
+        },
+        {
+          "do": "act",
+          "name": "point"
+        },
+        {
+          "do": "say",
+          "text": "North? Never. The west face lags, darling. It sulks toward the sunset.",
+          "to": "wren"
+        },
+        {
+          "do": "wait",
+          "secs": 4.0
+        }
+      ],
+      "t": 25.72
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "wait",
+          "secs": 3.0
+        },
+        {
+          "do": "look",
+          "pitch": 0.0
+        },
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        }
+      ],
+      "t": 32.47
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "shake_head"
+        },
+        {
+          "do": "act",
+          "name": "shake_head"
+        },
+        {
+          "do": "say",
+          "text": "Clocks do not sulk. They wear. From down here we cannot see two faces at once.",
+          "to": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "point"
+        }
+      ],
+      "t": 38.01
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look",
+          "pitch": 0.0
+        },
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "say",
+          "text": "From down here we are both guessing. There is a gallery over the courtroom. Shall we?",
+          "to": "wren"
+        },
+        {
+          "do": "wait",
+          "secs": 6.0
+        }
+      ],
+      "t": 39.36
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "act",
+          "name": "nod"
+        },
+        {
+          "do": "say",
+          "text": "We shall. And the courthouse keeps its own records. The true time is written somewhere.",
+          "to": "rosalind"
+        },
+        {
+          "do": "go",
+          "to": "west_porch"
+        }
+      ],
+      "t": 47.52
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "Wear, then. Come, we shall see two faces at once, and try them both.",
+          "to": "wren"
+        },
+        {
+          "do": "act",
+          "name": "wave"
+        },
+        {
+          "do": "go",
+          "to": "west_porch"
+        }
+      ],
+      "t": 58.13
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clerk"
+        },
+        {
+          "do": "act",
+          "name": "nod"
+        },
+        {
+          "do": "say",
+          "text": "Good morning. We are bound for the gallery, to settle a clock.",
+          "to": "clerk"
+        },
+        {
+          "do": "wait",
+          "secs": 3.0
+        }
+      ],
+      "t": 63.03
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "wait",
+          "secs": 3.0
+        }
+      ],
+      "t": 70.67
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clerk"
+        },
+        {
+          "do": "act",
+          "name": "nod"
+        },
+        {
+          "do": "say",
+          "text": "Good morning, keeper. Is the gallery open to two quarrelling witnesses?",
+          "to": "clerk"
+        },
+        {
+          "do": "wait",
+          "secs": 6.0
+        }
+      ],
+      "t": 72.25
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "After you, Rosalind. Mind the stairs; my knees are older than this building.",
+          "to": "rosalind"
+        },
+        {
+          "do": "go",
+          "to": "gallery"
+        }
+      ],
+      "t": 80.48
+    },
+    {
+      "actor": "clerk",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "act",
+          "name": "bow"
+        },
+        {
+          "do": "say",
+          "text": "Open to witnesses, always. Up the north stair, ladies. The court is not sitting today.",
+          "to": "rosalind"
+        },
+        {
+          "do": "wait",
+          "secs": 1.0
+        },
+        {
+          "do": "act",
+          "name": "read"
+        },
+        {
+          "do": "say",
+          "text": "Though if it is the time you want settled... I keep the winding book.",
+          "to": "wren"
+        }
+      ],
+      "t": 86.63
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "Older than the building? Then you outrank it, darling. Up we go.",
+          "to": "wren"
+        },
+        {
+          "do": "go",
+          "to": "gallery"
+        }
+      ],
+      "t": 86.95
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "go",
+          "to": "gallery"
+        },
+        {
+          "do": "look_at",
+          "target": "charter"
+        }
+      ],
+      "t": 130.02
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "A winding book! Wren, did you hear? The keeper has kept a witness all along.",
+          "to": "wren"
+        },
+        {
+          "_sidestepped": true,
+          "do": "go",
+          "to": "gallery"
+        },
+        {
+          "do": "look_at",
+          "target": "wren"
+        }
+      ],
+      "t": 136.13
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        },
+        {
+          "do": "say",
+          "text": "A winding book? I did not hear. Where is it? Who keeps it?",
+          "to": "rosalind"
+        },
+        {
+          "do": "wait",
+          "secs": 3.0
+        }
+      ],
+      "t": 141.85
+    },
+    {
+      "actor": "clerk",
+      "append": false,
+      "commands": [
+        {
+          "do": "speed",
+          "value": 1.9
+        },
+        {
+          "do": "go",
+          "to": "north_stair_head"
+        }
+      ],
+      "t": 142.79
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look",
+          "pitch": 30.0
+        },
+        {
+          "do": "say",
+          "text": "The gallery hangs above us like a balcony in Verona, and no stair in sight.",
+          "to": "wren"
+        },
+        {
+          "do": "wait",
+          "secs": 5.0
+        }
+      ],
+      "t": 145.26
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "wait",
+          "secs": 4.0
+        }
+      ],
+      "t": 150.3
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look",
+          "pitch": 0.0
+        },
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "say",
+          "text": "The keeper, below. He winds the tower, and writes it down. He offered it to you.",
+          "to": "wren"
+        },
+        {
+          "do": "message",
+          "text": "We are up in the courtroom, under the gallery. Bring the winding book to the court, if you will?",
+          "to": "clerk"
+        },
+        {
+          "do": "wait",
+          "secs": 6.0
+        }
+      ],
+      "t": 156.87
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "Then we settle it from the floor. There is a charter behind the bench. Charters are dated.",
+          "to": "rosalind"
+        },
+        {
+          "do": "go",
+          "to": "charter"
+        },
+        {
+          "do": "look_at",
+          "target": "charter"
+        },
+        {
+          "do": "act",
+          "name": "inspect"
+        }
+      ],
+      "t": 161.52
+    },
+    {
+      "actor": "clerk",
+      "append": false,
+      "commands": [
+        {
+          "do": "speed",
+          "value": 1.3
+        },
+        {
+          "do": "go",
+          "to": "courtroom"
+        }
+      ],
+      "t": 167.56
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "From the floor, then! And if the court will not sit, I shall be the court.",
+          "to": "wren"
+        },
+        {
+          "do": "go",
+          "to": "lectern"
+        },
+        {
+          "deg": 180.0,
+          "do": "turn"
+        }
+      ],
+      "t": 170.43
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "act",
+          "name": "point"
+        },
+        {
+          "do": "say",
+          "text": "Members of the jury! Four faces, one hand behind them. Which of them lies?"
+        },
+        {
+          "do": "wait",
+          "secs": 5.0
+        }
+      ],
+      "t": 179.15
+    },
+    {
+      "actor": "clerk",
+      "append": false,
+      "commands": [
+        {
+          "do": "teleport",
+          "to": [
+            0.0,
+            6.9,
+            10.4
+          ]
+        },
+        {
+          "do": "face",
+          "yaw": 0.0
+        }
+      ],
+      "t": 181.46
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "Hung too high again. A charter gives the year, never the hour.",
+          "to": "rosalind"
+        },
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "shrug"
+        },
+        {
+          "do": "say",
+          "text": "He offered me his winding book? And I walked straight past him. Fetch him, your honour.",
+          "to": "rosalind"
+        }
+      ],
+      "t": 184.84
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clerk"
+        },
+        {
+          "do": "act",
+          "name": "wave"
+        },
+        {
+          "do": "say",
+          "text": "The court calls the keeper of the winding book! Approach, sir, and be sworn.",
+          "to": "clerk"
+        },
+        {
+          "do": "wait",
+          "secs": 8.0
+        }
+      ],
+      "t": 188.44
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clerk"
+        },
+        {
+          "do": "act",
+          "name": "wave"
+        },
+        {
+          "do": "say",
+          "text": "Keeper! Forgive an old woman her hurry. May I see the winding book?",
+          "to": "clerk"
+        },
+        {
+          "do": "wait",
+          "secs": 4.0
+        }
+      ],
+      "t": 190.4
+    },
+    {
+      "actor": "clerk",
+      "append": false,
+      "commands": [
+        {
+          "do": "go",
+          "to": "bar_gate"
+        },
+        {
+          "do": "say",
+          "text": "Pardon me. The keeper of the winding book, for the court.",
+          "to": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "read"
+        }
+      ],
+      "t": 194.59
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "act",
+          "name": "bow"
+        },
+        {
+          "do": "wait",
+          "secs": 8.0
+        }
+      ],
+      "t": 207.4
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "wait",
+          "secs": 6.0
+        }
+      ],
+      "t": 207.96
+    },
+    {
+      "actor": "clerk",
+      "append": false,
+      "commands": [
+        {
+          "do": "go",
+          "to": "lectern"
+        },
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "nod"
+        },
+        {
+          "do": "say",
+          "text": "Sworn. The book says none of the four faces is slow, madam.",
+          "to": "rosalind"
+        },
+        {
+          "do": "wait",
+          "secs": 1.5
+        },
+        {
+          "do": "say",
+          "text": "All four run four minutes behind. Together. On purpose, since 1887.",
+          "to": "rosalind"
+        }
+      ],
+      "t": 211.98
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "go",
+          "to": "clerk"
+        },
+        {
+          "do": "look_at",
+          "target": "clerk"
+        },
+        {
+          "do": "say",
+          "text": "Tell us plainly, sir. Which face runs slow?",
+          "to": "clerk"
+        },
+        {
+          "do": "wait",
+          "secs": 5.0
+        }
+      ],
+      "t": 218.75
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "act",
+          "name": "shrug"
+        },
+        {
+          "do": "say",
+          "text": "All four? On purpose? Keeper, that is not a clock, that is a conspiracy. Why?",
+          "to": "clerk"
+        },
+        {
+          "do": "wait",
+          "secs": 8.0
+        }
+      ],
+      "t": 223.63
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "act",
+          "name": "think"
+        },
+        {
+          "do": "say",
+          "text": "Four minutes. My watch was right, and my face was wrong. We both lose.",
+          "to": "rosalind"
+        },
+        {
+          "do": "wait",
+          "secs": 4.0
+        }
+      ],
+      "t": 233.65
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "wait",
+          "secs": 10.0
+        }
+      ],
+      "t": 238.06
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "wait",
+          "secs": 5.0
+        }
+      ],
+      "t": 245.96
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "say",
+          "text": "Both lose? Never. Hear the verdict of this court:",
+          "to": "wren"
+        },
+        {
+          "do": "act",
+          "name": "verdict"
+        },
+        {
+          "do": "say",
+          "text": "Both faces acquitted. The clock is guilty of loyalty. The guinea buys us supper.",
+          "to": "wren"
+        },
+        {
+          "do": "wait",
+          "secs": 6.0
+        }
+      ],
+      "t": 252.24
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clerk"
+        },
+        {
+          "do": "say",
+          "text": "Four minutes is one degree of longitude. The town kept its own sun, did it not?",
+          "to": "clerk"
+        },
+        {
+          "do": "act",
+          "name": "inspect"
+        },
+        {
+          "do": "wait",
+          "secs": 3.0
+        }
+      ],
+      "t": 254.92
+    },
+    {
+      "actor": "clerk",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "say",
+          "text": "The carpenter who hung the clock was four minutes late the day he died.",
+          "to": "wren"
+        },
+        {
+          "do": "wait",
+          "secs": 1.2
+        },
+        {
+          "do": "say",
+          "text": "So the town gave him four minutes back. Every hour, for ever.",
+          "to": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "bow"
+        }
+      ],
+      "t": 256.14
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "wait",
+          "secs": 1.0
+        },
+        {
+          "do": "say",
+          "text": "Then my watch is the one that is wrong. I shall set it back.",
+          "to": "clerk"
+        },
+        {
+          "do": "act",
+          "name": "nod"
+        },
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        },
+        {
+          "do": "say",
+          "text": "Supper, then, your honour. But first, four minutes for the carpenter.",
+          "to": "rosalind"
+        }
+      ],
+      "t": 263.81
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clerk"
+        },
+        {
+          "do": "act",
+          "name": "plead"
+        },
+        {
+          "do": "say",
+          "text": "Four minutes back, every hour. Keeper, that is the kindest thing I ever heard a town do.",
+          "to": "clerk"
+        },
+        {
+          "do": "wait",
+          "secs": 7.0
+        }
+      ],
+      "t": 265.04
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "act",
+          "name": "stopped_clock"
+        },
+        {
+          "do": "wait",
+          "secs": 3.0
+        },
+        {
+          "do": "act",
+          "name": "clockwork"
+        },
+        {
+          "do": "say",
+          "text": "There. Four minutes late, like everyone worth waiting for.",
+          "to": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "bow"
+        }
+      ],
+      "t": 273.56
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "stand"
+        },
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "say",
+          "text": "Four minutes for the carpenter. From the gallery, darling, where he could see his work.",
+          "to": "wren"
+        }
+      ],
+      "t": 279.63
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "act",
+          "name": "wave"
+        },
+        {
+          "do": "sit",
+          "on": "gallery_pew_1_west"
+        }
+      ],
+      "t": 285.68
+    },
+    {
+      "actor": "clerk",
+      "append": false,
+      "commands": [
+        {
+          "do": "act",
+          "name": "smile"
+        },
+        {
+          "do": "back",
+          "m": 1.2
+        }
+      ],
+      "t": 293.56
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "wren"
+        },
+        {
+          "do": "say",
+          "text": "Worth waiting for. Then the gallery can wait too. Sit with me, Wren, row six.",
+          "to": "wren"
+        },
+        {
+          "do": "sit",
+          "on": "pew_6_west"
+        },
+        {
+          "do": "wait",
+          "secs": 8.0
+        }
+      ],
+      "t": 296.33
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        },
+        {
+          "do": "say",
+          "text": "From the gallery, yes. Come and sit with me, and let the hour be late.",
+          "to": "rosalind"
+        },
+        {
+          "_sidestepped": true,
+          "do": "sit",
+          "on": "gallery_pew_1_west"
+        }
+      ],
+      "t": 297.29
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "go",
+          "to": "bar_gate"
+        },
+        {
+          "do": "sit",
+          "on": "pew_6_west"
+        }
+      ],
+      "t": 308.37
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "sit",
+          "on": "gallery_pew_6_west"
+        }
+      ],
+      "t": 308.7
+    },
+    {
+      "actor": "rosalind",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "Then we stand, as players do. Four minutes for the carpenter, and a bow for his town.",
+          "to": "wren"
+        },
+        {
+          "do": "act",
+          "name": "flourish"
+        },
+        {
+          "do": "wait",
+          "secs": 6.0
+        }
+      ],
+      "t": 311.92
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "say",
+          "text": "Row six it is. Lead on, darling. There, I have caught it from you.",
+          "to": "rosalind"
+        },
+        {
+          "_sidestepped": true,
+          "do": "sit",
+          "on": "pew_6_west"
+        }
+      ],
+      "t": 315.89
+    },
+    {
+      "actor": "wren",
+      "append": false,
+      "commands": [
+        {
+          "do": "look_at",
+          "target": "clerk"
+        },
+        {
+          "do": "say",
+          "text": "For the carpenter, and his town.",
+          "to": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "bow"
+        },
+        {
+          "do": "wait",
+          "secs": 2.0
+        },
+        {
+          "do": "look_at",
+          "target": "rosalind"
+        },
+        {
+          "do": "act",
+          "name": "smile"
+        }
+      ],
+      "t": 322.89
+    },
+    {
+      "end": true,
+      "t": 334.91
+    }
+  ],
+  "hour": 16.3,
+  "subtitles": true,
+  "title": "the four faces"
+}

@@ -144,7 +144,7 @@ func _auto(delta: float) -> Dictionary:
 			cast.append(a)
 	if cast.is_empty():
 		return {}
-	var now := Time.get_ticks_msec() / 1000.0
+	var now := stage.clock
 	var want := {}
 	var sp := stage.last_speaker
 	var speaking := sp != null and is_instance_valid(sp) and sp.visible and (sp._say_left > 0.0 or now - stage.last_said_at < 1.5)

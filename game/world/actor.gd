@@ -64,6 +64,7 @@ var _settle_to := Vector3.ZERO
 var _cams: Dictionary = {}
 var _talk_left := 0.0
 var _wait_from := 0.0
+var _voice: AudioStreamPlayer
 ## Whoever it is attending to, and for how long: a speaker nearby.
 var _attend_to: Actor = null
 var _attend_left := 0.0
@@ -313,6 +314,20 @@ func _begin(c: Dictionary) -> void:
 			_say.visible = true
 			_say_left = float(c.get("secs", 2.0 + _say.text.length() * 0.07))
 			_talk_left = 0.4 + _say.text.length() * 0.055
+			# A recorded voice: heard, the mouth working as long as it lasts,
+			# and the line held until it is said.
+			var v: Variant = stage.voice_for(actor_name, _say.text) if stage != null else null
+			if v != null:
+				if _voice == null:
+					_voice = AudioStreamPlayer.new()
+					_voice.volume_db = 2.0
+					add_child(_voice)
+				_voice.stream = v[0]
+				_voice.play()
+				_talk_left = float(v[1])
+				_say_left = float(v[1]) + 0.4
+				current["wait"] = true
+				stage.voice_until = maxf(stage.voice_until, stage.clock + float(v[1]) + 0.35)
 			_note("said: " + _say.text)
 			if stage != null:
 				stage.hear(self, _say.text, str(c.get("to", "")))
@@ -361,7 +376,7 @@ func _begin(c: Dictionary) -> void:
 		"look":
 			head_pitch = clampf(float(c.get("pitch", 0.0)), -60.0, 70.0)
 		"wait":
-			_wait_from = Time.get_ticks_msec() / 1000.0
+			_wait_from = stage.clock if stage != null else 0.0
 		"teleport":
 			var v: Array = c.get("to", [])
 			if v.size() >= 3:

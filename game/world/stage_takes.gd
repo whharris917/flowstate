@@ -204,6 +204,7 @@ func play(take: Dictionary) -> Dictionary:
 	recording = false
 	playing = take
 	_play_t = 0.0
+	stage.load_voices()
 	_next = 0
 	subtitles = bool(take.get("subtitles", true))
 	if stage.world.has_method("set_time_of_day"):
@@ -235,7 +236,10 @@ func _process(delta: float) -> void:
 		_card.visible = _card_left > 0.0
 	if playing.is_empty():
 		return
-	_play_t += delta
+	# The script's clock stands still while a recorded line is being said,
+	# so the next line waits for it.
+	if stage.clock >= stage.voice_until:
+		_play_t += delta
 	var events: Array = playing.get("events", [])
 	for c: Dictionary in playing.get("cast", []):
 		if c.has("enter_at") and _play_t >= float(c["enter_at"]) and stage.actors.has(c["name"]):

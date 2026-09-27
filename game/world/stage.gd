@@ -14,6 +14,36 @@ var takes: StageTakes
 ## The last line said aloud: who, and when (seconds of the clock).
 var last_speaker: Actor = null
 var last_said_at := -100.0
+## Recorded voices for lines (actor|text -> {file, secs}) under
+## user://voices/, used when present; and until when someone is speaking.
+var voices: Dictionary = {}
+var voice_until := 0.0
+## The stage's own clock, in game seconds: it keeps time with the film
+## when a take is rendered slower than real time.
+var clock := 0.0
+
+
+func _process(delta: float) -> void:
+	clock += delta
+
+
+func load_voices() -> void:
+	var path := "user://voices/voices.json"
+	if FileAccess.file_exists(path):
+		var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if d is Dictionary:
+			voices = d
+
+
+## A line's recorded voice and its length, or null.
+func voice_for(who: String, text: String) -> Variant:
+	var v: Variant = voices.get(who + "|" + text)
+	if v == null:
+		return null
+	var stream := AudioStreamWAV.load_from_file("user://voices/" + str(v["file"]))
+	if stream == null:
+		return null
+	return [stream, float(v["secs"])]
 
 
 func _init(w: Node3D) -> void:
@@ -50,7 +80,7 @@ func remove(actor_name: String) -> void:
 ## one actor still reaches the others near enough to overhear.
 func hear(speaker: Actor, text: String, to: String) -> void:
 	last_speaker = speaker
-	last_said_at = Time.get_ticks_msec() / 1000.0
+	last_said_at = clock
 	if takes != null:
 		takes.said(speaker, text)
 	for a: Actor in actors.values():
@@ -60,7 +90,7 @@ func hear(speaker: Actor, text: String, to: String) -> void:
 		if d > Actor.HEAR_M:
 			continue
 		a.heard.append({"from": speaker.actor_name, "said": text, "to": to if to != "" else "everyone",
-			"distance_m": snappedf(d, 0.1), "at": Time.get_ticks_msec() / 1000.0})
+			"distance_m": snappedf(d, 0.1), "at": clock})
 		a.notice(speaker, 0.8 + text.length() * 0.06, to == a.actor_name)
 		if a.heard.size() > 40:
 			a.heard.remove_at(0)
