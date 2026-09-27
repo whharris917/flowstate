@@ -51,7 +51,7 @@ def sky_of_drawing(sheet_dir: str, front: str, shape: tuple[int, int]) -> np.nda
     lines = d < 170
     # Close the gaps between strokes so the sky cannot leak through a
     # railing's open work or a hatched roof.
-    lines = ndimage.binary_dilation(lines, iterations=2)
+    lines = ndimage.binary_dilation(lines, iterations=3)
     return flood_from_top(~lines)
 
 
@@ -68,12 +68,14 @@ def sky_of_model(front: str, low: np.ndarray | None = None) -> np.ndarray:
     bg = (np.abs(m - np.array([54, 54, 54])).sum(axis=2) < 12)
     # Railings, fret and posts are open work: close them as the drawing's
     # strokes are closed, then flood.
-    house = ndimage.binary_dilation(~bg, iterations=2)
+    house = ndimage.binary_dilation(~bg, iterations=3)
     # The drawing's ground closes the space under the porches: give the
     # model the same ground before flooding.
     if low is not None:
         rows = np.arange(house.shape[0])[:, None]
-        house |= rows > low[None, :]
+        # (a hand's breadth above it: posts and steps stop at the model's
+        # own lawn, which the picture leaves out)
+        house |= rows > low[None, :] - 10
     return flood_from_top(~house)
 
 
@@ -155,7 +157,8 @@ def main() -> None:
         items.sort(reverse=True)
         score = sum(i[0] for i in items)
         total += score
-        print("%s: %.0f sq ft of disagreement in %d regions" % (front, score, len(items)))
+        above = sum(i[0] for i in items if i[5] > 0.5)
+        print("%s: %.0f sq ft of disagreement in %d regions (%.0f above the ground floor)" % (front, score, len(items), above))
         for k, (area, kind, x0, x1, yb, yt) in enumerate(items):
             print("  %2d %-7s %6.1f sq ft   along %6.1f .. %6.1f   height %5.1f .. %5.1f" % (k + 1, kind, area, x0, x1, yb, yt))
             cx = (x0 - ORTHO_X[0]) * PX
