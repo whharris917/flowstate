@@ -186,7 +186,7 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 0. **The bench, open for the director:** the substance library and its draft notes (`chemistry.json`), seven library page drafts, the Maine bench, and whether the bench and the plant's six species should become one chemistry.
 1. **Filling line, open for the director:** the compact room (its cabinet, fused strip, tray CT-601 and clear sleeve SL-601), ten library page drafts (the nine line parts and the 24 V distribution strip), the campaign rung. Not done: 480 V feeders into trays (feeders stay pipe-routed conduit runs).
 2. **Standing review items:** the drip demo with tube-sized nozzles; the small-bore views (first drafts; coil and cable anchors sit where a DN50 body would put them); the two `docs/` documents and their five spec-prose drifts; the walk report on the merged showcase; the showcase's startup time.
-3. **Monroe courthouse, open for the director:** first look; the monument's inscriptions (modelled plain).
+3. **Monroe courthouse:** the monument's inscriptions (modelled plain). Next films: scripted top-down by Claude, no agent actors; pipeline in `tools/film/`.
 4. **Harbor town, open for the director:** what the domed hall is, the sign names, the town's name, the moon's phase (`SkyClock.MOON_AGE`), the noon sun's height (60°; October's is 33°).
 
 **Known gaps:**
