@@ -116,17 +116,21 @@ func _ground() -> void:
 	var nx := int((LAWN_HI.x - LAWN_LO.x) / LAWN_STEP)
 	var nz := int((LAWN_HI.y - LAWN_LO.y) / LAWN_STEP)
 	var faces := PackedVector3Array()
-	var hgt := func(x: float, z: float) -> float:
-		var sx := TwainHouse.OX - z / TwainHouse.FT
-		var sz := TwainHouse.OZ + x / TwainHouse.FT
-		return TwainHouse.h(TwainHouse.grade_at(Vector2(sx, sz)))
+	# The grid's corners' heights, each worked out once.
+	var hs := PackedFloat32Array()
+	hs.resize((nx + 1) * (nz + 1))
+	for i in nx + 1:
+		for j in nz + 1:
+			var x := LAWN_LO.x + i * LAWN_STEP
+			var z := LAWN_LO.y + j * LAWN_STEP
+			hs[i * (nz + 1) + j] = TwainHouse.h(TwainHouse.grade_at(Vector2(TwainHouse.OX - z / TwainHouse.FT, TwainHouse.OZ + x / TwainHouse.FT)))
 	for i in nx:
 		for j in nz:
 			var x0 := LAWN_LO.x + i * LAWN_STEP
 			var z0 := LAWN_LO.y + j * LAWN_STEP
-			var p := [Vector3(x0, hgt.call(x0, z0), z0), Vector3(x0 + LAWN_STEP, hgt.call(x0 + LAWN_STEP, z0), z0),
-				Vector3(x0 + LAWN_STEP, hgt.call(x0 + LAWN_STEP, z0 + LAWN_STEP), z0 + LAWN_STEP),
-				Vector3(x0, hgt.call(x0, z0 + LAWN_STEP), z0 + LAWN_STEP)]
+			var p := [Vector3(x0, hs[i * (nz + 1) + j], z0), Vector3(x0 + LAWN_STEP, hs[(i + 1) * (nz + 1) + j], z0),
+				Vector3(x0 + LAWN_STEP, hs[(i + 1) * (nz + 1) + j + 1], z0 + LAWN_STEP),
+				Vector3(x0, hs[i * (nz + 1) + j + 1], z0 + LAWN_STEP)]
 			var n: Vector3 = ((p[3] - p[0]).cross(p[1] - p[0])).normalized()
 			if n.y < 0.0:
 				n = -n
