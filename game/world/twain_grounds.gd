@@ -97,9 +97,50 @@ func _ribbon(key: String, pts: Array, wd: float, y: float, col: Color) -> void:
 			Vector3.UP, col)
 
 
+## The world's ground round the lawn, and the lawn itself as a grid that
+## follows the survey's grade: level round the house's front, falling to
+## the north-west where the basement stands out under the kitchen wing.
+## The grid is also what the player walks on.
+const LAWN_LO := Vector2(-60.0, WALK_Z + 1.5)
+const LAWN_HI := Vector2(70.0, 70.0)
+const LAWN_STEP := 1.0
+
+
 func _ground() -> void:
-	_flat("wall", -600, -600, 600, 600, 0.0, c(Color(0.34, 0.40, 0.21), CourthouseKit.K_LAWN))
-	_flat("wall", -60, WALK_Z + 1.5, 70, 70, 0.004, c(LAWN, CourthouseKit.K_LAWN))
+	var outer := c(Color(0.34, 0.40, 0.21), CourthouseKit.K_LAWN)
+	_flat("wall", -600, -600, 600, LAWN_LO.y, 0.0, outer)
+	_flat("wall", -600, LAWN_HI.y, 600, 600, 0.0, outer)
+	_flat("wall", -600, LAWN_LO.y, LAWN_LO.x, LAWN_HI.y, 0.0, outer)
+	_flat("wall", LAWN_HI.x, LAWN_LO.y, 600, LAWN_HI.y, 0.0, outer)
+	var lawn := c(LAWN, CourthouseKit.K_LAWN)
+	var nx := int((LAWN_HI.x - LAWN_LO.x) / LAWN_STEP)
+	var nz := int((LAWN_HI.y - LAWN_LO.y) / LAWN_STEP)
+	var faces := PackedVector3Array()
+	var hgt := func(x: float, z: float) -> float:
+		var sx := TwainHouse.OX - z / TwainHouse.FT
+		var sz := TwainHouse.OZ + x / TwainHouse.FT
+		return TwainHouse.h(TwainHouse.grade_at(Vector2(sx, sz)))
+	for i in nx:
+		for j in nz:
+			var x0 := LAWN_LO.x + i * LAWN_STEP
+			var z0 := LAWN_LO.y + j * LAWN_STEP
+			var p := [Vector3(x0, hgt.call(x0, z0), z0), Vector3(x0 + LAWN_STEP, hgt.call(x0 + LAWN_STEP, z0), z0),
+				Vector3(x0 + LAWN_STEP, hgt.call(x0 + LAWN_STEP, z0 + LAWN_STEP), z0 + LAWN_STEP),
+				Vector3(x0, hgt.call(x0, z0 + LAWN_STEP), z0 + LAWN_STEP)]
+			var n: Vector3 = ((p[3] - p[0]).cross(p[1] - p[0])).normalized()
+			if n.y < 0.0:
+				n = -n
+			k.m.quad("wall", p[0], p[1], p[2], p[3], n, lawn)
+			faces.append_array([p[0], p[1], p[2], p[0], p[2], p[3]])
+	var body := StaticBody3D.new()
+	body.name = "Lawn"
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(faces)
+	shape.backface_collision = true
+	var cs := CollisionShape3D.new()
+	cs.shape = shape
+	body.add_child(cs)
+	add_child(body)
 
 
 ## Farmington Avenue: a macadam road with gravel shoulders, the bluestone

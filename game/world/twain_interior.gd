@@ -104,22 +104,22 @@ static func _floors() -> void:
 	for q: Vector2 in p:
 		outline.append(q)
 	# The first floor on its fill, down to the lawn.
-	hs.floor_poly(outline, 0.0, oak, c(TwainHouse.STONE, CourthouseKit.K_STONE), -TwainHouse.GRADE)
+	hs.floor_poly(outline, 0.0, oak, c(TwainHouse.STONE, CourthouseKit.K_STONE), -TwainHouse.GROUND)
 	# The conservatory's, the pantry's, the service wing's.
 	var cons: Array[Vector2] = [Vector2(TwainHouse.MX0, TwainHouse.MZ0 + 0.2)]
 	for i in 13:
 		cons.append(TwainHouse._arc_point(TwainHouse.CONS_C, TwainHouse.CONS_R, -90.0 - 180.0 * i / 12.0))
 	cons.append(Vector2(TwainHouse.MX0, 55.5))
-	hs.floor_poly(cons, 0.0, c(Color(0.62, 0.30, 0.22), CourthouseKit.K_TILE), ceil, -TwainHouse.GRADE)
+	hs.floor_poly(cons, 0.0, c(Color(0.62, 0.30, 0.22), CourthouseKit.K_TILE), ceil, -TwainHouse.GROUND)
 	var pantry: Array[Vector2] = []
 	for i in 10:
 		pantry.append(TwainHouse._arc_point(TwainHouse.PANTRY_C, TwainHouse.PANTRY_R, 180.0 + 90.0 * i / 9.0))
 	pantry.append(Vector2(113.0, 22.3))
 	pantry.append(Vector2(113.0, TwainHouse.MZ0))
-	hs.floor_poly(pantry, 0.0, oak, ceil, -TwainHouse.GRADE)
+	hs.floor_poly(pantry, 0.0, oak, ceil, -TwainHouse.GROUND)
 	var wing: Array = TwainHouse.WING_PLAN.duplicate()
-	hs.floor_poly(wing, 0.0, oak, ceil, -TwainHouse.GRADE)
-	hs.floor_poly(wing, F2 - 1.0, oak, ceil, 1.0)
+	hs.floor_poly(wing, 0.0, oak, ceil, -TwainHouse.GROUND)
+	hs.floor_poly(wing, 10.8, oak, ceil, 1.0)
 	# The upper floors, their stair well cut: each in two halves, split
 	# through the well, so neither has a hole in it.
 	var hole := PackedVector2Array([Vector2(WELL_X0, BAND_W.x - 0.3), Vector2(WELL_X1, BAND_W.x - 0.3), Vector2(WELL_X1, BAND_E.y),
@@ -242,7 +242,7 @@ static func _partitions() -> void:
 	part(Vector2(75.5, 70.8), Vector2(75.5, Z1), 0.0, cy, [[Vector2(75.5, 74.2), 2.6, true]])
 	part(Vector2(61.5, 70.8), Vector2(61.5, Z1), 0.0, cy, [[Vector2(61.5, 77.0), 2.6, true]])
 	# The butler's pantry's wall to the kitchen, its door.
-	part(Vector2(112.8, 22.6), Vector2(112.8, TwainHouse.MZ0), 0.0, 11.0, [[Vector2(112.8, 35.0), 3.0, true]])
+	part(Vector2(112.8, 22.6), Vector2(112.8, TwainHouse.MZ0), 0.0, 7.6, [[Vector2(112.8, 35.0), 3.0, true]])
 	# The second floor.
 	var y2 := F2
 	var cy2 := F3 - 1.0
@@ -426,7 +426,7 @@ static func _rooms() -> void:
 	room(region(87.25, 100.5, 0.0, 55.7), F2, cy2, "stencil", TwainHouse.st(Color(0.50, 0.56, 0.62), 6), 0.0, WALNUT, "Langdon guest room")
 	room(octagon, F2, cy2, "stencil", TwainHouse.st(Color(0.70, 0.60, 0.50), 6), 0.0, OAK.darkened(0.15), "Clara and Jean's room")
 	room(region(67.95, 85.4, 71.05, 100.0), F2, cy2, "stencil", TwainHouse.st(Color(0.62, 0.52, 0.56), 6), 0.0, WALNUT, "Susy's room")
-	room(region(97.2, 200.0, 58.75, 100.0), F2, cy2, "stencil", TwainHouse.st(Color(0.50, 0.36, 0.30), 6), 0.0, WALNUT, "the Clemenses' bedroom")
+	room(region(97.2, TwainHouse.MX1 - 1.0, 58.75, 100.0), F2, cy2, "stencil", TwainHouse.st(Color(0.50, 0.36, 0.30), 6), 0.0, WALNUT, "the Clemenses' bedroom")
 	var hall2: Array[Vector2] = [Vector2(72.9, 56.2), Vector2(96.7, 56.2), Vector2(96.7, 70.55), Vector2(72.9, 70.55)]
 	# The rooms behind shut doors, and the west bath, finished plain.
 	var paint := c(Color(0.80, 0.78, 0.70), CourthouseKit.K_PLASTER)
@@ -449,14 +449,14 @@ static func _rooms() -> void:
 	for q: Vector2 in Geometry2D.offset_polygon(PackedVector2Array(TwainHouse.WING_PLAN), -1.0, Geometry2D.JOIN_MITER)[0]:
 		wing.append(q)
 	# The wing's upper floor stands at 12 ft, a foot under the house's.
-	room(wing, 0.0, F2 - 2.0, "wall", c(Color(0.78, 0.74, 0.64), CourthouseKit.K_PLASTER), 3.5, Color(0.40, 0.30, 0.20), "kitchen wing")
-	hs.floor_poly(wing, 17.8, c(CEIL, CourthouseKit.K_PLASTER), c(CEIL, CourthouseKit.K_PLASTER), 0.3)
-	room(wing, F2 - 1.0, 17.5, "wall", c(Color(0.78, 0.74, 0.64), CourthouseKit.K_PLASTER), 0.0, Color(0.40, 0.30, 0.20), "servants' rooms")
+	room(wing, 0.0, 9.8, "wall", c(Color(0.78, 0.74, 0.64), CourthouseKit.K_PLASTER), 3.5, Color(0.40, 0.30, 0.20), "kitchen wing")
+	hs.floor_poly(wing, 15.5, c(CEIL, CourthouseKit.K_PLASTER), c(CEIL, CourthouseKit.K_PLASTER), 0.3)
+	room(wing, 10.8, 15.2, "wall", c(Color(0.78, 0.74, 0.64), CourthouseKit.K_PLASTER), 0.0, Color(0.40, 0.30, 0.20), "servants' rooms")
 	var pantry: Array[Vector2] = [Vector2(112.8 - 14.5, TwainHouse.MZ0 - 0.2)]
 	for i in 9:
 		pantry.append(TwainHouse._arc_point(TwainHouse.PANTRY_C, TwainHouse.PANTRY_R - 1.0, 180.0 + 90.0 * (i + 1) / 9.0))
 	pantry.append(Vector2(112.0, TwainHouse.MZ0 - 0.2))
-	room(pantry, 0.0, 11.0, "wall", c(Color(0.80, 0.76, 0.64), CourthouseKit.K_PLASTER), 3.0, Color(0.40, 0.30, 0.20), "butler's pantry")
+	room(pantry, 0.0, 7.6, "wall", c(Color(0.80, 0.76, 0.64), CourthouseKit.K_PLASTER), 3.0, Color(0.40, 0.30, 0.20), "butler's pantry")
 
 
 ## A third-floor room's flat ceiling at ATTIC: where the roof stands

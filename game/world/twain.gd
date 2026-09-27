@@ -17,10 +17,18 @@ func _init() -> void:
 
 
 func _build_ground() -> void:
+	# The ground outside the lawn is level: four slabs round it (the lawn
+	# brings its own collision).
 	var body := StaticBody3D.new()
-	var shape := CollisionShape3D.new()
-	shape.shape = WorldBoundaryShape3D.new()
-	body.add_child(shape)
+	for r: Rect2 in [Rect2(-600, -600, 1200, 600 + TwainGrounds.LAWN_LO.y), Rect2(-600, TwainGrounds.LAWN_HI.y, 1200, 600),
+			Rect2(-600, TwainGrounds.LAWN_LO.y, 600 + TwainGrounds.LAWN_LO.x, TwainGrounds.LAWN_HI.y - TwainGrounds.LAWN_LO.y),
+			Rect2(TwainGrounds.LAWN_HI.x, TwainGrounds.LAWN_LO.y, 600, TwainGrounds.LAWN_HI.y - TwainGrounds.LAWN_LO.y)]:
+		var shape := CollisionShape3D.new()
+		var b := BoxShape3D.new()
+		b.size = Vector3(r.size.x, 2.0, r.size.y)
+		shape.shape = b
+		shape.position = Vector3(r.get_center().x, -1.0, r.get_center().y)
+		body.add_child(shape)
 	add_child(body)
 	house = TwainHouse.new()
 	add_child(house)
