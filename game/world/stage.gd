@@ -10,6 +10,10 @@ const DIR := "user://actors"
 
 var actors: Dictionary = {}          # name -> Actor
 var world: Node3D
+var takes: StageTakes
+## The last line said aloud: who, and when (seconds of the clock).
+var last_speaker: Actor = null
+var last_said_at := -100.0
 
 
 func _init(w: Node3D) -> void:
@@ -45,6 +49,10 @@ func remove(actor_name: String) -> void:
 ## Words said aloud reach everyone within earshot, and a line meant for
 ## one actor still reaches the others near enough to overhear.
 func hear(speaker: Actor, text: String, to: String) -> void:
+	last_speaker = speaker
+	last_said_at = Time.get_ticks_msec() / 1000.0
+	if takes != null:
+		takes.said(speaker, text)
 	for a: Actor in actors.values():
 		if a == speaker:
 			continue
@@ -52,7 +60,8 @@ func hear(speaker: Actor, text: String, to: String) -> void:
 		if d > Actor.HEAR_M:
 			continue
 		a.heard.append({"from": speaker.actor_name, "said": text, "to": to if to != "" else "everyone",
-			"distance_m": snappedf(d, 0.1)})
+			"distance_m": snappedf(d, 0.1), "at": Time.get_ticks_msec() / 1000.0})
+		a.notice(speaker, 0.8 + text.length() * 0.06, to == a.actor_name)
 		if a.heard.size() > 40:
 			a.heard.remove_at(0)
 

@@ -13,6 +13,7 @@ var square: CourthouseSquare
 var stage: Stage
 var stage_camera: StageCamera
 var stage_link: StageLink
+var stage_takes: StageTakes
 
 
 func _init() -> void:
@@ -70,9 +71,15 @@ func _after_plant() -> void:
 	stage_camera.stage = stage
 	stage_camera.player_cam = player.camera
 	add_child(stage_camera)
+	stage_takes = StageTakes.new()
+	stage_takes.stage = stage
+	stage_takes.camera = stage_camera
+	stage.takes = stage_takes
+	add_child(stage_takes)
 	stage_link = StageLink.new()
 	stage_link.stage = stage
 	stage_link.camera = stage_camera
+	stage_link.takes = stage_takes
 	add_child(stage_link)
 	if not FileAccess.file_exists(plant_save_path):
 		# On North Main Street's walk before the courthouse, looking east

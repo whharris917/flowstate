@@ -111,12 +111,13 @@ static func _head(skin: String, hair: String) -> Array:
 		{"joint": "head", "shape": "sphere", "size": [0.2, 0.2, 0.22], "at": [0, 0.13, 0.02], "color": hair, "finish": "hair", "tag": "hair"},
 		{"joint": "head", "shape": "box", "size": [0.022, 0.038, 0.03], "at": [0, 0.075, -0.103], "color": skin, "finish": "skin"},
 		{"joint": "head", "shape": "box", "size": [0.04, 0.006, 0.008], "at": [0, 0.04, -0.097], "color": "#7a2e28", "tag": "mouth"},
+		{"joint": "head", "shape": "sphere", "size": [0.034, 0.024, 0.01], "at": [0, 0.038, -0.096], "color": "#3a1512", "tag": "mouth_open", "hidden": true},
 		{"joint": "head", "shape": "box", "size": [0.03, 0.006, 0.008], "at": [0, 0.035, -0.097], "color": "#7a2e28", "tag": "smile", "hidden": true},
 		{"joint": "head", "shape": "box", "size": [0.05, 0.02, 0.006], "at": [0, 0.028, -0.094], "color": "#f4f0e6", "tag": "smile", "hidden": true},
 	]
 	for s: float in [-1.0, 1.0]:
 		p.append_array([
-			{"joint": "head", "shape": "sphere", "size": [0.022, 0.026, 0.012], "at": [0.037 * s, 0.105, -0.092], "color": "#1c1a18", "finish": "shiny"},
+			{"joint": "head", "shape": "sphere", "size": [0.022, 0.026, 0.012], "at": [0.037 * s, 0.105, -0.092], "color": "#1c1a18", "finish": "shiny", "tag": "eyes"},
 			{"joint": "head", "shape": "box", "size": [0.035, 0.008, 0.01], "at": [0.037 * s, 0.138, -0.093], "rot": [0, 0, -8 * s], "color": hair},
 			{"joint": "head", "shape": "sphere", "size": [0.02, 0.05, 0.035], "at": [0.094 * s, 0.085, 0.006], "color": skin, "finish": "skin"},
 			{"joint": "head", "shape": "box", "size": [0.016, 0.006, 0.008], "at": [0.022 * s, 0.041, -0.095], "rot": [0, 0, 35 * s], "color": "#7a2e28", "tag": "smile", "hidden": true},

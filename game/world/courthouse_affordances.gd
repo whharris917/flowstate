@@ -128,7 +128,7 @@ static func _build() -> void:
 			_seat("gallery_pew_%d_%s" % [t + 1, "west" if s < 0.0 else "east"], "a pew in the gallery, row %d" % (t + 1),
 				Vector3(s * 4.9, gy, gz), 0.0, Vector3(s * 0.8, gy, gz), 6, 1.2)
 	_add("frieze", "thing", "a frieze of green garlands and gilt bows round the top of the walls", Vector3(0, 12.9, -IZ), ["look_at"])
-	_add("charter", "thing", "a framed document hung in an arched niche behind the bench", Vector3(0, F2 + 2.7, -IZ), ["approach", "look_at"])
+	_add("charter", "thing", "a framed document hung in an arched niche behind the bench", Vector3(0, F2 + 2.25, -IZ), ["approach", "look_at"])
 	for s: float in [-1.0, 1.0]:
 		for u: float in [-2.9, 0.0, 2.9]:
 			_add("courtroom_window_%s_%d" % ["west" if s < 0.0 else "east", int(u / 2.9) + 2], "window",

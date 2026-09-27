@@ -32,6 +32,17 @@ var _hands: Array[Node3D] = []
 ## The body's own stance at rest (joint: [x, y, z] degrees): how it holds
 ## its arms when not busy.
 var rest: Dictionary = {}
+## Life in the face: the eyes blink every few seconds; the mouth works
+## while the actor speaks; the head turns toward what it attends to.
+## Eyes are the parts tagged "eyes", or, untagged, the small dark
+## spheres on the face; the mouth is the parts tagged "mouth", opened by
+## showing "mouth_open" where there is one, by stretching "mouth" where not.
+var talking := false
+var head_turn := 0.0          # radians, left positive, laid over the pose
+var _eyes: Array[Node3D] = []
+var _blink_in := 2.5
+var _blink_left := 0.0
+var _talk_t := 0.0
 
 ## The action playing: its definition, its time, its fade.
 var action: Dictionary = {}
@@ -100,6 +111,7 @@ func wear(spec: Dictionary) -> void:
 	_tags.clear()
 	_hidden_by_default.clear()
 	rest = spec.get("rest", {}) if spec.get("rest", {}) is Dictionary else {}
+	_eyes.clear()
 	var s := clampf(float(spec.get("scale", 1.0)), 0.5, 1.6)
 	scale = Vector3(s, s, s)
 	for p: Dictionary in spec.get("parts", []):
@@ -115,6 +127,8 @@ func wear(spec: Dictionary) -> void:
 		joint.add_child(mi)
 		_parts.append(mi)
 		var tag := str(p.get("tag", ""))
+		if tag == "eyes" or (tag == "" and _looks_like_eye(p)):
+			_eyes.append(mi)
 		if tag != "":
 			if not _tags.has(tag):
 				_tags[tag] = []
@@ -122,6 +136,17 @@ func wear(spec: Dictionary) -> void:
 			if bool(p.get("hidden", false)):
 				mi.visible = false
 				_hidden_by_default[tag] = true
+
+
+## An untagged part that is plainly an eye: a small dark sphere on the
+## front of the head, off the middle.
+func _looks_like_eye(p: Dictionary) -> bool:
+	if str(p.get("joint", "")) != "head" or str(p.get("shape", "")) != "sphere":
+		return false
+	var s := _vec(p.get("size", [1, 1, 1]), 0.0, 9.0)
+	var at := _vec(p.get("at", [0, 0, 0]), -9.0, 9.0)
+	var c := Color.from_string(str(p.get("color", "#888888")), Color.GRAY)
+	return maxf(s.x, maxf(s.y, s.z)) < 0.045 and at.z < -0.07 and absf(at.x) > 0.015 and absf(at.x) < 0.07 and c.get_luminance() < 0.3
 
 
 func _vec(v: Variant, lo: float, hi: float) -> Vector3:
@@ -281,6 +306,7 @@ func busy() -> bool:
 
 func pose(delta: float, velocity: Vector3, grounded: bool, pitch: float) -> bool:
 	var struck := super(delta, velocity, grounded, pitch)
+	_face(delta)
 	for j: String in rest:
 		var rn: Node3D = joints.get(j)
 		if rn != null and rn != self:
@@ -289,6 +315,7 @@ func pose(delta: float, velocity: Vector3, grounded: bool, pitch: float) -> bool
 		_fade = 0.0
 		position = Vector3.ZERO
 		rotation = Vector3.ZERO
+		_head.rotation.y += head_turn
 		return struck
 	action_t += delta
 	var secs := float(action.get("secs", 1.0))
@@ -337,7 +364,34 @@ func pose(delta: float, velocity: Vector3, grounded: bool, pitch: float) -> bool
 	var roll := _deg(a.get("roll", [0, 0, 0])).lerp(_deg(b.get("roll", [0, 0, 0])), f)
 	position = Vector3(0, lift * _fade, 0)
 	rotation = roll * _fade
+	_head.rotation.y += head_turn * (1.0 - _fade)
 	return struck
+
+
+## Blinks, the working mouth; the head's turn is laid on after the pose.
+func _face(delta: float) -> void:
+	_blink_in -= delta
+	if _blink_in <= 0.0:
+		_blink_left = 0.13
+		_blink_in = randf_range(2.2, 5.5)
+	_blink_left -= delta
+	var shut := _blink_left > 0.0
+	for e in _eyes:
+		e.scale.y = 0.12 if shut else 1.0
+	var open := false
+	if talking:
+		_talk_t += delta
+		# Syllables: open and shut about six times a second, unevenly.
+		open = fmod(_talk_t * 6.3 + 0.35 * sin(_talk_t * 2.1), 1.0) < 0.55
+	else:
+		_talk_t = 0.0
+	if _tags.has("mouth_open"):
+		_show("mouth_open", open)
+		if not action.get("hide", []).has("mouth") and not action.get("show", []).has("smile"):
+			_show("mouth", not open)
+	elif _tags.has("mouth"):
+		for m: Node3D in _tags["mouth"]:
+			m.scale.y = 4.0 if open else 1.0
 
 
 func _deg(v: Variant) -> Vector3:

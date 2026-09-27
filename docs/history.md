@@ -315,3 +315,14 @@ The director wants embodied agents as actors for films: moving efficiently and n
 - **The handbook** (`data/actor_handbook.md`, GET /handbook) is all an agent is given.
 - Tested live: an actor spawned, walked to another and spoke; the other heard; she taught herself a handstand, dressed herself in a red coat and a top hat, came back so after a restart, passed a note and sat on a bench. The counsel chairs had faced away from their tables and the jury's chairs the wall.
 
+## 2026-09-27: takes, the auto camera, film, and "The Four Faces"
+
+The director asked for a short film and a diary from each actor by the time they came back.
+
+- **Takes** (`world/stage_takes.gd`): the live stage recorded as it happens (the cast's starting marks, every script sent to an actor, every camera direction) and played back; the pauses while agents think are cut to a beat on saving. A take is also a screenplay: cards, a new scene's marks, an end. Subtitles show the lines said aloud while a take plays; the lines over heads are left off the picture.
+- **The auto camera** (`StageCamera` mode "auto"): over the listener's shoulder or a two-shot on whoever speaks, a medium shot on an actor performing an action, following whoever walks, the group wide when all are still; it cuts, holding each shot at least 2.6 s.
+- **Faces**: eyes blink, the mouth works while an actor's line lasts, heads turn to whoever speaks near them; addressed and idle, an actor turns to face the speaker.
+- **Film** (`world/take_render.tscn`): Godot's movie maker renders a take frame by frame at 1920 by 1080 and 30 fps (about a quarter of real time); it prints the frame each line is said on. A soundtrack script in the session's scratch voices each line with the Windows speech engine (a voice and pitch per character) at its frame, lays a synthesized music box under the titles, and mixes them with the game's sound.
+- **"The Four Faces"**: Wren and Rosalind were cast from their saved selves and memories and given a premise (the wager on which clock face runs slow) and a shape; everything they did was their own. Claude played the clerk and brought the one surprise (no face is slow; all four run four minutes behind for the carpenter who was late the day he died). The take was edited by cutting whole beats, never a word, bridged with cards and new marks.
+- **From the actors' reports**: the route to the gallery stair ran through the back pews (now by a cross aisle and the west side aisle); a wait can end when someone speaks to the actor; GET /things lists every named thing; the charter hangs lower; corners on a route are kept tighter (the clerk had caught a door frame); the front camera moves round anyone standing in the way.
+

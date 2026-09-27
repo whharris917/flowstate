@@ -630,10 +630,10 @@ static func _courtroom() -> void:
 		_flag(Vector3(s * 2.1, y + dais, -IZ + 0.4), s < 0.0)
 	# A framed document in the niche: the county's charter.
 	var nf := UnionCourthouse.face(Vector3(0, 0, 1), Vector3(0, 0, -MZ + 0.15))
-	k.box("wall", nf, Vector3(0, y + 2.7, 0.02), Vector3(0.95, 1.2, 0.04), c(Color(0.16, 0.11, 0.07), CourthouseKit.K_WOOD))
-	k.box("wall", nf, Vector3(0, y + 2.7, 0.045), Vector3(0.82, 1.07, 0.01), c(Color(0.86, 0.80, 0.64), CourthouseKit.K_PAINT))
+	k.box("wall", nf, Vector3(0, y + 2.25, 0.02), Vector3(0.95, 1.2, 0.04), c(Color(0.16, 0.11, 0.07), CourthouseKit.K_WOOD))
+	k.box("wall", nf, Vector3(0, y + 2.25, 0.045), Vector3(0.82, 1.07, 0.01), c(Color(0.86, 0.80, 0.64), CourthouseKit.K_PAINT))
 	for ln in 12:
-		k.box("wall", nf, Vector3(0, y + 3.1 - ln * 0.07, 0.051), Vector3(0.6 if ln > 0 else 0.4, 0.012, 0.002), c(Color(0.35, 0.28, 0.2), CourthouseKit.K_PAINT))
+		k.box("wall", nf, Vector3(0, y + 2.65 - ln * 0.07, 0.051), Vector3(0.6 if ln > 0 else 0.4, 0.012, 0.002), c(Color(0.35, 0.28, 0.2), CourthouseKit.K_PAINT))
 	# The door east of the niche, into the jury's rooms, shut.
 	var jd := UnionCourthouse.face(Vector3(0, 0, 1), Vector3(5.2, 0, -IZ))
 	var jo := CourthouseKit.opening(0.0, 1.1, y, y + 2.7, "flat")

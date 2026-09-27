@@ -62,6 +62,11 @@ var _shape: CollisionShape3D
 var _settle_from := Vector3.ZERO
 var _settle_to := Vector3.ZERO
 var _cams: Dictionary = {}
+var _talk_left := 0.0
+var _wait_from := 0.0
+## Whoever it is attending to, and for how long: a speaker nearby.
+var _attend_to: Actor = null
+var _attend_left := 0.0
 
 
 func _ready() -> void:
@@ -102,6 +107,35 @@ func _ready() -> void:
 	_steps.unit_size = 4.0
 	_steps.volume_db = -8.0
 	add_child(_steps)
+
+
+## Back to a starting mark for a take: nothing in hand, standing or
+## sitting as given.
+func reset_to(at: Vector3, yaw: float, seat: String) -> void:
+	queue.clear()
+	current = {}
+	_targets.clear()
+	figure.action = {}
+	figure.release()
+	_say_left = 0.0
+	_say.visible = false
+	_talk_left = 0.0
+	head_pitch = 0.0
+	sitting = ""
+	_shape.disabled = false
+	velocity = Vector3.ZERO
+	place(at, yaw)
+	if seat != "":
+		var s := CourthouseAffordances.find(seat)
+		if not s.is_empty():
+			sitting = seat
+			sit_spot = maxi(_free_spot(s), 0)
+			_shape.disabled = true
+			global_position = _spot_point(s, sit_spot)
+			var sit := action_def("sit").duplicate()
+			if not sit.is_empty():
+				sit["name"] = "sit"
+				figure.play(sit)
 
 
 ## Stand it somewhere, facing yaw (radians; 0 north, pi/2 west).
@@ -180,6 +214,10 @@ func _physics_process(delta: float) -> void:
 		_say_left -= delta
 		if _say_left <= 0.0:
 			_say.visible = false
+	# The mouth works for the time the words would take to say.
+	figure.talking = _say_left > 0.0 and _talk_left > 0.0
+	_talk_left -= delta
+	_attend(delta)
 
 
 func _begin(c: Dictionary) -> void:
@@ -274,6 +312,7 @@ func _begin(c: Dictionary) -> void:
 			_say.text = str(c.get("text", ""))
 			_say.visible = true
 			_say_left = float(c.get("secs", 2.0 + _say.text.length() * 0.07))
+			_talk_left = 0.4 + _say.text.length() * 0.055
 			_note("said: " + _say.text)
 			if stage != null:
 				stage.hear(self, _say.text, str(c.get("to", "")))
@@ -322,7 +361,7 @@ func _begin(c: Dictionary) -> void:
 		"look":
 			head_pitch = clampf(float(c.get("pitch", 0.0)), -60.0, 70.0)
 		"wait":
-			pass
+			_wait_from = Time.get_ticks_msec() / 1000.0
 		"teleport":
 			var v: Array = c.get("to", [])
 			if v.size() >= 3:
@@ -334,6 +373,29 @@ func _begin(c: Dictionary) -> void:
 			_finish()
 		_:
 			_fail("unknown command: " + JSON.stringify(c))
+
+
+## A speaker near it draws its eyes: it turns its head to them while
+## they talk, and turns to face them if spoken to and doing nothing else.
+func notice(speaker: Actor, secs: float, addressed: bool) -> void:
+	if speaker.global_position.distance_to(global_position) > 9.0:
+		return
+	_attend_to = speaker
+	_attend_left = secs
+	if addressed and current.is_empty() and queue.is_empty() and sitting == "" and not figure.busy():
+		var d := speaker.global_position - global_position
+		_yaw_goal = atan2(-d.x, -d.z)
+
+
+func _attend(delta: float) -> void:
+	var want := 0.0
+	if _attend_to != null and is_instance_valid(_attend_to) and _attend_left > 0.0:
+		_attend_left -= delta
+		var d := _attend_to.global_position - global_position
+		var fwd := -global_transform.basis.z
+		var ang := Vector2(fwd.x, fwd.z).angle_to(Vector2(d.x, d.z))
+		want = clampf(-ang, -1.2, 1.2)
+	figure.head_turn = lerpf(figure.head_turn, want, 1.0 - exp(-5.0 * delta))
 
 
 func _fail(why: String) -> void:
@@ -472,7 +534,7 @@ func _sidestep() -> bool:
 ## corner someone else is standing on, from further off. Sitting down,
 ## the last stretch to the seat is slid, so near enough will do.
 func _arrive_within(p: Vector3, last: bool, what: String) -> float:
-	var tol := ARRIVE if last else 0.6
+	var tol := ARRIVE if last else 0.35
 	if last and what == "sit":
 		tol = 0.9
 	if stage != null:
@@ -480,6 +542,21 @@ func _arrive_within(p: Vector3, last: bool, what: String) -> float:
 			if other != self and _flat(other.global_position, p) < 0.8:
 				return maxf(tol, 1.3)
 	return tol
+
+
+## Whether another actor stands on the line from a to b.
+func _someone_between(a: Vector3, b: Vector3) -> bool:
+	if stage == null:
+		return false
+	for other: Actor in stage.actors.values():
+		if other == self or not other.visible:
+			continue
+		var p := other.global_position + Vector3(0, 1.0, 0)
+		var ab := b - a
+		var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.001), 0.0, 1.0)
+		if (a + ab * t).distance_to(p) < 0.45:
+			return true
+	return false
 
 
 ## A camera spot pulled in toward the head if a wall stands between.
@@ -649,7 +726,10 @@ func _step(delta: float) -> Vector3:
 		if not figure.busy() or bool(figure.action.get("hold", false)) or bool(figure.action.get("loop", false)):
 			_finish()
 	elif what == "wait":
-		if _t > float(current.get("secs", 1.0)):
+		# A wait "until": "spoken_to" ends when someone speaks to it.
+		var heard_to_me := str(current.get("until", "")) == "spoken_to" and heard.any(
+			func(h: Dictionary) -> bool: return str(h.get("to", "")) == actor_name and float(h.get("at", 0.0)) >= _wait_from)
+		if _t > float(current.get("secs", 1.0)) or heard_to_me:
 			_finish()
 	else:
 		_finish()
@@ -839,7 +919,14 @@ func capture(which: String, path: String) -> Error:
 		cam.global_transform = Transform3D(Basis(), head)
 		cam.look_at(head + fwd.rotated(global_transform.basis.x, deg_to_rad(head_pitch)), Vector3.UP)
 	elif which == "front":
-		cam.global_transform = Transform3D(Basis(), _clear_spot(global_position + Vector3(0, 1.6, 0) + fwd * 2.6))
+		# From in front, or a little to one side if someone stands between.
+		var spot := _clear_spot(global_position + Vector3(0, 1.6, 0) + fwd * 2.6)
+		for ang: float in [0.0, 0.6, -0.6, 1.1, -1.1]:
+			var try := _clear_spot(global_position + Vector3(0, 1.6, 0) + fwd.rotated(Vector3.UP, ang) * 2.6)
+			if not _someone_between(try, global_position + Vector3(0, 1.3, 0)):
+				spot = try
+				break
+		cam.global_transform = Transform3D(Basis(), spot)
 		cam.look_at(global_position + Vector3(0, 1.25, 0), Vector3.UP)
 	else:
 		cam.global_transform = Transform3D(Basis(), _clear_spot(global_position + Vector3(0, 3.0, 0) - fwd * 5.0))

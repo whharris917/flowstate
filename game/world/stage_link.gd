@@ -17,6 +17,8 @@ extends Node
 ##   GET  /actors/<n>/state               the director's view, with coordinates
 ##   POST /camera {...}                   see StageCamera
 ##   POST /world {"hour": 15.5}           the time of day
+##   POST /takes/start {"title"}  POST /takes/stop    record a take
+##   GET|PUT /takes/<title>   POST /takes/<title>/play   (see StageTakes)
 ##   GET  /shot?cam=screen                what the screen shows
 ## The first actor, the clerk, keeps the older short forms: POST /run,
 ## GET /state, POST /stop, POST /explorer/step.
@@ -27,6 +29,7 @@ const EXPLORER_OK := ["forward", "back", "turn", "look", "say", "wait", "act", "
 
 var stage: Stage
 var camera: StageCamera
+var takes: StageTakes
 var _server := TCPServer.new()
 var _peers: Array[Dictionary] = []
 var _shots := 0
@@ -123,6 +126,12 @@ func _answer(req: Dictionary) -> Variant:
 	match parts[0]:
 		"handbook":
 			return FileAccess.get_file_as_string(HANDBOOK)
+		"things":
+			# Everything with a name, in sight or not; no coordinates.
+			var list := []
+			for a in CourthouseAffordances.all():
+				list.append({"id": a["id"], "kind": a["kind"], "what": a["desc"], "can": a["verbs"]})
+			return {"things": list}
 		"actors":
 			if parts.size() == 1:
 				if m == "POST":
@@ -139,7 +148,25 @@ func _answer(req: Dictionary) -> Variant:
 			var s: Variant = _body(req)
 			if not s is Dictionary:
 				return {"error": "the camera takes an object: see the handbook"}
+			takes.note_camera(s)
 			return {"camera": camera.direct(s)}
+		"takes":
+			var b: Variant = _body(req)
+			if parts.size() == 2 and parts[1] == "start":
+				return takes.start(str((b as Dictionary).get("title", "take")) if b is Dictionary else "take")
+			if parts.size() == 2 and parts[1] == "stop":
+				return takes.stop()
+			if parts.size() >= 2:
+				var title := parts[1]
+				if parts.size() == 3 and parts[2] == "play":
+					return takes.play(StageTakes.load_take(title))
+				if m == "PUT":
+					if not b is Dictionary:
+						return {"error": "a take is an object: see StageTakes"}
+					return {"saved": ProjectSettings.globalize_path(takes.save(title, b))}
+				var t := StageTakes.load_take(title)
+				return t if not t.is_empty() else {"error": "no take called '%s'" % title}
+			return {"error": "POST /takes/start, /takes/stop; GET, PUT /takes/<title>; POST /takes/<title>/play"}
 		"shot":
 			return await _screen_shot()
 		"world":
@@ -212,6 +239,7 @@ func _actor(a: Actor, m: String, rest: PackedStringArray, req: Dictionary) -> Va
 			else:
 				return {"error": "send {\"commands\": [...]}"}
 			a.last_walk = {}
+			var handle := takes.note_do(a, cmds, append)
 			a.run(cmds, append)
 			# A picture part-way through, to see an action as it happens.
 			var mid := {}
@@ -219,6 +247,9 @@ func _actor(a: Actor, m: String, rest: PackedStringArray, req: Dictionary) -> Va
 				_mid_shot(a, float(b["view_at"]), str((b as Dictionary).get("view_cam", "front")), mid)
 			if wait:
 				await _until_idle(a)
+				takes.note_done(handle)
+			else:
+				_close_when_idle(a, handle)
 			while b is Dictionary and (b as Dictionary).has("view_at") and not mid.has("path"):
 				await get_tree().create_timer(0.1).timeout
 			var out := a.perceive()
@@ -284,6 +315,11 @@ func _spawn(b: Variant) -> Dictionary:
 			p = af.get("approach", af["at"])
 	var a := stage.spawn(n, str(b.get("preset", "plain")), p + Vector3(0, 0.15, 0), deg_to_rad(float(b.get("yaw_deg", 0.0))))
 	return {"spawned": a.actor_name, "handbook": "/handbook"}
+
+
+func _close_when_idle(a: Actor, handle: int) -> void:
+	await _until_idle(a)
+	takes.note_done(handle)
 
 
 func _mid_shot(a: Actor, after: float, cam: String, into: Dictionary) -> void:

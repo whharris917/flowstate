@@ -61,6 +61,9 @@ const NODES := {
 	"courtroom": Vector3(-5.0, F2, -3.8),
 	"well": Vector3(-0.7, F2, -3.8),
 	"bar_gate": Vector3(0.0, F2, -0.3),
+	# In front of the pews, and down the west wall past their ends.
+	"front_aisle": Vector3(0.0, F2, 1.15),
+	"front_aisle_w": Vector3(-8.7, F2, 1.15),
 	"aisle": Vector3(0.0, F2, 2.6),
 	"under_gallery": Vector3(0.0, F2, 6.0),
 	"courtroom_door": Vector3(0.0, F2, 8.3),
@@ -93,12 +96,13 @@ const LEGS := [
 	["north_landing_a", "north_landing_b"], ["north_landing_b", "north_stair_head"],
 	["north_stair_head", "north_upstairs"], ["north_upstairs", "chambers_door"], ["chambers_door", "chambers"],
 	["chambers", "judge_door"], ["judge_door", "behind_bench"], ["behind_bench", "courtroom"],
-	["courtroom", "well"], ["well", "bar_gate"], ["bar_gate", "aisle"], ["aisle", "under_gallery"],
+	["courtroom", "well"], ["well", "bar_gate"], ["bar_gate", "front_aisle"], ["front_aisle", "aisle"],
+	["front_aisle", "front_aisle_w"], ["front_aisle_w", "gallery_stair_foot"], ["aisle", "under_gallery"],
 	["under_gallery", "courtroom_door"], ["courtroom_door", "south_upstairs"],
 	["south_upstairs", "south_stair_head"], ["south_stair_head", "south_landing_b"],
 	["south_landing_b", "south_landing_a"], ["south_landing_a", "south_stair_foot"],
 	["south_stair_foot", "south_hall"],
-	["under_gallery", "gallery_stair_foot"], ["gallery_stair_foot", "gallery_stair_start"],
+	["gallery_stair_foot", "gallery_stair_start"],
 	["gallery_stair_start", "gallery_back"], ["gallery_back", "gallery"],
 ]
 

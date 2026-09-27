@@ -34,7 +34,9 @@ By intention. Use the ids you perceive; the world finds the way, round corners a
 
 Walking, you keep to the right of anyone coming the other way, and step aside if someone stands in your path.
 
-By body: `{"do":"forward","m":2}`, `{"do":"back","m":1}`, `{"do":"turn","deg":45}` (positive = left), `{"do":"look","pitch":20}` (positive = up), `{"do":"wait","secs":2}`.
+By body: `{"do":"forward","m":2}`, `{"do":"back","m":1}`, `{"do":"turn","deg":45}` (positive = left), `{"do":"look","pitch":20}` (positive = up), `{"do":"wait","secs":2}`. A wait with `"until":"spoken_to"` ends as soon as someone speaks to you (`{"do":"wait","secs":20,"until":"spoken_to"}`): the way to listen for a reply.
+
+Every named thing in the place, seen or not (seats, doors, stairs, things): `curl -s http://127.0.0.1:47886/things`. Their ids work with go, sit, climb and look_at from anywhere.
 
 ### Notes
 
