@@ -30,7 +30,9 @@ const GRADE := -2.46        # the lawn in feet over the first floor
 const F2 := 13.0            # the second floor
 const F3 := 24.0            # the third
 const EAVE := 23.0          # a reference height for the towers' roofs
-const TOP := 42.2           # the main roof's highest point
+const TOP := 42.0           # the main roof's ridge
+const RIDGE_Z := 47.4       # where it runs (survey z)
+const DECK := 34.6          # the flat deck east of the ridge
 const GROUND := -11.0       # the foot of the walls: the basement's floor
 # The main walls' tops, side by side, from the survey's elevations and
 # section: the west front carries the third floor's wall to 25 ft; the
@@ -650,23 +652,23 @@ func _eave(a: Vector2, b: Vector2, inside: Vector2, y: float, out: float) -> voi
 func _chimneys() -> void:
 	# Each placed where the east and west elevations put it along the house
 	# and the north and south ones across it; tops from the elevations.
-	# The hall's and library's: two stacks side by side.
-	# (The east elevation gives them along the house, the south across.)
-	_chimney(Vector2(66.6, 59.7), Vector2(3.0, 7.3), 30.0, 47.5)
-	_chimney(Vector2(71.9, 59.7), Vector2(4.6, 7.3), 30.0, 47.5)
-	# By the east dormer; on the west gable; the kitchen's.
-	_chimney(Vector2(97.2, 69.3), Vector2(2.0, 7.4), 28.0, 47.5)
-	_chimney(Vector2(102.3, 38.5), Vector2(3.8, 2.0), 30.0, 45.0)
+	# The library's: broad to the east, thin to the south, its four flues
+	# in a row along the house.
+	_chimney(Vector2(70.6, 55.65), Vector2(6.8, 3.3), 30.0, 47.25)
+	# The hall's by the east dormer, the other way about; on the west
+	# gable; the kitchen's.
+	_chimney(Vector2(97.25, 69.0), Vector2(1.6, 6.0), 28.0, 47.25)
+	_chimney(Vector2(103.0, 38.5), Vector2(3.6, 2.0), 30.0, 45.3)
 	_chimney(Vector2(137.5, 30.0), Vector2(2.0, 3.0), 20.0, 38.7)
 	# The great chimney on the north front, as the north elevation draws
 	# it: a base 7.4 ft across at the ground drawn in to 4.8 at 15.5 ft,
 	# the shaft 4.4 across up the wall and through the roof, corbelled out
-	# at 34 ft to a stack 6.2 across topped at 47.5.
+	# at 34 ft to a stack 5.6 across topped at 47.25.
 	var brick := c(BRICK, CourthouseKit.K_BRICK)
 	var dark := c(BLACK, CourthouseKit.K_BRICK)
 	var g := Transform3D()
-	var zc := 59.8
-	var xc := MX1 + 1.4
+	var zc := 59.4
+	var xc := MX1 + 0.7
 	var steps := 8
 	var g0 := grade_at(Vector2(MX1 + 2.0, zc)) - 0.5
 	for i in steps:
@@ -681,7 +683,7 @@ func _chimneys() -> void:
 	var s0 := w(xc - 0.2, zc, 15.5)
 	var s1 := w(xc - 0.2, zc, 34.3)
 	k.box("wall", g, (s0 + s1) / 2.0, Vector3(4.4 * FT, s1.y - s0.y, 2.4 * FT), brick)
-	_chimney(Vector2(xc - 0.2, zc), Vector2(2.6, 6.2), 34.0, 47.5)
+	_chimney(Vector2(xc - 0.2, zc), Vector2(2.0, 5.6), 34.0, 47.25)
 
 
 ## A chimney standing from y0 to y1 feet: the shaft, and near its top a
@@ -774,24 +776,10 @@ func _fascia(e: Array) -> void:
 		k.m.bar("wall", a - Vector3(0, 0.1, 0), b - Vector3(0, 0.1, 0), 0.09, 4, trim)
 
 
-## Iron cresting along a ridge or a flat's edge: a rail, pickets, a
-## fleur at every fourth.
-func _cresting(a: Vector3, b: Vector3) -> void:
-	var col := IRON
-	k.m.bar("iron", a + Vector3(0, 0.05, 0), b + Vector3(0, 0.05, 0), 0.02, 4, col)
-	k.m.bar("iron", a + Vector3(0, 0.45, 0), b + Vector3(0, 0.45, 0), 0.012, 4, col)
-	var n := int(a.distance_to(b) / 0.15)
-	for i in n + 1:
-		var p := a.lerp(b, float(i) / maxi(n, 1))
-		k.m.bar("iron", p, p + Vector3(0, 0.55 if i % 4 == 0 else 0.45, 0), 0.008, 4, col)
-		if i % 4 == 0:
-			k.m.sphere("iron", Transform3D(Basis(), p + Vector3(0, 0.6, 0)), 0.035, 6, col)
-
-
 ## ---- the roof over the main block ---------------------------------------
 ##
 ## The main block's roof is steep slopes on all four sides up to a flat
-## with iron cresting round it; the gables stand out of it. Each is a
+## deck; the gables stand out of it. Each is a
 ## plane over the survey's plan (y = a x + b z + c, feet), and the roof
 ## is whichever plane stands highest: the hip's faces are cut away where
 ## a gable rises over them and the gables where they sink under the hip,
@@ -883,33 +871,31 @@ func _roofs() -> void:
 	var xb := MX1 + over
 	var za := MZ0 - over
 	var zb := MZ1 + over
-	# The main roof, from the roof plan and the elevations: steep lower
-	# slopes rising from each side's wall to a break at about 35 ft, and
-	# over them a low hip up to 42 ft; on the west the lower slope runs
-	# straight up to the top.
+	# The main roof, from the roof plan and the elevations: steep slopes
+	# rising from each side's wall to a flat deck at 34.6 ft; over the west
+	# half the south and north gables meet in one ridge at 42 ft.
 	hip_planes = [Vector3(0, 1.6, WEST_TOP - 1.6 * MZ0), Vector3(0, -0.86, EAST_TOP + 0.86 * MZ1),
 		Vector3(1.05, 0, SOUTH_TOP - 1.05 * MX0), Vector3(-1.05, 0, NORTH_TOP + 1.05 * MX1),
-		Vector3(0, -0.43, TOP + 0.43 * 53.0), Vector3(0.48, 0, TOP - 0.48 * 87.0), Vector3(-0.56, 0, TOP + 0.56 * 87.0),
-		Vector3(0, 0, TOP)]
+		Vector3(0, 0, DECK)]
 	roof_rect = PackedVector2Array([Vector2(xa, za), Vector2(xb, za), Vector2(xb, zb), Vector2(xa, zb)])
 	# The gables, each at the survey's peak and eave: south over the
 	# library's end, the two great east gables, the two small ones between
 	# them over the second floor's windows, the north one over the dining
 	# room, the small west one.
 	# The west half of the main block is one long roof from the south
-	# gable to the north one, its ridge the gables' peaks (the roof plan's
-	# line at 48.7 ft); each gable runs its ridge to the middle.
-	cross_gable(Vector2(MX0, 38.9), Vector2(MX0, 54.5), Vector2(70.0, 47.0), 41.7, 0.4, 19.5, SOUTH_TOP, 29.0, 3.0)
+	# gable to the north one, pitched at 45 degrees, its ridge the gables'
+	# peaks; each gable runs its ridge to the middle.
+	cross_gable(Vector2(MX0, 37.8), Vector2(MX0, 57.0), Vector2(70.0, RIDGE_Z), TOP, 0.4, 31.8, SOUTH_TOP, 29.0, 3.0)
 	# The two great east gables throw their roofs forward over their
-	# balconies: the southern 0.9 ft, the northern 3.6 (the south and north
+	# balconies: the southern 0.4 ft, the northern 3.6 (the south and north
 	# elevations' edges).
-	cross_gable(Vector2(57.5, MZ1), Vector2(79.5, MZ1), Vector2(68.5, 70.0), 34.3, 1.0, 18.0, EAST_TOP, -1.0, 0.9)
-	cross_gable(Vector2(96.7, MZ1), Vector2(115.3, MZ1), Vector2(106.0, 70.0), 34.4, 1.0, 18.0, EAST_TOP, -1.0, 3.6)
+	cross_gable(Vector2(57.5, MZ1), Vector2(79.5, MZ1), Vector2(68.5, 70.0), 34.4, 1.0, 18.0, EAST_TOP, 14.5, 0.4)
+	cross_gable(Vector2(96.7, MZ1), Vector2(115.3, MZ1), Vector2(106.0, 70.0), 34.4, 1.0, 18.0, EAST_TOP, 14.5, 3.6)
 	cross_gable(Vector2(80.4, MZ1), Vector2(86.9, MZ1), Vector2(83.6, 70.0), 26.0, 0.6, 19.5, EAST_TOP)
 	cross_gable(Vector2(88.0, MZ1), Vector2(96.3, MZ1), Vector2(92.1, 70.0), 26.0, 0.6, 19.5, EAST_TOP)
 	# The north gable: 23 ft wide (the roof plan's outline, 36 to 59.5 with
 	# its eaves), its roof 5 ft forward over the balcony.
-	cross_gable(Vector2(MX1, 37.0), Vector2(MX1, 58.5), Vector2(100.0, 48.4), 41.7, 1.0, 25.5, NORTH_TOP, 28.5, 5.0)
+	cross_gable(Vector2(MX1, 37.8), Vector2(MX1, 57.0), Vector2(100.0, RIDGE_Z), TOP, 1.0, 31.8, NORTH_TOP, 28.5, 5.0)
 	cross_gable(Vector2(95.5, MZ0), Vector2(109.0, MZ0), Vector2(102.2, 50.0), 38.0, 0.8, 28.25, WEST_TOP)
 	# The towers and bays rise through the main roof's eaves: no roof over
 	# them but their own.
@@ -1220,7 +1206,7 @@ func roof_higher(level: float) -> Array:
 
 
 ## A piece of the roof over a plan polygon on a plane: slate in courses of
-## colour by height, or the flat's tin with its cresting; a plastered
+## colour by height, or the flat's tin; a plastered
 ## underside for the room beneath.
 func roof_piece(poly: PackedVector2Array, pl: Vector3, flat: bool) -> void:
 	var world := func(p: Vector2) -> Vector3: return w(p.x, p.y, ph(pl, p))
@@ -1258,9 +1244,6 @@ func roof_piece(poly: PackedVector2Array, pl: Vector3, flat: bool) -> void:
 			var t2: Vector3 = world.call(p[idx[i + 2]])
 			k.m.tri("wall", t0, t1, t2, n, b[1] as Color)
 			k.m.tri("wall", t0 - n * 0.1, t1 - n * 0.1, t2 - n * 0.1, -n, ceil)
-	if flat:
-		for i in poly.size():
-			_cresting(world.call(poly[i]), world.call(poly[(i + 1) % poly.size()]))
 
 
 ## A small balcony: boards over the outline (survey plan, the house side
@@ -1407,8 +1390,8 @@ func gable(a: Vector2, b: Vector2, inward: Vector2, depth: float, y0: float, y1:
 		k.box_rz("wall", tf, (p0 + p1) / 2.0, Vector3(0.12, p0.distance_to(p1), 0.09), side * atan2(tw / 2.0, 1.0), trim)
 	var out3 := w2(mid - into) - w2(mid)
 	var tip := w(mid.x, mid.y, y1) + Vector3(out3.x, 0, out3.y).normalized() * (front * FT - 0.05)
-	k.m.bar("wall", tip, tip + Vector3(0, 1.1, 0), 0.05, 6, trim)
-	k.m.sphere("wall", Transform3D(Basis(), tip + Vector3(0, 0.55, 0)), 0.1, 8, trim)
+	k.m.bar("wall", tip, tip + Vector3(0, 0.35, 0), 0.05, 6, trim)
+	k.m.sphere("wall", Transform3D(Basis(), tip + Vector3(0, 0.2, 0)), 0.08, 8, trim)
 	k.m.bar("wall", tip, tip - Vector3(0, 0.6, 0), 0.06, 6, trim)
 
 
@@ -1570,9 +1553,9 @@ func _deck_tower(chain: Array[Vector2], floor_y: float, eave_y: float, apex: Vec
 	slope(ring[ring.size() - 1], ring[0], top, top)
 	for i in ring.size() - 1:
 		k.m.bar("wall", (ring[i] as Vector3) - Vector3(0, 0.1, 0), (ring[i + 1] as Vector3) - Vector3(0, 0.1, 0), 0.09, 4, trim)
-	k.m.bar("wall", top - Vector3(0, 0.2, 0), top + Vector3(0, 1.4, 0), 0.05, 6, trim)
+	k.m.bar("wall", top - Vector3(0, 0.2, 0), top + Vector3(0, 0.3, 0), 0.05, 6, trim)
 	k.m.sphere("wall", Transform3D(Basis(), top + Vector3(0, 0.7, 0)), 0.12, 8, trim)
-	k.m.bar("iron", top + Vector3(0, 1.4, 0), top + Vector3(0, 2.2, 0), 0.015, 4, IRON)
+	k.m.bar("iron", top + Vector3(0, 0.3, 0), top + Vector3(0, 0.5, 0), 0.015, 4, IRON)
 
 
 ## ---- the conservatory --------------------------------------------------
