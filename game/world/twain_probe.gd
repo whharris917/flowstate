@@ -35,6 +35,16 @@ func _run(world: TwainMap) -> void:
 	player._fov_target = 70.0
 	var views := OS.get_environment("FLOWSTATE_TW_VIEWS")
 	if views != "":
+		# Pictures for comparison: no panels, hotbar or crosshair over them.
+		for layer: Node in get_tree().root.find_children("*", "CanvasLayer", true, false):
+			(layer as CanvasLayer).visible = false
+		# FLOWSTATE_TW_NOTREES: the trees out of the way, for elevations.
+		if OS.get_environment("FLOWSTATE_TW_NOTREES") != "":
+			for f: Node in get_tree().root.find_children("*", "Forest", true, false):
+				(f as Node3D).visible = false
+			for f: Node in get_tree().root.find_children("*", "", true, false):
+				if f is Forest:
+					(f as Node3D).visible = false
 		# name:fov:x,y,z:tx,ty,tz;... for looking at one thing closely.
 		for v: String in views.split(";"):
 			var parts := v.split(":")
