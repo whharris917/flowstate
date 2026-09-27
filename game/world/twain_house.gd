@@ -567,7 +567,7 @@ func _walls() -> void:
 		var a := p[i]
 		var b := p[(i + 1) % p.size()]
 		var top := wall_top(a, b)
-		run(a, b, inside_of(a, b, cw), GROUND, top)
+		run(a, b, inside_of(a, b, cw), foot(a, b), top)
 		if top < F3:
 			_eave(a, b, inside_of(a, b, cw), top, 1.4)
 	# The decks' back walls: the third floor's door and windows out onto
@@ -581,15 +581,24 @@ func _walls() -> void:
 	var prev := _arc_point(PANTRY_C, PANTRY_R, PANTRY_BREAKS[0])
 	for i in range(1, PANTRY_BREAKS.size()):
 		var q := _arc_point(PANTRY_C, PANTRY_R, PANTRY_BREAKS[i])
-		run(prev, q, PANTRY_C, GROUND, 8.2)
+		run(prev, q, PANTRY_C, foot(prev, q), 8.2)
 		prev = q
-	run(prev, Vector2(113.0, 22.3), PANTRY_C + Vector2(0, -5), GROUND, 8.2)
+	run(prev, Vector2(113.0, 22.3), PANTRY_C + Vector2(0, -5), foot(prev, Vector2(113.0, 22.3)), 8.2)
 	# The service wing: two storeys, lower than the house.
 	var wing := [Vector2(113.0, 22.3), Vector2(137.0, 22.3), Vector2(137.0, 19.8), Vector2(155.5, 19.8), Vector2(155.5, 43.8),
 		Vector2(MX1, 43.8)]
 	for i in wing.size() - 1:
-		run(wing[i], wing[i + 1], Vector2(135.0, 33.0), GROUND, 15.75)
+		run(wing[i], wing[i + 1], Vector2(135.0, 33.0), foot(wing[i], wing[i + 1]), 15.75)
 		_eave(wing[i], wing[i + 1], Vector2(135.0, 33.0), 15.75, 1.4)
+
+
+## Where a wall from a to b starts: a little under the lowest ground
+## along it.
+static func foot(a: Vector2, b: Vector2) -> float:
+	var g := 0.0
+	for i in 5:
+		g = minf(g, grade_at(a.lerp(b, i / 4.0)))
+	return maxf(g - 0.8, GROUND)
 
 
 ## A main wall's top by which side of the house it stands on.

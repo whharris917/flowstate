@@ -174,6 +174,13 @@ func _orthos(world: TwainMap) -> void:
 		for i in 12:
 			await RenderingServer.frame_post_draw
 		vp.get_texture().get_image().save_png("user://ortho_%s.png" % front)
+		# The same view as surface directions only (no colour, no light),
+		# from which tools/twain_diff.py draws the model's lines.
+		vp.debug_draw = Viewport.DEBUG_DRAW_NORMAL_BUFFER
+		for i in 8:
+			await RenderingServer.frame_post_draw
+		vp.get_texture().get_image().save_png("user://ortho_%s_n.png" % front)
+		vp.debug_draw = Viewport.DEBUG_DRAW_DISABLED
 		print("[probe] ortho %s written" % front)
 		vp.queue_free()
 
