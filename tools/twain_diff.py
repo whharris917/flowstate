@@ -32,7 +32,9 @@ SHEETS = {"east": 8, "north": 9, "west": 10, "south": 11}
 ORTHO_X = (10.0, 170.0)
 ORTHO_Y = (-12.0, 52.0)
 PX = 16
-FF = 82.2
+# The first floor's line on each sheet (sheet feet), from the level marks
+# drawn beside each elevation (0'-0", 13'-1", 24'-1", -9'-5 1/4").
+FF = {"east": 83.5, "north": 83.4, "west": 83.4, "south": 83.6}
 # Parts of each sheet that are not the house: titles, dimension strings,
 # the level marks at the sides (sheet feet, heights over the first floor).
 MASK_OUT = {
@@ -46,7 +48,7 @@ MASK_OUT = {
 def sky_of_drawing(sheet_dir: str, front: str, shape: tuple[int, int]) -> np.ndarray:
     n = SHEETS[front]
     sheet = Image.open(os.path.join(sheet_dir, "m%02d.tif" % n)).convert("L")
-    box = (int(ORTHO_X[0] * 100), int((FF - ORTHO_Y[1]) * 100), int(ORTHO_X[1] * 100), int((FF - ORTHO_Y[0]) * 100))
+    box = (int(ORTHO_X[0] * 100), int((FF[front] - ORTHO_Y[1]) * 100), int(ORTHO_X[1] * 100), int((FF[front] - ORTHO_Y[0]) * 100))
     d = np.asarray(sheet.crop(box).resize((shape[1], shape[0]), Image.LANCZOS))
     lines = d < 170
     # Close the gaps between strokes so the sky cannot leak through a
@@ -130,7 +132,7 @@ def main() -> None:
         missing = (~sky_d) & sky_m & cmp
         extra = sky_d & (~sky_m) & cmp
         img = Image.open(os.path.join(sheet_dir, "m%02d.tif" % SHEETS[front])).convert("L")
-        box = (int(ORTHO_X[0] * 100), int((FF - ORTHO_Y[1]) * 100), int(ORTHO_X[1] * 100), int((FF - ORTHO_Y[0]) * 100))
+        box = (int(ORTHO_X[0] * 100), int((FF[front] - ORTHO_Y[1]) * 100), int(ORTHO_X[1] * 100), int((FF[front] - ORTHO_Y[0]) * 100))
         base = np.asarray(img.crop(box).resize((w, h), Image.LANCZOS))
         rgb = np.stack([base, base, base], axis=2).astype(float) * 0.55 + 110
         rgb[missing] = [215, 30, 30]

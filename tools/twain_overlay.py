@@ -28,7 +28,7 @@ SHEETS = {"east": 8, "north": 9, "west": 10, "south": 11}
 ORTHO_X = (10.0, 170.0)
 ORTHO_Y = (-12.0, 52.0)
 PX = 16
-FF = {8: 82.2, 9: 82.2, 10: 82.2, 11: 82.2}   # the first floor's line on each sheet, sheet feet
+FF = {8: 83.5, 9: 83.4, 10: 83.4, 11: 83.6}   # the first floor's line on each sheet (its level marks), sheet feet
 
 
 def overlay(sheet_dir: str, front: str, crop: tuple[float, float, float, float] | None) -> str:

@@ -28,7 +28,9 @@ FRONTS = {
     "west": (10, (0.0, -1.0), "x", -1.0, 176.5),
     "south": (11, (-1.0, 0.0), "z", 1.0, 23.0),
 }
-FF = 82.2
+# The first floor's line on each sheet (sheet feet), from the level marks
+# drawn beside each elevation (0'-0", 13'-1", 24'-1", -9'-5 1/4").
+FF = {"east": 83.5, "north": 83.4, "west": 83.4, "south": 83.6}
 PX = 40        # pixels to the foot in the output
 X_RANGE = (15.0, 165.0)
 Y_RANGE = (-12.0, 50.0)
@@ -51,7 +53,7 @@ def main() -> None:
         for t in range(TILES):
             x0 = X_RANGE[0] + t * span - 2.0
             x1 = x0 + span + 4.0
-            box = (int(x0 * 100), int((FF - Y_RANGE[1]) * 100), int(x1 * 100), int((FF - Y_RANGE[0]) * 100))
+            box = (int(x0 * 100), int((FF[front] - Y_RANGE[1]) * 100), int(x1 * 100), int((FF[front] - Y_RANGE[0]) * 100))
             img = sheet.crop(box).resize((int((x1 - x0) * PX), int((Y_RANGE[1] - Y_RANGE[0]) * PX)), Image.LANCZOS).convert("RGB")
             d = ImageDraw.Draw(img)
             for fx in range(int(x0), int(x1) + 1):
