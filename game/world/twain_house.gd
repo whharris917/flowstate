@@ -42,6 +42,9 @@ const WEST_TOP := 25.0
 const EAST_TOP := 22.7
 const NORTH_TOP := 18.2
 const SOUTH_TOP := 20.0
+const WING_TOP := 15.9      # the service wing's walls, under its cornice
+const WING_RING := 16.4     # the flat top of the wing's cornice, where its roof starts
+const WING_OUT := 1.8       # the cornice's reach
 const BAY_TOP := 12.4       # the drawing room's bay: its porch over it
 const T := 1.0              # an outside wall
 
@@ -299,17 +302,17 @@ func _openings() -> void:
 	for x: float in [133.3, 127.7, 122.7, 117.7]:
 		_op(x, 22.3, 2.5, 1.3, 7.0)
 	for x: float in [149.0, 146.3, 143.6]:
-		_op(x, 19.8, 2.2, 13.1, 16.4, "win", "flat", false)
+		_op(x, 19.8, 2.2, 11.0, 14.8, "win", "flat", false)
 	for x: float in [134.85, 132.0, 125.3, 120.1]:
-		_op(x, 22.3 if x < 137.0 else 19.8, 2.1, 13.1, 16.4, "win", "flat", false)
+		_op(x, 22.3 if x < 137.0 else 19.8, 2.1, 11.0, 14.8, "win", "flat", false)
 	for x: float in [149.7, 142.8]:
 		_op(x, 19.8, 2.6, -6.6, -2.6, "win", "segment", false)
 	for x: float in [127.3, 123.1, 119.1]:
 		_op(x, 22.3, 2.6, -6.6, -2.6, "win", "segment", false)
 	# The north end: two windows below, a double window above.
-	for z: float in [39.5, 28.8]:
+	for z: float in [37.65, 24.6]:
 		_op(155.5, z, 2.6, 1.5, 8.5)
-	_op(155.5, 30.4, 4.8, 13.3, 16.2, "win", "flat", false)
+	_op(155.5, 32.1, 7.4, 11.6, 14.6, "win", "flat", false)
 	_op(149.0, 43.8, 2.4, 1.1, 6.7)
 	_op(141.0, 43.8, 2.6, 0.0, 7.0, "door")
 	for x: float in [144.25, 146.75, 149.25]:
@@ -594,8 +597,8 @@ func _walls() -> void:
 	var wing := [Vector2(113.0, 22.3), Vector2(137.0, 22.3), Vector2(137.0, 19.8), Vector2(155.5, 19.8), Vector2(155.5, 43.8),
 		Vector2(MX1, 43.8)]
 	for i in wing.size() - 1:
-		run(wing[i], wing[i + 1], Vector2(135.0, 33.0), foot(wing[i], wing[i + 1]), 17.0)
-		_eave(wing[i], wing[i + 1], Vector2(135.0, 33.0), 17.0, 1.4)
+		run(wing[i], wing[i + 1], Vector2(135.0, 33.0), foot(wing[i], wing[i + 1]), WING_TOP)
+		_eave(wing[i], wing[i + 1], Vector2(135.0, 33.0), WING_TOP, WING_OUT)
 
 
 ## Where a wall from a to b starts: a little under the lowest ground
@@ -659,7 +662,7 @@ func _chimneys() -> void:
 	# gable; the kitchen's.
 	_chimney(Vector2(97.25, 69.0), Vector2(1.6, 6.0), 28.0, 47.25)
 	_chimney(Vector2(103.0, 38.5), Vector2(3.6, 2.0), 30.0, 45.3)
-	_chimney(Vector2(137.5, 30.0), Vector2(2.0, 3.0), 20.0, 38.7)
+	_chimney(Vector2(137.3, 31.5), Vector2(2.0, 4.0), 20.0, 38.7)
 	# The great chimney on the north front, as the north elevation draws
 	# it: a base 7.4 ft across at the ground drawn in to 4.8 at 15.5 ft,
 	# the shaft 4.4 across up the wall and through the roof, corbelled out
@@ -943,13 +946,9 @@ func _roofs() -> void:
 	# The dressing room's round under its half cone; the east dormer.
 	_half_cone(DRESS_C, DRESS_R + 1.4, 40.0, 320.0, 18, Vector2(58.5, 77.3), 31.0, SOUTH_TOP - 0.4)
 	_dormer7()
-	# The service wing's hip, stopping at the house; the pantry's roof,
+	# The service wing's roof, stopping at the house; the pantry's roof,
 	# falling from the house's corner to its round's eave.
-	# Pitched at 1.17 all round (the west elevation).
-	hip(113.0, 155.5, 19.8, 43.8, 17.0, 1.17, 29.5, 1.4,
-		PackedVector2Array([Vector2(MX0, MZ0), Vector2(MX1, MZ0), Vector2(MX1, MZ1 + 2.0), Vector2(MX0, MZ1 + 2.0)]), true, 1.17)
-	for dz: Array in [[122.0, 22.3, -1.0], [147.0, 19.8, -1.0], [125.0, 43.8, 1.0]]:
-		_wing_dormer(float(dz[0]), float(dz[1]), float(dz[2]))
+	_wing_roof()
 	_pantry_roof()
 	_pantry_steps()
 	# Balconies before the gables' doors, their rails as the survey draws
@@ -997,21 +996,81 @@ func _dormer7() -> void:
 
 ## A small dormer of lattice on the service wing's roof at x, over the
 ## wall at z, facing `side` (-1 west, +1 east).
-func _wing_dormer(x: float, z_wall: float, side: float) -> void:
-	var zf := z_wall - side * 3.9
-	var face := zf
-	var brick := c(Color(0.52, 0.34, 0.22), HarborTown.K_CLAP)
+func _wing_dormer(at: Vector2, out: Vector2) -> void:
+	var clap := c(Color(0.52, 0.34, 0.22), HarborTown.K_CLAP)
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
-	var cen := w(x, face - side * 1.6, 21.85)
-	k.box("wall", Transform3D(), cen, Vector3(3.4 * FT, 3.3 * FT, 5.0 * FT), brick)
+	var side := Vector2(-out.y, out.x)
+	var fr := frame(at - side * 2.5, at + side * 2.5, at + out)
+	var f: Transform3D = fr[0]
+	var width := 5.0 * FT
+	var depth := 3.4 * FT
+	var y0 := h(19.6)
+	var y1 := h(23.2)
+	# The cheeks and face, running back into the roof.
+	k.box("wall", f, Vector3(width / 2.0, (y0 + y1) / 2.0, -depth / 2.0), Vector3(width, y1 - y0, depth), clap)
 	# Its lattice window across the face.
-	var fc := w(x, face, 21.85) + Vector3(-side * 0.02, 0, 0)
+	var fc := Vector3(width / 2.0, (h(20.2) + y1) / 2.0, 0.02)
 	for i in 5:
 		var off := (i - 2) * 0.9 * FT
-		k.m.bar("wall", fc + Vector3(0, -0.4, off - 0.12), fc + Vector3(0, 0.4, off + 0.12), 0.012, 3, trim)
-		k.m.bar("wall", fc + Vector3(0, 0.4, off - 0.12), fc + Vector3(0, -0.4, off + 0.12), 0.012, 3, trim)
-	var r := w(x, face - side * 1.6, 23.5)
-	k.m.cylinder("wall", Transform3D(Basis(Vector3.UP, PI / 4.0), r + Vector3(0, 0.2, 0)), 1.2, 0.0, 0.4, 4, c(SLATE, CourthouseKit.K_SLATE))
+		k.box_rz("wall", f, fc + Vector3(off, 0, 0), Vector3(0.012, 0.9, 0.012), PI / 5.0, trim)
+		k.box_rz("wall", f, fc + Vector3(off, 0, 0), Vector3(0.012, 0.9, 0.012), -PI / 5.0, trim)
+	# A low gable over it, running back into the roof.
+	var ridge := h(24.2)
+	var over := 0.25
+	for sd: float in [-1.0, 1.0]:
+		var e0 := f * Vector3(width / 2.0 + sd * (width / 2.0 + over), y1, over)
+		var e1 := f * Vector3(width / 2.0 + sd * (width / 2.0 + over), y1, -depth - 0.6)
+		var r0 := f * Vector3(width / 2.0, ridge, over)
+		var r1 := f * Vector3(width / 2.0, ridge, -depth - 0.6)
+		slope(e0, e1, r1, r0, false)
+	k.m.tri("wall", f * Vector3(0, y1, 0.01), f * Vector3(width, y1, 0.01), f * Vector3(width / 2.0, ridge, 0.01),
+		(f.basis * Vector3(0, 0, 1)).normalized(), trim)
+
+
+## The service wing's roof, from the roof plan and the north, east and west
+## elevations: a ridge at 30.5 ft down the wing's middle from x 120.5 to
+## 144.5, falling 1.45 to its sides and south end and 2.1 to its north
+## end; across its north end a lower hip, its ridge at 27.4 ft along
+## x 146 from z 26.9 to 37.1, falling 1.18 to north and south and 2.1 to
+## the sides. Round both, the flat top of the bracketed cornice. Dormers
+## with lattice windows on the west, east and north faces.
+func _wing_roof() -> void:
+	var outline := PackedVector2Array([Vector2(113.0, 22.3), Vector2(137.0, 22.3), Vector2(137.0, 19.8), Vector2(155.5, 19.8),
+		Vector2(155.5, 43.8), Vector2(113.0, 43.8)])
+	var region: PackedVector2Array = Geometry2D.offset_polygon(outline, WING_OUT, Geometry2D.JOIN_MITER)[0]
+	var house := PackedVector2Array([Vector2(MX0, MZ0), Vector2(MX1, MZ0), Vector2(MX1, MZ1 + 2.0), Vector2(MX0, MZ1 + 2.0)])
+	var main: Array[Vector3] = [Vector3(0, 1.45, 30.5 - 1.45 * 31.2), Vector3(0, -1.45, 30.5 + 1.45 * 31.2),
+		Vector3(1.45, 0, 30.5 - 1.45 * 120.5), Vector3(-2.1, 0, 30.5 + 2.1 * 144.5)]
+	var cross: Array[Vector3] = [Vector3(0, 2.1, 27.4 - 2.1 * 26.9), Vector3(0, -2.1, 27.4 + 2.1 * 37.1),
+		Vector3(1.18, 0, 27.4 - 1.18 * 146.0), Vector3(-1.18, 0, 27.4 + 1.18 * 146.0)]
+	var ring := Vector3(0, 0, WING_RING)
+	var flat: Array = cut([region], house)
+	for planes: Array[Vector3] in [main, cross]:
+		# Each face where it is the lowest of its hip's planes and stands
+		# above the cornice; the two hips run into each other.
+		for i in planes.size():
+			var pieces: Array = [region]
+			for j in planes.size():
+				if j != i:
+					pieces = meet(pieces, under(planes[i], planes[j]))
+			pieces = meet(pieces, under(ring, planes[i]))
+			pieces = cut(pieces, house)
+			for p: PackedVector2Array in pieces:
+				roof_piece(p, planes[i], false)
+		# The cornice's top stops where the hip rises from it.
+		var foot_: Array = [region]
+		for pl: Vector3 in planes:
+			foot_ = meet(foot_, under(ring, pl))
+		for p: PackedVector2Array in foot_:
+			flat = cut(flat, p)
+	for p: PackedVector2Array in flat:
+		if not Geometry2D.is_polygon_clockwise(p):
+			roof_piece(p, ring, true)
+	# Each where its face meets the roof at 20 ft.
+	_wing_dormer(Vector2(123.8, 24.0), Vector2(0, -1))
+	_wing_dormer(Vector2(146.0, 23.4), Vector2(0, -1))
+	_wing_dormer(Vector2(124.3, 38.4), Vector2(0, 1))
+	_wing_dormer(Vector2(153.0, 31.2), Vector2(1, 0))
 
 
 ## The pantry's roof: a cone's quarter falling from the house's corner at
