@@ -135,6 +135,15 @@ func _orthos(world: TwainMap) -> void:
 	world.grounds.visible = false
 	world.player.visible = false
 	var only := OS.get_environment("FLOWSTATE_TW_ORTHO")
+	var ops_out: Array = []
+	for d: Dictionary in world.house.dressed:
+		var c: Vector3 = d["c"]
+		var n: Vector3 = d["n"]
+		ops_out.append({"x": TwainHouse.OX - c.z / TwainHouse.FT, "z": TwainHouse.OZ + c.x / TwainHouse.FT, "nx": -n.z, "nz": n.x, "w": float(d["w"]) / TwainHouse.FT,
+			"y0": (float(d["y0"]) - TwainHouse.FL) / TwainHouse.FT, "yt": (float(d["yt"]) - TwainHouse.FL) / TwainHouse.FT, "kind": d["kind"]})
+	var fo := FileAccess.open("user://twain_openings.json", FileAccess.WRITE)
+	fo.store_string(JSON.stringify(ops_out))
+	fo.close()
 	for front: String in SHEETS:
 		if only != "all" and not only.split(",").has(front):
 			continue

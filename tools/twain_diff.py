@@ -114,6 +114,17 @@ def main() -> None:
             c0 = int((x0 - ORTHO_X[0]) * PX)
             c1 = int((x1 - ORTHO_X[0]) * PX)
             cmp[:, max(c0, 0):min(c1, w)] = False
+        # How well the sheet is registered: the sideways shift of the
+        # drawing that best fits the model's outline, above the ground.
+        best = (1e18, 0)
+        hard = cmp.copy()
+        hard[: int(2 * PX), :] = False
+        for sh in range(-6 * PX, 6 * PX + 1, 2):
+            sd = np.roll(sky_d, sh, axis=1)
+            bad = ((sd != sky_m) & hard).sum()
+            if bad < best[0]:
+                best = (bad, sh)
+        print("%s: best fit with the drawing moved %+.1f ft along the front" % (front, best[1] / PX))
         missing = (~sky_d) & sky_m & cmp
         extra = sky_d & (~sky_m) & cmp
         img = Image.open(os.path.join(sheet_dir, "m%02d.tif" % SHEETS[front])).convert("L")
