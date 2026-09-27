@@ -38,6 +38,7 @@ const LINEN := Color(0.92, 0.90, 0.84)
 const PLUSH := Color(0.40, 0.08, 0.08)
 const GREEN_BAIZE := Color(0.10, 0.34, 0.16)
 const DOOR_H := 8.0
+const ATTIC := 34.75          # the third floor's ceiling, where the roof allows
 
 ## The stair's geometry: its well in the hall's south-west corner, the
 ## flights running north and south in two bands either side of a narrow
@@ -131,6 +132,15 @@ static func _floors() -> void:
 				for q: Vector2 in piece:
 					pts.append(q)
 				hs.floor_poly(pts, y, oak, ceil, 1.0)
+	# Ceilings over the drawing room's bay and the dressing room's round,
+	# under their roofs.
+	var towers := TwainHouse.tower_plans()
+	for t: PackedVector2Array in [towers[2], towers[3]]:
+		for piece: PackedVector2Array in TwainHouse.cut([t], rect):
+			var pts: Array = []
+			for q: Vector2 in piece:
+				pts.append(q)
+			hs.floor_poly(pts, TwainHouse.EAVE, ceil, ceil, 0.4)
 
 
 ## ---- walls between rooms ----------------------------------------------------
@@ -188,7 +198,7 @@ static func _to_roof(f: Transform3D, a: Vector2, b: Vector2, length: float, y0: 
 		var t0 := float(i) / strips
 		var t1 := float(i + 1) / strips
 		var roof := minf(hs.roof_y(a.lerp(b, t0)), hs.roof_y(a.lerp(b, t1)))
-		roof = minf(roof, hs.roof_y(a.lerp(b, (t0 + t1) / 2.0)))
+		roof = minf(minf(roof, hs.roof_y(a.lerp(b, (t0 + t1) / 2.0))), ATTIC)
 		if roof < y0 + 0.2:
 			continue
 		k.wall(key, f, u0, u1, h(y0), h(roof) - 0.03, t, col, mine, 1000.0 if solid else -1000.0)
@@ -263,7 +273,7 @@ static func room(poly: Array, y0: float, y1: float, key: String, wall: Color, da
 			k.wall(key, f, 0.0, length, h(y0), h(y1), 0.02, wall, mine, -1000.0)
 		else:
 			_to_roof(f, a, b, length, y0, 0.02, wall, mine, key, false)
-			top = y0 + 8.5
+			top = ATTIC
 		if dado > 0.0:
 			var fd := f0 * Transform3D(Basis(), Vector3(0, 0, 0.03))
 			k.wall("wall", fd, 0.0, length, h(y0), h(y0 + dado), 0.03, wood, mine, -1000.0)
@@ -344,64 +354,62 @@ static func ceiling(poly: Array, y: float, col: Color, ribs := 0.0) -> void:
 			z += ribs
 
 
+## A room's outline: the part of the rectangle x0..x1, z0..z1 (survey
+## feet, from the partitions' faces) inside the outer walls.
+static func region(x0: float, x1: float, z0: float, z1: float) -> Array:
+	var r := PackedVector2Array([Vector2(x0, z0), Vector2(x1, z0), Vector2(x1, z1), Vector2(x0, z1)])
+	var best := PackedVector2Array()
+	for q: PackedVector2Array in Geometry2D.intersect_polygons(r, _inner):
+		if absf(TwainHouse.signed_area(q)) > absf(TwainHouse.signed_area(best)):
+			best = q
+	var out: Array = []
+	for p: Vector2 in best:
+		out.append(p)
+	return out
+
+
+static var _inner := PackedVector2Array()
+
+
 static func _rooms() -> void:
-	var X0 := TwainHouse.MX0 + 1.0
-	var X1 := TwainHouse.MX1 - 1.0
-	var Z0 := TwainHouse.MZ0 + 1.0
+	_inner = TwainHouse.inner_plan()
 	var Z1 := TwainHouse.MZ1 - 1.0
 	var cy := F2 - 1.0
-	var alcove: Array[Vector2] = [Vector2(67.5, Z0), Vector2(67.5, 34.0), Vector2(70.9, 30.7), Vector2(75.5, 30.7), Vector2(78.9, 34.0),
-		Vector2(78.9, Z0)]
-	var bay: Array[Vector2] = [Vector2(X1, 65.0), Vector2(118.0, 65.0), Vector2(120.0, 67.0), Vector2(120.0, 72.0), Vector2(118.0, 74.0),
-		Vector2(X1, 74.0)]
-	var octagon: Array[Vector2] = [Vector2(72.15, 56.2), Vector2(72.15, 70.55), Vector2(52.0, 70.55), Vector2(48.5, 66.4), Vector2(48.5, 60.8),
-		Vector2(52.7, 56.2)]
 	# The library: the alcove west, the south end open to the conservatory.
-	var library: Array[Vector2] = [Vector2(X0, Z0)]
-	library.append_array(alcove)
-	library.append_array([Vector2(87.75, Z0), Vector2(87.75, 55.7), Vector2(X0, 55.7)])
-	room(library, 0.0, cy, "stencil", TwainHouse.st(Color(0.14, 0.26, 0.28), 3), 3.0)
-	room([Vector2(88.25, Z0), Vector2(X1, Z0), Vector2(X1, 55.7), Vector2(88.25, 55.7)], 0.0, cy, "stencil",
-		TwainHouse.st(Color(0.36, 0.13, 0.08), 4), 3.2)
+	room(region(0.0, 87.75, 0.0, 55.7), 0.0, cy, "stencil", TwainHouse.st(Color(0.14, 0.26, 0.28), 3), 3.0)
+	room(region(88.25, 200.0, 0.0, 55.7), 0.0, cy, "stencil", TwainHouse.st(Color(0.36, 0.13, 0.08), 4), 3.2)
 	var hall: Array[Vector2] = [Vector2(72.65, 56.2), Vector2(95.7, 56.2), Vector2(95.7, Z1), Vector2(75.75, Z1), Vector2(75.75, 71.05),
 		Vector2(72.65, 71.05)]
 	room(hall, 0.0, cy, "stencil", TwainHouse.st(Color(0.46, 0.10, 0.07), 1), 4.6)
 	ceiling(hall, cy, TwainHouse.st(Color(0.40, 0.12, 0.08), 5), 4.0)
-	var drawing: Array[Vector2] = [Vector2(96.2, 56.2), Vector2(X1, 56.2)]
-	drawing.append_array(bay)
-	drawing.append_array([Vector2(X1, Z1), Vector2(96.2, Z1)])
+	var drawing := region(96.2, 200.0, 56.2, 100.0)
 	room(drawing, 0.0, cy, "stencil", TwainHouse.st(Color(0.80, 0.52, 0.44), 2), 0.0, Color(0.55, 0.42, 0.30))
 	ceiling(drawing, cy, TwainHouse.st(Color(0.86, 0.72, 0.62), 2))
+	var octagon := region(0.0, 72.15, 56.2, 70.55)
 	room(octagon, 0.0, cy, "stencil", TwainHouse.st(Color(0.48, 0.20, 0.14), 6), 0.0, MAHOGANY)
-	var dressing: Array[Vector2] = [Vector2(61.25, 71.05), Vector2(61.25, Z1)]
-	for i in 11:
-		dressing.append(TwainHouse._arc_point(TwainHouse.DRESS_C, 5.6, 90.0 + 170.0 * i / 10.0))
-	room(dressing, 0.0, cy, "stencil", TwainHouse.st(Color(0.62, 0.58, 0.46), 6), 0.0, MAHOGANY)
-	room([Vector2(61.75, 71.05), Vector2(75.25, 71.05), Vector2(75.25, Z1), Vector2(61.75, Z1)], 0.0, cy, "wall",
+	room(region(0.0, 61.25, 71.05, 100.0), 0.0, cy, "stencil", TwainHouse.st(Color(0.62, 0.58, 0.46), 6), 0.0, MAHOGANY)
+	room(region(61.75, 75.25, 71.05, 100.0), 0.0, cy, "wall",
 		c(Color(0.80, 0.78, 0.70), CourthouseKit.K_TILE), 4.0, WALNUT.lightened(0.1))
 	# The second floor.
 	var cy2 := F3 - 1.0
-	var school: Array[Vector2] = [Vector2(X0, Z0)]
-	school.append_array(alcove)
-	school.append_array([Vector2(79.05, Z0), Vector2(79.05, 55.7), Vector2(X0, 55.7)])
-	room(school, F2, cy2, "stencil", TwainHouse.st(Color(0.58, 0.60, 0.46), 6), 3.0, OAK.darkened(0.2))
-	room([Vector2(87.25, Z0), Vector2(100.5, Z0), Vector2(100.5, 55.7), Vector2(87.25, 55.7)], F2, cy2, "stencil",
+	room(region(0.0, 79.05, 0.0, 55.7), F2, cy2, "stencil", TwainHouse.st(Color(0.58, 0.60, 0.46), 6), 3.0, OAK.darkened(0.2))
+	room(region(87.25, 100.5, 0.0, 55.7), F2, cy2, "stencil",
 		TwainHouse.st(Color(0.50, 0.56, 0.62), 6), 0.0, WALNUT)
 	room(octagon, F2, cy2, "stencil", TwainHouse.st(Color(0.70, 0.60, 0.50), 6), 0.0, OAK.darkened(0.15))
-	room([Vector2(67.95, 71.05), Vector2(85.4, 71.05), Vector2(85.4, Z1), Vector2(67.95, Z1)], F2, cy2, "stencil",
+	room(region(67.95, 85.4, 71.05, 100.0), F2, cy2, "stencil",
 		TwainHouse.st(Color(0.62, 0.52, 0.56), 6), 0.0, WALNUT)
-	var bedroom: Array[Vector2] = [Vector2(97.2, 58.75), Vector2(X1, 58.75)]
-	bedroom.append_array(bay)
-	bedroom.append_array([Vector2(X1, Z1), Vector2(97.2, Z1)])
-	room(bedroom, F2, cy2, "stencil", TwainHouse.st(Color(0.50, 0.36, 0.30), 6), 0.0, WALNUT)
+	room(region(97.2, 200.0, 58.75, 100.0), F2, cy2, "stencil", TwainHouse.st(Color(0.50, 0.36, 0.30), 6), 0.0, WALNUT)
 	var hall2: Array[Vector2] = [Vector2(72.65, 56.2), Vector2(96.7, 56.2), Vector2(96.7, 70.55), Vector2(72.65, 70.55)]
 	room(hall2, F2, cy2, "stencil", TwainHouse.st(Color(0.46, 0.10, 0.07), 1), 4.6)
 	ceiling(hall2, cy2, TwainHouse.st(Color(0.40, 0.12, 0.08), 5), 4.0)
-	# The third floor: the billiard room and the stair hall.
-	room([Vector2(X0, 41.2), Vector2(89.25, 41.2), Vector2(89.25, 55.7), Vector2(X0, 55.7)], F3, -1.0, "stencil",
-		TwainHouse.st(Color(0.62, 0.50, 0.30), 3), 3.0, WALNUT)
-	room([Vector2(72.65, 56.2), Vector2(96.75, 56.2), Vector2(96.75, 71.75), Vector2(72.65, 71.75)], F3, -1.0, "stencil",
-		TwainHouse.st(Color(0.46, 0.10, 0.07), 1), 3.0)
+	# The third floor: the billiard room and the stair hall, under a flat
+	# ceiling where the roof stands higher.
+	var billiard: Array = [Vector2(TwainHouse.MX0 + 1.0, 41.2), Vector2(89.25, 41.2), Vector2(89.25, 55.7), Vector2(TwainHouse.MX0 + 1.0, 55.7)]
+	var hall3: Array = [Vector2(72.65, 56.2), Vector2(96.75, 56.2), Vector2(96.75, 71.75), Vector2(72.65, 71.75)]
+	room(billiard, F3, -1.0, "stencil", TwainHouse.st(Color(0.62, 0.50, 0.30), 3), 3.0, WALNUT)
+	room(hall3, F3, -1.0, "stencil", TwainHouse.st(Color(0.46, 0.10, 0.07), 1), 3.0)
+	for r: Array in [billiard, hall3]:
+		_attic_ceiling(PackedVector2Array(r))
 	# The service wing's rooms, seen through its windows.
 	var wing: Array[Vector2] = [Vector2(114.0, 23.3), Vector2(137.0, 23.3), Vector2(137.0, 20.8), Vector2(154.5, 20.8), Vector2(154.5, 42.8),
 		Vector2(114.0, 42.8)]
@@ -412,6 +420,27 @@ static func _rooms() -> void:
 		pantry.append(TwainHouse._arc_point(TwainHouse.PANTRY_C, TwainHouse.PANTRY_R - 1.0, 180.0 + 90.0 * (i + 1) / 9.0))
 	pantry.append(Vector2(112.0, TwainHouse.MZ0 - 0.2))
 	room(pantry, 0.0, 11.0, "wall", c(Color(0.80, 0.76, 0.64), CourthouseKit.K_PLASTER), 3.0, Color(0.40, 0.30, 0.20))
+
+
+## A third-floor room's flat ceiling at ATTIC: where the roof stands
+## higher than it (under the flat of the hip, or a gable's ridge).
+static func _attic_ceiling(room_poly: PackedVector2Array) -> void:
+	var flat := Vector3(0, 0, ATTIC)
+	var high: Array = [hs.roof_rect]
+	for pl: Vector3 in hs.hip_planes:
+		high = TwainHouse.meet(high, TwainHouse.under(flat, pl))
+	var pieces: Array = TwainHouse.meet(high, room_poly)
+	for g: Dictionary in hs.gable_slopes:
+		var up := TwainHouse.meet([g["poly"]], TwainHouse.under(flat, g["plane"] as Vector3))
+		for hp: PackedVector2Array in high:
+			up = TwainHouse.cut(up, hp)
+		pieces.append_array(TwainHouse.meet(up, room_poly))
+	var ceil := c(CEIL, CourthouseKit.K_PLASTER)
+	for p: PackedVector2Array in pieces:
+		var pts: Array = []
+		for q: Vector2 in p:
+			pts.append(q)
+		hs.floor_poly(pts, ATTIC + 0.4, ceil, ceil, 0.4, false)
 
 
 ## ---- the stair ------------------------------------------------------------------
@@ -524,16 +553,24 @@ static func _balustrade(a: Vector3, b: Vector3) -> void:
 
 
 ## A twisted column of walnut from foot up `tall` metres: a square base,
-## a shaft turned in a spiral, a carved capital.
+## a shaft of two strands wound round a core, a carved capital.
 static func _twist(foot: Vector3, tall: float) -> void:
 	var wood := c(WALNUT, CourthouseKit.K_WOOD)
 	k.box("wall", Transform3D(), foot + Vector3(0, 0.45, 0), Vector3(0.24, 0.9, 0.24), wood)
-	var n := int((tall - 1.3) / 0.08)
-	for i in n:
-		var y := 0.9 + i * 0.08
-		var a := i * 0.7
-		var off := Vector3(cos(a), 0, sin(a)) * 0.025
-		k.m.cylinder("wall", Transform3D(Basis(), foot + Vector3(0, y + 0.04, 0) + off), 0.06, 0.06, 0.085, 6, wood, false)
+	var y0 := 0.9
+	var y1 := tall - 0.45
+	k.m.cylinder("wall", Transform3D(Basis(), foot + Vector3(0, (y0 + y1) / 2.0, 0)), 0.035, 0.035, y1 - y0, 6, wood, false)
+	var pitch := 0.28
+	var steps := int((y1 - y0) / pitch * 10.0)
+	for strand in 2:
+		var prev := Vector3.ZERO
+		for i in steps + 1:
+			var t := float(i) / steps
+			var a := TAU * (y1 - y0) * t / pitch + PI * strand
+			var p := foot + Vector3(cos(a) * 0.04, y0 + (y1 - y0) * t, sin(a) * 0.04)
+			if i > 0:
+				k.m.bar("wall", prev, p, 0.032, 5, wood)
+			prev = p
 	k.box("wall", Transform3D(), foot + Vector3(0, tall - 0.3, 0), Vector3(0.22, 0.3, 0.22), wood)
 	k.box("wall", Transform3D(), foot + Vector3(0, tall - 0.08, 0), Vector3(0.3, 0.16, 0.3), wood)
 	k.solid(Transform3D(), foot + Vector3(0, tall / 2.0, 0), Vector3(0.16, tall, 0.16))
@@ -684,7 +721,7 @@ static func fireplace(xf: Transform3D, wd: float, wood_col: Color, over: float, 
 			fb(xf, Vector3(s * (wd / 2.0 - 0.08), 1.29 + over / 2.0, 0.0), Vector3(0.12, over, 0.12), wood)
 		fb(xf, Vector3(0, 1.29 + over, 0.02), Vector3(wd + 0.1, 0.14, 0.2), wood)
 		if mirror:
-			fb(xf, Vector3(0, 1.29 + over / 2.0, -0.02), Vector3(wd - 0.3, over - 0.2, 0.02), c(Color(0.55, 0.60, 0.62), CourthouseKit.K_ENAMEL))
+			fb(xf, Vector3(0, 1.29 + over / 2.0, -0.02), Vector3(wd - 0.3, over - 0.2, 0.02), c(Color(0.20, 0.23, 0.24), CourthouseKit.K_ENAMEL))
 		else:
 			for i in 3:
 				fb(xf, Vector3((i - 1) * (wd - 0.3) / 3.0, 1.29 + over / 2.0, -0.02), Vector3((wd - 0.4) / 3.0, over - 0.25, 0.04),
@@ -748,14 +785,28 @@ static func rug(sx: float, sz: float, y: float, size: Vector2, field: Color, bor
 static func plant(sx: float, sz: float, y: float, tall: float, rng: RandomNumberGenerator) -> void:
 	var p := w(sx, sz, y)
 	k.m.cylinder("wall", Transform3D(Basis(), p + Vector3(0, 0.2, 0)), 0.18, 0.24, 0.4, 10, c(Color(0.55, 0.28, 0.18), CourthouseKit.K_TILE))
-	var leaf := c(Color(0.14, 0.30, 0.10), CourthouseKit.K_PAINT)
-	for i in 9:
-		var a := rng.randf() * TAU
-		var tilt := rng.randf_range(0.4, 1.1)
-		var dir := Vector3(cos(a) * sin(tilt), cos(tilt), sin(a) * sin(tilt))
-		var tip := p + Vector3(0, 0.4, 0) + dir * tall
-		k.m.bar("wall", p + Vector3(0, 0.4, 0), tip, 0.01, 3, leaf)
-		k.m.sphere("wall", Transform3D(Basis().scaled(Vector3(1.0, 0.35, 1.0)), tip), tall * 0.28, 6, leaf)
+	k.m.cylinder("wall", Transform3D(Basis(), p + Vector3(0, 0.405, 0)), 0.17, 0.17, 0.01, 10, c(Color(0.22, 0.15, 0.10), CourthouseKit.K_TAR))
+	var fronds := rng.randi_range(9, 14)
+	for i in fronds:
+		var a := TAU * i / fronds + rng.randf_range(-0.2, 0.2)
+		var lift := rng.randf_range(0.5, 1.2)
+		var reach := tall * rng.randf_range(0.7, 1.1)
+		var tone := Color(0.14, 0.30, 0.10).lightened(rng.randf_range(-0.05, 0.1))
+		var leaf := c(tone, CourthouseKit.K_PAINT)
+		var prev := p + Vector3(0, 0.4, 0)
+		var dir := Vector3(cos(a), 0, sin(a))
+		var side := Vector3(-dir.z, 0, dir.x)
+		var segs := 5
+		for j in segs:
+			var t := float(j + 1) / segs
+			var next := p + Vector3(0, 0.4, 0) + dir * reach * t + Vector3(0, reach * (lift * t - 0.9 * t * t), 0)
+			var wide := 0.07 * sin(PI * (t - 0.5 / segs)) + 0.015
+			var n := (next - prev).cross(side).normalized()
+			if n.y < 0.0:
+				n = -n
+			k.m.quad("wall", prev - side * wide, prev + side * wide, next + side * wide * 0.8, next - side * wide * 0.8, n, leaf)
+			k.m.quad("wall", prev - side * wide, prev + side * wide, next + side * wide * 0.8, next - side * wide * 0.8, -n, leaf)
+			prev = next
 	k.solid(Transform3D(), p + Vector3(0, 0.3, 0), Vector3(0.45, 0.6, 0.45))
 
 
@@ -940,7 +991,7 @@ static func _conservatory() -> void:
 	var p := w(cen.x, cen.y, 0.0)
 	var stone := c(Color(0.80, 0.78, 0.72), CourthouseKit.K_STONE)
 	k.m.cylinder("wall", Transform3D(Basis(), p + Vector3(0, 0.2, 0)), 0.75, 0.8, 0.4, 20, stone)
-	k.m.cylinder("wall", Transform3D(Basis(), p + Vector3(0, 0.38, 0)), 0.68, 0.68, 0.02, 20, c(Color(0.18, 0.26, 0.26), CourthouseKit.K_ENAMEL))
+	k.m.cylinder("wall", Transform3D(Basis(), p + Vector3(0, 0.405, 0)), 0.68, 0.68, 0.01, 20, c(Color(0.16, 0.24, 0.25), CourthouseKit.K_ENAMEL))
 	k.m.cylinder("wall", Transform3D(Basis(), p + Vector3(0, 0.65, 0)), 0.06, 0.08, 0.6, 8, stone)
 	k.m.cylinder("wall", Transform3D(Basis(), p + Vector3(0, 0.98, 0)), 0.3, 0.1, 0.08, 14, stone)
 	k.m.bar("glass", p + Vector3(0, 1.0, 0), p + Vector3(0, 1.35, 0), 0.015, 5, Color(1, 1, 1, 1))

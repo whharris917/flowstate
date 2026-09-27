@@ -113,8 +113,7 @@ func build() -> void:
 	# are not drawn from far off.
 	var outer := k.m
 	k.m = TownMesh.new()
-	if OS.get_environment("FLOWSTATE_TW_DEBUG") != "nointerior":
-		TwainInterior.build(self)
+	TwainInterior.build(self)
 	var inner := k.m
 	k.m = outer
 	var mats := {"wall": wall_mat, "glass": glass_mat, "iron": iron_mat, "lamp": lamp_mat, "stencil": stencil_mat,
@@ -527,8 +526,8 @@ func _eave(a: Vector2, b: Vector2, inside: Vector2, y: float, out: float) -> voi
 ## block, the dining room's on the north front split round the window
 ## over its fireplace, the Langdon room's on the west front, the kitchen's.
 func _chimneys() -> void:
-	_chimney(Vector2(71.5, 55.6), Vector2(5.0, 3.2), 30.0, 48.5)
-	_chimney(Vector2(96.0, 69.0), Vector2(3.2, 5.0), 30.0, 47.5)
+	_chimney(Vector2(71.5, 55.6), Vector2(5.0, 3.2), F3, 48.5)
+	_chimney(Vector2(96.0, 69.0), Vector2(3.2, 5.0), F3, 47.5)
 	_chimney(Vector2(101.2, 38.6), Vector2(3.0, 3.2), 24.0, 45.0)
 	_chimney(Vector2(133.0, 31.0), Vector2(3.0, 3.0), 20.0, 38.0)
 	# The dining room's: two flues up the outside of the north wall either
@@ -742,6 +741,9 @@ func _roofs() -> void:
 	cross_gable(Vector2(94.0, MZ1), Vector2(MX1 + 0.5, MZ1), Vector2(104.0, 70.0))
 	cross_gable(Vector2(MX1, 43.0), Vector2(MX1, 61.0), Vector2(100.0, 52.0))
 	cross_gable(Vector2(96.0, MZ0), Vector2(106.0, MZ0), Vector2(101.0, 50.0))
+	# The towers and bays rise through the main roof's eaves: no roof over
+	# them but their own.
+	var towers := tower_plans()
 	# The hip's faces, each where it is the lowest of the hip's planes, less
 	# where a gable stands over it.
 	for i in hip_planes.size():
@@ -753,6 +755,8 @@ func _roofs() -> void:
 			var hidden := meet([g["poly"]], under(hip_planes[i], g["plane"] as Vector3))
 			for hole: PackedVector2Array in hidden:
 				pieces = cut(pieces, hole)
+		for t: PackedVector2Array in towers:
+			pieces = cut(pieces, t)
 		for p: PackedVector2Array in pieces:
 			roof_piece(p, hip_planes[i], i == 4)
 	# The gables' slopes, less where they sink under the hip.
@@ -763,19 +767,16 @@ func _roofs() -> void:
 		var pieces: Array = [g["poly"]]
 		for hole: PackedVector2Array in sunk:
 			pieces = cut(pieces, hole)
+		for t: PackedVector2Array in towers:
+			pieces = cut(pieces, t)
 		for p: PackedVector2Array in pieces:
 			roof_piece(p, g["plane"] as Vector3, false)
 	# The eaves' fascia round the hip.
 	_fascia([w(xa, za, ye), w(xb, za, ye), w(xb, zb, ye), w(xa, zb, ye)])
-	# The dressing room's round: a half cone into the main roof.
-	var apex := w(58.5, 77.3, 32.0)
-	var prev := _arc_point(DRESS_C, DRESS_R + 1.4, 90.0)
-	for i in range(1, 13):
-		var q := _arc_point(DRESS_C, DRESS_R + 1.4, 90.0 + 160.0 * i / 12.0)
-		slope(w(prev.x, prev.y, EAVE - 1.2), w(q.x, q.y, EAVE - 1.2), apex, apex)
-		prev = q
-	# The drawing room's bay: a cone of eight sides over its half octagon.
-	_cone(Vector2(117.0, 69.5), 6.2, EAVE - 1.0, 32.0, 8, PI / 8.0)
+	# The dressing room's round and the drawing room's bay: half cones
+	# leaning on the main walls.
+	_half_cone(DRESS_C, DRESS_R + 1.4, 90.0, 250.0, 12, Vector2(58.5, 77.3), 33.0)
+	_half_cone(Vector2(MX1, 69.5), 7.9, -90.0, 90.0, 8, Vector2(MX1 + 0.5, 69.5), 33.0)
 	# The service wing's hip, and the pantry's flat with its railing.
 	hip(113.0, 155.5, 20.5, 43.8, 18.0, 1.4, 40.0)
 	var flat: Array[Vector2] = []
@@ -790,6 +791,36 @@ func _roofs() -> void:
 	# doors.
 	_balcony([Vector2(MX0, 41.0), Vector2(55.2, 41.0), Vector2(55.2, 52.6), Vector2(MX0, 52.6)], F3)
 	_balcony([Vector2(59.0, MZ1), Vector2(59.0, 86.3), Vector2(72.0, 86.3), Vector2(72.0, MZ1)], F3 + 0.5)
+
+
+## The plans of what rises through the main roof's eaves: the library's
+## alcove, the guest room's octagon, the dressing room's round, the
+## drawing room's bay; each as far in as the main walls' inner faces.
+static func tower_plans() -> Array:
+	var out: Array = []
+	out.append(PackedVector2Array([Vector2(66.5, MZ0 + 1.0), Vector2(66.5, 33.6), Vector2(70.5, 29.7), Vector2(75.9, 29.7), Vector2(79.9, 33.6),
+		Vector2(79.9, MZ0 + 1.0)]))
+	out.append(PackedVector2Array([Vector2(MX0 + 1.0, 55.8), Vector2(52.3, 55.8), Vector2(47.5, 60.4), Vector2(47.5, 66.8), Vector2(52.5, 71.1),
+		Vector2(MX0 + 1.0, 71.1)]))
+	var round := PackedVector2Array()
+	for i in 13:
+		round.append(_arc_point(DRESS_C, DRESS_R, 90.0 + 160.0 * i / 12.0))
+	round.append(Vector2(MX0 + 1.0, DRESS_C.y - DRESS_R))
+	round.append(Vector2(MX0 + 1.0, DRESS_C.y + DRESS_R))
+	out.append(round)
+	out.append(PackedVector2Array([Vector2(MX1 - 1.0, 64.0), Vector2(118.5, 64.0), Vector2(121.0, 66.5), Vector2(121.0, 72.5), Vector2(118.5, 75.0),
+		Vector2(MX1 - 1.0, 75.0)]))
+	return out
+
+
+## The house's rooms' outline: the outer walls' inner faces at the first
+## and second floors.
+static func inner_plan() -> PackedVector2Array:
+	var best := PackedVector2Array()
+	for q: PackedVector2Array in Geometry2D.offset_polygon(perimeter(), -T, Geometry2D.JOIN_MITER):
+		if absf(signed_area(q)) > absf(signed_area(best)):
+			best = q
+	return best
 
 
 ## A piece of the roof over a plan polygon on a plane: slate in courses of
@@ -942,6 +973,22 @@ func gable(a: Vector2, b: Vector2, inward: Vector2, depth: float, y0: float, y1:
 	k.m.bar("wall", tip, tip + Vector3(0, 1.1, 0), 0.05, 6, trim)
 	k.m.sphere("wall", Transform3D(Basis(), tip + Vector3(0, 0.55, 0)), 0.1, 8, trim)
 	k.m.bar("wall", tip, tip - Vector3(0, 0.6, 0), 0.06, 6, trim)
+
+
+## A half cone over a round or a bay: its eave on the circle cen, r (survey
+## feet) from angle a0 to a1 at the main eave, rising to a point at apex,
+## y1 feet up, against the main roof.
+func _half_cone(cen: Vector2, r: float, a0: float, a1: float, n: int, apex2: Vector2, y1: float) -> void:
+	var apex := w(apex2.x, apex2.y, y1)
+	var ring: Array = []
+	for i in n + 1:
+		var q := _arc_point(cen, r, lerpf(a0, a1, float(i) / n))
+		ring.append(w(q.x, q.y, EAVE + 0.1))
+	for i in n:
+		slope(ring[i], ring[i + 1], apex, apex)
+	var trim := c(TRIM, CourthouseKit.K_PAINT)
+	for i in n:
+		k.m.bar("wall", (ring[i] as Vector3) - Vector3(0, 0.1, 0), (ring[i + 1] as Vector3) - Vector3(0, 0.1, 0), 0.09, 4, trim)
 
 
 ## An octagonal cone or spire from ring y0 to point y1 (feet), radius r
@@ -1137,7 +1184,7 @@ func _ring3(pts: Array[Vector2], y: float) -> Array:
 ## boards on a latticed skirt, posts with braces, crossed railings, flat
 ## roofs on a bracketed plate; steps down to the drive.
 func _porches() -> void:
-	var deck := -0.6
+	var deck := -0.03
 	var ombra: Array[Vector2] = [Vector2(48.4, 67.3), Vector2(29.2, 67.3), Vector2(22.8, 74.4), Vector2(22.8, 84.0), Vector2(29.3, 90.2),
 		Vector2(48.4, 90.2)]
 	var veranda: Array[Vector2] = [Vector2(48.4, 81.5), Vector2(96.3, MZ1 - 0.5), Vector2(96.3, 92.8), Vector2(84.8, 92.8), Vector2(84.8, 90.0),
@@ -1156,7 +1203,7 @@ func _porches() -> void:
 	for poly: Array in [ombra, veranda]:
 		_skirt(poly, deck)
 	# The ombra: posts round its outer edge, the house side open.
-	_porch_edge(ombra.slice(0, 6), deck, 10.2, [])
+	_porch_edge(ombra.slice(0, 6), deck, 10.2, [Vector2(22.8, 79.0)])
 	var roof_o: Array[Vector2] = [Vector2(49.0, 65.5), Vector2(28.4, 65.5), Vector2(21.0, 73.6), Vector2(21.0, 84.8), Vector2(28.5, 92.0),
 		Vector2(49.0, 92.0)]
 	_porch_roof(roof_o, 10.8)
