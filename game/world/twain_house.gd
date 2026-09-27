@@ -67,6 +67,16 @@ var ops: Array[Dictionary] = []
 ## The gas lights, which are lit as the day goes: {light, energy}.
 var lights: Array[Dictionary] = []
 var stats: Dictionary = {}
+## What the audit (world/twain_audit.gd) checks the model against: the
+## rooms {name, poly (survey plan), y0, y1 (feet; y1 < 0 up to the roof)},
+## the furniture {name, xf (world, the box's middle), size, kind: "floor"
+## or "wall"}, the doorways {center, normal, width, outside}; and, when
+## FLOWSTATE_TW_AUDIT is set, the meshes as built {outer, inner,
+## furniture}.
+var rooms: Array[Dictionary] = []
+var items: Array[Dictionary] = []
+var doors: Array[Dictionary] = []
+var meshes: Dictionary = {}
 
 
 ## The world point of a survey point (feet: x north, z east, y over the
@@ -115,17 +125,24 @@ func build() -> void:
 	k.m = TownMesh.new()
 	TwainInterior.build(self)
 	var inner := k.m
+	k.m = TownMesh.new()
+	TwainInterior.furnish()
+	var furniture := k.m
 	k.m = outer
+	if OS.get_environment("FLOWSTATE_TW_AUDIT") != "":
+		meshes = {"outer": outer, "inner": inner, "furniture": furniture}
 	var mats := {"wall": wall_mat, "glass": glass_mat, "iron": iron_mat, "lamp": lamp_mat, "stencil": stencil_mat,
 		"flame": flame_mat}
 	var drawn: Array = outer.commit(self, mats, ["wall", "iron"]).values()
-	for mi: MeshInstance3D in inner.commit(self, mats, []).values():
-		mi.visibility_range_end = 120.0
-		drawn.append(mi)
+	for tm: TownMesh in [inner, furniture]:
+		for mi: MeshInstance3D in tm.commit(self, mats, []).values():
+			mi.visibility_range_end = 120.0
+			drawn.append(mi)
 	for mi: MeshInstance3D in drawn:
 		if mi.name.ends_with("glass"):
 			mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-	stats = {"triangles": outer.triangles + inner.triangles, "inside": inner.triangles, "solids": k.solid_count,
+	stats = {"triangles": outer.triangles + inner.triangles + furniture.triangles, "inside": inner.triangles + furniture.triangles,
+		"solids": k.solid_count,
 		"ms": Time.get_ticks_msec() - t0}
 
 
@@ -168,7 +185,7 @@ func _op(sx: float, sz: float, wd: float, sill: float, head: float, kind := "win
 ## 21.5; the doors are 8.5 ft.
 func _openings() -> void:
 	# The library's alcove, west, and the school room over it.
-	_op(73.2, 29.7, 3.6, 1.2, 10.0)
+	_op(73.2, 29.7, 3.6, 1.7, 10.0)
 	_op(68.5, 31.65, 2.4, 2.5, 10.0)
 	_op(77.9, 31.65, 2.4, 2.5, 10.0)
 	_op(73.2, 29.7, 3.4, 15.5, 21.5)
@@ -176,6 +193,8 @@ func _openings() -> void:
 	_op(77.9, 31.65, 2.2, 15.5, 21.5)
 	# The west front: the dining room; upstairs the bath, the Langdon room.
 	_op(92.2, MZ0, 4.2, 2.5, 10.0)
+	# The dining room's door to the butler's pantry.
+	_op(107.5, MZ0, 3.0, 0.0, 8.0, "open", "flat", false)
 	_op(62.5, MZ0, 3.0, 15.5, 21.5)
 	_op(83.0, MZ0, 2.8, 15.5, 21.5)
 	_op(90.0, MZ0, 3.0, 15.5, 21.5)
@@ -427,7 +446,10 @@ func _dress(f: Transform3D, o: Dictionary) -> void:
 		for s: float in [-1.0, 1.0]:
 			k.box("wall", f, Vector3(u + s * (wd / 2.0 - 0.04), (y0 + float(o["ys"])) / 2.0, -0.14), Vector3(0.08, float(o["ys"]) - y0, 0.08), sash)
 		k.box("wall", f, Vector3(u, (y0 + float(o["ys"])) / 2.0, -0.14), Vector3(0.06, float(o["ys"]) - y0, 0.07), sash)
-	elif kind == "door":
+	if kind == "door" or kind == "french" or kind == "open":
+		doors.append({"center": f * Vector3(u, (y0 + float(o["ys"])) / 2.0, -T * FT / 2.0), "normal": f.basis.z,
+			"along": f.basis.x, "width": wd, "y0": y0, "y1": float(o["ys"]), "outside": true})
+	if kind == "door":
 		# The doors stand open, folded back inside the reveal.
 		for s: float in [-1.0, 1.0]:
 			var leaf := wd / 2.0 if wd > 1.1 else wd
@@ -795,21 +817,21 @@ func _roofs() -> void:
 
 ## The plans of what rises through the main roof's eaves: the library's
 ## alcove, the guest room's octagon, the dressing room's round, the
-## drawing room's bay; each as far in as the main walls' inner faces.
+## drawing room's bay; each to the main walls' outer faces.
 static func tower_plans() -> Array:
 	var out: Array = []
-	out.append(PackedVector2Array([Vector2(66.5, MZ0 + 1.0), Vector2(66.5, 33.6), Vector2(70.5, 29.7), Vector2(75.9, 29.7), Vector2(79.9, 33.6),
-		Vector2(79.9, MZ0 + 1.0)]))
-	out.append(PackedVector2Array([Vector2(MX0 + 1.0, 55.8), Vector2(52.3, 55.8), Vector2(47.5, 60.4), Vector2(47.5, 66.8), Vector2(52.5, 71.1),
-		Vector2(MX0 + 1.0, 71.1)]))
+	out.append(PackedVector2Array([Vector2(66.5, MZ0), Vector2(66.5, 33.6), Vector2(70.5, 29.7), Vector2(75.9, 29.7), Vector2(79.9, 33.6),
+		Vector2(79.9, MZ0)]))
+	out.append(PackedVector2Array([Vector2(MX0, 55.8), Vector2(52.3, 55.8), Vector2(47.5, 60.4), Vector2(47.5, 66.8), Vector2(52.5, 71.1),
+		Vector2(MX0, 71.1)]))
 	var round := PackedVector2Array()
 	for i in 13:
 		round.append(_arc_point(DRESS_C, DRESS_R, 90.0 + 160.0 * i / 12.0))
-	round.append(Vector2(MX0 + 1.0, DRESS_C.y - DRESS_R))
-	round.append(Vector2(MX0 + 1.0, DRESS_C.y + DRESS_R))
+	round.append(Vector2(MX0, DRESS_C.y - DRESS_R))
+	round.append(Vector2(MX0, DRESS_C.y + DRESS_R))
 	out.append(round)
-	out.append(PackedVector2Array([Vector2(MX1 - 1.0, 64.0), Vector2(118.5, 64.0), Vector2(121.0, 66.5), Vector2(121.0, 72.5), Vector2(118.5, 75.0),
-		Vector2(MX1 - 1.0, 75.0)]))
+	out.append(PackedVector2Array([Vector2(MX1, 64.0), Vector2(118.5, 64.0), Vector2(121.0, 66.5), Vector2(121.0, 72.5), Vector2(118.5, 75.0),
+		Vector2(MX1, 75.0)]))
 	return out
 
 
@@ -1088,41 +1110,52 @@ func floor_poly(pts: Array, y: float, top: Color, under: Color, thick := 0.8, so
 ## smaller deck under a tall spire. Railings round both, open to the
 ## house on its side.
 func _towers() -> void:
-	_deck_tower(Vector2(54.0, 63.5), 8.8, F3 + 0.6, 34.0, 37.5, [7, 0])
-	_deck_tower(Vector2(73.2, 34.0), 6.0, F3 + 0.6, 33.0, 48.5, [1])
+	# Each deck on its tower's own outline, open on the house's side.
+	_deck_tower([Vector2(MX0, 55.8), Vector2(52.3, 55.8), Vector2(47.5, 60.4), Vector2(47.5, 66.8), Vector2(52.5, 71.1), Vector2(MX0, 71.1)],
+		F3 + 0.6, 34.0, Vector2(MX0 - 1.0, 63.45), 38.5)
+	_deck_tower([Vector2(66.5, MZ0), Vector2(66.5, 33.6), Vector2(70.5, 29.7), Vector2(75.9, 29.7), Vector2(79.9, 33.6), Vector2(79.9, MZ0)],
+		F3 + 0.6, 33.0, Vector2(73.2, 34.2), 48.5)
 
 
-func _deck_tower(cen: Vector2, r: float, floor_y: float, eave_y: float, peak: float, open_sides: Array) -> void:
-	var sides := 8
-	var turn := PI / 8.0
-	var ring: Array[Vector2] = []
-	for i in sides:
-		var a := turn + TAU * i / sides
-		ring.append(cen + Vector2(cos(a), sin(a)) * r)
-	floor_poly(ring, floor_y, c(PORCH, HarborTown.K_PLANK), c(CEIL, CourthouseKit.K_PLASTER), 1.0)
+## An open deck on top of a tower whose outer walls run along `chain`
+## (survey plan, from the main wall round to the main wall): boards over
+## it, a post at each corner with brackets and a fret under the plate,
+## crossed railings between, and a roof rising from the plate to a point
+## at `apex` (plan), `peak` feet, its eaves standing out 1.6 ft.
+func _deck_tower(chain: Array[Vector2], floor_y: float, eave_y: float, apex: Vector2, peak: float) -> void:
+	floor_poly(chain, floor_y, c(PORCH, HarborTown.K_PLANK), c(CEIL, CourthouseKit.K_PLASTER), 1.0)
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
-	for i in sides:
-		var a := ring[i]
-		var b := ring[(i + 1) % sides]
+	var rise := h(eave_y) - h(floor_y)
+	for i in chain.size() - 1:
+		var a := chain[i]
+		var b := chain[i + 1]
 		var pa := w(a.x, a.y, floor_y)
 		var pb := w(b.x, b.y, floor_y)
-		# The posts, their brackets up to the plate.
-		k.box("wall", Transform3D(), (pa + w(a.x, a.y, eave_y)) / 2.0, Vector3(0.16, h(eave_y) - h(floor_y), 0.16), trim)
-		k.solid(Transform3D(), (pa + w(a.x, a.y, eave_y)) / 2.0, Vector3(0.16, h(eave_y) - h(floor_y), 0.16))
-		k.m.bar("wall", w(a.x, a.y, eave_y), w(b.x, b.y, eave_y), 0.1, 4, trim)
-		# A fret of sticks under the plate.
+		for post: Vector3 in [pa, pb]:
+			k.box("wall", Transform3D(), post + Vector3(0, rise / 2.0, 0), Vector3(0.16, rise, 0.16), trim)
+			k.solid(Transform3D(), post + Vector3(0, rise / 2.0, 0), Vector3(0.16, rise, 0.16))
+		k.m.bar("wall", pa + Vector3(0, rise, 0), pb + Vector3(0, rise, 0), 0.1, 4, trim)
 		for j in 7:
-			var t := (j + 0.5) / 7.0
-			var p := w(a.x, a.y, eave_y).lerp(w(b.x, b.y, eave_y), t)
+			var p := pa.lerp(pb, (j + 0.5) / 7.0) + Vector3(0, rise, 0)
 			k.m.bar("wall", p, p - Vector3(0, 0.45, 0), 0.018, 4, trim)
-		k.m.bar("wall", pa.lerp(pb, 0.0) + Vector3(0, h(eave_y) - h(floor_y) - 0.45, 0), pb + Vector3(0, h(eave_y) - h(floor_y) - 0.45, 0), 0.03, 4, trim)
+		k.m.bar("wall", pa + Vector3(0, rise - 0.45, 0), pb + Vector3(0, rise - 0.45, 0), 0.03, 4, trim)
 		var mid := pa.lerp(pb, 0.5)
-		for s: float in [0.0, 1.0]:
-			var post := pa if s == 0.0 else pb
-			k.m.bar("wall", post + Vector3(0, h(eave_y) - h(floor_y) - 0.8, 0), post.lerp(mid, 0.3) + Vector3(0, h(eave_y) - h(floor_y), 0), 0.035, 4, trim)
-		if not open_sides.has(i):
-			xrail(pa, pb, 0.95)
-	_cone(cen, r + 1.6, eave_y, peak, 8, turn)
+		for post: Vector3 in [pa, pb]:
+			k.m.bar("wall", post + Vector3(0, rise - 0.8, 0), post.lerp(mid, 0.3) + Vector3(0, rise, 0), 0.035, 4, trim)
+		xrail(pa, pb, 0.95)
+	# The roof: from the plate, standing out, up to its point.
+	var top := w(apex.x, apex.y, peak)
+	var ring: Array = []
+	for q: Vector2 in chain:
+		var out := (q - apex).normalized() * 1.6
+		ring.append(w(q.x + out.x, q.y + out.y, eave_y + 0.1))
+	for i in ring.size() - 1:
+		slope(ring[i], ring[i + 1], top, top)
+	for i in ring.size() - 1:
+		k.m.bar("wall", (ring[i] as Vector3) - Vector3(0, 0.1, 0), (ring[i + 1] as Vector3) - Vector3(0, 0.1, 0), 0.09, 4, trim)
+	k.m.bar("wall", top - Vector3(0, 0.2, 0), top + Vector3(0, 1.4, 0), 0.05, 6, trim)
+	k.m.sphere("wall", Transform3D(Basis(), top + Vector3(0, 0.7, 0)), 0.12, 8, trim)
+	k.m.bar("iron", top + Vector3(0, 1.4, 0), top + Vector3(0, 2.2, 0), 0.015, 4, IRON)
 
 
 ## ---- the conservatory --------------------------------------------------
