@@ -909,8 +909,10 @@ func _roofs() -> void:
 	var zb := MZ1 + over
 	# The main roof, from the roof plan and the elevations: steep slopes
 	# rising from each side's wall to a flat deck at 35.9 ft; over the west
-	# half the south and north gables meet in one ridge at 43.3 ft (the survey's 43'-3").
-	hip_planes = [Vector3(0, 1.6, WEST_TOP - 1.6 * MZ0), Vector3(0, -0.86, EAST_TOP + 0.86 * MZ1),
+	# half the south and north gables meet in one ridge at 43.3 ft (the
+	# survey's 43'-3"). On the west the steep slope rises from the wall's
+	# cornice until it meets the gables' roofs.
+	hip_planes = [Vector3(0, 2.5, WEST_TOP - 2.5 * MZ0), Vector3(0, -0.86, EAST_TOP + 0.86 * MZ1),
 		Vector3(1.05, 0, SOUTH_TOP - 1.05 * MX0), Vector3(-1.05, 0, NORTH_TOP + 1.05 * MX1),
 		Vector3(0, 0, DECK)]
 	roof_rect = PackedVector2Array([Vector2(xa, za), Vector2(xb, za), Vector2(xb, zb), Vector2(xa, zb)])
@@ -921,7 +923,9 @@ func _roofs() -> void:
 	# The west half of the main block is one long roof from the south
 	# gable to the north one, pitched at 45 degrees, its ridge the gables'
 	# peaks; each gable runs its ridge to the middle.
+	var first := gable_slopes.size()
 	cross_gable(Vector2(MX0, 37.8), Vector2(MX0, 57.0), Vector2(70.0, RIDGE_Z), TOP, 0.4, 33.1, SOUTH_TOP, 29.0, 3.0)
+	var south_end := gable_slopes.size()
 	# The two great east gables throw their roofs forward over their
 	# balconies: the southern 0.4 ft, the northern 3.6 (the south and north
 	# elevations' edges).
@@ -931,7 +935,24 @@ func _roofs() -> void:
 	cross_gable(Vector2(88.0, MZ1), Vector2(96.3, MZ1), Vector2(92.1, 70.0), 27.3, 0.6, 20.8, EAST_TOP)
 	# The north gable: 23 ft wide (the roof plan's outline, 36 to 59.5 with
 	# its eaves), its roof 5 ft forward over the balcony.
+	var north_start := gable_slopes.size()
 	cross_gable(Vector2(MX1, 37.8), Vector2(MX1, 57.0), Vector2(100.0, RIDGE_Z), TOP, 1.0, 33.1, NORTH_TOP, 28.5, 5.0)
+	# The two gables' roofs give way to the west slope where it is lower.
+	for i in range(first, gable_slopes.size()):
+		if i >= south_end and i < north_start:
+			continue
+		var g := gable_slopes[i]
+		var kept := meet([g["poly"]], under(g["plane"] as Vector3, hip_planes[0]))
+		g["poly"] = kept[0] if not kept.is_empty() else PackedVector2Array()
+	# The west slope runs on up over the deck's level to meet them.
+	var gw: Vector3 = gable_slopes[first]["plane"]
+	if gw.y < 0.0:
+		gw = gable_slopes[first + 1]["plane"]
+	var strip := meet([PackedVector2Array([Vector2(MX0 - 0.4, MZ0 - 1.4), Vector2(MX1 + 1.0, MZ0 - 1.4), Vector2(MX1 + 1.0, RIDGE_Z),
+		Vector2(MX0 - 0.4, RIDGE_Z)])], under(hip_planes[0], gw))
+	# (a hair above the hip's own west face, which gives way to it)
+	for p: PackedVector2Array in strip:
+		gable_slopes.append({"plane": hip_planes[0] + Vector3(0, 0, 0.02), "poly": p})
 	cross_gable(Vector2(95.5, MZ0), Vector2(109.0, MZ0), Vector2(102.2, 50.0), 39.3, 0.8, 29.55, WEST_TOP)
 	# The towers and bays rise through the main roof's eaves: no roof over
 	# them but their own.
