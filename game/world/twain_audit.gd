@@ -424,6 +424,9 @@ func _pokes() -> void:
 				var a := sf.v[sf.i[t]]
 				var b := sf.v[sf.i[t + 1]]
 				var c := sf.v[sf.i[t + 2]]
+				# The roof's plastered underside is a room's ceiling.
+				if group == "outer" and sf.n[sf.i[t]].y < -0.3:
+					continue
 				for p: Vector3 in _samples(a, b, c):
 					if group != "outer":
 						if _want("poke_out") or _want("poke"):
@@ -673,13 +676,44 @@ func _reach() -> void:
 			issue("reach", "%s has no floor the player can stand on" % r["name"], TwainHouse.w(0, 0), Vector3.INF)
 		elif got == 0:
 			issue("reach", "%s cannot be walked to from the front door" % r["name"], missed[0], eye_toward(missed[0], r), free)
-		elif missed.size() * CELL * CELL > 1.0:
-			# The largest cut-off patch.
+		else:
+			# The largest connected patch cut off; small gaps between chairs
+			# and the like are not worth a finding.
+			var patch := _largest_patch(missed)
+			if patch.size() * CELL * CELL < 1.0:
+				continue
+			missed = patch
 			var p := missed[0]
 			issue("reach", "%s: %.1f m² of floor cannot be walked to (cut off by furniture or a wall)" % [r["name"], missed.size() * CELL * CELL],
 				p, eye_toward(p, r), missed.size())
 	print("[audit] reach: walked %d places" % seen.size())
 	_reach_maps(seen)
+
+
+## The largest group of neighbouring places among `pts` (on the CELL grid).
+func _largest_patch(pts: Array[Vector3]) -> Array[Vector3]:
+	var by := {}
+	for p: Vector3 in pts:
+		by[Vector2i(floori(p.x / CELL), floori(p.z / CELL))] = p
+	var seen := {}
+	var best: Array[Vector3] = []
+	for key: Vector2i in by:
+		if seen.has(key):
+			continue
+		var group: Array[Vector3] = []
+		var stack: Array[Vector2i] = [key]
+		seen[key] = true
+		while not stack.is_empty():
+			var k0: Vector2i = stack.pop_back()
+			group.append(by[k0])
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var k1 := k0 + d
+				if by.has(k1) and not seen.has(k1):
+					seen[k1] = true
+					stack.append(k1)
+		if group.size() > best.size():
+			best = group
+	return best
 
 
 ## A map of each floor seen from above, a pixel to a place: grey where
@@ -777,13 +811,13 @@ func _fights() -> void:
 				var a := sf.v[sf.i[t]]
 				var b := sf.v[sf.i[t + 1]]
 				var c := sf.v[sf.i[t + 2]]
-				var nn := (b - a).cross(c - a)
-				var area := nn.length() / 2.0
+				var area := (b - a).cross(c - a).length() / 2.0
+				var nn := sf.n[sf.i[t]]
 				# Under the lawn nothing is seen.
 				if area < 0.002 or maxf(a.y, maxf(b.y, c.y)) < 0.02:
 					continue
 				# Faces that look the same way: a face against the back of another
-				# is never seen.
+				# is never seen. The mesh's own normal says which way it looks.
 				nn = nn.normalized()
 				var d := nn.dot(a)
 				var bk := [roundi(nn.x * 40.0), roundi(nn.y * 40.0), roundi(nn.z * 40.0), roundi(d / 0.003)]
@@ -860,7 +894,7 @@ func _fights() -> void:
 							cen += q
 						cen /= poly.size()
 						var p3 := n * (tris[ia][0] as Vector3).dot(n) + u * cen.x + v * cen.y
-						if _visible_face(p3, n):
+						if _visible_face(p3, n) and _eye_place(p3 + n * 0.3):
 							seen_pts += 1
 							at = p3
 					if seen_pts == 0:
@@ -874,7 +908,7 @@ func _fights() -> void:
 		var f: Array = found[key]
 		if float(f[4]) < 0.01:
 			continue
-		if OS.get_environment("FLOWSTATE_TW_AUDIT_DEBUG") != "" and issues.size() < 30:
+		if OS.get_environment("FLOWSTATE_TW_AUDIT_DEBUG") != "":
 			for tr: Array in f[5]:
 				print("[audit]   face %s col %s: %s | %s | %s  (%.3f %.3f %.3f)" % [tr[5], str(tr[4]), where(tr[0]), where(tr[1]), where(tr[2]), (tr[0] as Vector3).x, (tr[0] as Vector3).y, (tr[0] as Vector3).z])
 		var p := f[0] as Vector3
@@ -886,23 +920,33 @@ func _fights() -> void:
 
 
 ## Whether a face at p looking along n can be seen: the point just in
-## front of it must not be enclosed (rays from it in the six directions
-## meet the backs of surfaces in at least five) nor pressed against
-## something within 2 cm along n.
+## front of it is not enclosed (rays from it in the six directions meet the
+## backs of surfaces in at least five), and from it a clear 0.8 m opens in
+## at least one of five directions round n, so an eye could stand there.
 func _visible_face(p: Vector3, n: Vector3) -> bool:
 	var o := p + n * 0.004
-	var front := ray(o, o + n * 2.5, L_ARCH | L_FURN)
-	if not front.is_empty() and (front["position"] as Vector3).distance_to(p) < 0.02:
-		return false
-	# Looking out of the face it meets the inside of a solid: the face is in it.
-	if not front.is_empty() and (front["normal"] as Vector3).dot(n) > 0.0:
-		return false
 	var backs := 0
 	for d: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.FORWARD, Vector3.BACK]:
 		var hit := ray(o, o + d * 30.0, L_ARCH | L_FURN)
 		if not hit.is_empty() and (hit["normal"] as Vector3).dot(d) > 0.0:
 			backs += 1
-	return backs < 5
+	if backs >= 5:
+		return false
+	var u := n.cross(Vector3.UP if absf(n.y) < 0.9 else Vector3.RIGHT).normalized()
+	var v := n.cross(u)
+	for d: Vector3 in [n, (n + u * 0.7).normalized(), (n - u * 0.7).normalized(), (n + v * 0.7).normalized(), (n - v * 0.7).normalized()]:
+		var hit := ray(o, o + d * 0.8, L_ARCH | L_FURN)
+		if hit.is_empty():
+			return true
+	return false
+
+
+## Whether an eye could be at p: in a room, or outside the house.
+func _eye_place(p: Vector3) -> bool:
+	if not room_at(p).is_empty():
+		return true
+	var s := survey(p)
+	return not _in_footprint(Vector2(s.x, s.y)) or p.y > TwainHouse.h(house.roof_y(Vector2(s.x, s.y)))
 
 
 ## ---- the report --------------------------------------------------------------------

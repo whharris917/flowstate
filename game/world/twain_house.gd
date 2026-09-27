@@ -272,8 +272,8 @@ func _openings() -> void:
 	# gable, the small windows of carved marble either side; the east
 	# gables' windows; the north gable's.
 	_op(MX0, 46.8, 4.0, 24.0, 32.5, "french", "round")
-	_op(MX0, 41.5, 1.6, 26.5, 30.5, "win", "flat", false)
-	_op(MX0, 52.1, 1.6, 26.5, 30.5, "win", "flat", false)
+	_op(MX0, 43.0, 1.4, 25.3, 28.0, "win", "flat", false)
+	_op(MX0, 50.7, 1.4, 25.3, 28.0, "win", "flat", false)
 	_op(65.5, MZ1, 4.4, 24.5, 33.0, "french", "round")
 	_op(101.0, MZ1, 2.4, 25.0, 31.0, "win", "flat", false)
 	_op(104.0, MZ1, 2.4, 25.0, 31.0, "win", "flat", false)
@@ -471,8 +471,8 @@ func _dress(f: Transform3D, o: Dictionary) -> void:
 	# The casing round the opening, standing a little proud.
 	if str(o["head"]) == "flat":
 		for s: float in [-1.0, 1.0]:
-			k.box("wall", f, Vector3(u + s * (wd / 2.0 + 0.05), (y0 + yt) / 2.0, 0.025), Vector3(0.1, yt - y0, 0.05), trim)
-		k.box("wall", f, Vector3(u, yt + 0.06, 0.03), Vector3(wd + 0.3, 0.12, 0.08), trim)
+			k.box("wall", f, Vector3(u + s * (wd / 2.0 + 0.05), (y0 + yt) / 2.0, 0.026), Vector3(0.1, yt - y0, 0.05), trim)
+		k.box("wall", f, Vector3(u, yt + 0.06, 0.042), Vector3(wd + 0.3, 0.12, 0.08), trim)
 	else:
 		var circ := CourthouseKit.head_circle(o)
 		var a0 := atan2(float(o["ys"]) - circ.y, -wd / 2.0)
@@ -623,31 +623,32 @@ func slope(a: Vector3, b: Vector3, cc: Vector3, d: Vector3, under := true) -> vo
 ## A hip over the rectangle x0..x1, z0..z1 (survey feet) from the eave y0
 ## at slope s (rise over run), cut off flat at y1 if it would rise past
 ## it; eaves standing out `out` feet.
-func hip(x0: float, x1: float, z0: float, z1: float, y0: float, s: float, y1: float, out := 1.4) -> void:
+func hip(x0: float, x1: float, z0: float, z1: float, y0: float, s: float, y1: float, out := 1.4,
+		hole := PackedVector2Array()) -> void:
 	var xa := x0 - out
 	var xb := x1 + out
 	var za := z0 - out
 	var zb := z1 + out
 	var ye := y0 - out * s
-	var full := minf(xb - xa, zb - za) / 2.0
-	var inset := minf(full, (y1 - ye) / s)
-	var yt := ye + inset * s
-	var e := [w(xa, za, ye), w(xb, za, ye), w(xb, zb, ye), w(xa, zb, ye)]
-	var xi0 := xa + inset
-	var xi1 := maxf(xb - inset, xi0)
-	var zi0 := za + inset
-	var zi1 := maxf(zb - inset, zi0)
-	var tp := [w(xi0, zi0, yt), w(xi1, zi0, yt), w(xi1, zi1, yt), w(xi0, zi1, yt)]
-	for i in 4:
-		slope(e[i], e[(i + 1) % 4], tp[(i + 1) % 4], tp[i])
-	if xi1 - xi0 > 0.1 and zi1 - zi0 > 0.1:
-		# The flat: tinned, a railing of iron cresting round it.
-		k.m.quad("wall", tp[0], tp[1], tp[2], tp[3], Vector3.UP, c(Color(0.30, 0.30, 0.31), CourthouseKit.K_TAR))
-		k.m.quad("wall", tp[0] - Vector3(0, 0.1, 0), tp[1] - Vector3(0, 0.1, 0), tp[2] - Vector3(0, 0.1, 0), tp[3] - Vector3(0, 0.1, 0),
-			Vector3.DOWN, c(CEIL, CourthouseKit.K_PLASTER))
-		for i in 4:
-			_cresting(tp[i], tp[(i + 1) % 4])
-	_fascia(e)
+	var planes: Array[Vector3] = [Vector3(s, 0, ye - s * xa), Vector3(-s, 0, ye + s * xb), Vector3(0, s, ye - s * za),
+		Vector3(0, -s, ye + s * zb), Vector3(0, 0, y1)]
+	var rect := PackedVector2Array([Vector2(xa, za), Vector2(xb, za), Vector2(xb, zb), Vector2(xa, zb)])
+	# Each face where it is the lowest of the planes, less any hole (where
+	# the roof meets a taller block).
+	for i in planes.size():
+		var pieces: Array = [rect]
+		for j in planes.size():
+			if j != i:
+				pieces = meet(pieces, under(planes[i], planes[j]))
+		pieces = cut(pieces, hole)
+		for p: PackedVector2Array in pieces:
+			roof_piece(p, planes[i], i == 4)
+	var line := PackedVector2Array([Vector2(xa, za), Vector2(xb, za), Vector2(xb, zb), Vector2(xa, zb), Vector2(xa, za)])
+	var runs: Array = [line] if hole.is_empty() else Geometry2D.clip_polyline_with_polygon(line, hole)
+	var trim := c(TRIM, CourthouseKit.K_PAINT)
+	for run_: PackedVector2Array in runs:
+		for i in run_.size() - 1:
+			k.m.bar("wall", w(run_[i].x, run_[i].y, ye) - Vector3(0, 0.1, 0), w(run_[i + 1].x, run_[i + 1].y, ye) - Vector3(0, 0.1, 0), 0.09, 4, trim)
 
 
 ## The boarded edge of a roof round its eave corners.
@@ -767,11 +768,13 @@ func _roofs() -> void:
 	roof_rect = PackedVector2Array([Vector2(xa, za), Vector2(xb, za), Vector2(xb, zb), Vector2(xa, zb)])
 	# The gables: south over the library's end, two east, north over the
 	# dining room, a small one west.
-	cross_gable(Vector2(MX0, MZ0), Vector2(MX0, 56.2), Vector2(70.0, 47.0))
-	cross_gable(Vector2(55.5, MZ1), Vector2(76.5, MZ1), Vector2(66.0, 70.0))
-	cross_gable(Vector2(94.0, MZ1), Vector2(MX1 + 0.5, MZ1), Vector2(104.0, 70.0))
-	cross_gable(Vector2(MX1, 43.0), Vector2(MX1, 61.0), Vector2(100.0, 52.0))
-	cross_gable(Vector2(96.0, MZ0), Vector2(106.0, MZ0), Vector2(101.0, 50.0))
+	# Peaks from the survey's elevations; the south gable's rake stops short
+	# of the octagon's tower beside it.
+	cross_gable(Vector2(MX0, MZ0), Vector2(MX0, 55.4), Vector2(70.0, 47.0), 43.5, 0.4)
+	cross_gable(Vector2(55.5, MZ1), Vector2(76.5, MZ1), Vector2(66.0, 70.0), 37.0)
+	cross_gable(Vector2(94.0, MZ1), Vector2(MX1 + 0.5, MZ1), Vector2(104.0, 70.0), 42.5)
+	cross_gable(Vector2(MX1, 43.0), Vector2(MX1, 61.0), Vector2(100.0, 52.0), 36.0)
+	cross_gable(Vector2(96.0, MZ0), Vector2(106.0, MZ0), Vector2(101.0, 50.0), 33.0)
 	# The towers and bays rise through the main roof's eaves: no roof over
 	# them but their own.
 	var towers := tower_plans()
@@ -820,7 +823,8 @@ func _roofs() -> void:
 	_half_cone(DRESS_C, DRESS_R + 1.4, 40.0, 320.0, 18, Vector2(58.5, 77.3), 33.0)
 	_half_cone(Vector2(MX1, 69.5), 7.9, -90.0, 90.0, 8, Vector2(MX1 + 0.5, 69.5), 33.0)
 	# The service wing's hip, and the pantry's flat with its railing.
-	hip(113.0, 155.5, 20.5, 43.8, 18.0, 1.4, 40.0)
+	hip(113.0, 155.5, 20.5, 43.8, 18.0, 1.4, 40.0, 1.4,
+		PackedVector2Array([Vector2(MX0, MZ0), Vector2(MX1, MZ0), Vector2(MX1, MZ1 + 2.0), Vector2(MX0, MZ1 + 2.0)]))
 	var flat: Array[Vector2] = []
 	for i in 10:
 		flat.append(_arc_point(PANTRY_C, PANTRY_R, 180.0 + 90.0 * i / 9.0))
@@ -930,9 +934,19 @@ func _balcony(pts: Array, y: float) -> void:
 ## its eaves level with the main eaves, so its slopes die into the main
 ## roof's in valleys and its ridge runs out onto it; as wide as a-b on
 ## the wall, `inward` a point inside.
-func cross_gable(a: Vector2, b: Vector2, inward: Vector2) -> void:
+func cross_gable(a: Vector2, b: Vector2, inward: Vector2, peak: float, over := 1.4) -> void:
 	var half := (b - a).length() / 2.0
-	gable(a, b, inward, half + 3.0, EAVE, EAVE + SLOPE * half, true, false, 1.4)
+	# The ridge must die into the main roof where the gable ends: no higher
+	# than the main roof there.
+	var mid := (a + b) / 2.0
+	var into := (b - a).normalized().orthogonal()
+	if into.dot(inward - mid) < 0.0:
+		into = -into
+	var end := mid + into * (half + 3.0)
+	var main := 1e9
+	for pl: Vector3 in hip_planes:
+		main = minf(main, ph(pl, end))
+	gable(a, b, inward, half + 3.0, EAVE, minf(peak, main - 0.3), true, false, over)
 
 
 ## A gable: its face on the house's wall between the eave corners a and
@@ -1356,11 +1370,16 @@ func _porch_roof(poly: Array, y: float) -> void:
 			pts.append(q)
 		floor_poly(pts, y + 0.6, c(Color(0.30, 0.29, 0.29), CourthouseKit.K_TAR), c(Color(0.60, 0.50, 0.38), CourthouseKit.K_WOOD), 0.6, false)
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
-	for i in poly.size():
-		var a := w(poly[i].x, poly[i].y, y)
-		var b := w(poly[(i + 1) % poly.size()].x, poly[(i + 1) % poly.size()].y, y)
-		if poly[i].y < MZ1 + 0.1 and poly[(i + 1) % poly.size()].y < MZ1 + 0.1 and poly[i].x > 48.0 and poly[(i + 1) % poly.size()].x > 48.0:
+	var outer := Geometry2D.clip_polygons(PackedVector2Array(poly), perimeter())
+	var edge := PackedVector2Array() if outer.is_empty() else outer[0]
+	for i in edge.size():
+		var qa := edge[i]
+		var qb := edge[(i + 1) % edge.size()]
+		# An edge along the house's wall has no fascia.
+		if _near_perimeter((qa + qb) / 2.0, 0.3):
 			continue
+		var a := w(qa.x, qa.y, y)
+		var b := w(qb.x, qb.y, y)
 		var n3 := (b - a).cross(Vector3.UP).normalized()
 		k.m.quad("wall", a - Vector3(0, 0.02, 0), b - Vector3(0, 0.02, 0), b + Vector3(0, 0.2, 0), a + Vector3(0, 0.2, 0), n3, trim)
 		k.m.quad("wall", a - Vector3(0, 0.02, 0), b - Vector3(0, 0.02, 0), b + Vector3(0, 0.2, 0), a + Vector3(0, 0.2, 0), -n3, trim)
@@ -1368,6 +1387,15 @@ func _porch_roof(poly: Array, y: float) -> void:
 		for j in n:
 			var p := a.lerp(b, (j + 0.5) / n)
 			k.m.bar("wall", p - Vector3(0, 0.02, 0), p - Vector3(0, 0.22 if j % 2 == 0 else 0.14, 0), 0.012, 3, trim)
+
+
+## Whether a plan point lies within d feet of the house's outer wall.
+static func _near_perimeter(q: Vector2, d: float) -> bool:
+	var p := perimeter()
+	for i in p.size():
+		if q.distance_to(Geometry2D.get_closest_point_to_segment(q, p[i], p[(i + 1) % p.size()])) < d:
+			return true
+	return false
 
 
 ## The porte-cochere: a gabled roof on four posts over the drive, braced

@@ -201,7 +201,7 @@ static func part(a: Vector2, b: Vector2, y0: float, y1: float, doors: Array = []
 ## A wall on frame f from u 0 to length whose top follows the roof over
 ## the line a-b: built in strips a foot wide.
 static func _to_roof(f: Transform3D, a: Vector2, b: Vector2, length: float, y0: float, t: float, col: Color, mine: Array, key: String,
-		solid: bool) -> void:
+		solid: bool, cap := INF) -> void:
 	var strips := maxi(1, int(length / (FT * 0.4)))
 	# The frame runs from whichever end its x points away from.
 	var o := Vector2(f.origin.x, f.origin.z)
@@ -222,7 +222,7 @@ static func _to_roof(f: Transform3D, a: Vector2, b: Vector2, length: float, y0: 
 		roof -= 0.1
 		if roof < y0 + 0.2:
 			continue
-		k.wall(key, f, u0, u1, h(y0), h(roof) - 0.03, t, col, mine, 1000.0 if solid else -1000.0)
+		k.wall(key, f, u0, u1, h(y0), minf(h(roof) - 0.03, cap), t, col, mine, 1000.0 if solid else -1000.0)
 
 
 static func _partitions() -> void:
@@ -300,7 +300,11 @@ static func room(poly: Array, y0: float, y1: float, key: String, wall: Color, da
 		else:
 			_to_roof(f, a, b, length, y0, 0.02, wall, mine, key, false)
 			top = ATTIC
-		if dado > 0.0:
+		if dado > 0.0 and y1 < 0.0:
+			# Under the roof the dado follows it down where it is low; its
+			# cap and panels are left out there.
+			_to_roof(f0 * Transform3D(Basis(), Vector3(0, 0, 0.03)), a, b, length, y0, 0.03, wood, mine, "wall", false, h(y0 + dado))
+		elif dado > 0.0:
 			var fd := f0 * Transform3D(Basis(), Vector3(0, 0, 0.03))
 			k.wall("wall", fd, 0.0, length, h(y0), h(y0 + dado), 0.03, wood, mine, -1000.0)
 			k.wall("wall", f0 * Transform3D(Basis(), Vector3(0, 0, 0.06)), 0.0, length, h(y0 + dado) - 0.06, h(y0 + dado) + 0.012, 0.05,
@@ -446,7 +450,8 @@ static func _rooms() -> void:
 		wing.append(q)
 	# The wing's upper floor stands at 12 ft, a foot under the house's.
 	room(wing, 0.0, F2 - 2.0, "wall", c(Color(0.78, 0.74, 0.64), CourthouseKit.K_PLASTER), 3.5, Color(0.40, 0.30, 0.20), "kitchen wing")
-	room(wing, F2 - 1.0, 18.0, "wall", c(Color(0.78, 0.74, 0.64), CourthouseKit.K_PLASTER), 0.0, Color(0.40, 0.30, 0.20), "servants' rooms")
+	hs.floor_poly(wing, 17.8, c(CEIL, CourthouseKit.K_PLASTER), c(CEIL, CourthouseKit.K_PLASTER), 0.3)
+	room(wing, F2 - 1.0, 17.5, "wall", c(Color(0.78, 0.74, 0.64), CourthouseKit.K_PLASTER), 0.0, Color(0.40, 0.30, 0.20), "servants' rooms")
 	var pantry: Array[Vector2] = [Vector2(112.8 - 14.5, TwainHouse.MZ0 - 0.2)]
 	for i in 9:
 		pantry.append(TwainHouse._arc_point(TwainHouse.PANTRY_C, TwainHouse.PANTRY_R - 1.0, 180.0 + 90.0 * (i + 1) / 9.0))
@@ -457,7 +462,8 @@ static func _rooms() -> void:
 ## A third-floor room's flat ceiling at ATTIC: where the roof stands
 ## higher than it (under the flat of the hip, or a gable's ridge).
 static func _attic_ceiling(room_poly: PackedVector2Array) -> void:
-	var flat := Vector3(0, 0, ATTIC)
+	# Where the roof stands at least half a foot over the ceiling.
+	var flat := Vector3(0, 0, ATTIC + 0.5)
 	var high: Array = [hs.roof_rect]
 	for pl: Vector3 in hs.hip_planes:
 		high = TwainHouse.meet(high, TwainHouse.under(flat, pl))
@@ -472,7 +478,7 @@ static func _attic_ceiling(room_poly: PackedVector2Array) -> void:
 		var pts: Array = []
 		for q: Vector2 in p:
 			pts.append(q)
-		hs.floor_poly(pts, ATTIC + 0.4, ceil, ceil, 0.4, false)
+		hs.floor_poly(pts, ATTIC + 0.1, ceil, ceil, 0.1, false)
 
 
 ## ---- the stair ------------------------------------------------------------------
@@ -968,8 +974,8 @@ static func plant(sx: float, sz: float, y: float, tall: float, rng: RandomNumber
 static func picture(f: Transform3D, u: float, y: float, wd: float, ht: float, tone: Color) -> void:
 	item("picture", f, Vector3(u, y, 0.035), Vector3(wd, ht, 0.04), "wall", true)
 	k.box("wall", f, Vector3(u, y, 0.035), Vector3(wd, ht, 0.04), c(GILT, CourthouseKit.K_PAINT))
-	k.box("wall", f, Vector3(u, y, 0.057), Vector3(wd - 0.12, ht - 0.12, 0.01), c(tone, CourthouseKit.K_ENAMEL))
-	k.box("wall", f, Vector3(u, y - ht * 0.15, 0.06), Vector3(wd - 0.3, ht * 0.3, 0.005), c(tone.darkened(0.35), CourthouseKit.K_ENAMEL))
+	k.box("wall", f, Vector3(u, y, 0.06), Vector3(wd - 0.12, ht - 0.12, 0.01), c(tone, CourthouseKit.K_ENAMEL))
+	k.box("wall", f, Vector3(u, y - ht * 0.15, 0.07), Vector3(wd - 0.3, ht * 0.3, 0.005), c(tone.darkened(0.35), CourthouseKit.K_ENAMEL))
 
 
 ## A place on a wall for something hung on it: the face of the survey
@@ -1201,8 +1207,8 @@ static func _bedrooms() -> void:
 	bookcase(at(78.8, 44.0, F2, Vector2(-1, 0)), 1.4, 2.0, rng, OAK.darkened(0.2))
 	var bw := on_wall(Vector2(TwainHouse.MX0 + 1.0, 55.7), Vector2(79.05, 55.7), Vector2(70.0, 45.0), Vector2(69.0, 55.7))
 	var fs2: Transform3D = bw[0]
-	item("blackboard", fs2, Vector3(bw[1], h(F2 + 4.5), 0.045), Vector3(2.2, 1.0, 0.03), "wall", true)
-	k.box("wall", fs2, Vector3(bw[1], h(F2 + 4.5), 0.045), Vector3(2.2, 1.0, 0.03), c(Color(0.10, 0.12, 0.10), CourthouseKit.K_ENAMEL))
+	item("blackboard", fs2, Vector3(bw[1], h(F2 + 5.4), 0.045), Vector3(2.2, 0.9, 0.03), "wall", true)
+	k.box("wall", fs2, Vector3(bw[1], h(F2 + 5.4), 0.045), Vector3(2.2, 0.9, 0.03), c(Color(0.10, 0.12, 0.10), CourthouseKit.K_ENAMEL))
 	var pw := on_wall(Vector2(TwainHouse.MX0 + 1.0, 55.7), Vector2(79.05, 55.7), Vector2(70.0, 45.0), Vector2(75.5, 55.7))
 	picture(pw[0], pw[1], h(F2 + 5.5), 1.2, 0.9, Color(0.62, 0.58, 0.42))
 	_gasolier(w(68.0, 47.0, cy), 3, 0.3)
