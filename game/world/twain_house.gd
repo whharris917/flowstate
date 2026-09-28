@@ -95,6 +95,11 @@ var items: Array[Dictionary] = []
 var doors: Array[Dictionary] = []
 var meshes: Dictionary = {}
 var dressed: Array[Dictionary] = []
+## Every railing as built: [from, to] (world, at the foot of the rail).
+var rails: Array = []
+## The dressing of the openings (sashes, glass, casings, hoods, door
+## leaves), apart from the walls so the audit can look through a hole.
+var dress_m := TownMesh.new()
 
 
 ## The world point of a survey point (feet: x north, z east, y over the
@@ -148,10 +153,14 @@ func build() -> void:
 	var furniture := k.m
 	k.m = outer
 	if OS.get_environment("FLOWSTATE_TW_AUDIT") != "":
-		meshes = {"outer": outer, "inner": inner, "furniture": furniture}
+		meshes = {"outer": outer, "inner": inner, "furniture": furniture, "dress": dress_m}
 	var mats := {"wall": wall_mat, "glass": glass_mat, "iron": iron_mat, "lamp": lamp_mat, "stencil": stencil_mat,
 		"flame": flame_mat}
 	var drawn: Array = outer.commit(self, mats, ["wall", "iron"]).values()
+	var dress_node := Node3D.new()
+	dress_node.name = "Dressing"
+	add_child(dress_node)
+	drawn.append_array(dress_m.commit(dress_node, mats, ["wall"]).values())
 	for tm: TownMesh in [inner, furniture]:
 		for mi: MeshInstance3D in tm.commit(self, mats, []).values():
 			mi.visibility_range_end = 120.0
@@ -195,7 +204,8 @@ func _materials() -> void:
 ## ---- openings ------------------------------------------------------------
 
 func _op(sx: float, sz: float, wd: float, sill: float, head: float, kind := "win", shape := "flat", hood := true) -> void:
-	ops.append({"at": Vector2(sx, sz), "w": wd, "sill": sill, "head": head, "kind": kind, "shape": shape, "hood": hood})
+	ops.append({"at": Vector2(sx, sz), "w": wd, "sill": sill, "head": head, "kind": kind, "shape": shape, "hood": hood,
+		"id": ops.size()})
 
 
 ## The windows and doors, read off the survey's plans and elevations. A
@@ -481,6 +491,7 @@ func ops_on(f: Transform3D, length: float, y0: float, y1: float, tol: float) -> 
 		var op := CourthouseKit.opening(u, wd, sill, spring, shape, 0.25)
 		op["kind"] = o["kind"]
 		op["hood"] = o["hood"]
+		op["id"] = o["id"]
 		out.append(op)
 	return out
 
@@ -544,7 +555,15 @@ func _dress(f: Transform3D, o: Dictionary) -> void:
 	var kind := str(o["kind"])
 	# Every opening as built, for tools/twain_openings.py.
 	dressed.append({"c": f * Vector3(float(o["u"]), 0, 0), "n": f.basis.z, "w": float(o["w"]), "y0": float(o["y0"]),
-		"yt": float(o["yt"]), "kind": kind})
+		"yt": float(o["yt"]), "kind": kind, "id": int(o["id"])})
+	var walls_m := k.m
+	k.m = dress_m
+	_dress_parts(f, o)
+	k.m = walls_m
+
+
+func _dress_parts(f: Transform3D, o: Dictionary) -> void:
+	var kind := str(o["kind"])
 	var u := float(o["u"])
 	var wd := float(o["w"])
 	var y0 := float(o["y0"])
@@ -1566,6 +1585,7 @@ func _rail(a: Vector3, b: Vector3, ht: float, col := TRIM) -> void:
 	var length := a.distance_to(b)
 	if length < 0.05:
 		return
+	rails.append([a, b])
 	k.m.bar("wall", a + Vector3(0, ht, 0), b + Vector3(0, ht, 0), 0.05, 4, trim)
 	k.m.bar("wall", a + Vector3(0, 0.08, 0), b + Vector3(0, 0.08, 0), 0.04, 4, trim)
 	var n := int(length / 0.14)
@@ -1585,6 +1605,7 @@ func xrail(a: Vector3, b: Vector3, ht: float) -> void:
 	var length := a.distance_to(b)
 	if length < 0.1:
 		return
+	rails.append([a, b])
 	k.m.bar("wall", a + Vector3(0, ht, 0), b + Vector3(0, ht, 0), 0.05, 4, trim)
 	k.m.bar("wall", a + Vector3(0, 0.12, 0), b + Vector3(0, 0.12, 0), 0.04, 4, trim)
 	var panels := maxi(1, int(round(length / 0.9)))

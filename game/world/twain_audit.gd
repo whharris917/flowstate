@@ -23,6 +23,15 @@ extends Node
 ##              front door
 ##   fight      two surfaces of different colour in the same plane (they
 ##              flicker)
+## and the building's own sense (the rules any real house keeps, checked
+## on what was built, not on what the code meant):
+##   orphan     an opening in the list that no wall carries, or that two
+##              walls carry
+##   blind      an opening's frame on solid wall: no hole behind the sash
+##   nowhere    a window or door with no room behind it (roof, void or
+##              solid on the inside)
+##   landing    a door with no floor on one side of its sill
+##   rail       a railing with no floor under it
 ## Run headless for the report, windowed for a picture of each finding:
 ##   godot --headless --path game res://world/twain_audit.tscn
 ##   godot --path game res://world/twain_audit.tscn
@@ -33,6 +42,7 @@ extends Node
 const L_ARCH := 1 << 19
 const L_FURN := 1 << 20
 const L_ITEM := 1 << 21
+const L_DRESS := 1 << 22
 const FT := TwainHouse.FT
 const CELL := 0.2
 ## Rooms the walk is not expected to reach, and why.
@@ -60,7 +70,8 @@ func _ready() -> void:
 
 
 func _want(check: String) -> bool:
-	return only.is_empty() or only.has(check)
+	return only.is_empty() or only.has(check) or (check == "arch" and (only.has("blind") or only.has("rail")
+		or only.has("nowhere") or only.has("landing") or only.has("orphan")))
 
 
 func _run() -> void:
@@ -71,12 +82,13 @@ func _run() -> void:
 	for i in 3:
 		await get_tree().physics_frame
 	space = world.get_world_3d().direct_space_state
-	for check: String in ["leak", "roof", "poke", "clash", "overlap", "float", "door", "reach", "fight"]:
+	for check: String in ["arch", "leak", "roof", "poke", "clash", "overlap", "float", "door", "reach", "fight"]:
 		if not _want(check) and not (check == "poke" and (_want("poke_out") or _want("poke_in"))):
 			continue
 		_t0 = Time.get_ticks_msec()
 		var before := issues.size()
 		match check:
+			"arch": _architecture()
 			"leak": _leaks()
 			"roof": _roof()
 			"poke": _pokes()
@@ -97,7 +109,7 @@ func _run() -> void:
 ## ---- the probe geometry ----------------------------------------------------
 
 func _bodies() -> void:
-	for group: String in ["outer", "inner", "furniture"]:
+	for group: String in ["outer", "inner", "furniture", "dress"]:
 		var tm: TownMesh = house.meshes[group]
 		for key: String in tm._surfaces:
 			if key == "lamp" or key == "flame":
@@ -113,7 +125,7 @@ func _bodies() -> void:
 			shape.backface_collision = true
 			shape.set_faces(faces)
 			var body := StaticBody3D.new()
-			body.collision_layer = L_FURN if group == "furniture" else L_ARCH
+			body.collision_layer = L_FURN if group == "furniture" else (L_DRESS if group == "dress" else L_ARCH)
 			body.collision_mask = 0
 			body.set_meta("group", group)
 			body.set_meta("key", key)
@@ -252,6 +264,96 @@ func room_samples(r: Dictionary, step: float, inset: float) -> Array[Vector3]:
 			z += s
 		x += s
 	return out
+
+
+## ---- arch: the building's own sense ---------------------------------------
+
+const OUTSIDE_KINDS := ["win", "door", "french", "open", "shut"]
+const DOOR_KINDS := ["door", "french", "open", "shut"]
+
+
+func _architecture() -> void:
+	var t := TwainHouse.T * FT
+	# Every opening carried by exactly one wall.
+	var seen := {}
+	for d: Dictionary in house.dressed:
+		seen[int(d["id"])] = int(seen.get(int(d["id"]), 0)) + 1
+	for o: Dictionary in house.ops:
+		if not OUTSIDE_KINDS.has(str(o["kind"])):
+			continue
+		var count := int(seen.get(int(o["id"]), 0))
+		if count != 1:
+			var q := o["at"] as Vector2
+			var p := TwainHouse.w(q.x, q.y, (float(o["sill"]) + float(o["head"])) / 2.0)
+			issue("orphan", "the %s is carried by %d walls" % [str(o["kind"]), count], p)
+	for d: Dictionary in house.dressed:
+		var kind := str(d["kind"])
+		var c := d["c"] as Vector3
+		var n := d["n"] as Vector3
+		var side := Vector3(n.z, 0, -n.x).normalized()
+		var wd := float(d["w"])
+		var y0 := float(d["y0"])
+		var yt := float(d["yt"])
+		var mid := Vector3(c.x, (y0 + yt) / 2.0, c.z)
+		var eye := mid + n * 3.0 + Vector3(0, 0.3, 0)
+		# A hole behind the dressing: rays through a grid over the opening,
+		# looking only at the walls and rooms.
+		var blocked := 0
+		var blocker := ""
+		for i in 3:
+			for j in 3:
+				var off := side * wd * (i - 1) * 0.28 + Vector3(0, lerpf(y0, yt, 0.22 + 0.28 * j) - mid.y, 0)
+				var hit := ray(mid + off + n * 0.3, mid + off - n * (t + 0.25), L_ARCH)
+				if not hit.is_empty():
+					blocked += 1
+					var body := hit["collider"] as Node
+					blocker = "%s %s %.2f m in" % [str(body.get_meta("group")), str(body.get_meta("key")),
+						0.3 - (hit["position"] as Vector3 - (mid + off)).dot(n)]
+		if blocked >= 6:
+			issue("blind", "the %s's frame is on solid wall (%d of 9 rays stopped; %s)" % [kind, blocked, blocker], mid, eye)
+			continue
+		# A room behind it: the space just inside the wall.
+		var inside := mid - n * (t + 0.45)
+		var low := Vector3(c.x, y0 + 0.3, c.z) - n * (t + 0.45)
+		if room_at(inside).is_empty() and room_at(low).is_empty():
+			var what := "void"
+			var up := ray(inside, inside + Vector3(0, 0.6, 0), L_ARCH)
+			if not up.is_empty():
+				what = "the roof"
+			issue("nowhere", "the %s opens onto %s, not a room" % [kind, what], mid, eye)
+		# A door's sill has a floor on each side.
+		if DOOR_KINDS.has(kind):
+			for sd: float in [1.0, -1.0]:
+				if sd > 0.0 and y0 < TwainHouse.h(1.0):
+					continue    # at the ground: steps and lawn, not in the house
+				var foot := Vector3(c.x, y0, c.z) + n * sd * (0.35 + (0.0 if sd > 0.0 else t))
+				var hit := ray(foot + Vector3(0, 0.5, 0), foot - Vector3(0, 0.45, 0), L_ARCH)
+				var ok := not hit.is_empty() and absf((hit["position"] as Vector3).y - y0) < 0.35 \
+					and (hit["normal"] as Vector3).y > 0.7
+				if not ok:
+					issue("landing", "the %s has no floor %s its sill" % [kind, "outside" if sd > 0.0 else "inside"], foot, eye)
+	# Every railing stands on a floor.
+	print("[audit] %d railings" % house.rails.size())
+	for r: Array in house.rails:
+		var a := r[0] as Vector3
+		var b := r[1] as Vector3
+		var d := (b - a)
+		var across := Vector3(d.z, 0, -d.x).normalized()
+		var bad := 0
+		for k in 3:
+			var p := a.lerp(b, (k + 0.5) / 3.0)
+			var ok := false
+			for sd: float in [1.0, -1.0]:
+				var q := p + across * sd * 0.12
+				var hit := ray(q + Vector3(0, 0.02, 0), q - Vector3(0, 0.25, 0), L_ARCH)
+				if not hit.is_empty() and absf((hit["normal"] as Vector3).y) > 0.9 and (hit["position"] as Vector3).y > q.y - 0.15:
+					ok = true
+			if not ok:
+				bad += 1
+		if bad >= 2:
+			var m := (a + b) / 2.0
+			issue("rail", "a railing %.1f m long stands on no floor" % a.distance_to(b), m + Vector3(0, 0.5, 0),
+				m + across * 3.0 + Vector3(0, 1.2, 0))
 
 
 ## ---- leak: holes in a room's shell -------------------------------------------
@@ -803,7 +905,7 @@ func _reach_maps(seen: Dictionary) -> void:
 func _fights() -> void:
 	var buckets := {}
 	var tris: Array = []
-	for group: String in ["outer", "inner", "furniture"]:
+	for group: String in ["outer", "inner", "furniture", "dress"]:
 		var tm: TownMesh = house.meshes[group]
 		for key: String in tm._surfaces:
 			if key == "lamp" or key == "flame" or key == "glass":
