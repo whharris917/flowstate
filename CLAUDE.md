@@ -189,7 +189,7 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 2. **Standing review items:** the drip demo with tube-sized nozzles; the small-bore views (first drafts; anchors sit where a DN50 body would put them); the two `docs/` documents and their five spec-prose drifts; the showcase's walk report and startup time.
 3. **Monroe courthouse:** the monument's inscriptions (modelled plain). Next films: scripted top-down by Claude, no agent actors; pipeline in `tools/film/`.
 4. **Harbor town, open for the director:** the domed hall, the sign names, the town's name, the moon's phase (`SkyClock.MOON_AGE`), the noon sun's height (60°).
-5. **Twain house:** exterior next: the Texas deck's roof and the east gables' balconies against the director's photograph (in memory); then the third-floor interiors (the audit's poke_in list).
+5. **Twain house:** next, the Texas deck's roof and east gable balconies against the director's photograph (in memory); then third-floor interiors.
 
 **Known gaps:**
 - Mass does not close across the steam generator: its drum is a fixed-pressure boundary that makes up whatever is drawn. Closing it needs a real drum inventory and changes the boiler's dynamics; the director's call.
