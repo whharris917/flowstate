@@ -60,7 +60,9 @@ func build(house: TwainHouse) -> void:
 	_drive()
 	_carriage_house()
 	_planting()
-	k.m.commit(self, {"wall": wall_mat, "lamp": lamp_mat, "street": street_mat, "iron": iron_mat, "glass": glass_mat}, ["wall", "iron"])
+	# The lawn takes shadows but casts none: its slopes would shade themselves in stripes.
+	k.m.commit(self, {"wall": wall_mat, "lawn": wall_mat, "lamp": lamp_mat, "street": street_mat, "iron": iron_mat, "glass": glass_mat},
+		["wall", "iron"])
 	_trees.finish(true, false, true)
 	add_child(_trees)
 	stats = {"triangles": k.m.triangles, "solids": k.solid_count, "ms": Time.get_ticks_msec() - t0}
@@ -134,7 +136,7 @@ func _ground() -> void:
 			var n: Vector3 = ((p[3] - p[0]).cross(p[1] - p[0])).normalized()
 			if n.y < 0.0:
 				n = -n
-			k.m.quad("wall", p[0], p[1], p[2], p[3], n, lawn)
+			k.m.quad("lawn", p[0], p[1], p[2], p[3], n, lawn)
 			faces.append_array([p[0], p[1], p[2], p[0], p[2], p[3]])
 	var body := StaticBody3D.new()
 	body.name = "Lawn"
@@ -261,6 +263,11 @@ func _carriage_house() -> void:
 	k.box("wall", f, Vector3(0, 0.02, 0), Vector3(wd - 0.4, 0.04, dp - 0.4), c(Color(0.40, 0.34, 0.26), HarborTown.K_PLANK))
 
 
+## A world point set down on the lawn's surface.
+func _on_lawn(p: Vector3) -> Vector3:
+	return Vector3(p.x, TwainHouse.h(TwainHouse.grade_at(Vector2(TwainHouse.OX - p.z / TwainHouse.FT, TwainHouse.OZ + p.x / TwainHouse.FT))), p.z)
+
+
 func _planting() -> void:
 	# Elms and oaks over the lawn and along the avenue.
 	for t: Array in [[Vector3(-22.0, 0, -18.0), 22.0, "elm", Color(0.24, 0.34, 0.12)],
@@ -273,15 +280,18 @@ func _planting() -> void:
 			[Vector3(52.0, 0, -22.0), 18.0, "maple", Color(0.28, 0.36, 0.12)],
 			[Vector3(-12.0, 0, -28.0), 16.0, "elm", Color(0.26, 0.35, 0.13)],
 			[Vector3(40.0, 0, 36.0), 17.0, "oak", Color(0.22, 0.30, 0.10)]]:
-		_trees.plant_species(t[0], float(t[1]), str(t[2]), t[3], _rng)
+		_trees.plant_species(_on_lawn(t[0]), float(t[1]), str(t[2]), t[3], _rng)
 	# The evergreens by the house, as in the old views.
 	for p: Vector3 in [Vector3(-12.5, 0, -12.0), Vector3(16.5, 0, -12.0), Vector3(19.0, 0, 7.0), Vector3(-17.0, 0, 14.0)]:
-		_trees.plant_conifer(p, _rng.randf_range(6.0, 9.0), _rng)
+		_trees.plant_conifer(_on_lawn(p), _rng.randf_range(6.0, 9.0), _rng)
 	# A clipped hedge along the avenue's walk, broken for the drive and the path.
 	var box := Color(0.10, 0.20, 0.08)
 	for seg: Vector2 in [Vector2(-80.0, 0.5), Vector2(4.5, DRIVE_X + 2.0), Vector2(DRIVE_X + 11.0, 90.0)]:
-		var length := seg.y - seg.x
-		if length > 1.0:
-			_trees.plant_species(Vector3((seg.x + seg.y) / 2.0, 0, WALK_Z + 1.6), 1.1, "hedge", box, _rng, PI / 2.0, Vector3(1.0, 1.0, length))
+		# In lengths of about 2 m, each standing on the lawn where it falls.
+		var n := int(ceil((seg.y - seg.x) / 2.0))
+		var length := (seg.y - seg.x) / n
+		for i in n:
+			var p := _on_lawn(Vector3(seg.x + (i + 0.5) * length, 0, WALK_Z + 1.6))
+			_trees.plant_species(p, 1.1, "hedge", box, _rng, PI / 2.0, Vector3(1.0, 1.0, length + 0.05))
 	for p: Vector3 in [Vector3(-9.0, 0, -8.0), Vector3(-9.5, 0, 6.0), Vector3(12.8, 0, -8.0), Vector3(5.0, 0, 13.0), Vector3(-6.0, 0, 14.5)]:
-		_trees.plant_species(p, 1.4, "shrub", Color(0.12, 0.24, 0.09), _rng)
+		_trees.plant_species(_on_lawn(p), 1.4, "shrub", Color(0.12, 0.24, 0.09), _rng)
