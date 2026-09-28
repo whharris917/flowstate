@@ -156,24 +156,37 @@ func wall(key: String, f: Transform3D, u0: float, u1: float, y0: float, y1: floa
 		if float(o["y0"]) < y1 - 0.001 and float(o["yt"]) > y0 + 0.001 \
 				and float(o["u"]) + float(o["w"]) / 2.0 > u0 and float(o["u"]) - float(o["w"]) / 2.0 < u1:
 			sorted.append(o)
-	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["u"]) < float(b["u"]))
-	var u := u0
+	# Every edge of an opening splits the band into strips; each strip is
+	# filled between the openings over it, so openings may stand one over
+	# another (a door and the fan over it).
+	var edges: Array[float] = [u0, u1]
 	for o: Dictionary in sorted:
-		var ol := maxf(float(o["u"]) - float(o["w"]) / 2.0, u0)
-		var orr := minf(float(o["u"]) + float(o["w"]) / 2.0, u1)
-		if ol > u + 0.001:
-			_piece(key, f, u, ol, y0, y1, t, col, solid_below)
-		# Under the sill, over the head.
-		if float(o["y0"]) > y0 + 0.001:
-			_piece(key, f, ol, orr, y0, minf(float(o["y0"]), y1), t, col, solid_below)
-		if y1 > float(o["yt"]) + 0.001:
-			_piece(key, f, ol, orr, maxf(float(o["yt"]), y0), y1, t, col, solid_below)
+		for e: float in [float(o["u"]) - float(o["w"]) / 2.0, float(o["u"]) + float(o["w"]) / 2.0]:
+			if e > u0 and e < u1:
+				edges.append(e)
+	edges.sort()
+	for i in edges.size() - 1:
+		var ua := edges[i]
+		var ub := edges[i + 1]
+		if ub - ua < 0.001:
+			continue
+		var um := (ua + ub) / 2.0
+		var over: Array = []
+		for o: Dictionary in sorted:
+			if absf(um - float(o["u"])) < float(o["w"]) / 2.0:
+				over.append(o)
+		over.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["y0"]) < float(b["y0"]))
+		var y := y0
+		for o: Dictionary in over:
+			if float(o["y0"]) > y + 0.001:
+				_piece(key, f, ua, ub, y, minf(float(o["y0"]), y1), t, col, solid_below)
+			y = maxf(y, float(o["yt"]))
+		if y1 > y + 0.001:
+			_piece(key, f, ua, ub, maxf(y, y0), y1, t, col, solid_below)
+	for o: Dictionary in sorted:
 		# A band is never cut through an arch: its head lies wholly inside.
 		if float(o["ys"]) >= y0 - 0.001 and float(o["yt"]) <= y1 + 0.001:
 			_spandrels(key, f, o, t, col)
-		u = orr
-	if u1 > u + 0.001:
-		_piece(key, f, u, u1, y0, y1, t, col, solid_below)
 
 
 func _piece(key: String, f: Transform3D, ua: float, ub: float, ya: float, yb: float, t: float, col: Color,

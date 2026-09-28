@@ -32,6 +32,8 @@ extends Node
 ##              solid on the inside)
 ##   landing    a door with no floor on one side of its sill
 ##   rail       a railing with no floor under it
+##   faces      an opening that looks straight into a wall or roof
+##   straddle   a window or door across the partition between two rooms
 ## Run headless for the report, windowed for a picture of each finding:
 ##   godot --headless --path game res://world/twain_audit.tscn
 ##   godot --path game res://world/twain_audit.tscn
@@ -43,10 +45,12 @@ const L_ARCH := 1 << 19
 const L_FURN := 1 << 20
 const L_ITEM := 1 << 21
 const L_DRESS := 1 << 22
+## The building as seen: its walls and roofs with the openings' dressing.
+const L_BUILT := L_ARCH | L_DRESS
 const FT := TwainHouse.FT
 const CELL := 0.2
 ## Rooms the walk is not expected to reach, and why.
-const NOT_VISITED := {"servants' rooms": "the back stair from the kitchen is not modelled",
+const NOT_VISITED := {"basement": "no stair down is modelled", "pantry basement": "no stair down is modelled","servants' rooms": "the back stair from the kitchen is not modelled",
 	"the office": "its door is kept shut", "south-east bath": "its door is kept shut", "the small room": "its door is kept shut"}
 
 var world: TwainMap
@@ -71,7 +75,7 @@ func _ready() -> void:
 
 func _want(check: String) -> bool:
 	return only.is_empty() or only.has(check) or (check == "arch" and (only.has("blind") or only.has("rail")
-		or only.has("nowhere") or only.has("landing") or only.has("orphan")))
+		or only.has("nowhere") or only.has("landing") or only.has("orphan") or only.has("faces") or only.has("straddle")))
 
 
 func _run() -> void:
@@ -234,7 +238,7 @@ func eye_toward(p: Vector3, r: Dictionary) -> Vector3:
 				continue
 			if not _capsule_clear(Vector3(e.x, floor_y + 1.05, e.z), 0.3, 1.5):
 				continue
-			var hit := ray(e, p, L_ARCH | L_FURN)
+			var hit := ray(e, p, L_BUILT | L_FURN)
 			var clear := hit.is_empty() or (hit["position"] as Vector3).distance_to(p) < 0.25
 			var score := dist + (10.0 if clear else 0.0)
 			if score > best_score:
@@ -312,10 +316,24 @@ func _architecture() -> void:
 		if blocked >= 6:
 			issue("blind", "the %s's frame is on solid wall (%d of 9 rays stopped; %s)" % [kind, blocked, blocker], mid, eye)
 			continue
+		# Open air in front of it.
+		var front := ray(mid + n * 0.05, mid + n * 0.5, L_ARCH)
+		if not front.is_empty():
+			var body := front["collider"] as Node
+			issue("faces", "the %s looks straight into %s %s" % [kind, str(body.get_meta("group")), str(body.get_meta("key"))], mid, eye)
+		# One room behind it, not a partition's two.
+		var la := room_at(mid - n * (t + 0.45) - side * wd * 0.35)
+		var ra := room_at(mid - n * (t + 0.45) + side * wd * 0.35)
+		if not la.is_empty() and not ra.is_empty() and la["name"] != ra["name"]:
+			issue("straddle", "the %s straddles the wall between %s and %s" % [kind, la["name"], ra["name"]], mid, eye)
 		# A room behind it: the space just inside the wall.
 		var inside := mid - n * (t + 0.45)
 		var low := Vector3(c.x, y0 + 0.3, c.z) - n * (t + 0.45)
-		if room_at(inside).is_empty() and room_at(low).is_empty():
+		var attic := false
+		for dy: float in [0.8, 1.6, 2.4]:
+			if not room_at(inside - Vector3(0, dy, 0)).is_empty() and not ray(inside, inside + Vector3(0, 3.0, 0), L_ARCH).is_empty():
+				attic = true
+		if room_at(inside).is_empty() and room_at(low).is_empty() and not attic:
 			var what := "void"
 			var up := ray(inside, inside + Vector3(0, 0.6, 0), L_ARCH)
 			if not up.is_empty():
@@ -393,7 +411,7 @@ func _leaks() -> void:
 			if room_top(r, Vector2(so.x, so.y)) < o.y + 0.3:
 				continue
 			for d: Vector3 in dirs:
-				if not ray(o, o + d * 80.0, L_ARCH).is_empty():
+				if not ray(o, o + d * 80.0, L_BUILT).is_empty():
 					continue
 				if _through_door(o, d):
 					continue
@@ -463,7 +481,7 @@ func _roof() -> void:
 			var q := Vector2(x, z)
 			if _in_footprint(q):
 				var top := TwainHouse.w(x, z, 70.0)
-				var hit := ray(top, TwainHouse.w(x, z, -3.0), L_ARCH)
+				var hit := ray(top, TwainHouse.w(x, z, -3.0), L_BUILT)
 				var bad := ""
 				if hit.is_empty():
 					bad = "nothing at all"
@@ -590,7 +608,7 @@ func _clashes() -> void:
 		if str(it["kind"]) == "rug" or str(it["kind"]) == "door":
 			continue
 		# A piece's back may touch its wall, a lamp its ceiling.
-		var q := _box_query(it, Vector3(0.03, 0.03, 0.03), L_ARCH, [])
+		var q := _box_query(it, Vector3(0.03, 0.03, 0.03), L_BUILT, [])
 		if bool(it["backed"]):
 			var sz := it["size"] as Vector3
 			var b := BoxShape3D.new()
@@ -650,7 +668,7 @@ func _support() -> void:
 				var gaps: Array[float] = []
 				for c: Vector2 in [Vector2(0, 0), Vector2(-0.4, -0.4), Vector2(0.4, -0.4), Vector2(0.4, 0.4), Vector2(-0.4, 0.4)]:
 					var p := bottom + xf.basis.x * sz.x * c.x + xf.basis.z * sz.z * c.y
-					var hit := ray(p + Vector3(0, 0.25, 0), p - Vector3(0, 0.6, 0), L_ARCH)
+					var hit := ray(p + Vector3(0, 0.25, 0), p - Vector3(0, 0.6, 0), L_BUILT)
 					gaps.append(99.0 if hit.is_empty() else p.y - (hit["position"] as Vector3).y)
 				var worst: float = gaps.max()
 				var least: float = gaps.min()
@@ -664,11 +682,11 @@ func _support() -> void:
 					issue("float", "%s lies outside any room" % _label(i), bottom)
 			"hanging":
 				var top := xf.origin + Vector3(0, sz.y / 2.0, 0)
-				var up := ray(top - Vector3(0, 0.15, 0), top + Vector3(0, 0.6, 0), L_ARCH)
+				var up := ray(top - Vector3(0, 0.15, 0), top + Vector3(0, 0.6, 0), L_BUILT)
 				if up.is_empty() or (up["position"] as Vector3).y - top.y > 0.1:
 					issue("float", "%s does not reach its ceiling" % _label(i), top, eye_toward(top, room_at(top - Vector3(0, 0.5, 0))))
 				var low := xf.origin - Vector3(0, sz.y / 2.0, 0)
-				var floor_hit := ray(low, low - Vector3(0, 6.0, 0), L_ARCH | L_FURN)
+				var floor_hit := ray(low, low - Vector3(0, 6.0, 0), L_BUILT | L_FURN)
 				if not floor_hit.is_empty() and low.y - (floor_hit["position"] as Vector3).y < 1.95:
 					var under: bool = (floor_hit["collider"] as Node).get_meta("group") == "furniture"
 					if not under:
@@ -679,7 +697,7 @@ func _support() -> void:
 			var offs: Array[float] = []
 			for c: Vector2 in [Vector2(0, 0), Vector2(-0.4, -0.3), Vector2(0.4, -0.3), Vector2(0.4, 0.3), Vector2(-0.4, 0.3)]:
 				var p := back + xf.basis.x * sz.x * c.x + xf.basis.y * sz.y * c.y
-				var hit := ray(p + xf.basis.z * 0.02, p - xf.basis.z * 0.5, L_ARCH)
+				var hit := ray(p + xf.basis.z * 0.02, p - xf.basis.z * 0.5, L_BUILT)
 				offs.append(0.5 if hit.is_empty() else p.distance_to(hit["position"] as Vector3))
 			if offs.max() > 0.08:
 				issue("float", "%s stands %.0f cm off the wall behind it" % [_label(i), offs.max() * 100.0], back,
@@ -1031,7 +1049,7 @@ func _visible_face(p: Vector3, n: Vector3) -> bool:
 	var o := p + n * 0.004
 	var backs := 0
 	for d: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.UP, Vector3.DOWN, Vector3.FORWARD, Vector3.BACK]:
-		var hit := ray(o, o + d * 30.0, L_ARCH | L_FURN)
+		var hit := ray(o, o + d * 30.0, L_BUILT | L_FURN)
 		if not hit.is_empty() and (hit["normal"] as Vector3).dot(d) > 0.0:
 			backs += 1
 	if backs >= 5:
@@ -1039,7 +1057,7 @@ func _visible_face(p: Vector3, n: Vector3) -> bool:
 	var u := n.cross(Vector3.UP if absf(n.y) < 0.9 else Vector3.RIGHT).normalized()
 	var v := n.cross(u)
 	for d: Vector3 in [n, (n + u * 0.7).normalized(), (n - u * 0.7).normalized(), (n + v * 0.7).normalized(), (n - v * 0.7).normalized()]:
-		var hit := ray(o, o + d * 0.8, L_ARCH | L_FURN)
+		var hit := ray(o, o + d * 0.8, L_BUILT | L_FURN)
 		if hit.is_empty():
 			return true
 	return false

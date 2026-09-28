@@ -270,7 +270,7 @@ func _openings() -> void:
 	_op(82.9, MZ1, 2.4, 15.8, 21.4)
 	_op(92.1, MZ1, 2.4, 15.8, 21.4)
 	for x: float in [103.2, 106.25, 109.3]:
-		_op(x, MZ1, 2.6, 15.8, 21.4, "win", "flat", x == 106.25)
+		_op(x, MZ1, 2.6, 14.2, 20.6, "win", "flat", x == 106.25)
 	# The gables' balcony doors.
 	_op(68.2, MZ1, 4.0, F3, 31.3, "french", "round")
 	_op(105.4, MZ1, 2.9, F3, 31.1, "french", "round")
@@ -311,7 +311,7 @@ func _openings() -> void:
 	_op(bd.x, bd.y, 3.8, -9.1, -1.7, "shut", "flat", false)
 	# The service wing: its west face (ground floor, upper floor, the
 	# basement where the ground falls away), its north end, its east face
-	# with the door and the three windows stepping up the back stair.
+	# with the door and the windows stepping down under the back stair.
 	for x: float in [150.0, 142.5]:
 		_op(x, 19.8, 2.5, 2.6, 8.3)
 	for x: float in [133.3, 127.7, 122.7, 117.7]:
@@ -332,10 +332,10 @@ func _openings() -> void:
 	_op(141.0, 43.8, 2.6, 0.0, 8.3, "door")
 	for x: float in [144.25, 146.75, 149.25]:
 		_op(x, 43.8, 2.2, 12.4, 15.8, "win", "flat", false)
-	_op(136.2, 43.8, 2.2, 12.4, 15.8, "win", "flat", false)
-	_op(128.4, 43.8, 2.2, 8.3, 12.05)
-	_op(130.75, 43.8, 1.9, 9.55, 13.9)
-	_op(133.25, 43.8, 1.9, 10.8, 15.5)
+	_op(137.2, 43.8, 2.0, 13.8, 18.5, "win", "flat", false)
+	# Under the back stair's roof, stepping down with the stair.
+	_op(127.2, 43.8, 2.0, 8.0, 13.5)
+	_op(132.2, 43.8, 2.0, 5.0, 10.0)
 	# The third floor: the billiard room's balcony door in the south
 	# gable, the small windows of carved marble either side.
 	_op(MX0, 46.9, 3.0, F3, 33.3, "french", "flat")
@@ -644,11 +644,6 @@ func _walls() -> void:
 			_eave(a, b, inside_of(a, b, cw), top, 1.4)
 	# The decks' back walls: the third floor's door and windows out onto
 	# each tower's top, under the tower's roof.
-	# The Texas deck's well: the billiard room's wall, the top hall's with
-	# its doors, the storeroom's; each up under the roof round the well.
-	for wall_: Array in [[Vector2(MX0, DECK_Z0), Vector2(DECK_X, DECK_Z0)], [Vector2(DECK_X, DECK_Z0), Vector2(DECK_X, 67.5)],
-			[Vector2(DECK_X, 67.5), Vector2(60.5, 71.1)], [Vector2(60.5, 71.1), Vector2(MX0, 71.1)]]:
-		_well_wall(wall_[0] as Vector2, wall_[1] as Vector2, Vector2(60.0, 63.5), F3 + 0.5)
 	run(Vector2(79.9, MZ0), Vector2(66.5, MZ0), Vector2(73.2, 44.0), F3 + 0.5, ALCOVE_TOP, false)
 	# The wall behind the bay's porch, with the door out onto it.
 	run(Vector2(MX1, 64.0), Vector2(MX1, 75.0), Vector2(108.0, 69.5), BAY_TOP, NORTH_TOP + 0.6, false)
@@ -726,6 +721,22 @@ static func wall_top(a: Vector2, b: Vector2) -> float:
 ## A bracketed eave along a run: the frieze board, brackets on it and the
 ## soffit reaching `out` feet.
 func _eave(a: Vector2, b: Vector2, inside: Vector2, y: float, out: float) -> void:
+	# Only along the stretches where a roof starts at the wall's top: not
+	# where a gable or dormer wall carries the face on up.
+	var inward := (inside - (a + b) / 2.0).normalized()
+	var n := maxi(1, int(a.distance_to(b) / 1.0))
+	var start := -1
+	for i in n + 1:
+		var q := a.lerp(b, (i + 0.5) / n) + inward * 1.5
+		var roofed := i < n and roof_y(q) < y + 4.0 and roof_y(q) > y - 1.0
+		if roofed and start < 0:
+			start = i
+		elif not roofed and start >= 0:
+			_eave_run(a.lerp(b, float(start) / n), a.lerp(b, float(i) / n), inside, y, out)
+			start = -1
+
+
+func _eave_run(a: Vector2, b: Vector2, inside: Vector2, y: float, out: float) -> void:
 	var mid := (a + b) / 2.0
 	var fr := frame(a, b, mid + (mid - inside))
 	var f: Transform3D = fr[0]
@@ -942,7 +953,21 @@ static func cut(pieces: Array, hole: PackedVector2Array) -> Array:
 		return pieces
 	var out: Array = []
 	for p: PackedVector2Array in pieces:
-		for q: PackedVector2Array in Geometry2D.clip_polygons(p, hole):
+		var res := Geometry2D.clip_polygons(p, hole)
+		# A hole wholly inside comes back as an outline and a hole of the
+		# other winding: split the piece through the hole and cut each half.
+		var holed := false
+		for q: PackedVector2Array in res:
+			if res.size() > 1 and Geometry2D.is_polygon_clockwise(q) != Geometry2D.is_polygon_clockwise(res[0]):
+				holed = true
+		if holed:
+			var cx := 0.0
+			for q: Vector2 in hole:
+				cx += q.x / hole.size()
+			for half: PackedVector2Array in [under(Vector3(1, 0, -cx), Vector3.ZERO), under(Vector3.ZERO, Vector3(1, 0, -cx))]:
+				out.append_array(cut(meet([p], half), hole))
+			continue
+		for q: PackedVector2Array in res:
 			if q.size() >= 3:
 				out.append(q)
 	return out
@@ -959,6 +984,12 @@ func roof_y(p: Vector2) -> float:
 		if Geometry2D.is_point_in_polygon(p, plans[i] as PackedVector2Array):
 			return tops[i]
 	var y := -1000.0
+	# The alcove's dormer stands to its flat top.
+	if Geometry2D.is_point_in_polygon(p, alcove_dormer()):
+		return ALCOVE_TOP
+	# So does the east slope's dormer, to its eave.
+	if Geometry2D.is_point_in_polygon(p, dormer7_plan()):
+		return 35.2
 	if Geometry2D.is_point_in_polygon(p, roof_rect):
 		var m := 1e9
 		for pl: Vector3 in hip_planes:
@@ -1079,11 +1110,23 @@ func _roofs() -> void:
 		for line: PackedVector2Array in runs:
 			next.append_array(Geometry2D.clip_polyline_with_polygon(line, t))
 		runs = next
+	# Foot by foot, and only where the hip is the roof at its edge: never
+	# across a gable's front, where the roof is the gable's.
 	for line: PackedVector2Array in runs:
 		for i in line.size() - 1:
 			var qa := line[i]
 			var qb := line[i + 1]
-			k.m.bar("wall", w(qa.x, qa.y, roof_y(qa)) - Vector3(0, 0.1, 0), w(qb.x, qb.y, roof_y(qb)) - Vector3(0, 0.1, 0), 0.09, 4, trim)
+			var n := maxi(1, int(qa.distance_to(qb)))
+			for j in n:
+				var p0 := qa.lerp(qb, float(j) / n)
+				var p1 := qa.lerp(qb, float(j + 1) / n)
+				var pm := (p0 + p1) / 2.0
+				var hip := 1e9
+				for pl: Vector3 in hip_planes:
+					hip = minf(hip, ph(pl, pm))
+				if roof_y(pm) > hip + 0.2:
+					continue
+				k.m.bar("wall", w(p0.x, p0.y, roof_y(p0)) - Vector3(0, 0.1, 0), w(p1.x, p1.y, roof_y(p1)) - Vector3(0, 0.1, 0), 0.09, 4, trim)
 	# The dressing room's round under its half cone; the east dormer.
 	_half_cone(DRESS_C, DRESS_R + 0.6, 40.0, 320.0, 18, Vector2(57.0, 77.3), 33.0, SOUTH_TOP - 0.3)
 	_dormer7()
@@ -1099,6 +1142,10 @@ func _roofs() -> void:
 	# The service wing's roof, stopping at the house; the pantry's roof,
 	# falling from the house's corner to its round's eave.
 	_wing_roof()
+	# The service wing's east window that rises through the cornice, in a
+	# wall dormer with a small gable.
+	run(Vector2(135.9, 43.8), Vector2(138.5, 43.8), Vector2(137.2, 33.0), WING_TOP, 19.0, false)
+	gable(Vector2(135.6, 43.8), Vector2(138.8, 43.8), Vector2(137.2, 33.0), 3.2, 19.0, 20.6, false, true, 0.4)
 	_pantry_roof()
 	_pantry_steps()
 	# Balconies before the gables' doors, their rails as the survey draws
@@ -1580,13 +1627,16 @@ func gable(a: Vector2, b: Vector2, inward: Vector2, depth: float, y0: float, y1:
 		else:
 			gable_slopes.append({"plane": plane3(Vector3(ea.x, ea.y, y0 - drop), Vector3(eb.x, eb.y, y0 - drop), Vector3(rb.x, rb.y, y1)),
 				"poly": PackedVector2Array([ea, eb, rb, ra])})
-	if alone:
-		var fa := mid + along * (half + over) + into * depth
-		var fb := mid - along * (half + over) + into * depth
-		var fm := mid + into * depth
-		var back := w2(fm + into) - w2(fm)
-		k.m.tri("wall", w(fa.x, fa.y, y0 - drop), w(fb.x, fb.y, y0 - drop), w(fm.x, fm.y, y1), Vector3(back.x, 0, back.y).normalized(),
-			c(SLATE, CourthouseKit.K_SLATE))
+	# The far end closed: whole where the gable stands alone, and inside
+	# the main roof where the gable runs into it, so no slot opens between
+	# the gable's end and the roof behind.
+	var fa := mid + along * (half + over) + into * depth
+	var fb := mid - along * (half + over) + into * depth
+	var fm := mid + into * depth
+	var back := w2(fm + into) - w2(fm)
+	for sd: float in [1.0, -1.0] if not alone else [1.0]:
+		k.m.tri("wall", w(fa.x, fa.y, y0 - drop), w(fb.x, fb.y, y0 - drop), w(fm.x, fm.y, y1), Vector3(back.x, 0, back.y).normalized() * sd,
+			c(SLATE, CourthouseKit.K_SLATE) if alone else c(CEIL, CourthouseKit.K_PLASTER))
 	if not face:
 		return
 	# The face in courses, each as wide as the rakes allow at its middle.
@@ -1748,6 +1798,12 @@ func floor_poly(pts: Array, y: float, top: Color, under: Color, thick := 0.8, so
 ## smaller deck under a tall spire. Railings round both, open to the
 ## house on its side.
 func _towers() -> void:
+	# The Texas deck's well: the billiard room's wall, the top hall's with
+	# its doors, the storeroom's; each up under the roof round the well
+	# (built after the roofs, whose height it follows).
+	for wall_: Array in [[Vector2(MX0, DECK_Z0), Vector2(DECK_X, DECK_Z0)], [Vector2(DECK_X, DECK_Z0), Vector2(DECK_X, 67.5)],
+			[Vector2(DECK_X, 67.5), Vector2(60.5, 71.1)], [Vector2(60.5, 71.1), Vector2(MX0, 71.1)]]:
+		_well_wall(wall_[0] as Vector2, wall_[1] as Vector2, Vector2(60.0, 63.5), F3 + 0.5)
 	# Each deck on its tower's own outline, open on the house's side.
 	_deck_tower([Vector2(MX0, 55.8), Vector2(52.3, 55.8), Vector2(48.7, 60.4), Vector2(48.7, 66.8), Vector2(52.5, 71.1), Vector2(MX0, 71.1)],
 		F3 + 0.5, 34.6, Vector2(MX0 - 1.5, 63.45), 37.1, 1.0)
