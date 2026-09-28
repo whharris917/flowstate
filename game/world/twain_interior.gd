@@ -136,7 +136,9 @@ static func _floors() -> void:
 	var attic := PackedVector2Array([Vector2(TwainHouse.MX0 + 1.0, TwainHouse.MZ0 + 1.0), Vector2(TwainHouse.MX1 - 1.0, TwainHouse.MZ0 + 1.0),
 		Vector2(TwainHouse.MX1 - 1.0, TwainHouse.MZ1 - 1.0), Vector2(TwainHouse.MX0 + 1.0, TwainHouse.MZ1 - 1.0)])
 	var third: Array = TwainHouse.meet(hs.roof_higher(F3 + 1.0), attic)
-	for level: Array in [[F2, [p]], [F3, third]]:
+	# The second floor stops at the dressing room's round, one storey.
+	var second: Array = TwainHouse.cut([p], TwainHouse.tower_plans()[2])
+	for level: Array in [[F2, second], [F3, third]]:
 		var y := float(level[0])
 		var shapes: Array = level[1]
 		for half: PackedVector2Array in [TwainHouse.under(Vector3(1, 0, -78.9), Vector3.ZERO), TwainHouse.under(Vector3.ZERO, Vector3(1, 0, -78.9))]:
@@ -145,14 +147,12 @@ static func _floors() -> void:
 				for q: Vector2 in piece:
 					pts.append(q)
 				hs.floor_poly(pts, y, oak, ceil, 1.0)
-	# Ceilings over the drawing room's bay and the dressing room's round,
-	# under their roofs.
+	# The dressing room's ceiling, under the round's own roof.
 	var towers := TwainHouse.tower_plans()
-	# The dressing room's round, under its cone.
 	var pts: Array = []
 	for q: Vector2 in towers[2]:
 		pts.append(q)
-	hs.floor_poly(pts, TwainHouse.SOUTH_TOP - 0.05, ceil, ceil, 0.4)
+	hs.floor_poly(pts, F2 - 0.8, ceil, ceil, 0.2)
 
 
 ## ---- walls between rooms ----------------------------------------------------
@@ -456,7 +456,7 @@ static func _rooms() -> void:
 	var paint := c(Color(0.80, 0.78, 0.70), CourthouseKit.K_PLASTER)
 	room(region(79.55, 86.75, 0.0, 55.7), F2, cy2, "wall", c(Color(0.82, 0.82, 0.78), CourthouseKit.K_TILE), 4.0, WALNUT.lightened(0.1), "west bath")
 	room(region(101.0, 200.0, 0.0, 55.7), F2, cy2, "wall", paint, 0.0, WALNUT, "the office")
-	room(region(0.0, 67.45, 71.05, 100.0), F2, cy2, "wall", c(Color(0.82, 0.82, 0.78), CourthouseKit.K_TILE), 4.0, WALNUT.lightened(0.1), "south-east bath")
+	room(region(TwainHouse.MX0 + 1.0, 67.45, 71.05, 100.0), F2, cy2, "wall", c(Color(0.82, 0.82, 0.78), CourthouseKit.K_TILE), 4.0, WALNUT.lightened(0.1), "south-east bath")
 	room(region(85.9, 96.7, 71.05, 100.0), F2, cy2, "wall", paint, 0.0, WALNUT, "the small room")
 	room(hall2, F2, cy2, "stencil", TwainHouse.st(Color(0.46, 0.10, 0.07), 1), 4.6, WALNUT, "upstairs hall")
 	ceiling(hall2, cy2, TwainHouse.st(Color(0.40, 0.12, 0.08), 5), 4.0)
