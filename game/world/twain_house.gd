@@ -828,7 +828,7 @@ func _chimney(at: Vector2, size: Vector2, y0: float, y1: float) -> void:
 ## A face of slate from the edge a-b up to d-c (d over a, c over b; c = d
 ## for a hip's end), laid in coloured courses as the house's roofs are,
 ## with a plastered underside for the rooms under it.
-func slope(a: Vector3, b: Vector3, cc: Vector3, d: Vector3, under := true) -> void:
+func slope(a: Vector3, b: Vector3, cc: Vector3, d: Vector3, under := true, under_col := Color(-1, 0, 0)) -> void:
 	var n := (b - a).cross(d - a).normalized()
 	if n.y < 0.0:
 		n = -n
@@ -845,7 +845,8 @@ func slope(a: Vector3, b: Vector3, cc: Vector3, d: Vector3, under := true) -> vo
 		k.m.quad("wall", p0, p1, p2, p3, n, c(courses[i % courses.size()], CourthouseKit.K_SLATE))
 	if under:
 		var off := -n * 0.1
-		k.m.quad("wall", a + off, b + off, cc + off, d + off, -n, c(CEIL, CourthouseKit.K_PLASTER))
+		var uc := c(CEIL, CourthouseKit.K_PLASTER) if under_col.r < 0.0 else under_col
+		k.m.quad("wall", a + off, b + off, cc + off, d + off, -n, uc)
 
 
 ## A hip over the rectangle x0..x1, z0..z1 (survey feet) from the eave y0
@@ -1029,10 +1030,15 @@ func _roofs() -> void:
 		TOP - WEST_PITCH * 8.75, SOUTH_TOP, 29.0, 3.0)
 	var south_end := gable_slopes.size()
 	# The two great east gables throw their roofs forward over their
-	# balconies: the southern 0.4 ft, the northern 3.6 (the south and north
-	# elevations' edges).
-	cross_gable(Vector2(57.5, MZ1), Vector2(79.5, MZ1), Vector2(68.5, 70.0), 35.7, 1.0, 19.3, EAST_TOP, 14.5, 0.4)
-	cross_gable(Vector2(96.7, MZ1), Vector2(115.3, MZ1), Vector2(106.0, 70.0), 35.7, 1.0, 19.3, EAST_TOP, 14.5, 3.6)
+	# balconies: the southern 2.8 ft, the northern 3.0 (the south and north
+	# elevations, each from the wall it draws under the gable's edge).
+	cross_gable(Vector2(57.5, MZ1), Vector2(79.5, MZ1), Vector2(68.5, 70.0), 35.7, 1.0, 19.3, EAST_TOP, 14.5, 2.8)
+	cross_gable(Vector2(96.7, MZ1), Vector2(115.3, MZ1), Vector2(106.0, 70.0), 35.7, 1.0, 19.3, EAST_TOP, 14.5, 3.0)
+	# Each carries an arched rib across its front (the east elevation): the
+	# southern under its balcony from the rakes' feet, the northern over its
+	# balcony from the rakes at the rail's height.
+	_gable_arch(Vector2(57.5, MZ1), Vector2(79.5, MZ1), 1.0, 19.3, 35.7, 2.8, 18.7, 23.3)
+	_gable_arch(Vector2(96.7, MZ1), Vector2(115.3, MZ1), 1.0, 19.3, 35.7, 3.0, 25.9, 29.2)
 	cross_gable(Vector2(80.4, MZ1), Vector2(86.9, MZ1), Vector2(83.6, 70.0), 27.3, 0.6, 20.8, EAST_TOP)
 	cross_gable(Vector2(88.0, MZ1), Vector2(96.3, MZ1), Vector2(92.1, 70.0), 27.3, 0.6, 20.8, EAST_TOP)
 	# The north gable, its roof 5 ft forward over the balcony.
@@ -1597,6 +1603,37 @@ func cross_gable(a: Vector2, b: Vector2, inward: Vector2, peak: float, over := 1
 	gable(a, b, inward, half + 3.0 + maxf(front, 0.0), eave, minf(peak, main - 0.3), true, false, over, maxf(eave, wall), front)
 
 
+## A gable's arched rib: a segment of a circle in the plane just behind
+## its bargeboards (`front` feet out from the wall a-b), springing from the
+## rakes where they stand y_end feet up and rising to y_apex at the middle.
+## The gable is `over` feet wider than a-b each side, its eave y0 and peak
+## y1, as it was built.
+func _gable_arch(a: Vector2, b: Vector2, over: float, y0: float, y1: float, front: float, y_end: float, y_apex: float) -> void:
+	var along := (b - a).normalized()
+	var half := (b - a).length() / 2.0
+	var mid := (a + b) / 2.0
+	var out := along.orthogonal()
+	if out.dot(Vector2(OX, OZ) - mid) > 0.0:
+		out = -out
+	var s := (y1 - y0) / half
+	var ue := minf((y1 - y_end) / s, half + over)
+	var sg := y_apex - y_end
+	var r := (ue * ue + sg * sg) / (2.0 * sg)
+	var cy := y_apex - r
+	var plane := mid + out * (front - 0.15)
+	var trim := c(TRIM, CourthouseKit.K_PAINT)
+	var n := 20
+	var prev := Vector3.ZERO
+	for i in n + 1:
+		var u := lerpf(-ue, ue, float(i) / n)
+		var y := cy + sqrt(maxf(r * r - u * u, 0.0))
+		var q := plane + along * u
+		var p := w(q.x, q.y, y)
+		if i > 0:
+			k.m.bar("wall", prev, p, 0.07, 4, trim)
+		prev = p
+
+
 ## A gable: its face on the house's wall between the eave corners a and
 ## b (survey plan), the roof running `depth` feet back into the house
 ## (`inward` a point that way); from the eave y0 to the peak y1. Its two
@@ -1806,7 +1843,7 @@ func _towers() -> void:
 		_well_wall(wall_[0] as Vector2, wall_[1] as Vector2, Vector2(60.0, 63.5), F3 + 0.5)
 	# Each deck on its tower's own outline, open on the house's side.
 	_deck_tower([Vector2(MX0, 55.8), Vector2(52.3, 55.8), Vector2(48.7, 60.4), Vector2(48.7, 66.8), Vector2(52.5, 71.1), Vector2(MX0, 71.1)],
-		F3 + 0.5, 34.6, Vector2(MX0 - 1.5, 63.45), 37.1, 1.0)
+		F3 + 0.5, 34.6, Vector2(MX0 - 1.5, 63.45), 37.1, 1.9, true)
 	floor_poly(deck_well(), F3 + 0.5, c(PORCH, HarborTown.K_PLANK), c(CEIL, CourthouseKit.K_PLASTER), 1.0)
 	_deck_tower([Vector2(66.5, MZ0), Vector2(66.5, 33.6), Vector2(70.5, 29.7), Vector2(75.9, 29.7), Vector2(79.9, 33.6), Vector2(79.9, MZ0)],
 		F3 + 0.5, 33.1, Vector2(73.2, 34.2), 46.6, 2.8)
@@ -1816,11 +1853,18 @@ func _towers() -> void:
 ## (survey plan, from the main wall round to the main wall): boards over
 ## it, a post at each corner with brackets and a fret under the plate,
 ## crossed railings between, and a roof rising from the plate to a point
-## at `apex` (plan), `peak` feet, its eaves standing out 1.6 ft.
-func _deck_tower(chain: Array[Vector2], floor_y: float, eave_y: float, apex: Vector2, peak: float, eave_out := 1.6) -> void:
+## at `apex` (plan), `peak` feet, its eaves standing out 1.6 ft. With
+## `frieze` (the Texas deck, from the east elevation and the photographs)
+## the posts are turned, a band of pierced lattice 2.5 ft deep hangs under
+## the plate with a fringe of drops along its foot, blocks carry the eave,
+## a moulded band runs round the tower at the deck's floor and the ceiling
+## under the roof is painted as the woodwork.
+func _deck_tower(chain: Array[Vector2], floor_y: float, eave_y: float, apex: Vector2, peak: float, eave_out := 1.6,
+		frieze := false) -> void:
 	floor_poly(chain, floor_y, c(PORCH, HarborTown.K_PLANK), c(CEIL, CourthouseKit.K_PLASTER), 1.0)
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
 	var rise := h(eave_y) - h(floor_y)
+	var band := 2.5 * FT
 	for i in chain.size() - 1:
 		var a := chain[i]
 		var b := chain[i + 1]
@@ -1829,25 +1873,77 @@ func _deck_tower(chain: Array[Vector2], floor_y: float, eave_y: float, apex: Vec
 		for post: Vector3 in [pa, pb]:
 			k.box("wall", Transform3D(), post + Vector3(0, rise / 2.0, 0), Vector3(0.16, rise, 0.16), trim)
 			k.solid(Transform3D(), post + Vector3(0, rise / 2.0, 0), Vector3(0.16, rise, 0.16))
+			if frieze:
+				# Turned: a bulb over the rail and one under the frieze,
+				# collars between.
+				for y: float in [1.1, rise - band - 0.35]:
+					k.m.sphere("wall", Transform3D(Basis(), post + Vector3(0, y, 0)), 0.13, 8, trim)
+					k.m.bar("wall", post + Vector3(0, y - 0.3, 0), post + Vector3(0, y - 0.24, 0), 0.11, 8, trim)
+					k.m.bar("wall", post + Vector3(0, y + 0.24, 0), post + Vector3(0, y + 0.3, 0), 0.11, 8, trim)
 		k.m.bar("wall", pa + Vector3(0, rise, 0), pb + Vector3(0, rise, 0), 0.1, 4, trim)
-		for j in 7:
-			var p := pa.lerp(pb, (j + 0.5) / 7.0) + Vector3(0, rise, 0)
-			k.m.bar("wall", p, p - Vector3(0, 0.45, 0), 0.018, 4, trim)
-		k.m.bar("wall", pa + Vector3(0, rise - 0.45, 0), pb + Vector3(0, rise - 0.45, 0), 0.03, 4, trim)
 		var mid := pa.lerp(pb, 0.5)
+		if frieze:
+			var plate := rise - 0.06
+			var foot := rise - band
+			k.m.bar("wall", pa + Vector3(0, foot, 0), pb + Vector3(0, foot, 0), 0.035, 4, trim)
+			k.m.bar("wall", pa + Vector3(0, foot + 0.14, 0), pb + Vector3(0, foot + 0.14, 0), 0.025, 4, trim)
+			# The lattice: laths crossing at 45 degrees between the rails.
+			var length := pa.distance_to(pb)
+			var deep := plate - foot - 0.14
+			var step := 0.16
+			var n := int((length + deep) / step)
+			for j in n + 1:
+				var u0 := j * step - deep
+				for sd: float in [1.0, -1.0]:
+					# Along the lath from u0 at the foot to u0 + deep at the
+					# top, clipped to the span.
+					var s0 := clampf(u0, 0.0, length)
+					var s1 := clampf(u0 + deep, 0.0, length)
+					if s1 - s0 < 0.02:
+						continue
+					var y0 := foot + 0.14 + (s0 - u0)
+					var y1 := foot + 0.14 + (s1 - u0)
+					var qa := s0 / length
+					var qb := s1 / length
+					if sd < 0.0:
+						qa = 1.0 - qa
+						qb = 1.0 - qb
+					k.m.bar("wall", pa.lerp(pb, qa) + Vector3(0, y0, 0), pa.lerp(pb, qb) + Vector3(0, y1, 0), 0.012, 3, trim)
+			# The fringe of drops along its foot.
+			var drops := int(length / 0.09)
+			for j in drops:
+				var p := pa.lerp(pb, (j + 0.5) / drops) + Vector3(0, foot, 0)
+				k.m.bar("wall", p, p - Vector3(0, 0.13, 0), 0.016, 4, trim)
+			# Blocks under the eave.
+			var out3 := (mid - w(apex.x, apex.y, floor_y)) * Vector3(1, 0, 1)
+			out3 = out3.normalized()
+			for j in 3:
+				var p := pa.lerp(pb, (j + 0.5) / 3.0) + Vector3(0, rise + 0.04, 0) + out3 * 0.25
+				k.box("wall", Transform3D(), p, Vector3(0.12, 0.12, 0.12), trim)
+			# The moulded band round the tower at the floor.
+			var d := (pb - pa).normalized()
+			var bf := Transform3D(Basis(d.cross(Vector3.UP).normalized(), Vector3.UP, d), mid + out3 * 0.06 - Vector3(0, 0.12, 0))
+			k.box("wall", bf, Vector3.ZERO, Vector3(0.2, 0.3, length + 0.12), trim)
+		else:
+			for j in 7:
+				var p := pa.lerp(pb, (j + 0.5) / 7.0) + Vector3(0, rise, 0)
+				k.m.bar("wall", p, p - Vector3(0, 0.45, 0), 0.018, 4, trim)
+			k.m.bar("wall", pa + Vector3(0, rise - 0.45, 0), pb + Vector3(0, rise - 0.45, 0), 0.03, 4, trim)
 		for post: Vector3 in [pa, pb]:
-			k.m.bar("wall", post + Vector3(0, rise - 0.8, 0), post.lerp(mid, 0.3) + Vector3(0, rise, 0), 0.035, 4, trim)
+			var foot2 := rise - (band if frieze else 0.0)
+			k.m.bar("wall", post + Vector3(0, foot2 - 0.8, 0), post.lerp(mid, 0.3) + Vector3(0, foot2, 0), 0.035, 4, trim)
 		xrail(pa, pb, 0.95)
 	# The roof: from the plate, standing out, up to its point.
+	var ceil_col := trim if frieze else c(CEIL, CourthouseKit.K_PLASTER)
 	var top := w(apex.x, apex.y, peak)
 	var ring: Array = []
 	for q: Vector2 in chain:
 		var out := (q - apex).normalized() * eave_out
 		ring.append(w(q.x + out.x, q.y + out.y, eave_y + 0.1))
 	for i in ring.size() - 1:
-		slope(ring[i], ring[i + 1], top, top)
+		slope(ring[i], ring[i + 1], top, top, true, ceil_col)
 	# Closed over the house's side too.
-	slope(ring[ring.size() - 1], ring[0], top, top)
+	slope(ring[ring.size() - 1], ring[0], top, top, true, ceil_col)
 	for i in ring.size() - 1:
 		k.m.bar("wall", (ring[i] as Vector3) - Vector3(0, 0.1, 0), (ring[i + 1] as Vector3) - Vector3(0, 0.1, 0), 0.09, 4, trim)
 	k.m.bar("wall", top - Vector3(0, 0.2, 0), top + Vector3(0, 0.3, 0), 0.05, 6, trim)
