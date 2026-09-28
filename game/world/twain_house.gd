@@ -699,7 +699,7 @@ func _chimneys() -> void:
 	# gable; the kitchen's.
 	_chimney(Vector2(97.25, 68.8), Vector2(1.6, 7.2), 29.3, 48.2)
 	_chimney(Vector2(103.0, 37.0), Vector2(3.8, 1.6), 31.3, 47.6)
-	_chimney(Vector2(138.0, 31.5), Vector2(2.4, 4.0), 21.3, 40.8)
+	_chimney(Vector2(137.8, 28.8), Vector2(2.4, 3.6), 20.0, 40.6)
 	# The great chimney on the north front, as the north elevation draws
 	# it: a base 9.2 ft across standing to 8.8 ft, drawn in to 4.7 at
 	# 16 ft; the shaft 4.7 across up the wall and through the roof to a
