@@ -36,10 +36,6 @@ func _build_ground() -> void:
 	grounds = TwainGrounds.new()
 	add_child(grounds)
 	grounds.build(house)
-	# The lawn falls steeply round the service wing: the trees' shadows on
-	# it band without a wider bias.
-	if sun != null:
-		sun.shadow_normal_bias = 3.5
 
 
 ## Past the neighbours' lawns a ring of woods closes the view.
