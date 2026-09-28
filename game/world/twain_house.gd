@@ -32,6 +32,8 @@ const F3 := 24.0            # the third
 const EAVE := 24.3          # a reference height for the towers' roofs
 const TOP := 43.3           # the main roof's ridge
 const RIDGE_Z := 47.4       # where it runs (survey z)
+const DECK_X := 64.3        # the Texas deck's well: its north wall (survey x)
+const DECK_Z0 := 55.8       # and its west wall (survey z)
 const WEST_EAVE := 28.0     # the long west roof's eave, a foot out from the wall
 const WEST_PITCH := 1.515   # its rise per foot, from that eave to the ridge
 const DECK := 35.9          # the flat deck east of the ridge
@@ -100,6 +102,7 @@ var rails: Array = []
 ## The dressing of the openings (sashes, glass, casings, hoods, door
 ## leaves), apart from the walls so the audit can look through a hole.
 var dress_m := TownMesh.new()
+var _dressed_ids := {}
 
 
 ## The world point of a survey point (feet: x north, z east, y over the
@@ -220,7 +223,7 @@ func _openings() -> void:
 	_op(68.5, 31.65, 2.2, 15.8, 21.5)
 	_op(77.9, 31.65, 2.2, 15.8, 21.5)
 	# The alcove's deck: a door and two windows in the wall behind it.
-	_op(73.2, MZ0, 2.6, 25.9, 31.3, "shut", "flat", false)
+	_op(73.2, MZ0, 2.6, F3 + 0.3, 31.3, "door", "flat", false)
 	_op(69.6, MZ0, 2.0, 27.3, 31.3, "win", "flat", false)
 	_op(76.8, MZ0, 2.0, 27.3, 31.3, "win", "flat", false)
 	# The west front: the dining room; upstairs the Langdon room, the bath.
@@ -259,7 +262,7 @@ func _openings() -> void:
 	_op(90.8, MZ1, 4.4, 0.0, 10.3, "door")
 	_op(81.3, MZ1, 3.2, 3.8, 11.1)
 	_op(68.4, MZ1, 2.6, 3.8, 13.6)
-	_op(74.8, MZ1, 2.6, 3.8, 13.6)
+	_op(77.7, MZ1, 2.6, 3.8, 13.6)
 	# Upstairs: two windows under the first gable, one under each small
 	# gable, the three-part window under the second gable.
 	_op(64.5, MZ1, 2.6, 15.8, 21.6)
@@ -280,9 +283,8 @@ func _openings() -> void:
 	_op(49.9, 58.1, 2.2, 15.8, 21.5)
 	_op(50.0, 68.95, 2.2, 15.8, 21.5)
 	# The octagon's deck: the door and windows in the wall behind it.
-	_op(MX0, 63.3, 2.6, 25.9, 32.3, "shut", "flat", false)
-	_op(MX0, 57.5, 2.2, 27.3, 32.3, "win", "flat", false)
-	_op(MX0, 68.6, 2.2, 27.3, 32.3, "win", "flat", false)
+	_op(DECK_X, 64.0, 3.4, F3 + 0.5, 32.0, "french", "flat", false)
+	_op(61.2, DECK_Z0, 2.6, F3 + 0.5, 31.6, "door", "flat", false)
 	# The dressing room's round, and the bath over it: each at the middle of
 	# a facet of the round wide enough for it.
 	for a: float in [150.0, 180.0, 235.0]:
@@ -491,7 +493,7 @@ func ops_on(f: Transform3D, length: float, y0: float, y1: float, tol: float) -> 
 		var op := CourthouseKit.opening(u, wd, sill, spring, shape, 0.25)
 		op["kind"] = o["kind"]
 		op["hood"] = o["hood"]
-		op["id"] = o["id"]
+		op["id"] = int(o.get("id", -1))
 		out.append(op)
 	return out
 
@@ -552,6 +554,11 @@ func _bands(f: Transform3D, length: float, y0: float, y1: float, mine: Array) ->
 ## head's board and, over most windows, the stepped sunburst of boards
 ## that marks the house.
 func _dress(f: Transform3D, o: Dictionary) -> void:
+	# Where two walls stand in one plane both cut the hole; only the first
+	# dresses it.
+	if _dressed_ids.has(int(o["id"])):
+		return
+	_dressed_ids[int(o["id"])] = true
 	var kind := str(o["kind"])
 	# Every opening as built, for tools/twain_openings.py.
 	dressed.append({"c": f * Vector3(float(o["u"]), 0, 0), "n": f.basis.z, "w": float(o["w"]), "y0": float(o["y0"]),
@@ -637,8 +644,12 @@ func _walls() -> void:
 			_eave(a, b, inside_of(a, b, cw), top, 1.4)
 	# The decks' back walls: the third floor's door and windows out onto
 	# each tower's top, under the tower's roof.
-	run(Vector2(MX0, 71.1), Vector2(MX0, 55.8), Vector2(64.0, 63.5), SOUTH_TOP, 34.6, false)
-	run(Vector2(79.9, MZ0), Vector2(66.5, MZ0), Vector2(73.2, 44.0), F3 + 0.5, 34.3, false)
+	# The Texas deck's well: the billiard room's wall, the top hall's with
+	# its doors, the storeroom's; each up under the roof round the well.
+	for wall_: Array in [[Vector2(MX0, DECK_Z0), Vector2(DECK_X, DECK_Z0)], [Vector2(DECK_X, DECK_Z0), Vector2(DECK_X, 67.5)],
+			[Vector2(DECK_X, 67.5), Vector2(60.5, 71.1)], [Vector2(60.5, 71.1), Vector2(MX0, 71.1)]]:
+		_well_wall(wall_[0] as Vector2, wall_[1] as Vector2, Vector2(60.0, 63.5), F3 + 0.5)
+	run(Vector2(79.9, MZ0), Vector2(66.5, MZ0), Vector2(73.2, 44.0), F3 + 0.5, ALCOVE_TOP, false)
 	# The wall behind the bay's porch, with the door out onto it.
 	run(Vector2(MX1, 64.0), Vector2(MX1, 75.0), Vector2(108.0, 69.5), BAY_TOP, NORTH_TOP + 0.6, false)
 	# The butler's pantry: a quarter round of one storey under a roof
@@ -655,6 +666,34 @@ func _walls() -> void:
 	for i in wing.size() - 1:
 		run(wing[i], wing[i + 1], Vector2(135.0, 33.0), foot(wing[i], wing[i + 1]), WING_TOP)
 		_eave(wing[i], wing[i + 1], Vector2(135.0, 33.0), WING_TOP, WING_OUT)
+
+
+## A wall of the Texas deck's well from a to b, its face toward `open`,
+## from y0 up to the roof over it: built in strips whose tops follow the
+## roof, its openings cut and dressed.
+func _well_wall(a: Vector2, b: Vector2, open: Vector2, y0: float) -> void:
+	var mid := (a + b) / 2.0
+	var fr := frame(a, b, open)
+	var f: Transform3D = fr[0]
+	var length: float = fr[1]
+	var mine := ops_on(f, length, y0, 40.0, 0.8)
+	var strips := maxi(1, int(length / 0.3))
+	var o := Vector2(f.origin.x, f.origin.z)
+	var from := a if o.distance_to(w2(a)) < o.distance_to(w2(b)) else b
+	var to := b if from == a else a
+	for i in strips:
+		var t0 := float(i) / strips
+		var t1 := float(i + 1) / strips
+		var top := 1e9
+		var back := (mid - open).normalized() * 1.2
+		for t: float in [t0, t1]:
+			top = minf(top, roof_y(from.lerp(to, t) + back))
+		top = minf(top, DECK)
+		if top < y0 + 0.5:
+			continue
+		k.wall("wall", f, length * t0, length * t1, h(y0 - 0.5), h(top), T * FT, c(BRICK, CourthouseKit.K_BRICK), mine, 1000.0)
+	for op: Dictionary in mine:
+		_dress(f, op)
 
 
 ## Where a wall from a to b starts: a little under the lowest ground
@@ -717,7 +756,7 @@ func _chimneys() -> void:
 	# The hall's by the east dormer, the other way about; on the west
 	# gable; the kitchen's.
 	_chimney(Vector2(97.25, 68.8), Vector2(1.6, 7.2), 29.3, 48.2)
-	_chimney(Vector2(103.0, 37.0), Vector2(3.8, 1.6), 31.3, 47.6)
+	_chimney(Vector2(101.9, 37.3), Vector2(3.0, 2.0), 31.3, 47.6)
 	_chimney(Vector2(137.8, 28.8), Vector2(2.4, 3.6), 20.0, 40.6)
 	# The great chimney on the north front, as the north elevation draws
 	# it: a base 9.2 ft across standing to 8.8 ft, drawn in to 4.7 at
@@ -943,7 +982,7 @@ func _roofs() -> void:
 	# survey's 43'-3"). On the west the steep slope rises from the wall's
 	# cornice until it meets the gables' roofs.
 	hip_planes = [Vector3(0, WEST_PITCH, WEST_EAVE - WEST_PITCH * (MZ0 - 1.0)), Vector3(0, -0.86, EAST_TOP + 0.86 * MZ1),
-		Vector3(1.05, 0, SOUTH_TOP - 1.05 * MX0), Vector3(-1.05, 0, NORTH_TOP + 1.05 * MX1),
+		Vector3(1.8, 0, F3 + 0.5 - 1.8 * MX0), Vector3(-1.05, 0, NORTH_TOP + 1.05 * MX1),
 		Vector3(0, 0, DECK)]
 	roof_rect = PackedVector2Array([Vector2(xa, za), Vector2(xb, za), Vector2(xb, zb), Vector2(xa, zb)])
 	# The gables, each at the survey's peak and eave: south over the
@@ -977,12 +1016,34 @@ func _roofs() -> void:
 			continue
 		if (gable_slopes[i]["plane"] as Vector3).y > 0.0:
 			gable_slopes[i]["poly"] = PackedVector2Array()
-	gable_slopes.append({"plane": hip_planes[0] + Vector3(0, 0, 0.02), "poly": PackedVector2Array([Vector2(55.2, MZ0 - 1.0),
-		Vector2(119.2, MZ0 - 1.0), Vector2(119.2, RIDGE_Z), Vector2(55.2, RIDGE_Z)])})
+	var west_start := gable_slopes.size()
 	cross_gable(Vector2(96.2, MZ0), Vector2(108.4, MZ0), Vector2(102.3, 50.0), 39.4, 1.4, 32.4, WEST_TOP, 8.0)
+	var west_end := gable_slopes.size()
+	# The long roof and the west gable's roof each show where they stand
+	# higher; the long roof is open over the alcove's dormer.
+	var long_plane := hip_planes[0] + Vector3(0, 0, 0.02)
+	var long: Array = cut([PackedVector2Array([Vector2(55.2, MZ0 - 1.0), Vector2(119.2, MZ0 - 1.0), Vector2(119.2, RIDGE_Z),
+		Vector2(55.2, RIDGE_Z)])], alcove_dormer())
+	var kept_west: Array[Dictionary] = []
+	for i in range(west_start, west_end):
+		var g := gable_slopes[i]
+		var gp := g["plane"] as Vector3
+		for over_: PackedVector2Array in meet([g["poly"]], under(long_plane, gp)):
+			long = cut(long, over_)
+		for piece: PackedVector2Array in meet([g["poly"]], under(long_plane, gp)):
+			kept_west.append({"plane": gp, "poly": piece})
+	gable_slopes = gable_slopes.slice(0, west_start)
+	gable_slopes.append_array(kept_west)
+	for piece: PackedVector2Array in long:
+		gable_slopes.append({"plane": long_plane, "poly": piece})
 	# The towers and bays rise through the main roof's eaves: no roof over
 	# them but their own.
 	var towers := tower_plans()
+	# The roof is open over the Texas deck's well, the alcove's dormer and
+	# the east slope's dormer.
+	towers.append(deck_well())
+	towers.append(alcove_dormer())
+	towers.append(dormer7_plan())
 	var cap := hip_planes.size() - 1
 	for i in hip_planes.size():
 		var pieces: Array = [roof_rect]
@@ -1026,6 +1087,15 @@ func _roofs() -> void:
 	# The dressing room's round under its half cone; the east dormer.
 	_half_cone(DRESS_C, DRESS_R + 0.6, 40.0, 320.0, 18, Vector2(57.0, 77.3), 33.0, SOUTH_TOP - 0.3)
 	_dormer7()
+	var ad := alcove_dormer()
+	roof_piece(ad, Vector3(0, 0, ALCOVE_TOP), true)
+	var brick := c(BRICK, CourthouseKit.K_BRICK)
+	for x: float in [66.5, 79.9]:
+		var zt := ad[2].y
+		var n3 := (w(x + 1.0, 45.0) - w(x, 45.0)).normalized() * (1.0 if x > 70.0 else -1.0)
+		var cheek := ph(hip_planes[0], Vector2(x, MZ0))
+		for sd: float in [1.0, -1.0]:
+			k.m.tri("wall", w(x, MZ0, cheek), w(x, MZ0, ALCOVE_TOP), w(x, zt, ALCOVE_TOP), n3 * sd, brick)
 	# The service wing's roof, stopping at the house; the pantry's roof,
 	# falling from the house's corner to its round's eave.
 	_wing_roof()
@@ -1033,13 +1103,19 @@ func _roofs() -> void:
 	_pantry_steps()
 	# Balconies before the gables' doors, their rails as the survey draws
 	# them.
-	_balcony([Vector2(MX0, 38.0), Vector2(55.2, 38.0), Vector2(55.2, 56.4), Vector2(MX0, 56.4)], 24.2, 1.1, F3)
+	_balcony([Vector2(MX0, 38.6), Vector2(55.2, 38.6), Vector2(55.2, 55.6), Vector2(MX0, 55.6)], 24.2, 1.1, F3)
 	_balcony([Vector2(61.7, MZ1), Vector2(61.7, 86.3), Vector2(74.5, 86.3), Vector2(74.5, MZ1)], 24.0, 0.66, F3)
 	_balcony([Vector2(100.5, MZ1), Vector2(100.5, 86.3), Vector2(111.4, 86.3), Vector2(111.4, MZ1)], 23.9, 0.73, F3)
 	_balcony([Vector2(MX1, 45.8), Vector2(117.0, 45.8), Vector2(117.0, 53.8), Vector2(MX1, 53.8)], 23.1, 0.95, F3)
 	_bay_porch()
 	_side_porch()
 	_back_stair()
+
+
+## The east dormer's footprint on the roof (survey plan).
+func dormer7_plan() -> PackedVector2Array:
+	var zb := MZ1 - (35.2 - EAST_TOP) / 0.86
+	return PackedVector2Array([Vector2(78.6, zb), Vector2(96.0, zb), Vector2(96.0, 74.5), Vector2(78.6, 74.5)])
 
 
 ## The dormer on the east slope beside the chimney: a low hipped roof
@@ -1314,6 +1390,21 @@ func _back_stair() -> void:
 ## The plans of what rises through the main roof's eaves: the library's
 ## alcove, the guest room's octagon, the dressing room's round, the
 ## drawing room's bay; each to the main walls' outer faces.
+## The Texas deck's well into the main roof (survey plan), as the third
+## floor plan draws it: from the octagon to the top hall's wall.
+static func deck_well() -> PackedVector2Array:
+	return PackedVector2Array([Vector2(MX0, DECK_Z0), Vector2(DECK_X, DECK_Z0), Vector2(DECK_X, 67.5), Vector2(60.5, 71.1),
+		Vector2(MX0, 71.1)])
+
+
+## The dormer behind the alcove deck, through the long west roof: from
+## the deck's back wall to where the roof rises to its top.
+const ALCOVE_TOP := 34.3
+static func alcove_dormer() -> PackedVector2Array:
+	var zb := MZ0 - 1.0 + (ALCOVE_TOP - WEST_EAVE) / WEST_PITCH
+	return PackedVector2Array([Vector2(66.5, MZ0 - 1.2), Vector2(79.9, MZ0 - 1.2), Vector2(79.9, zb), Vector2(66.5, zb)])
+
+
 static func tower_plans() -> Array:
 	var out: Array = []
 	out.append(PackedVector2Array([Vector2(66.5, MZ0), Vector2(66.5, 33.6), Vector2(70.5, 29.7), Vector2(75.9, 29.7), Vector2(79.9, 33.6),
@@ -1465,7 +1556,7 @@ func cross_gable(a: Vector2, b: Vector2, inward: Vector2, peak: float, over := 1
 ## slopes join the main roof's planes (or, `alone`, are drawn whole with
 ## the far end closed). The face is brick with its openings cut in
 ## courses that narrow with the rakes; the rakes carry carved
-## bargeboards, a truss of sticks in the peak and a finial.
+## bargeboards, a king post and collar in the peak and a finial.
 func gable(a: Vector2, b: Vector2, inward: Vector2, depth: float, y0: float, y1: float, face := true, alone := false,
 		over := 1.8, face0 := -1000.0, front := -1.0) -> void:
 	if front < 0.0:
@@ -1532,14 +1623,11 @@ func gable(a: Vector2, b: Vector2, inward: Vector2, depth: float, y0: float, y1:
 			var p := Vector3(length / 2.0 + side * (half + over) * FT * (1.0 - t), lerpf(h(y0 - drop), h(y1), t) - 0.36, 0.0)
 			k.box_rz("wall", ff, p, Vector3(0.12, 0.12, 0.05), -side * ang + PI / 4.0, trim)
 	var tf := f * Transform3D(Basis(), Vector3(0, 0, 0.08))
-	var ty := h(y0 + (y1 - y0) * 0.5)
-	var tw := half * FT * 0.5 * 2.0
-	k.box("wall", tf, Vector3(length / 2.0, ty, 0.0), Vector3(tw, 0.14, 0.1), trim)
-	k.box("wall", tf, Vector3(length / 2.0, (ty + h(y1)) / 2.0, 0.0), Vector3(0.14, h(y1) - ty, 0.1), trim)
-	for side: float in [-1.0, 1.0]:
-		var p0 := Vector3(length / 2.0, ty + 0.1, 0.0)
-		var p1 := Vector3(length / 2.0 + side * tw / 2.0, ty - 0.9, 0.0)
-		k.box_rz("wall", tf, (p0 + p1) / 2.0, Vector3(0.12, p0.distance_to(p1), 0.09), side * atan2(tw / 2.0, 1.0), trim)
+	# (in the peak only, clear of every opening in the face)
+	var ty := h(y1 - (y1 - y0) * 0.2)
+	var tw := half * FT * 0.2 * 2.0 * 0.9
+	k.box("wall", tf, Vector3(length / 2.0, ty, 0.0), Vector3(tw, 0.12, 0.1), trim)
+	k.box("wall", tf, Vector3(length / 2.0, (ty + h(y1)) / 2.0 - 0.1, 0.0), Vector3(0.12, h(y1) - ty + 0.2, 0.1), trim)
 	var out3 := w2(mid - into) - w2(mid)
 	var tip := w(mid.x, mid.y, y1) + Vector3(out3.x, 0, out3.y).normalized() * (front * FT - 0.05)
 	k.m.bar("wall", tip, tip + Vector3(0, 0.35, 0), 0.05, 6, trim)
@@ -1663,6 +1751,7 @@ func _towers() -> void:
 	# Each deck on its tower's own outline, open on the house's side.
 	_deck_tower([Vector2(MX0, 55.8), Vector2(52.3, 55.8), Vector2(48.7, 60.4), Vector2(48.7, 66.8), Vector2(52.5, 71.1), Vector2(MX0, 71.1)],
 		F3 + 0.5, 34.6, Vector2(MX0 - 1.5, 63.45), 37.1, 1.0)
+	floor_poly(deck_well(), F3 + 0.5, c(PORCH, HarborTown.K_PLANK), c(CEIL, CourthouseKit.K_PLASTER), 1.0)
 	_deck_tower([Vector2(66.5, MZ0), Vector2(66.5, 33.6), Vector2(70.5, 29.7), Vector2(75.9, 29.7), Vector2(79.9, 33.6), Vector2(79.9, MZ0)],
 		F3 + 0.5, 33.1, Vector2(73.2, 34.2), 46.6, 2.8)
 

@@ -170,7 +170,7 @@ static func where(p: Vector3) -> String:
 ## The top of a room at a plan point, in world metres.
 func room_top(r: Dictionary, q: Vector2) -> float:
 	var y1 := float(r["y1"])
-	if y1 > 0.0:
+	if y1 != TwainInterior.TO_ROOF:
 		# The roof's underside is the ceiling where it comes lower.
 		var roof := house.roof_y(q)
 		return TwainHouse.h(minf(y1, roof) if roof > -100.0 else y1)
@@ -307,8 +307,8 @@ func _architecture() -> void:
 				if not hit.is_empty():
 					blocked += 1
 					var body := hit["collider"] as Node
-					blocker = "%s %s %.2f m in" % [str(body.get_meta("group")), str(body.get_meta("key")),
-						0.3 - (hit["position"] as Vector3 - (mid + off)).dot(n)]
+					blocker = "%s %s %.2f m in, at %s" % [str(body.get_meta("group")), str(body.get_meta("key")),
+						0.3 - (hit["position"] as Vector3 - (mid + off)).dot(n), where(hit["position"] as Vector3)]
 		if blocked >= 6:
 			issue("blind", "the %s's frame is on solid wall (%d of 9 rays stopped; %s)" % [kind, blocked, blocker], mid, eye)
 			continue
