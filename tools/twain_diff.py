@@ -15,7 +15,10 @@ front, heights over the first floor) and drawn over the sheet in
 user://diff_<front>.png. A score per front (square feet of disagreement)
 tracks progress.
 
-    python tools/twain_diff.py <sheet dir> [front ...] [--min 2]
+    python tools/twain_diff.py <sheet dir> [front ...] [--min 2] [--crops n] [--skyline]
+
+--skyline also lists, column by column, where the top of the house (roof,
+chimneys, finials) stands higher or lower in the model than in the drawing.
 """
 from __future__ import annotations
 
@@ -97,6 +100,9 @@ def main() -> None:
         i = args.index("--crops")
         crops = int(args[i + 1])
         del args[i:i + 2]
+    skyline = "--skyline" in args
+    if skyline:
+        args.remove("--skyline")
     if "--min" in args:
         i = args.index("--min")
         min_ft2 = float(args[i + 1])
@@ -210,7 +216,42 @@ def main() -> None:
                         fy -= 1
                 pd.text((4, 4), "%s %d: %s %.0f sq ft  (drawing | model)" % (front, k + 1, kind, area), fill=(0, 0, 0), font=font)
                 pair.save(os.path.join(USER, "diff_%s_%02d.png" % (front, k + 1)))
+        if skyline:
+            report_skyline(front, sky_d, sky_m, cmp)
     print("total: %.0f sq ft" % total)
+
+
+def report_skyline(front: str, sky_d: np.ndarray, sky_m: np.ndarray, cmp: np.ndarray) -> None:
+    """Per column, the height of the first house pixel from the top in the
+    drawing and in the model; runs of columns where they differ by more
+    than half a foot are listed (along, from, to, drawing height, model
+    height, largest difference)."""
+    h, w = sky_d.shape
+    rows = np.arange(h)[:, None]
+    big = h + 1
+    top_d = np.where(~sky_d & cmp, rows, big).min(axis=0)
+    top_m = np.where(~sky_m & cmp, rows, big).min(axis=0)
+    ok = (top_d < big) & (top_m < big) & cmp.any(axis=0)
+    yd = ORTHO_Y[1] - top_d / PX
+    ym = ORTHO_Y[1] - top_m / PX
+    diff = np.where(ok, ym - yd, 0.0)
+    bad = np.abs(diff) > 0.5
+    print("%s skyline: model minus drawing, runs over 0.5 ft" % front)
+    i = 0
+    while i < w:
+        if not bad[i]:
+            i += 1
+            continue
+        j = i
+        while j < w and bad[j] and np.sign(diff[j]) == np.sign(diff[i]):
+            j += 1
+        if j - i >= PX // 2:
+            seg = slice(i, j)
+            k = i + int(np.argmax(np.abs(diff[seg])))
+            print("  along %6.1f .. %6.1f   drawing %5.1f .. %5.1f   model %5.1f .. %5.1f   worst %+5.1f at %6.1f" % (
+                ORTHO_X[0] + i / PX, ORTHO_X[0] + j / PX, yd[seg].min(), yd[seg].max(), ym[seg].min(), ym[seg].max(),
+                diff[k], ORTHO_X[0] + k / PX))
+        i = j
 
 
 if __name__ == "__main__":
