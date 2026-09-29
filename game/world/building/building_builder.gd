@@ -434,6 +434,11 @@ func _ops_on(wl: Dictionary, f: Transform3D, length: float, y0: float, y1: float
 		var at: Vector2 = op["at"]
 		if BuildingGeom.seg_dist(at, a, b) > tol:
 			continue
+		# On the wall's run, not beyond its end (a wall meeting this one
+		# square at the opening does not carry it).
+		var t_along := (at - a).dot(b - a) / maxf((b - a).length_squared(), 1e-6)
+		if t_along < 0.0 or t_along > 1.0:
+			continue
 		if float(op["sill"]) >= y1 or float(op["head"]) <= y0:
 			continue
 		var q := d.w(at)
@@ -620,10 +625,7 @@ func _dress(f: Transform3D, o: Dictionary, wl: Dictionary) -> void:
 			var q := d.plan_of(pw)
 			# Every roof there, not only the highest: a porch's hood runs
 			# under the house's own eave.
-			for bi in d.roofs.size():
-				var hb := roof.body_height(bi, q)
-				if not is_finite(hb):
-					continue
+			for hb: float in roof.surfaces_at(q):
 				var rh := d.wy(hb)
 				if rh > yt - 0.05 and rh < yt + 0.75:
 					hood_ok = false
@@ -1083,11 +1085,14 @@ func _gable_ends() -> void:
 			var collar_h := apex_h - rise * 0.22
 			var cw := side.normalized() * (side.length() * 0.22)
 			var inner := mid - out * 0.15
-			k.m.bar("wall", d.w(inner - cw, collar_h), d.w(inner + cw, collar_h), 0.06, 4, trim)
-			k.m.bar("wall", d.w(inner, collar_h), d.w(inner, apex_h - 0.1), 0.06, 4, trim)
-			k.m.bar("wall", apex, apex + Vector3(0, 0.35, 0), 0.05, 6, trim)
-			k.m.sphere("wall", Transform3D(Basis(), apex + Vector3(0, 0.2, 0)), 0.08, 8, trim)
-			k.m.bar("wall", apex, apex - Vector3(0, 0.6, 0), 0.06, 6, trim)
+			if _clear(d.w(inner - cw, collar_h), d.w(inner + cw, collar_h), 0.06, bi, 2.0):
+				k.m.bar("wall", d.w(inner - cw, collar_h), d.w(inner + cw, collar_h), 0.06, 4, trim)
+			if _clear(d.w(inner, collar_h), d.w(inner, apex_h - 0.1), 0.06, bi, 2.0):
+				k.m.bar("wall", d.w(inner, collar_h), d.w(inner, apex_h - 0.1), 0.06, 4, trim)
+			if _clear(apex - Vector3(0, 0.6, 0), apex + Vector3(0, 0.35, 0), 0.08, bi):
+				k.m.bar("wall", apex, apex + Vector3(0, 0.35, 0), 0.05, 6, trim)
+				k.m.sphere("wall", Transform3D(Basis(), apex + Vector3(0, 0.2, 0)), 0.08, 8, trim)
+				k.m.bar("wall", apex, apex - Vector3(0, 0.6, 0), 0.06, 6, trim)
 			if spec.has("arch"):
 				var ar: Array = spec["arch"]
 				var y_end := float(ar[0])
@@ -1112,19 +1117,25 @@ func _gable_ends() -> void:
 ## surface over it, no chimney, no window or door's dressing and no
 ## balcony's or deck's floor where it passes. Trim is left out where it
 ## is not: it stops against what it meets, as a joiner's would.
-func _clear(pa: Vector3, pb: Vector3, r: float, own: int) -> bool:
+func _clear(pa: Vector3, pb: Vector3, r: float, own: int, reach := 0.5) -> bool:
+	var pts: Array[Vector3] = []
 	for t: float in [0.0, 0.5, 1.0]:
-		var p := pa.lerp(pb, t)
+		var c := pa.lerp(pb, t)
+		pts.append(c)
+		# Round the piece's section as well as along its line.
+		for off: Vector3 in [Vector3(r, 0, 0), Vector3(-r, 0, 0), Vector3(0, 0, r), Vector3(0, 0, -r)]:
+			pts.append(c + off)
+	for p: Vector3 in pts:
 		var q := d.plan_of(p)
 		var y := (p.y - d.datum_m) / d.ft
 		var rf := r / d.ft
 		# Under another roof's surface (any other body over it there, even
 		# one that meets this roof in the same plane).
-		for bi in d.roofs.size():
-			if bi == own:
+		var own_h := roof.body_height(own, q)
+		for hb: float in roof.surfaces_at(q):
+			if is_finite(own_h) and absf(hb - own_h) < 0.02:
 				continue
-			var hb := roof.body_height(bi, q)
-			if is_finite(hb) and hb > y - rf + 0.02 and hb < y + 6.0:
+			if hb > y - rf + 0.02 and hb < y + 6.0:
 				return false
 		for ch: Dictionary in d.chimneys:
 			var at := d.point(ch["at"])
@@ -1136,13 +1147,16 @@ func _clear(pa: Vector3, pb: Vector3, r: float, own: int) -> bool:
 			var rel: Vector3 = p - (o["c"] as Vector3)
 			var u := rel.dot(o["along"] as Vector3)
 			var v := rel.dot(o["n"] as Vector3)
-			if absf(u) < float(o["w"]) / 2.0 + 0.3 + r and v > -0.15 and v < 0.5 + r \
+			if absf(u) < float(o["w"]) / 2.0 + 0.3 + r and v > -0.15 and v < reach + r \
 					and p.y > float(o["y0"]) - 0.2 - r and p.y < float(o["yt"]) + 0.8 + r:
 				return false
 		for sp: Dictionary in d.spaces:
-			if d.is_open(sp) and str(sp["kind"]) != "canopy" and Geometry2D.is_point_in_polygon(q, sp["poly"] as PackedVector2Array):
+			if d.is_open(sp) and str(sp["kind"]) != "canopy":
+				var poly: PackedVector2Array = sp["poly"]
 				var fl := float(sp["floor"])
-				if y > fl - 0.7 - rf and y < fl + 0.2 + rf:
+				# Its floor, its railings, the air one stands in on it.
+				if (Geometry2D.is_point_in_polygon(q, poly) or BuildingGeom.on_boundary(q, poly, 0.4 + rf)) \
+						and y > fl - 0.7 - rf and y < fl + 7.5:
 					return false
 	return true
 
@@ -1300,6 +1314,12 @@ func _posts(s: Dictionary, fl: float, trim: Color) -> void:
 		for st: Array in stations:
 			var q: Vector2 = st[0]
 			var inward: Vector2 = st[1]
+			# At the house the wall carries the plate: no post against it; and
+			# where two porches meet, one post serves both.
+			if _on_space_edge(q) or _post_near(q):
+				prev_body = -1
+				continue
+			_post_spots.append(q)
 			var top := roof.height(q + inward * 0.3)
 			var body := roof.body_at(q + inward * 0.3)
 			var base := fl if str(s["kind"]) != "canopy" else ground_at(q)
@@ -1316,6 +1336,16 @@ func _posts(s: Dictionary, fl: float, trim: Color) -> void:
 				_between_posts(prev, head, str(s["kind"]), trim)
 			prev = head
 			prev_body = body
+
+
+var _post_spots: Array[Vector2] = []
+
+
+func _post_near(q: Vector2) -> bool:
+	for p: Vector2 in _post_spots:
+		if p.distance_to(q) < 1.0:
+			return true
+	return false
 
 
 ## Between two posts under a roof: on a porch, a brace from each post up
@@ -1429,6 +1459,19 @@ func _rail(a: Vector3, b: Vector3, ht: float, trim: Color) -> void:
 	var length := a.distance_to(b)
 	if length < 0.1:
 		return
+	# Where another railing already runs alongside (two decks meeting), the
+	# one railing serves.
+	for r: Array in rails:
+		var ra: Vector3 = r[0]
+		var rb: Vector3 = r[1]
+		var near := 0
+		for t: float in [0.1, 0.5, 0.9]:
+			var p := a.lerp(b, t)
+			var cp := Geometry3D.get_closest_point_to_segment(p, ra, rb)
+			if Vector2(cp.x - p.x, cp.z - p.z).length() < 0.35 and absf(cp.y - p.y) < 0.9:
+				near += 1
+		if near >= 2:
+			return
 	rails.append([a, b])
 	k.m.bar("wall", a + Vector3(0, ht, 0), b + Vector3(0, ht, 0), 0.05, 4, trim)
 	k.m.bar("wall", a + Vector3(0, 0.12, 0), b + Vector3(0, 0.12, 0), 0.04, 4, trim)

@@ -1255,7 +1255,7 @@
    "level": "third",
    "kind": "balcony",
    "group": "porch",
-   "floor": 24.2,
+   "floor": 24.0,
    "poly": {
     "rect": [
      55.2,
@@ -1316,9 +1316,9 @@
    "poly": {
     "rect": [
      "n_wall",
-     45.8,
+     46.3,
      117.0,
-     53.8
+     53.3
     ]
    }
   },
@@ -1463,19 +1463,20 @@
   },
   {
    "id": "side_porch",
-   "name": "side porch",
+   "name": "the areaway's hood",
    "level": "first",
-   "kind": "porch",
+   "kind": "canopy",
    "group": "porch",
-   "floor": -0.1,
+   "floor": -6.4,
    "poly": {
     "rect": [
-     "n_wall",
-     "wing_e",
+     115.3,
+     44.0,
      119.0,
-     49.8
+     49.0
     ]
-   }
+   },
+   "note": "a hood on two posts over the steps down to the basement door (north elevation)"
   },
   {
    "id": "wing_attic",
@@ -1667,7 +1668,7 @@
     "w_wall"
    ],
    "w": 2.6,
-   "sill": 24.3,
+   "sill": 24.5,
    "head": 31.3,
    "kind": "door",
    "hood": false
@@ -1764,7 +1765,7 @@
     105.0,
     "w_wall"
    ],
-   "w": 2.0,
+   "w": 1.6,
    "sill": 26.4,
    "head": 30.5,
    "hood": false
@@ -1774,7 +1775,7 @@
     99.5,
     "w_wall"
    ],
-   "w": 2.0,
+   "w": 1.6,
    "sill": 26.4,
    "head": 30.5,
    "hood": false
@@ -1813,13 +1814,14 @@
   {
    "at": [
     "n_wall",
-    48.6
+    47.4
    ],
-   "w": 4.4,
+   "w": 3.6,
    "sill": 36.0,
    "head": 40.2,
    "shape": "round",
-   "hood": false
+   "hood": false,
+   "note": "centred under the north gable's peak (z 47.4), as the gable's own window"
   },
   {
    "at": [
@@ -1842,21 +1844,16 @@
   {
    "at": [
     "n_wall",
-    46.9
+    48.1
    ],
-   "w": 2.8,
-   "sill": 0.0,
-   "head": 8.9,
-   "kind": "door"
-  },
-  {
-   "at": [
-    "n_wall",
-    49.9
-   ],
-   "w": 2.4,
-   "sill": 4.5,
-   "head": 11.7
+   "w": 3.8,
+   "sill": 4.2,
+   "head": 10.9,
+   "hood": true,
+   "note": "the leaded window over the dining room's fireplace (first floor plan, north elevation)",
+   "exempt": {
+    "roof-crosses": "the hood over the areaway steps stands before it, as the north elevation draws it"
+   }
   },
   {
    "at": [
@@ -2117,9 +2114,10 @@
    ],
    "w": 2.6,
    "sill": 24.5,
-   "head": 31.6,
+   "head": 30.0,
    "kind": "door",
-   "hood": false
+   "hood": false,
+   "note": "from the billiard room to the Texas deck, under the long roof"
   },
   {
    "at": {
@@ -2991,20 +2989,20 @@
     121.2,
     24.86
    ],
-   "w": 5.0,
-   "sill": 22.5,
-   "head": 24.4,
+   "w": 4.4,
+   "sill": 22.8,
+   "head": 24.1,
    "hood": false,
    "kind": "win"
   },
   {
    "at": [
     144.8,
-    24.86
+    23.85
    ],
-   "w": 5.0,
-   "sill": 22.5,
-   "head": 24.4,
+   "w": 4.4,
+   "sill": 22.8,
+   "head": 24.1,
    "hood": false,
    "kind": "win"
   },
@@ -3013,9 +3011,9 @@
     129.1,
     36.79
    ],
-   "w": 4.8,
+   "w": 4.2,
    "sill": 23.6,
-   "head": 25.5,
+   "head": 25.2,
    "hood": false,
    "kind": "win"
   },
@@ -3162,7 +3160,7 @@
    "axis": "x",
    "eave": 28.0,
    "peak": 43.3,
-   "note": "One ridge at 43.3 the length of the main block, z 47.4 (south elevation's gable peak, the attic plan's framed strip, section B-B); both slopes at the west roof's pitch (1.515, west elevation) from the cornice at 28.0 a foot out; the east slope meets the flat at 35.9 on z 52.3 (the roof plan's line).",
+   "note": "One ridge at 43.3 the length of the main block, z 47.4 (south elevation's gable peak, the attic plan's framed strip, section B-B); both slopes at the west roof's pitch (1.515, west elevation) from the cornice at 28.0 a foot out; the east slope meets the flat at 35.9 on z 52.3 (the roof plan's line). Its ends are the south and north gables', which carry the overhangs there.",
    "footprint": {
     "rect": [
      "s_wall",
@@ -3172,8 +3170,8 @@
     ]
    },
    "overhang": [
-    2.3,
-    4.7,
+    0.0,
+    0.0,
     1.0,
     0.0
    ],
@@ -3308,10 +3306,10 @@
    "peak": 26.2,
    "footprint": {
     "rect": [
-     80.4,
+     79.65,
      77.65,
-     86.9,
-     83.9
+     86.15,
+     "e_wall"
     ]
    },
    "overhang": [
@@ -3321,7 +3319,7 @@
     1.4
    ],
    "trim": "gable",
-   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2)"
+   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2); centred on its window"
   },
   {
    "id": "e_gable_2",
@@ -3331,10 +3329,10 @@
    "peak": 26.2,
    "footprint": {
     "rect": [
-     88.0,
+     88.9,
      77.65,
-     96.3,
-     83.9
+     95.4,
+     "e_wall"
     ]
    },
    "overhang": [
@@ -3344,7 +3342,7 @@
     1.4
    ],
    "trim": "gable",
-   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2)"
+   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2); centred on its window"
   },
   {
    "id": "east_dormer",
@@ -3793,19 +3791,23 @@
   {
    "id": "side_porch_hood",
    "kind": "flat",
-   "y": 9.9,
+   "y": 9.3,
    "trim": "porch",
    "footprint": {
     "rect": [
-     114.5,
-     43.4,
-     119.6,
-     50.3
+     115.3,
+     44.0,
+     119.0,
+     49.0
     ]
    },
-   "overhang": 0.0,
-   "cover": "tin",
-   "clear_rooms": "first"
+   "overhang": [
+    0.0,
+    0.6,
+    0.0,
+    0.0
+   ],
+   "cover": "tin"
   },
   {
    "id": "back_stair",
@@ -3942,11 +3944,11 @@
    "peak": 25.9,
    "trim": "gable",
    "cheek": "clapboard",
-   "note": "a lattice dormer on the wing's roof (west, east and north elevations)",
+   "note": "a lattice dormer on the wing's roof (west, east and north elevations); its face where the cross hip at the wing's north end comes down to its sill",
    "footprint": {
     "rect": [
      141.75,
-     24.86,
+     23.85,
      147.85,
      31.2
     ]
@@ -4063,16 +4065,16 @@
   {
    "id": "west_gable",
    "at": [
-    101.7,
+    102.15,
     37.7
    ],
    "size": [
-    3.6,
+    2.9,
     2.6
    ],
    "base": 0.0,
    "top": 46.2,
-   "note": "roof plan; elevations 46.0-46.5"
+   "note": "rising through the west wall dormer's peak between its two windows (west elevation); roof plan for its depth"
   },
   {
    "id": "kitchen",

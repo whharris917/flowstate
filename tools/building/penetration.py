@@ -99,6 +99,9 @@ def allowed(ka: str, oa: str, kb: str, ob: str) -> bool:
         return True
     if pair == {"dress"}:
         return True
+    # A door's threshold and casing stand on the floor outside it.
+    if pair == {"dress", "floor"}:
+        return True
     return False
 
 

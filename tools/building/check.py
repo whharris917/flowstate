@@ -227,11 +227,15 @@ def run(bname: str, res: float) -> int:
                     ez = at[1] + nz * 1.0 + (dz / L) * float(o["w"]) * u
                     i = int((ex - x0) / res)
                     j = int((ez - z0) / res)
-                    if 0 <= i < H.shape[0] and 0 <= j < H.shape[1] and np.isfinite(H[i, j]):
-                        top_eff = head - (float(o["w"]) * 0.3 if o.get("shape") == "round" else 0.0)
-                        if sill + 0.3 < H[i, j] < top_eff + 0.25:
-                            found.append(("roof-crosses", tag + ": a roof (%.1f ft) crosses it just outside" % H[i, j]))
-                            break
+                    top_eff = head - (float(o["w"]) * 0.3 if o.get("shape") == "round" else 0.0)
+                    # Every roof there, not only the highest.
+                    hit = None
+                    for bd, hb in visible_surfaces(b, ex, ez):
+                        if sill + 0.3 < hb < top_eff + 0.25:
+                            hit = (bd.id, hb)
+                    if hit and "roof-crosses" not in o.get("exempt", {}):
+                        found.append(("roof-crosses", tag + ": roof %s (%.1f ft) crosses it just outside" % hit))
+                        break
         # A space counts on the far side only where its cover stands above
         # the window's sill: a dormer's window looks out over the roof.
         def covers(s):
@@ -347,6 +351,33 @@ def run(bname: str, res: float) -> int:
         print("%-18s %s" % (rule, text))
     print("%d findings" % len(found))
     return 1 if found else 0
+
+
+def visible_surfaces(b: Building, x: float, z: float):
+    """[(body, height)] of every roof surface drawn over a plan point: a
+    body is drawn there unless a higher one stands over it inside that one's
+    own footprint, or over its eave while this one is eave too (the rule the
+    builder cuts faces by)."""
+    X, Z = np.array([x]), np.array([z])
+    here = []
+    for bd in b.bodies:
+        if not inside(bd.extent, X, Z)[0] or any(inside(hh, X, Z)[0] for hh in bd.holes):
+            continue
+        hb = float(bd.height(X, Z)[0])
+        if np.isfinite(hb):
+            here.append((bd, hb, bool(inside(bd.footprint, X, Z)[0])))
+    out = []
+    for bd, hb, in_fp in here:
+        hidden = False
+        for od, ob, o_fp in here:
+            if od is bd or ob <= hb + 0.01:
+                continue
+            if o_fp or not in_fp:
+                hidden = True
+                break
+        if not hidden:
+            out.append((bd, hb))
+    return out
 
 
 def _seg_dist(p, a, c) -> float:

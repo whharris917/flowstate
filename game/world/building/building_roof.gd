@@ -44,6 +44,19 @@ func body_height(bi: int, p: Vector2, walls := false) -> float:
 	return y
 
 
+## The heights of every roof surface drawn over a plan point, highest
+## first: the roof, and under a higher roof's eave the lower roof that
+## runs on beneath it.
+func surfaces_at(p: Vector2) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for fc: Dictionary in faces:
+		if Geometry2D.is_point_in_polygon(p, fc["poly"] as PackedVector2Array):
+			out.append(BuildingGeom.ph(fc["plane"] as Vector3, p))
+	out.sort()
+	out.reverse()
+	return out
+
+
 ## The roof's height over a plan point (feet), or -INF where none is.
 ## With `walls`, the roof a wall there rises to: a higher roof's overhang
 ## over a lower roof does not count.
@@ -124,15 +137,14 @@ func _higher(ci: int, pl: Vector3, bi: int) -> Array:
 			continue
 		out.append_array(BuildingGeom.meet(own, BuildingGeom.under(pl, q)))
 	# A higher body's eaves stand over a lower roof without cutting it where
-	# the lower roof covers a room or is itself over its own footprint (a
-	# dormer's eaves over the slope, the main eave over a porch roof): the
-	# lower roof runs on underneath to the wall. Its footprint (inside its
-	# walls) always cuts.
+	# the lower roof is over its own footprint (a dormer's eaves over the
+	# slope, the main eave over a porch roof): the lower roof runs on
+	# underneath to its wall. Where the lower roof is itself only eave, the
+	# higher one's eave takes over. A body's footprint (inside its walls)
+	# always cuts.
 	var fp: PackedVector2Array = r["footprint"]
 	var kept: Array = BuildingGeom.meet(out, fp)
 	var eaves: Array = BuildingGeom.cut(out, fp)
-	for room: PackedVector2Array in _rooms():
-		eaves = BuildingGeom.cut(eaves, room)
 	eaves = BuildingGeom.cut(eaves, b.roofs[bi]["footprint"] as PackedVector2Array)
 	kept.append_array(eaves)
 	return kept
