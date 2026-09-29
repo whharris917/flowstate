@@ -104,6 +104,7 @@ func build() -> void:
 		_chimneys()
 	if not skip.has("open"):
 		_open_edges()
+		_steps()
 	if not skip.has("rooms"):
 		_rooms()
 	_materials()
@@ -1059,6 +1060,57 @@ func _between_posts(pa: Vector3, pb: Vector3, kind: String, trim: Color) -> void
 	var t := clampf(0.9 / maxf(length, 0.1), 0.0, 0.45)
 	k.m.bar("wall", pa - Vector3(0, 0.9, 0), pa.lerp(pb, t), 0.05, 4, trim)
 	k.m.bar("wall", pb - Vector3(0, 0.9, 0), pb.lerp(pa, t), 0.05, 4, trim)
+
+
+## Steps wherever a way out meets the ground lower down: from every outer
+## door with neither a porch nor a balcony before it, and from every gap
+## ("gap" openings) in a porch's railing; stone treads of a foot, risers
+## of at most seven inches, as wide as the way plus a foot, and a slope
+## under them for the player's feet.
+func _steps() -> void:
+	var stone := c(col("stone", Color(0.50, 0.46, 0.42)), CourthouseKit.K_STONE)
+	var ways: Array = []    # [plan point on the threshold, outward (plan), width ft, top ft]
+	for o: Dictionary in built_openings:
+		if not bool(o["outer"]) or not ["door", "french", "open", "shut"].has(str(o["kind"])):
+			continue
+		var cc: Vector3 = o["c"]
+		var nn: Vector3 = o["n"]
+		var at := d.plan_of(cc)
+		var out := (d.plan_of(cc + nn) - at).normalized()
+		if _open_at(at + out * 1.0) or _room_at(at + out * 1.0):
+			continue
+		ways.append([at, out, float(o["w"]) / d.ft, (float(o["y0"]) - d.datum_m) / d.ft])
+	for op: Dictionary in d.openings:
+		if str(op["kind"]) != "gap":
+			continue
+		var at: Vector2 = op["at"]
+		for s: Dictionary in d.spaces:
+			if not d.is_open(s):
+				continue
+			for e: Dictionary in _edges[str(s["id"])]:
+				if BuildingGeom.seg_dist(at, e["a"] as Vector2, e["b"] as Vector2) < 0.5:
+					ways.append([at, -(e["inward"] as Vector2), float(op["w"]), float(s["floor"])])
+	for w: Array in ways:
+		var at: Vector2 = w[0]
+		var out: Vector2 = w[1]
+		var width: float = w[2] + 1.0
+		var top: float = w[3]
+		var g0 := ground_at(at + out * 1.0)
+		var drop := top - g0
+		if drop < 0.5 or drop > 12.0:
+			continue
+		var n := int(ceil(drop / 0.58))
+		var rise := drop / n
+		var side := Vector2(-out.y, out.x)
+		var yaw := atan2((d.w(at + out) - d.w(at)).x, (d.w(at + out) - d.w(at)).z)
+		for i in n:
+			var q := at + out * (0.5 + i * 1.0 + 0.5)
+			var y_top := top - rise * (i + 1)
+			var g := ground_at(q)
+			var hgt := maxf(y_top - g + 0.3, 0.2)
+			var cen := d.w(q, y_top - hgt / 2.0)
+			k.box("wall", Transform3D(Basis(Vector3.UP, yaw), cen), Vector3.ZERO, Vector3(width * d.ft, hgt * d.ft, 1.0 * d.ft), stone)
+		k.ramp(Transform3D(), d.w(at + out * (n + 0.8), ground_at(at + out * (n + 0.8))), d.w(at + out * 0.3, top), width * d.ft)
 
 
 ## A porch's lattice skirt from the ground up to under its boards along

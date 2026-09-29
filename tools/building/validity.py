@@ -5,12 +5,14 @@ with FLOWSTATE_BLD_EXPORT=1: every triangle, tagged with what drew it),
 not on the data or the drawings, so it finds what a visitor would find.
 The triangles are sampled into a grid of 0.1 m cells; then:
 
+  gap         where outside air gets inside the house's shell (over its
+              plan, under its roof) with every window and door shut
   leak        with every window and door shut, outside air still reaches
               deep into a room or attic: a gap in a wall or roof that
               would let rain and wind in. Listed where the outside air
               gets in, with what is drawn round the gap.
   blocked     a window's view out is blocked close in front of it by the
-              building's own parts (a roof, a wall, a post), within 2.5 m
+              building's own parts (a roof, a wall), within 1.2 m
   intrudes    a roof, eave, cheek, gable trim, chimney or porch part
               standing inside a room's or attic's airspace
   exposed     a room's inner finish showing to the outside air
@@ -231,6 +233,8 @@ def run(name: str, h: float, out_dir: str) -> int:
                 owner[:, j, :] = np.where(mj, si, owner[:, j, :])
 
     envelope = ndimage.binary_erosion(envelope, iterations=3)
+    # What stands well inside a room: half a metre clear of its bounds.
+    deep = ndimage.binary_erosion(envelope, iterations=3)
     findings = []
 
     def place(cells):
@@ -263,7 +267,7 @@ def run(name: str, h: float, out_dir: str) -> int:
             if f2 > fl + 1.5:
                 mo = inside([tuple(q) for q in o2["poly"]], plan_x, plan_z)
                 above = np.where(mo, np.minimum(above, f2), above)
-        ceil = np.minimum(np.minimum(above, roofH - 0.5), top + 1.0)
+        ceil = np.minimum(np.minimum(above, roofH - 0.5), top - 0.2)
         for j, y in enumerate(yft):
             if y > fl - 0.5:
                 full[:, j, :] |= m2 & (y < ceil)
@@ -274,6 +278,23 @@ def run(name: str, h: float, out_dir: str) -> int:
     edge_o.discard(0)
     out_air = np.isin(lab_o, list(edge_o))
     leak = full & ~shut & ndimage.binary_dilation(out_air, iterations=1) & ~near_open
+    # Where the outside air gets into the building: outside air inside the
+    # house's shell (over its plan, under its roof) next to outside air
+    # beyond the shell. One finding per gap, with what is drawn round it.
+    shell = rooms_m[:, None, :] & (yft[None, :, None] < roofH[:, None, :] - 0.3) & ~earth
+    # Over a deck, a balcony or a porch it is open air.
+    for s in meta["spaces"]:
+        if s["open"]:
+            mo = inside([tuple(q) for q in s["poly"]], plan_x, plan_z)
+            shell &= ~(mo[:, None, :] & (yft[None, :, None] > float(s["floor"]) - 0.5))
+    gaps = out_air & shell & ndimage.binary_dilation(out_air & ~shell, iterations=1) & ~near_open
+    lab_g, n_g = ndimage.label(gaps, structure=np.ones((3, 3, 3)))
+    gap_found = []
+    for k in range(1, n_g + 1):
+        cells = np.argwhere(lab_g == k)
+        if len(cells) < 3:
+            continue
+        gap_found.append(cells)
     lab2, n2 = ndimage.label(leak)
     for k in range(1, n2 + 1):
         cells = np.argwhere(lab2 == k)
@@ -285,11 +306,24 @@ def run(name: str, h: float, out_dir: str) -> int:
                          "text": "outside air reaches %d cells of %s round (%.1f, %.1f) %.1f ft up; drawn round it: %s"
                                  % (len(cells), ", ".join(w for w, _ in who.most_common(3)), x, z, y, around(cells))})
 
+    for cells in gap_found:
+        x, z, y = place(cells)
+        findings.append({"rule": "gap", "size": int(len(cells)), "at": [x, z, y],
+                         "text": "the outside air gets into the house round (%.1f, %.1f) %.1f ft up (%d cells); drawn round it: %s"
+                                 % (x, z, y, len(cells), around(cells))})
+
     # Intruders into rooms' airspace.
     for t_id, tname in enumerate(names):
         if not tname.startswith(INTRUDERS):
             continue
-        m = exterior & (tagv == t_id) & envelope
+        m = exterior & (tagv == t_id) & deep
+        if tname.startswith("chimney"):
+            # A chimney may rise through an attic.
+            att = np.zeros(g.shape, dtype=bool)
+            for si, s in enumerate(spaces):
+                if s["kind"] == "attic":
+                    att |= owner == si
+            m &= ~att
         if m.sum() < 6:
             continue
         lab3, n3 = ndimage.label(m, structure=np.ones((3, 3, 3)))
@@ -377,25 +411,32 @@ def run(name: str, h: float, out_dir: str) -> int:
                             dvec = (n * math.cos(math.radians(yaw)) + al * math.sin(math.radians(yaw))) * math.cos(math.radians(pitch))
                             dvec = dvec + np.array([0, math.sin(math.radians(pitch)), 0])
                             total += 1
-                            for step in np.arange(0.0, 2.5, h * 0.7):
+                            for step in np.arange(0.0, 1.2, h * 0.7):
                                 q = g.idx(start + dvec * step)
                                 if not g.ok(q) or not exterior[tuple(q)]:
+                                    continue
+                                tn = tag_name(int(tagv[tuple(q)]))
+                                # A porch's own rails and posts, and the
+                                # window's own dressing, are its view.
+                                if tn.startswith("porch") or tn.startswith("dress"):
                                     continue
                                 blocked += 1
                                 hits[tag_name(int(tagv[tuple(q)]))] += 1
                                 break
             if total and blocked / total > 0.2:
                 findings.append({"rule": "blocked", "size": int(100 * blocked / total), "at": [float(px), float(pz), ft_y(meta, c[1] + 1.0)],
-                                 "text": "window %d at (%.1f, %.1f), sill %.1f ft: %d%% of its view out blocked within 2.5 m by %s"
+                                 "text": "window %d at (%.1f, %.1f), sill %.1f ft: %d%% of its view out blocked within 1.2 m by %s"
                                          % (o["id"], px, pz, ft_y(meta, float(o["y0"])), 100 * blocked / total,
                                             ", ".join(k for k, _ in hits.most_common(3)))})
         if kind in ("door", "french", "open", "shut"):
             foot = c + n * 0.8
             foot[1] = float(o["y0"]) + 0.02
             found_floor = False
+            foot = c + n * 0.35
+            foot[1] = float(o["y0"]) + 0.02
             for step in np.arange(0.0, 0.45, h * 0.5):
                 q = g.idx(foot - np.array([0, step, 0]))
-                if g.ok(q) and exterior[tuple(q)]:
+                if g.ok(q) and shut[tuple(q)]:
                     found_floor = True
                     break
             drop = float(o["y0"]) - float(o.get("ground_out", -99))

@@ -17,6 +17,9 @@ opening, and where it is in the building's feet:
   chimney-low a chimney whose top does not clear the roof by 2 ft
   roof-over-nothing a roof body over no space
   deck-headroom a porch or deck under a roof less than 6 ft over its floor
+  window-ceiling / window-floor  an opening reaching over its room's
+              ceiling or under its floor
+  roof-crosses a roof crossing a window or door just outside it
   porch-over-room / porch-gap  a porch, deck or balcony over a room's floor,
               or with an edge standing short of the wall it runs along
 
@@ -171,6 +174,50 @@ def run(bname: str, res: float) -> int:
                 found.append(("no-level", tag + ": on no space's edge at its height"))
             continue
         enclosed = [s for s in near if s["kind"] not in OPEN]
+        # Within the storey it lights: its head under the room's ceiling,
+        # its sill over the floor.
+        head = float(o["head"])
+        dormer = any(min(_seg_dist(at, bd.footprint[i], bd.footprint[(i + 1) % len(bd.footprint)])
+                         for i in range(len(bd.footprint))) < 1.2 and bd.kind == "gable" and float(bd.spec.get("eave", 0)) < head
+                     for bd in b.bodies)
+        for s in enclosed:
+            fl = float(s["floor"])
+            if not (fl - 1.0 <= sill <= fl + 9.0):
+                continue
+            if s["top"] != "roof" and head > float(s["top"]) + 0.2 and not dormer:
+                found.append(("window-ceiling", tag + ": its head is above %s's ceiling (%.1f)" % (s["id"], float(s["top"]))))
+            if sill < fl - 0.2 and kind not in ("idoor", "ishut"):
+                found.append(("window-floor", tag + ": its sill is under %s's floor (%.1f)" % (s["id"], fl)))
+        # No roof crosses it outside: the roof just outside the wall stands
+        # under its sill or over its head.
+        if kind not in ("idoor", "ishut"):
+            best = None
+            for s in b.spaces:
+                p = s["poly"]
+                for i in range(len(p)):
+                    a0, c0 = p[i], p[(i + 1) % len(p)]
+                    d0 = _seg_dist(at, a0, c0)
+                    if best is None or d0 < best[0]:
+                        best = (d0, a0, c0, s)
+            if best is not None and best[0] < 1.2:
+                _, a0, c0, s = best
+                dx, dz = c0[0] - a0[0], c0[1] - a0[1]
+                L = math.hypot(dx, dz) or 1.0
+                nx, nz = dz / L, -dx / L
+                # Outward: away from the space the edge belongs to.
+                test = (np.array([at[0] + nx * 0.6]), np.array([at[1] + nz * 0.6]))
+                if inside(s["poly"], *test)[0]:
+                    nx, nz = -nx, -nz
+                for u in (-0.35, 0.0, 0.35):
+                    ex = at[0] + nx * 1.0 + (dx / L) * float(o["w"]) * u
+                    ez = at[1] + nz * 1.0 + (dz / L) * float(o["w"]) * u
+                    i = int((ex - x0) / res)
+                    j = int((ez - z0) / res)
+                    if 0 <= i < H.shape[0] and 0 <= j < H.shape[1] and np.isfinite(H[i, j]):
+                        top_eff = head - (float(o["w"]) * 0.3 if o.get("shape") == "round" else 0.0)
+                        if sill + 0.3 < H[i, j] < top_eff - 0.3:
+                            found.append(("roof-crosses", tag + ": a roof (%.1f ft) crosses it just outside" % H[i, j]))
+                            break
         # A space counts on the far side only where its cover stands above
         # the window's sill: a dormer's window looks out over the roof.
         def covers(s):

@@ -461,7 +461,7 @@
    "level": "first",
    "kind": "room",
    "group": "pantry",
-   "top": 7.6,
+   "top": "roof",
    "poly": [
     {
      "arc_at": [
@@ -488,7 +488,8 @@
      "pantry_wing",
      "w_wall"
     ]
-   ]
+   ],
+   "note": "open to its roof, which falls from the house"
   },
   {
    "id": "scullery",
@@ -576,9 +577,9 @@
    "id": "back_passage",
    "name": "back passage and stair",
    "level": "first",
-   "kind": "hall",
+   "kind": "stair",
    "group": "wing",
-   "top": 9.8,
+   "top": 16.6,
    "poly": [
     [
      "n_wall",
@@ -612,7 +613,8 @@
      "n_wall",
      "wing_e"
     ]
-   ]
+   ],
+   "note": "the back passage and the back stair, open through both floors of the wing"
   },
   {
    "id": "wing_upper_s",
@@ -632,6 +634,14 @@
     ],
     [
      "upper_n",
+     "wing_corr"
+    ],
+    [
+     "kitch_w",
+     "wing_corr"
+    ],
+    [
+     "kitch_w",
      "wing_e"
     ],
     [
@@ -678,8 +688,16 @@
      "wing_e"
     ],
     [
-     "upper_n",
+     "entry_s",
      "wing_e"
+    ],
+    [
+     "entry_s",
+     "wing_corr"
+    ],
+    [
+     "upper_n",
+     "wing_corr"
     ]
    ],
    "note": "partition assumed, clear of the kitchen chimney and the wall dormer's window"
@@ -1013,7 +1031,7 @@
    "level": "second",
    "kind": "balcony",
    "group": "porch",
-   "floor": 13.7,
+   "floor": 12.9,
    "poly": [
     [
      "n_wall",
@@ -1039,7 +1057,8 @@
      "n_wall",
      "bay_e"
     ]
-   ]
+   ],
+   "note": "a step down from the Clemenses' door, on the bay's roof"
   },
   {
    "id": "billiard",
@@ -1851,7 +1870,8 @@
    ],
    "w": 2.6,
    "sill": 3.8,
-   "head": 13.6
+   "head": 9.3,
+   "note": "under the veranda's roof (east elevation)"
   },
   {
    "at": [
@@ -1860,7 +1880,8 @@
    ],
    "w": 2.6,
    "sill": 3.8,
-   "head": 13.6
+   "head": 9.3,
+   "note": "under the veranda's roof (east elevation)"
   },
   {
    "at": [
@@ -2934,6 +2955,75 @@
    "head": 23.9,
    "hood": false,
    "kind": "win"
+  },
+  {
+   "at": [
+    22.8,
+    79.0
+   ],
+   "w": 5.0,
+   "sill": 0.0,
+   "head": 0.0,
+   "kind": "gap",
+   "hood": false
+  },
+  {
+   "at": [
+    90.5,
+    92.8
+   ],
+   "w": 10.0,
+   "sill": 0.0,
+   "head": 0.0,
+   "kind": "gap",
+   "hood": false
+  },
+  {
+   "at": [
+    119.0,
+    46.9
+   ],
+   "w": 4.0,
+   "sill": 0.0,
+   "head": 0.0,
+   "kind": "gap",
+   "hood": false
+  },
+  {
+   "at": [
+    62.2,
+    "e_wall"
+   ],
+   "w": 2.4,
+   "sill": 10.3,
+   "head": 11.8,
+   "kind": "win",
+   "hood": true,
+   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation)"
+  },
+  {
+   "at": [
+    68.8,
+    "e_wall"
+   ],
+   "w": 2.8,
+   "sill": 10.3,
+   "head": 11.8,
+   "kind": "win",
+   "hood": true,
+   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation)"
+  },
+  {
+   "at": [
+    74.5,
+    "e_wall"
+   ],
+   "w": 2.8,
+   "sill": 10.3,
+   "head": 11.8,
+   "kind": "win",
+   "hood": true,
+   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation)"
   }
  ],
  "roofs": [
@@ -3038,7 +3128,7 @@
    "id": "south_gable",
    "kind": "gable",
    "axis": "x",
-   "eave": 30.04,
+   "eave": 27.62,
    "peak": 43.3,
    "footprint": {
     "rect": [
@@ -3054,13 +3144,14 @@
     1.6,
     1.6
    ],
-   "trim": "gable"
+   "trim": "gable",
+   "note": "pitched as the long roof (1.515), so its slopes are the long roof's own; only its front stands out"
   },
   {
    "id": "north_gable",
    "kind": "gable",
    "axis": "x",
-   "eave": 31.94,
+   "eave": 28.91,
    "peak": 43.3,
    "footprint": {
     "rect": [
@@ -3076,7 +3167,8 @@
     2.0,
     2.0
    ],
-   "trim": "gable"
+   "trim": "gable",
+   "note": "pitched as the long roof (1.515), so its slopes are the long roof's own; only its front stands out"
   },
   {
    "id": "west_gable",
@@ -3249,36 +3341,32 @@
    "trim": "pavilion",
    "footprint": [
     [
-     48.75,
-     61.3
+     52.3,
+     "oct_w"
     ],
     [
-     48.75,
-     68.3
+     "deck_n",
+     "oct_w"
     ],
     [
-     53.7,
-     73.25
+     "deck_n",
+     67.5
     ],
     [
-     60.7,
-     73.25
+     60.5,
+     71.1
     ],
     [
-     64.3,
-     68.3
+     52.5,
+     71.1
     ],
     [
-     64.3,
-     61.3
+     "oct_s",
+     68.1
     ],
     [
-     60.7,
-     56.35
-    ],
-    [
-     53.7,
-     56.35
+     "oct_s",
+     60.8
     ]
    ],
    "overhang": 1.9,
@@ -3757,11 +3845,11 @@
    "planes": [
     [
      0.0,
-     -0.08,
-     17.2
+     -0.044,
+     13.8
     ]
    ],
-   "note": "Nearly flat, falling from 10.5 at the house wall to 9.7 at its outer edge (east elevation).",
+   "note": "Nearly flat: 9.7 at its outer edge, 10.1 at the house wall, under the upper lights' sills (east elevation).",
    "cover": "tin",
    "clear_rooms": "first"
   },
@@ -3880,7 +3968,7 @@
     0.3,
     0.3,
     0.0,
-    0.4
+    1.9
    ]
   },
   {
@@ -3900,7 +3988,7 @@
     ]
    },
    "overhang": [
-    0.8,
+    1.2,
     0.0,
     0.5,
     0.5
