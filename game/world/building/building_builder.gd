@@ -85,6 +85,8 @@ func build() -> void:
 	if not skip.has("trim"):
 		_roof_trim()
 		_cheeks()
+		_brackets()
+		_gable_ends()
 	if not skip.has("chimneys"):
 		_chimneys()
 	if not skip.has("open"):
@@ -457,6 +459,9 @@ func _floors() -> void:
 			pts.append(q)
 		var fl := float(s["floor"])
 		var thick := SLAB if _below(str(s["level"]), _centre(p)) or fl > 2.0 else fl - ground_at(_centre(p)) + 0.5
+		# A porch's boards on joists, its skirt of lattice under them.
+		if open:
+			thick = 0.5
 		_floor_poly(pts, fl, plank if open else oak, paint if open else ceil, maxf(thick, 0.3), k.m if open else inner_mesh, open)
 
 
@@ -538,7 +543,8 @@ func _roof_faces() -> void:
 	for fc: Dictionary in roof.faces:
 		var pl: Vector3 = fc["plane"]
 		var poly: PackedVector2Array = fc["poly"]
-		var flat := Vector2(pl.x, pl.y).length() < 0.12
+		var cover := str((d.roofs[int(fc["body"])]["spec"] as Dictionary).get("cover", ""))
+		var flat := Vector2(pl.x, pl.y).length() < 0.12 or cover == "tin"
 		var world := func(p: Vector2) -> Vector3: return d.w(p, BuildingGeom.ph(pl, p))
 		# The plane's slope in the world's axes: plan z is world x, plan x
 		# is world -z, feet and metres alike on both.
@@ -546,7 +552,10 @@ func _roof_faces() -> void:
 		# The top: slate in courses of colour by height, or the flat's tin.
 		var bands: Array = []
 		if flat:
-			bands.append([poly, c(col("tin", Color(0.30, 0.30, 0.31)), CourthouseKit.K_TAR)])
+			var tin_col: Color = col("tin", Color(0.30, 0.30, 0.31))
+			if cover == "tin":
+				tin_col = col("tin_roof", tin_col)
+			bands.append([poly, c(tin_col, CourthouseKit.K_PAINT)])
 		else:
 			var y0 := 1e9
 			var y1 := -1e9
@@ -713,6 +722,129 @@ func _cheek(bi: int, a: Vector2, b: Vector2, inward: Vector2, y0: float, materia
 		_dress(f, o, wl)
 
 
+## Brackets under a roof body's eaves where its data asks ("brackets":
+## spacing in feet): along each footprint edge that is an eave (the roof
+## level along it and standing out past it), a sawn bracket every
+## spacing from the wall's top out under the soffit, and a frieze board
+## on the wall under them.
+func _brackets() -> void:
+	var trim := c(col("trim", Color(0.33, 0.14, 0.09)), CourthouseKit.K_PAINT)
+	for bi in d.roofs.size():
+		var r: Dictionary = d.roofs[bi]
+		var spec: Dictionary = r["spec"]
+		if not spec.has("brackets"):
+			continue
+		var step := float(spec["brackets"])
+		var fp: PackedVector2Array = r["footprint"]
+		var ext: PackedVector2Array = r["extent"]
+		for i in fp.size():
+			var a := fp[i]
+			var b := fp[(i + 1) % fp.size()]
+			var L := a.distance_to(b)
+			if L < 1.0:
+				continue
+			var dir := (b - a) / L
+			var out := Vector2(dir.y, -dir.x)
+			if Geometry2D.is_point_in_polygon((a + b) / 2.0 + out * 0.3, fp):
+				out = -out
+			var n := maxi(1, int(L / step))
+			for j in n + 1:
+				var q := a.lerp(b, (float(j) + 0.0) / n)
+				# The eave over this point: out to the extent's edge.
+				var reach := 0.0
+				while reach < 6.0 and Geometry2D.is_point_in_polygon(q + out * (reach + 0.1), ext):
+					reach += 0.1
+				if reach < 0.6:
+					continue
+				var y_eave := roof.body_height(bi, q + out * reach)
+				if not is_finite(y_eave) or roof.height(q + out * 0.2) > y_eave + 1.0 or _open_at(q - out * 0.5):
+					continue
+				var top := d.w(q + out * 0.05, y_eave - 0.15)
+				var tip := d.w(q + out * (reach - 0.3), y_eave - 0.15)
+				var foot := d.w(q + out * 0.05, y_eave - 1.6)
+				k.m.bar("wall", top, tip, 0.06, 4, trim)
+				k.m.bar("wall", foot, tip.lerp(top, 0.35), 0.05, 4, trim)
+				k.m.bar("wall", foot, top, 0.05, 4, trim)
+			# The frieze board under the brackets.
+			var ya := roof.body_height(bi, a + out * 0.3)
+			var yb := roof.body_height(bi, b + out * 0.3)
+			if is_finite(ya) and is_finite(yb) and absf(ya - yb) < 0.3 and not _open_at((a + b) / 2.0 - out * 0.5):
+				k.m.bar("wall", d.w(a + out * 0.08, ya - 1.2), d.w(b + out * 0.08, yb - 1.2), 0.08, 4, trim)
+
+
+## Each gable body's open ends ("trim": "gable"): a scalloped bargeboard
+## down each rake, a king post and collar in the peak, a finial on the
+## point; with "arch": [height at the rakes, height at the middle], an
+## arched rib across the front just behind the bargeboards.
+func _gable_ends() -> void:
+	var trim := c(col("trim", Color(0.33, 0.14, 0.09)), CourthouseKit.K_PAINT)
+	for bi in d.roofs.size():
+		var r: Dictionary = d.roofs[bi]
+		var spec: Dictionary = r["spec"]
+		if str(r["kind"]) != "gable" or str(r["trim"]) != "gable":
+			continue
+		var ext: PackedVector2Array = r["extent"]
+		var lo := Vector2(1e9, 1e9)
+		var hi := Vector2(-1e9, -1e9)
+		for q: Vector2 in ext:
+			lo = lo.min(q)
+			hi = hi.max(q)
+		var along_x := str(spec["axis"]) == "x"
+		for end: float in [0.0, 1.0]:
+			var out := Vector2(-1.0 if end == 0.0 else 1.0, 0.0) if along_x else Vector2(0.0, -1.0 if end == 0.0 else 1.0)
+			var mid := Vector2(lerpf(lo.x, hi.x, end), (lo.y + hi.y) / 2.0) if along_x else Vector2((lo.x + hi.x) / 2.0, lerpf(lo.y, hi.y, end))
+			var side := Vector2(0, (hi.y - lo.y) / 2.0) if along_x else Vector2((hi.x - lo.x) / 2.0, 0)
+			var apex_h := roof.body_height(bi, mid - out * 0.05)
+			if not is_finite(apex_h) or roof.height(mid + out * 0.3) > apex_h - 1.0:
+				continue
+			var e0 := mid - side * 0.98 - out * 0.05
+			var e1 := mid + side * 0.98 - out * 0.05
+			var h0 := roof.body_height(bi, e0)
+			var h1 := roof.body_height(bi, e1)
+			if not is_finite(h0) or not is_finite(h1):
+				continue
+			var apex := d.w(mid - out * 0.05, apex_h)
+			for pa: Vector3 in [d.w(e0, h0), d.w(e1, h1)]:
+				var n := maxi(1, int(pa.distance_to(apex) / 0.35))
+				for j in n:
+					var p := pa.lerp(apex, (j + 0.5) / n) - Vector3(0, 0.3, 0)
+					k.m.bar("wall", p - Vector3(0, 0.06, 0), p + Vector3(0, 0.06, 0), 0.07, 4, trim)
+			var rise := apex_h - minf(h0, h1)
+			var collar_h := apex_h - rise * 0.22
+			var cw := side.normalized() * (side.length() * 0.22)
+			var inner := mid - out * 0.15
+			k.m.bar("wall", d.w(inner - cw, collar_h), d.w(inner + cw, collar_h), 0.06, 4, trim)
+			k.m.bar("wall", d.w(inner, collar_h), d.w(inner, apex_h - 0.1), 0.06, 4, trim)
+			k.m.bar("wall", apex, apex + Vector3(0, 0.35, 0), 0.05, 6, trim)
+			k.m.sphere("wall", Transform3D(Basis(), apex + Vector3(0, 0.2, 0)), 0.08, 8, trim)
+			k.m.bar("wall", apex, apex - Vector3(0, 0.6, 0), 0.06, 6, trim)
+			if spec.has("arch"):
+				var ar: Array = spec["arch"]
+				var y_end := float(ar[0])
+				var y_top := float(ar[1])
+				var half := side.length()
+				var sg := maxf(y_top - y_end, 0.1)
+				var rad := (half * half + sg * sg) / (2.0 * sg)
+				var cy := y_top - rad
+				var prev := Vector3.ZERO
+				for j in 21:
+					var u := lerpf(-half, half, j / 20.0)
+					var q := inner + side.normalized() * u
+					var y := minf(cy + sqrt(maxf(rad * rad - u * u, 0.0)), roof.body_height(bi, q) - 0.4)
+					var p := d.w(q, y)
+					if j > 0:
+						k.m.bar("wall", prev, p, 0.07, 4, trim)
+					prev = p
+
+
+## Whether a plan point lies in a porch, deck or balcony.
+func _open_at(p: Vector2) -> bool:
+	for s: Dictionary in d.spaces:
+		if d.is_open(s) and Geometry2D.is_point_in_polygon(p, s["poly"] as PackedVector2Array):
+			return true
+	return false
+
+
 func _on_space_edge(p: Vector2) -> bool:
 	for s: Dictionary in d.spaces:
 		if not d.is_open(s) and BuildingGeom.on_boundary(p, s["poly"] as PackedVector2Array, 0.3):
@@ -781,26 +913,139 @@ func _open_edges() -> void:
 			var pa := d.w(a, fl)
 			var pb := d.w(b, fl)
 			_rail(pa, pb, RAIL_H * d.ft, trim)
-			# Posts under a roof, and a plate between two posts under the same
-			# roof body.
-			var n := maxi(1, int(ceil(a.distance_to(b) / 8.0)))
-			var prev := Vector3.ZERO
-			var prev_body := -1
-			for j in n + 1:
-				var q := a.lerp(b, float(j) / n)
-				var top := roof.height(q + inward * 0.3)
-				var body := roof.body_at(q + inward * 0.3)
-				if top < fl + 6.0 or top > fl + 30.0:
-					prev_body = -1
-					continue
-				var foot := d.w(q, fl)
-				var head := d.w(q, top - 0.3)
-				k.box("wall", Transform3D(), (foot + head) / 2.0, Vector3(0.16, head.y - foot.y, 0.16), trim)
-				k.solid(Transform3D(), (foot + head) / 2.0, Vector3(0.16, head.y - foot.y, 0.16))
-				if body == prev_body and absf(prev.y - head.y) < 0.4:
-					k.m.bar("wall", prev - Vector3(0, 0.1, 0), head - Vector3(0, 0.1, 0), 0.1, 4, trim)
-				prev = head
-				prev_body = body
+			if str(s["kind"]) == "porch":
+				_skirt(a, b, fl, trim)
+		_posts(s, fl, trim)
+
+
+## Posts along a porch's or deck's open edges, where a roof is over them:
+## the open edges joined into runs, a post at each end of a run, at each
+## corner sharper than 25 degrees and between at about every 9 ft of
+## length; a plate and the braces or frieze between neighbouring posts
+## under the same roof.
+func _posts(s: Dictionary, fl: float, trim: Color) -> void:
+	var open_edges: Array = []
+	for e: Dictionary in _edges[str(s["id"])]:
+		if (e["other"] as Dictionary).is_empty() and not _gap(e["a"] as Vector2, e["b"] as Vector2):
+			open_edges.append(e)
+	# Chain the edges end to end.
+	var runs: Array = []
+	for e: Dictionary in open_edges:
+		if not runs.is_empty() and (runs[-1][-1]["b"] as Vector2).distance_to(e["a"] as Vector2) < 0.05:
+			runs[-1].append(e)
+		else:
+			runs.append([e])
+	if runs.size() > 1 and (runs[-1][-1]["b"] as Vector2).distance_to(runs[0][0]["a"] as Vector2) < 0.05:
+		var last: Array = runs.pop_back()
+		last.append_array(runs[0])
+		runs[0] = last
+	for run: Array in runs:
+		# Stations: the run's corners that turn, spaced out between.
+		var pts: Array = [[run[0]["a"], run[0]["inward"]]]
+		for k_ in run.size():
+			var e: Dictionary = run[k_]
+			var a: Vector2 = e["a"]
+			var b: Vector2 = e["b"]
+			var turn := 0.0
+			if k_ < run.size() - 1:
+				var d0 := (b - a).normalized()
+				var d1 := ((run[k_ + 1]["b"] as Vector2) - (run[k_ + 1]["a"] as Vector2)).normalized()
+				turn = rad_to_deg(absf(d0.angle_to(d1)))
+			if k_ == run.size() - 1 or turn > 25.0:
+				pts.append([b, e["inward"]])
+		var stations: Array = []
+		for m in range(pts.size() - 1):
+			# Along the run between two corners, the path through the edges.
+			var a: Vector2 = pts[m][0]
+			var b: Vector2 = pts[m + 1][0]
+			var path: Array = []
+			var on := false
+			for e: Dictionary in run:
+				if (e["a"] as Vector2).distance_to(a) < 0.05:
+					on = true
+				if on:
+					path.append(e)
+				if on and (e["b"] as Vector2).distance_to(b) < 0.05:
+					break
+			var total := 0.0
+			for e: Dictionary in path:
+				total += (e["a"] as Vector2).distance_to(e["b"] as Vector2)
+			var n := maxi(1, int(round(total / 9.0)))
+			for j2 in n:
+				var want := total * j2 / n
+				var acc := 0.0
+				for e: Dictionary in path:
+					var L := (e["a"] as Vector2).distance_to(e["b"] as Vector2)
+					if acc + L >= want - 1e-6:
+						stations.append([(e["a"] as Vector2).lerp(e["b"] as Vector2, clampf((want - acc) / maxf(L, 1e-6), 0.0, 1.0)), e["inward"]])
+						break
+					acc += L
+		stations.append(pts[-1])
+		var prev := Vector3.ZERO
+		var prev_body := -1
+		for st: Array in stations:
+			var q: Vector2 = st[0]
+			var inward: Vector2 = st[1]
+			var top := roof.height(q + inward * 0.3)
+			var body := roof.body_at(q + inward * 0.3)
+			if top < fl + 6.0 or top > fl + 30.0:
+				prev_body = -1
+				continue
+			var foot := d.w(q, fl)
+			var head := d.w(q, top - 0.3)
+			k.box("wall", Transform3D(), (foot + head) / 2.0, Vector3(0.18, head.y - foot.y, 0.18), trim)
+			k.solid(Transform3D(), (foot + head) / 2.0, Vector3(0.18, head.y - foot.y, 0.18))
+			if body == prev_body and absf(prev.y - head.y) < 0.6:
+				k.m.bar("wall", prev - Vector3(0, 0.1, 0), head - Vector3(0, 0.1, 0), 0.1, 4, trim)
+				_between_posts(prev, head, str(s["kind"]), trim)
+			prev = head
+			prev_body = body
+
+
+## Between two posts under a roof: on a porch, a brace from each post up
+## to the plate; on a deck, a band of pierced lattice under the plate
+## with a fringe of drops along its foot (the Texas deck's frieze).
+func _between_posts(pa: Vector3, pb: Vector3, kind: String, trim: Color) -> void:
+	var length := pa.distance_to(pb)
+	if kind == "deck":
+		var foot := -2.5 * d.ft
+		k.m.bar("wall", pa + Vector3(0, foot, 0), pb + Vector3(0, foot, 0), 0.035, 4, trim)
+		var n := maxi(1, int(length / 0.16))
+		for j in n:
+			var t0 := float(j) / n
+			var t1 := float(j + 1) / n
+			k.m.bar("wall", pa.lerp(pb, t0) + Vector3(0, foot, 0), pa.lerp(pb, t1) + Vector3(0, -0.12, 0), 0.012, 3, trim)
+			k.m.bar("wall", pa.lerp(pb, t0) + Vector3(0, -0.12, 0), pa.lerp(pb, t1) + Vector3(0, foot, 0), 0.012, 3, trim)
+		var drops := int(length / 0.09)
+		for j in drops:
+			var p := pa.lerp(pb, (j + 0.5) / drops) + Vector3(0, foot, 0)
+			k.m.bar("wall", p, p - Vector3(0, 0.13, 0), 0.016, 4, trim)
+		return
+	var t := clampf(0.9 / maxf(length, 0.1), 0.0, 0.45)
+	k.m.bar("wall", pa - Vector3(0, 0.9, 0), pa.lerp(pb, t), 0.05, 4, trim)
+	k.m.bar("wall", pb - Vector3(0, 0.9, 0), pb.lerp(pa, t), 0.05, 4, trim)
+
+
+## A porch's lattice skirt from the ground up to under its boards along
+## a-b: a rail at the top and foot, crossed laths between.
+func _skirt(a: Vector2, b: Vector2, fl: float, trim: Color) -> void:
+	var L := a.distance_to(b)
+	var n := maxi(1, int(L / 0.6))
+	for i in n:
+		var q0 := a.lerp(b, float(i) / n)
+		var q1 := a.lerp(b, float(i + 1) / n)
+		var g0 := ground_at(q0)
+		var g1 := ground_at(q1)
+		if fl - maxf(g0, g1) < 0.4:
+			continue
+		var t0 := d.w(q0, fl - 0.35)
+		var t1 := d.w(q1, fl - 0.35)
+		var b0 := d.w(q0, g0)
+		var b1 := d.w(q1, g1)
+		k.m.bar("wall", b0, t1, 0.015, 3, trim)
+		k.m.bar("wall", b1, t0, 0.015, 3, trim)
+		k.m.bar("wall", t0, t1, 0.04, 4, trim)
+		k.m.bar("wall", b0, b1, 0.03, 4, trim)
 
 
 ## Whether an opening of kind "gap" (steps down, an open side) stands on

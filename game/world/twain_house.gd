@@ -68,9 +68,9 @@ const VERMILION := Color(0.66, 0.17, 0.10)
 const NOGGING := Color(0.64, 0.32, 0.22)   # the herringbone brick between timbers
 const TRIM := Color(0.33, 0.14, 0.09)
 const SASH := Color(0.22, 0.10, 0.07)
-const SLATE := Color(0.34, 0.37, 0.43)
-const SLATE_RED := Color(0.46, 0.27, 0.23)
-const SLATE_DARK := Color(0.24, 0.26, 0.31)
+const SLATE := Color(0.37, 0.42, 0.40)       # grey-green (the photographs)
+const SLATE_RED := Color(0.44, 0.26, 0.24)
+const SLATE_DARK := Color(0.26, 0.30, 0.29)
 const STONE := Color(0.44, 0.34, 0.29)
 const PORCH := Color(0.36, 0.34, 0.31)
 const CEIL := Color(0.86, 0.82, 0.72)
@@ -408,7 +408,15 @@ static func grade_at(q: Vector2) -> float:
 	# by 160 ft; on the north it climbs to the side walk's level by 166 ft.
 	var t := clampf((sqrt(near) - 60.0) / 100.0, 0.0, 1.0)
 	var g := lerpf(sum / wsum, GRADE, t * t * (3.0 - 2.0 * t))
-	return lerpf(GRADE, g, clampf((166.0 - q.x) / 6.0, 0.0, 1.0))
+	g = lerpf(GRADE, g, clampf((166.0 - q.x) / 6.0, 0.0, 1.0))
+	# West of the house the lawn goes on falling toward the river (the
+	# survey's north-west photograph was taken from about 15 ft under the
+	# first floor, 80 ft west of the wing), easing back to the lawn's
+	# edge.
+	var t0 := clampf((15.0 - q.y) / 60.0, 0.0, 1.0)
+	var t1 := clampf((-80.0 - q.y) / 45.0, 0.0, 1.0)
+	var fall := t0 * t0 * (3.0 - 2.0 * t0) - t1 * t1 * (3.0 - 2.0 * t1)
+	return g - 7.0 * maxf(fall, 0.0)
 
 
 ## A point on a circle in the survey's plan, at an angle in degrees (0

@@ -17,6 +17,8 @@ opening, and where it is in the building's feet:
   chimney-low a chimney whose top does not clear the roof by 2 ft
   roof-over-nothing a roof body over no space
   deck-headroom a porch or deck under a roof less than 6 ft over its floor
+  porch-over-room / porch-gap  a porch, deck or balcony over a room's floor,
+              or with an edge standing short of the wall it runs along
 
     python tools/building/check.py <building> [--res 0.25]
 
@@ -110,6 +112,36 @@ def run(bname: str, res: float) -> int:
             if core.sum() and low.sum() > 0.4 * core.sum():
                 found.append(("low-roof", "%s: %.0f%% of its floor has under 6 ft over it"
                               % (s["id"], 100.0 * low.sum() / core.sum())))
+    # Porches, decks and balconies against the house: their inner edges on
+    # the walls' outer faces, never short of them (a strip no one owns, a
+    # railing along the wall) nor over them.
+    for s in b.spaces:
+        if s["kind"] not in OPEN:
+            continue
+        fl = float(s["floor"])
+        rooms = [o for o in b.spaces if o["kind"] not in OPEN and abs(float(o["floor"]) - fl) < 3.0]
+        both = masks[s["id"]].copy()
+        cover = np.zeros(X.shape, dtype=bool)
+        for o in rooms:
+            cover |= masks[o["id"]]
+        for area, ax0, ax1, az0, az1 in blobs(both & cover, xs, zs, res, 1.0):
+            found.append(("porch-over-room", "%s covers %.1f sq ft of a room's floor, x %.1f-%.1f, z %.1f-%.1f"
+                          % (s["id"], area, ax0, ax1, az0, az1)))
+        p = s["poly"]
+        for i in range(len(p)):
+            a0, c0 = p[i], p[(i + 1) % len(p)]
+            if math.hypot(c0[0] - a0[0], c0[1] - a0[1]) < 0.5:
+                continue
+            def wall_gap(q):
+                return min((min(_seg_dist(q, o["poly"][j], o["poly"][(j + 1) % len(o["poly"])]) for j in range(len(o["poly"])))
+                            for o in rooms), default=99.0)
+            # Along its whole length: an edge running beside a wall, not one
+            # that ends at the wall.
+            gaps = [wall_gap((a0[0] + (c0[0] - a0[0]) * t, a0[1] + (c0[1] - a0[1]) * t)) for t in (0.1, 0.5, 0.9)]
+            gap = max(gaps)
+            if all(0.15 < g < 2.0 for g in gaps):
+                found.append(("porch-gap", "%s's edge (%.1f, %.1f)-(%.1f, %.1f) stands %.1f ft off a wall"
+                              % (s["id"], a0[0], a0[1], c0[0], c0[1], gap)))
     # Openings.
     floors = sorted({float(s["floor"]) for s in b.spaces})
     for o in b.openings:
