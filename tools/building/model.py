@@ -285,7 +285,8 @@ class Building:
             fp = list(by_id[fps["space"]]["poly"]) if isinstance(fps, dict) and "space" in fps else expand_poly(fps)
             over = r.get("overhang", 0.0)
             ext = rect_overhang(fp, over) if isinstance(over, list) else offset_poly(fp, float(over))
-            holes = [expand_poly(h) for h in r.get("holes", [])]
+            holes = [list(by_id[h["space"]]["poly"]) if isinstance(h, dict) and "space" in h else expand_poly(h)
+                     for h in r.get("holes", [])]
             if "clear_rooms" in r:
                 holes += [s["poly"] for s in self.spaces
                           if s["level"] == r["clear_rooms"] and s["kind"] not in ("porch", "balcony", "deck")]

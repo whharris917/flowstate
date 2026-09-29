@@ -166,28 +166,29 @@ func _knee_walls() -> void:
 		var fl := float(s["floor"])
 		var flat := Vector3(0, 0, fl + KNEE)
 		var poly: PackedVector2Array = s["poly"]
-		var high: Array = []
+		# Cut away where the roof over it comes lower than the knee.
+		var left: Array = [poly]
 		for fc: Dictionary in roof.faces:
 			var r: Dictionary = d.roofs[int(fc["body"])]
 			var pieces := BuildingGeom.meet([fc["poly"]], r["footprint"] as PackedVector2Array)
-			pieces = BuildingGeom.meet(pieces, BuildingGeom.under(flat, fc["plane"] as Vector3))
+			pieces = BuildingGeom.meet(pieces, BuildingGeom.under(fc["plane"] as Vector3, flat))
 			for pc: PackedVector2Array in pieces:
-				high.append_array(Geometry2D.intersect_polygons(poly, pc))
-		if high.is_empty():
-			continue
-		# Merge the pieces into one outline.
-		var merged: Array = [high[0]]
-		for i in range(1, high.size()):
-			var next: Array = []
-			var cur: PackedVector2Array = high[i]
-			for m: PackedVector2Array in merged:
-				var u := Geometry2D.merge_polygons(m, cur)
-				if u.size() == 1 or (u.size() > 1 and not Geometry2D.is_polygon_clockwise(u[1]) == Geometry2D.is_polygon_clockwise(u[0]) and false):
-					cur = u[0]
-				else:
-					next.append(m)
-			next.append(cur)
-			merged = next
+				left = BuildingGeom.cut(left, pc)
+		# Rejoin pieces a cut split through an interior hole.
+		var merged: Array = left.duplicate()
+		var joined := true
+		while joined and merged.size() > 1:
+			joined = false
+			for i in merged.size():
+				for j in range(i + 1, merged.size()):
+					var u := Geometry2D.merge_polygons(merged[i] as PackedVector2Array, merged[j] as PackedVector2Array)
+					if u.size() == 1:
+						merged[i] = u[0]
+						merged.remove_at(j)
+						joined = true
+						break
+				if joined:
+					break
 		var best := PackedVector2Array()
 		for m: PackedVector2Array in merged:
 			if absf(BuildingGeom.area(m)) > absf(BuildingGeom.area(best)):
@@ -840,30 +841,48 @@ func _cheeks() -> void:
 ## A cheek or a dormer's front: a wall on the body's footprint line from
 ## the lower roof up under this body, its openings cut and dressed.
 func _cheek(bi: int, a: Vector2, b: Vector2, inward: Vector2, y0: float, material: String) -> void:
+	# Along the line, where it stands: from the lower roof under it up to
+	# the roof over it (this body's surface, or a higher one's where that
+	# comes lower), each strip on its own heights.
 	var n := maxi(1, int(ceil(a.distance_to(b) / 0.5)))
 	var tops := PackedFloat32Array()
+	var bots := PackedFloat32Array()
 	for i in n + 1:
-		tops.append(roof.body_height(bi, a.lerp(b, float(i) / n) + inward * 0.05) - 0.05)
+		var q := a.lerp(b, float(i) / n) + inward * 0.05
+		var hb := roof.body_height(bi, q)
+		tops.append(minf(hb, roof.height(q, true)) - 0.05)
+		var lower := -INF
+		for ci in d.roofs.size():
+			if ci != bi:
+				var hc := roof.body_height(ci, q - inward * 0.3)
+				if hc < hb - 0.3:
+					lower = maxf(lower, hc)
+		bots.append(lower - 0.3 if lower > -1e30 else y0)
+	var hi := -INF
+	for v: float in tops:
+		hi = maxf(hi, v)
 	var wl := {"a": a, "b": b, "inward": inward, "thick": 0.5, "y0": y0, "tops": tops, "level": "", "space": "",
 		"other": "", "kind": "cheek", "material": material}
 	var fr := _frame(wl)
 	var f: Transform3D = fr[0]
 	var length: float = fr[1]
 	var forward: bool = fr[2]
-	var hi := -INF
-	for v: float in tops:
-		hi = maxf(hi, v)
 	var mine := _ops_on(wl, f, length, y0, hi)
 	var colr := _wall_color(material)
 	var strips := maxi(1, int(length / 0.2))
 	for i in strips:
 		var u0 := length * i / strips
 		var u1 := length * (i + 1) / strips
-		var ta := _sample(tops, (u0 / length) if forward else 1.0 - u0 / length)
-		var tb := _sample(tops, (u1 / length) if forward else 1.0 - u1 / length)
+		var s0 := (u0 / length) if forward else 1.0 - u0 / length
+		var s1 := (u1 / length) if forward else 1.0 - u1 / length
+		var ta := _sample(tops, s0)
+		var tb := _sample(tops, s1)
 		var top := minf(ta, tb)
-		if top > y0 + 0.05:
-			k.wall("wall", f, u0, u1, d.wy(y0), d.wy(top), 0.5 * d.ft, colr, mine, -1000.0)
+		var bot := minf(_sample(bots, s0), _sample(bots, s1))
+		if top > bot + 0.05:
+			k.wall("wall", f, u0, u1, d.wy(bot), d.wy(top), 0.5 * d.ft, colr, mine, -1000.0)
+			if absf(ta - tb) > 0.02:
+				_wedge(f, u0, u1, d.wy(top), d.wy(ta), d.wy(tb), 0.5 * d.ft, colr)
 	for o: Dictionary in mine:
 		_dress(f, o, wl)
 

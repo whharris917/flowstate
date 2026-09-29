@@ -206,7 +206,12 @@ func _roof(r: Dictionary) -> Dictionary:
 		ext = fp
 	var holes: Array = []
 	for hs: Variant in r.get("holes", []):
-		holes.append(poly(hs))
+		if hs is Dictionary and (hs as Dictionary).has("space"):
+			for sp: Dictionary in spaces:
+				if str(sp["id"]) == str(hs["space"]):
+					holes.append(sp["poly"])
+		else:
+			holes.append(poly(hs))
 	# A roof that stops at a level's rooms: a porch roof runs up to the
 	# house's wall and no further.
 	if r.has("clear_rooms"):
