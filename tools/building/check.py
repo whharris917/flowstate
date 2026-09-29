@@ -17,6 +17,8 @@ opening, and where it is in the building's feet:
   chimney-room a chimney standing in a room's floor rather than in a wall
   chimney-low a chimney whose top does not clear the roof by 2 ft
   roof-over-nothing a roof body over no space
+  sunk-gable  a gable whose eave is lower than the roof beside it on the
+              same wall: the neighbouring eave runs across its face
   unsupported a roof body whose wall line runs where no wall or post is
   deck-headroom a porch or deck under a roof less than 6 ft over its floor
   window-ceiling / window-floor  an opening reaching over its room's
@@ -61,7 +63,7 @@ def run(bname: str, res: float) -> int:
     b = Building.load(bname)
     found = []
     x0, x1, z0, z1 = 10.0, 170.0, 10.0, 125.0
-    xs, zs, H, L = b.roof_raster(x0, x1, z0, z1, res)
+    xs, zs, H, LB = b.roof_raster(x0, x1, z0, z1, res)
     X, Z = np.meshgrid(xs, zs, indexing="ij")
     masks = {}
     for s in b.spaces:
@@ -86,6 +88,10 @@ def run(bname: str, res: float) -> int:
     for s in b.spaces:
         m = masks[s["id"]]
         fl = float(s["floor"])
+        if s.get("top") == "roof" and s["kind"] not in OPEN:
+            # The builder stops such a room at a knee wall where the roof
+            # comes within 3 ft of its floor.
+            m = m & ~(np.isfinite(H) & (H < fl + 3.0))
         over_space = np.full(X.shape, np.inf)
         for o in b.spaces:
             fo = float(o["floor"])
@@ -261,6 +267,46 @@ def run(bname: str, res: float) -> int:
         rt = np.max(np.where(cm, H, -np.inf))
         if np.isfinite(rt) and top < rt + 2.0:
             found.append(("chimney-low", "chimney %s tops out at %.1f, the roof round it at %.1f" % (ch["id"], top, rt)))
+    # A gable or dormer stands out of the roof it rises from: at its front
+    # the roof beside it on the same wall comes no higher than its own eave
+    # (else the gable is sunk behind the neighbouring eave, which then runs
+    # across its face).
+    def h_at(x, z):
+        i = int((x - x0) / res)
+        j = int((z - z0) / res)
+        if 0 <= i < H.shape[0] and 0 <= j < H.shape[1] and np.isfinite(H[i, j]):
+            return float(H[i, j])
+        return -np.inf
+    for bd in b.bodies:
+        if bd.kind != "gable" or bd.trim != "gable":
+            continue
+        e = float(bd.spec["eave"])
+        fxs = [q[0] for q in bd.footprint]
+        fzs = [q[1] for q in bd.footprint]
+        exs = [q[0] for q in bd.extent]
+        ezs = [q[1] for q in bd.extent]
+        ax = bd.spec["axis"]
+        # The ends of the ridge are the fronts; the sides run along it.
+        ends = [(min(fzs), -1), (max(fzs), 1)] if ax == "z" else [(min(fxs), -1), (max(fxs), 1)]
+        for pos, sgn in ends:
+            # A front: just outside it is outside the building.
+            mid = (pos + sgn * 0.8, (min(fzs) + max(fzs)) / 2) if ax == "x" else ((min(fxs) + max(fxs)) / 2, pos + sgn * 0.8)
+            if any(inside(sp["poly"], np.array([mid[0]]), np.array([mid[1]]))[0] for sp in b.spaces if sp["kind"] not in OPEN):
+                continue
+            for side in (-1, 1):
+                if ax == "z":
+                    q = ((max(exs) + 0.8) if side > 0 else (min(exs) - 0.8), pos - sgn * 0.5)
+                else:
+                    q = (pos - sgn * 0.5, (max(ezs) + 0.8) if side > 0 else (min(ezs) - 0.8))
+                on_wall = any(min(_seg_dist(q, sp["poly"][j], sp["poly"][(j + 1) % len(sp["poly"])]) for j in range(len(sp["poly"]))) < 1.2
+                              for sp in b.spaces if sp["kind"] not in OPEN)
+                hn = h_at(*q)
+                i = int((q[0] - x0) / res)
+                j = int((q[1] - z0) / res)
+                who = b.bodies[LB[i, j] // 64] if 0 <= i < LB.shape[0] and 0 <= j < LB.shape[1] and LB[i, j] >= 0 else None
+                if on_wall and who is not None and who.kind != "gable" and hn > e + 0.8:
+                    found.append(("sunk-gable", "gable %s: beside its front the roof stands at %.1f, over its own eave (%.1f), at (%.1f, %.1f)"
+                                  % (bd.id, hn, e, q[0], q[1])))
     # Every roof body is carried: each point of its footprint's outline
     # (its wall line) stands on a space's edge (a wall, or a porch's posts)
     # or inside a space; anything else hangs in the air.

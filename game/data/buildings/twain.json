@@ -1977,8 +1977,8 @@
     "e_wall"
    ],
    "w": 2.4,
-   "sill": 15.8,
-   "head": 21.4
+   "sill": 16.3,
+   "head": 21.5
   },
   {
    "at": [
@@ -1986,8 +1986,8 @@
     "e_wall"
    ],
    "w": 2.4,
-   "sill": 15.8,
-   "head": 21.4
+   "sill": 16.3,
+   "head": 21.5
   },
   {
    "at": [
@@ -3100,7 +3100,7 @@
   {
    "id": "main",
    "kind": "planes",
-   "note": "Steep lower slopes from each side's wall to the flat at 35.9 (roof plan, elevations): the north face meets the flat on x 105.5 (roof plan) from its eave at 18.9 (north elevation). Open over the Texas deck (its pavilion covers it) and where the south-east gable's south slope is the roof.",
+   "note": "Steep lower slopes from each side's wall to the flat at 35.9 (roof plan, elevations): the north face meets the flat on x 105.5 (roof plan) from its eave at 18.9 (north elevation). Open over the Texas deck (its pavilion covers it) and where the south-east gable's south slope is the roof. The east slope rises from the cornice at 19.3 between the small gables (east elevation) to the flat's edge at z 70.",
    "footprint": {
     "rect": [
      57.5,
@@ -3118,8 +3118,8 @@
     ],
     [
      0.0,
-     -0.86,
-     96.154
+     -1.2,
+     119.98
     ],
     [
      1.8,
@@ -3299,8 +3299,8 @@
    "id": "e_gable_1",
    "kind": "gable",
    "axis": "z",
-   "eave": 20.8,
-   "peak": 27.3,
+   "eave": 19.3,
+   "peak": 26.2,
    "footprint": {
     "rect": [
      80.4,
@@ -3313,16 +3313,17 @@
     0.6,
     0.6,
     0.0,
-    0.6
+    1.4
    ],
-   "trim": "gable"
+   "trim": "gable",
+   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2)"
   },
   {
    "id": "e_gable_2",
    "kind": "gable",
    "axis": "z",
-   "eave": 20.8,
-   "peak": 27.3,
+   "eave": 19.3,
+   "peak": 26.2,
    "footprint": {
     "rect": [
      88.0,
@@ -3335,9 +3336,10 @@
     0.6,
     0.6,
     0.0,
-    0.6
+    1.4
    ],
-   "trim": "gable"
+   "trim": "gable",
+   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2)"
   },
   {
    "id": "east_dormer",
