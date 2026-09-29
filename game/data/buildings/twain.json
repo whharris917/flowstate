@@ -3832,7 +3832,7 @@
    ],
    "eave": 11.2,
    "peak": 15.5,
-   "trim": "glass",
+   "trim": "none",
    "note": "A glass roof on ribs rising to the library's wall (model-v1).",
    "footprint": [
     [
@@ -3854,7 +3854,8 @@
      55.5
     ]
    ],
-   "overhang": 0.0
+   "overhang": 0.0,
+   "cover": "glass"
   },
   {
    "id": "wing_east_dormer",

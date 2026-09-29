@@ -24,6 +24,7 @@ static func style(house: TwainHouse = null) -> Dictionary:
 		"deck": TwainHouse.PORCH,
 		"tin_roof": Color(0.38, 0.47, 0.41),
 		"tin": Color(0.38, 0.47, 0.41),
+		"sash_light": Color(0.80, 0.78, 0.70),
 		"slate_courses": [TwainHouse.SLATE, TwainHouse.SLATE, TwainHouse.SLATE, TwainHouse.SLATE_DARK, TwainHouse.SLATE,
 			TwainHouse.SLATE, TwainHouse.SLATE_RED, TwainHouse.SLATE, TwainHouse.SLATE, TwainHouse.SLATE_DARK, TwainHouse.SLATE,
 			TwainHouse.SLATE_RED],

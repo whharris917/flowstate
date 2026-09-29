@@ -470,6 +470,9 @@ func _wall_color(material: String) -> Color:
 
 
 func _build_wall(wl: Dictionary) -> void:
+	if str(wl["material"]) == "glass" and str(wl["kind"]) != "part":
+		_glass_wall(wl)
+		return
 	var fr := _frame(wl)
 	var f: Transform3D = fr[0]
 	var length: float = fr[1]
@@ -534,6 +537,49 @@ func _build_wall(wl: Dictionary) -> void:
 		(style["bands"] as Callable).call(f, length, y0, lo, mine)
 	for o: Dictionary in mine:
 		_dress(f, o, wl)
+
+
+## A wall of glass (a conservatory's): a brick base to 2.5 ft, then panes
+## in a painted frame up to the roof, a mullion every 2.5 ft, a rail at
+## the base and the head.
+func _glass_wall(wl: Dictionary) -> void:
+	var fr := _frame(wl)
+	var f: Transform3D = fr[0]
+	var length: float = fr[1]
+	var forward: bool = fr[2]
+	var tops: PackedFloat32Array = wl["tops"]
+	var y0 := float(wl["y0"])
+	var fl := y0
+	for s: Dictionary in d.spaces:
+		if str(s["id"]) == str(wl["space"]):
+			fl = float(s["floor"])
+	var base := fl + 2.5
+	var brick := _wall_color("brick")
+	var trim := c(col("sash_light", Color(0.86, 0.84, 0.78)), CourthouseKit.K_PAINT)
+	k.wall("wall", f, 0.0, length, d.wy(y0), d.wy(base), 0.6 * d.ft, brick, [], 1000.0)
+	var nz := f.basis.z.normalized()
+	var n := maxi(1, int(round(length / (2.5 * d.ft))))
+	for i in n:
+		var u0 := length * i / n
+		var u1 := length * (i + 1) / n
+		var ta := _sample(tops, (u0 / length) if forward else 1.0 - u0 / length)
+		var tb := _sample(tops, (u1 / length) if forward else 1.0 - u1 / length)
+		var p0 := f * Vector3(u0, d.wy(base), -0.05)
+		var p1 := f * Vector3(u1, d.wy(base), -0.05)
+		var p2 := f * Vector3(u1, d.wy(tb), -0.05)
+		var p3 := f * Vector3(u0, d.wy(ta), -0.05)
+		k.m.quad("glass", p0, p1, p2, p3, nz, Color(1, 1, 1, 1))
+		k.m.bar("wall", p0, p3, 0.035, 4, trim)
+		k.m.bar("wall", p0, p1, 0.04, 4, trim)
+		k.m.bar("wall", p3, p2, 0.04, 4, trim)
+		var mid := d.wy(base + 4.0)
+		if mid < minf(d.wy(ta), d.wy(tb)):
+			k.m.bar("wall", f * Vector3(u0, mid, -0.05), f * Vector3(u1, mid, -0.05), 0.025, 4, trim)
+		# Solid to the player.
+		var cen := f * Vector3((u0 + u1) / 2.0, (d.wy(base) + minf(d.wy(ta), d.wy(tb))) / 2.0, -0.05)
+		var hgt := minf(d.wy(ta), d.wy(tb)) - d.wy(base)
+		if hgt > 0.1:
+			k.solid(Transform3D(f.basis, cen), Vector3.ZERO, Vector3(u1 - u0, hgt, 0.06))
 
 
 ## A wall's triangular top between u0 and u1: from the flat line y up to
@@ -689,6 +735,17 @@ func _roof_faces() -> void:
 		var pl: Vector3 = fc["plane"]
 		var poly: PackedVector2Array = fc["poly"]
 		var cover := str((d.roofs[int(fc["body"])]["spec"] as Dictionary).get("cover", ""))
+		if cover == "glass":
+			# Panes on light ribs: glass over the face, a rib along each edge.
+			var wf := func(p: Vector2) -> Vector3: return d.w(p, BuildingGeom.ph(pl, p))
+			var idxg := Geometry2D.triangulate_polygon(poly)
+			var ng := Vector3(-pl.y, 1.0, pl.x).normalized()
+			for i in range(0, idxg.size(), 3):
+				k.m.tri("glass", wf.call(poly[idxg[i]]), wf.call(poly[idxg[i + 1]]), wf.call(poly[idxg[i + 2]]), ng, Color(1, 1, 1, 1))
+			var rib := c(col("sash_light", Color(0.86, 0.84, 0.78)), CourthouseKit.K_PAINT)
+			for i in poly.size():
+				k.m.bar("wall", wf.call(poly[i]), wf.call(poly[(i + 1) % poly.size()]), 0.035, 4, rib)
+			continue
 		var flat := Vector2(pl.x, pl.y).length() < 0.12 or cover == "tin"
 		var world := func(p: Vector2) -> Vector3: return d.w(p, BuildingGeom.ph(pl, p))
 		# The plane's slope in the world's axes: plan z is world x, plan x
