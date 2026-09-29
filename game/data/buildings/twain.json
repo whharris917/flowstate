@@ -1817,8 +1817,8 @@
     47.4
    ],
    "w": 3.6,
-   "sill": 36.0,
-   "head": 40.2,
+   "sill": 35.2,
+   "head": 39.4,
    "shape": "round",
    "hood": false,
    "note": "centred under the north gable's peak (z 47.4), as the gable's own window"
@@ -2575,7 +2575,7 @@
    ],
    "w": 2.0,
    "sill": 13.8,
-   "head": 18.5,
+   "head": 18.2,
    "hood": false
   },
   {

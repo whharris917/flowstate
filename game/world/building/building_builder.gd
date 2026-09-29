@@ -320,7 +320,7 @@ func _walls() -> void:
 		if d.is_open(s) or str(s["kind"]) == "void":
 			continue
 		var g: Dictionary = d.groups.get(str(s["group"]), {"wall": 1.0, "material": "brick"})
-		for e: Dictionary in _edges[str(s["id"])]:
+		for e: Dictionary in _outer_runs(_edges[str(s["id"])]):
 			var o: Dictionary = e["other"]
 			var kind := "outer"
 			var thick := float(g.get("wall", 1.0))
@@ -336,6 +336,36 @@ func _walls() -> void:
 				else:
 					kind = "group"
 			_wall(s, e, kind, thick, str(g.get("material", "brick")))
+
+
+## A space's edges with consecutive straight edges that all face outside
+## (the air, a porch, a balcony) joined into one: an outer wall is one
+## run whatever stands against its foot, so a window above a balcony's
+## end is carried whole.
+func _outer_runs(edges: Array) -> Array:
+	var out: Array = []
+	for e: Dictionary in edges:
+		if not out.is_empty():
+			var last: Dictionary = out[out.size() - 1]
+			var la: Vector2 = last["a"]
+			var lb: Vector2 = last["b"]
+			var eb: Vector2 = e["b"]
+			if _faces_out(last) and _faces_out(e) and lb.distance_to(e["a"] as Vector2) < 0.05 \
+					and absf((lb - la).normalized().cross((eb - lb).normalized())) < 1e-3 \
+					and (lb - la).dot(eb - lb) > 0.0:
+				last = last.duplicate()
+				last["b"] = eb
+				if (last["other"] as Dictionary).is_empty():
+					last["other"] = e["other"]
+				out[out.size() - 1] = last
+				continue
+		out.append(e)
+	return out
+
+
+func _faces_out(e: Dictionary) -> bool:
+	var o: Dictionary = e["other"]
+	return o.is_empty() or d.is_open(o)
 
 
 func _override(level: String, a: Vector2, b: Vector2) -> Dictionary:
@@ -1322,8 +1352,10 @@ func _posts(s: Dictionary, fl: float, trim: Color) -> void:
 			_post_spots.append(q)
 			var top := roof.height(q + inward * 0.3)
 			var body := roof.body_at(q + inward * 0.3)
+			# A post carries a roof a storey over its floor; a roof higher over
+			# a porch or balcony (a gable's hood) is carried by the house.
 			var base := fl if str(s["kind"]) != "canopy" else ground_at(q)
-			if top < base + 6.0 or top > base + 30.0:
+			if top < base + 6.0 or top > base + (30.0 if str(s["kind"]) == "canopy" else POST_MAX):
 				prev_body = -1
 				continue
 			var foot := d.w(q, fl if str(s["kind"]) != "canopy" else ground_at(q))
@@ -1337,6 +1369,8 @@ func _posts(s: Dictionary, fl: float, trim: Color) -> void:
 			prev = head
 			prev_body = body
 
+
+const POST_MAX := 14.0          # feet, the tallest porch or balcony post
 
 var _post_spots: Array[Vector2] = []
 
