@@ -230,6 +230,7 @@ def run(name: str, h: float, out_dir: str) -> int:
                 envelope[:, j, :] |= mj
                 owner[:, j, :] = np.where(mj, si, owner[:, j, :])
 
+    envelope = ndimage.binary_erosion(envelope, iterations=3)
     findings = []
 
     def place(cells):
@@ -319,13 +320,20 @@ def run(name: str, h: float, out_dir: str) -> int:
         if not tname.startswith("wall "):
             continue
         m = exterior & (tagv == t_id)
-        above = m & (yft[None, :, None] > roofH[:, None, :] + 0.6) & np.isfinite(roofH)[:, None, :]
+        # A fin: outside air on both sides, along x or along z.
+        oa = out_air
+        both = np.zeros(g.shape, dtype=bool)
+        for ax in (0, 2):
+            fwd = np.roll(oa, 3, axis=ax)
+            bwd = np.roll(oa, -3, axis=ax)
+            both |= fwd & bwd
+        above = m & both
         if above.sum() < 10:
             continue
         cells = np.argwhere(above)
         x, z, y = place(cells)
         findings.append({"rule": "above-roof", "size": int(len(cells)), "at": [x, z, y],
-                         "text": "%s stands above the roof round (%.1f, %.1f) %.1f ft up (%d cells)" % (tname, x, z, y, len(cells))})
+                         "text": "%s stands free, outside air on both sides, round (%.1f, %.1f) %.1f ft up (%d cells)" % (tname, x, z, y, len(cells))})
 
     # Floating pieces.
     ext = ndimage.binary_dilation(exterior, iterations=1)

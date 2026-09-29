@@ -199,6 +199,12 @@ func _roof(r: Dictionary) -> Dictionary:
 	var holes: Array = []
 	for hs: Variant in r.get("holes", []):
 		holes.append(poly(hs))
+	# A roof that stops at a level's rooms: a porch roof runs up to the
+	# house's wall and no further.
+	if r.has("clear_rooms"):
+		for s: Dictionary in spaces:
+			if str(s["level"]) == str(r["clear_rooms"]) and not OPEN_KINDS.has(str(s["kind"])):
+				holes.append(s["poly"])
 	var planes := _planes(r, fp, ext)
 	# A pyramid or cone: each plane owns its sector, the triangle from its
 	# eave edge to the apex, whatever the footprint's shape.

@@ -283,6 +283,9 @@ class Building:
             over = r.get("overhang", 0.0)
             ext = rect_overhang(fp, over) if isinstance(over, list) else offset_poly(fp, float(over))
             holes = [expand_poly(h) for h in r.get("holes", [])]
+            if "clear_rooms" in r:
+                holes += [s["poly"] for s in self.spaces
+                          if s["level"] == r["clear_rooms"] and s["kind"] not in ("porch", "balcony", "deck")]
             body = Body(r["id"], r["kind"], fp, ext, _planes_for(r, fp, ext), holes, r.get("trim", "eave"), r)
             if r["kind"] == "pyramid":
                 ax, az = gx(r["apex"][0]), gz(r["apex"][1])

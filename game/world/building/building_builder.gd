@@ -480,7 +480,7 @@ func _floors() -> void:
 		if str(s["kind"]) == "void":
 			continue
 		var open := d.is_open(s)
-		var p: PackedVector2Array = s["poly"]
+		var p: PackedVector2Array = s["poly"] if open else _inner_poly(s)
 		var pts: Array = []
 		for q: Vector2 in p:
 			pts.append(q)
@@ -1112,6 +1112,29 @@ func _rail(a: Vector3, b: Vector3, ht: float, trim: Color) -> void:
 
 
 # ---- rooms -------------------------------------------------------------------------
+
+## A space's outline on its walls' inner faces: in by an outer wall's
+## thickness, half a partition's, not at all where it meets a part of the
+## building listed before its own.
+func _inner_poly(s: Dictionary) -> PackedVector2Array:
+	var edges: Array = _edges[str(s["id"])]
+	var p := PackedVector2Array()
+	var ins := PackedFloat32Array()
+	var g: Dictionary = d.groups.get(str(s["group"]), {"wall": 1.0})
+	for e: Dictionary in edges:
+		p.append(e["a"] as Vector2)
+		var o: Dictionary = e["other"]
+		var t := float(g.get("wall", 1.0))
+		if not o.is_empty() and not d.is_open(o):
+			if str(o["group"]) == str(s["group"]):
+				t = PART / 2.0
+			elif int(d.rank.get(str(o["group"]), 99)) < int(d.rank.get(str(s["group"]), 99)):
+				t = 0.0
+		ins.append(t)
+	if p.size() < 3:
+		return s["poly"]
+	return BuildingGeom.inset(p, ins)
+
 
 ## Each enclosed space's finish on the inner faces of its walls: plaster
 ## (or the space's finish) from its floor to its ceiling, or up to the roof

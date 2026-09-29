@@ -3619,28 +3619,52 @@
    "trim": "porch",
    "footprint": [
     [
-     48.4,
-     67.3
-    ],
-    [
      29.2,
      67.3
     ],
     [
-     22.8,
-     74.4
+     "oct_s",
+     67.3
     ],
     [
-     22.8,
-     84.0
+     "oct_s",
+     68.1
+    ],
+    [
+     51.2,
+     "part1"
+    ],
+    {
+     "arc_at": [
+      54.3,
+      78.2,
+      6.7,
+      [
+       241.7,
+       225,
+       210,
+       195,
+       180,
+       165,
+       150
+      ]
+     ]
+    },
+    [
+     48.4,
+     90.2
     ],
     [
      29.3,
      90.2
     ],
     [
-     48.4,
-     90.2
+     22.8,
+     84.0
+    ],
+    [
+     22.8,
+     74.4
     ]
    ],
    "overhang": 1.0,
@@ -3651,42 +3675,54 @@
    "eave": 9.8,
    "peak": 11.3,
    "note": "A low hipped roof, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 11.3 (east and south elevations, fascia 9.2-10.2).",
-   "cover": "tin"
+   "cover": "tin",
+   "clear_rooms": "first"
   },
   {
    "id": "veranda_roof",
    "kind": "planes",
    "trim": "porch",
    "footprint": [
+    {
+     "arc_at": [
+      54.3,
+      78.2,
+      6.7,
+      [
+       150,
+       130,
+       110,
+       90,
+       70,
+       58.3
+      ]
+     ]
+    },
     [
-     48.4,
-     81.5
+     96.3,
+     "e_wall"
     ],
     [
      96.3,
-     83.4
-    ],
-    [
-     96.3,
-     94.0
+     92.8
     ],
     [
      84.8,
-     94.0
+     92.8
     ],
     [
      84.8,
-     91.2
+     90.0
     ],
     [
      75.6,
-     91.2
+     90.0
     ],
     {
      "arc": [
       66.8,
       83.65,
-      12.05,
+      10.85,
       35.8,
       144.2,
       12
@@ -3694,30 +3730,30 @@
     },
     [
      58.0,
-     91.2
+     90.0
     ],
     [
      56.0,
-     91.2
+     90.0
     ],
     [
      56.0,
-     94.2
+     93.0
     ],
     [
      50.0,
-     94.2
+     93.0
     ],
     [
      50.0,
-     91.4
+     90.2
     ],
     [
      48.4,
-     91.4
+     90.2
     ]
    ],
-   "overhang": 0.0,
+   "overhang": 1.2,
    "planes": [
     [
      0.0,
@@ -3726,7 +3762,8 @@
     ]
    ],
    "note": "Nearly flat, falling from 10.5 at the house wall to 9.7 at its outer edge (east elevation).",
-   "cover": "tin"
+   "cover": "tin",
+   "clear_rooms": "first"
   },
   {
    "id": "porte_cochere",
@@ -3761,7 +3798,8 @@
     ]
    },
    "overhang": 0.0,
-   "cover": "tin"
+   "cover": "tin",
+   "clear_rooms": "first"
   },
   {
    "id": "back_stair",
