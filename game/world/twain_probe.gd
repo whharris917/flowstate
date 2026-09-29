@@ -64,6 +64,8 @@ func _run(world: TwainMap) -> void:
 				cam.look_at_from_position(Vector3(cpos[0], cpos[1], cpos[2]), Vector3(ctgt[0], ctgt[1], ctgt[2]), Vector3.UP)
 				cam.current = true
 				world.player.visible = false
+				# The house alone: the lawn and drive are modelled only near it.
+				world.grounds.visible = false
 				for i in 20:
 					await RenderingServer.frame_post_draw
 				get_viewport().get_texture().get_image().save_png("user://probe_tw_%s.png" % cp[0])

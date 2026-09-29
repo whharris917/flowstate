@@ -129,7 +129,14 @@ def run(bname: str, res: float) -> int:
                 near.append(s)
         tag = "opening at (%.1f, %.1f), %s %.1f-%.1f" % (at[0], at[1], kind, sill, float(o["head"]))
         if not near:
-            found.append(("no-level", tag + ": on no space's edge at its height"))
+            # A dormer's window: on a roof body's footprint edge, over a space.
+            on_cheek = any(min(_seg_dist(at, bd.footprint[i], bd.footprint[(i + 1) % len(bd.footprint)])
+                               for i in range(len(bd.footprint))) < 1.2 for bd in b.bodies)
+            under = any(inside(s["poly"], np.array([at[0]]), np.array([at[1]]))[0] or
+                        min(_seg_dist(at, s["poly"][i], s["poly"][(i + 1) % len(s["poly"])]) for i in range(len(s["poly"]))) < 3.0
+                        for s in b.spaces if float(s["floor"]) < sill)
+            if not (on_cheek and under):
+                found.append(("no-level", tag + ": on no space's edge at its height"))
             continue
         enclosed = [s for s in near if s["kind"] not in OPEN]
         # A space counts on the far side only where its cover stands above
@@ -157,12 +164,12 @@ def run(bname: str, res: float) -> int:
         base, top = float(ch.get("base", 0.0)), float(ch["top"])
         cm = (np.abs(X - cx) <= sx / 2) & (np.abs(Z - cz) <= sz / 2)
         for s in b.spaces:
-            if s["kind"] in OPEN or not (base < float(s["floor"]) + 1.0 < top):
+            if s["kind"] in OPEN or s["kind"] in LOW_OK or not (base < float(s["floor"]) + 1.0 < top):
                 continue
             # A breast may stand 2 ft into a room from its wall.
             core = ndimage.binary_erosion(masks[s["id"]], iterations=max(1, int(2.0 / res)))
             hit = (cm & core).sum() * res * res
-            if hit > 1.0:
+            if hit > 3.0:
                 found.append(("chimney-room", "chimney %s stands %.1f sq ft into %s's floor" % (ch["id"], hit, s["id"])))
         rt = np.max(np.where(cm, H, -np.inf))
         if np.isfinite(rt) and top < rt + 2.0:

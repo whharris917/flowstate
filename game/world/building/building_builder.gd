@@ -371,6 +371,8 @@ func _wall_color(material: String) -> Color:
 			return c(col("trim", Color(0.33, 0.14, 0.09)), CourthouseKit.K_PAINT)
 		"plaster":
 			return c(col("plaster", Color(0.84, 0.79, 0.68)), CourthouseKit.K_PLASTER)
+		"clapboard":
+			return c(col("clapboard", Color(0.52, 0.34, 0.22)), HarborTown.K_CLAP)
 	return c(col("brick", Color(0.60, 0.26, 0.17)), CourthouseKit.K_BRICK)
 
 
@@ -606,7 +608,9 @@ func _roof_trim() -> void:
 				var h0 := BuildingGeom.ph(pl, p0)
 				var h1 := BuildingGeom.ph(pl, p1)
 				var hm := (h0 + h1) / 2.0
-				var out_h := roof.height(pm + outward * 0.1)
+				# The roof drops away beyond the edge (not only at a sliver
+				# where two faces were cut apart).
+				var out_h := maxf(roof.height(pm + outward * 0.1), roof.height(pm + outward * 0.6) - 0.5 * absf(h1 - h0))
 				if out_h > hm - 0.3:
 					continue
 				var on_edge := BuildingGeom.on_boundary(pm, ext, 0.08)
@@ -632,18 +636,22 @@ func _roof_trim() -> void:
 ## lower roof up to this one. Not on a line where a space's wall already
 ## rises (a gable's front on the house's wall).
 func _cheeks() -> void:
-	var brick := c(col("brick", Color(0.60, 0.26, 0.17)), CourthouseKit.K_BRICK)
 	for bi in d.roofs.size():
 		var r: Dictionary = d.roofs[bi]
 		var fp: PackedVector2Array = r["footprint"]
 		var ext: PackedVector2Array = r["extent"]
 		if absf(BuildingGeom.area(ext) - BuildingGeom.area(fp)) < 0.5:
 			continue
+		var material := str((r["spec"] as Dictionary).get("cheek", "brick"))
 		for i in fp.size():
 			var a := fp[i]
 			var b := fp[(i + 1) % fp.size()]
 			var L := a.distance_to(b)
-			var n := maxi(1, int(ceil(L / 1.0)))
+			if L < 0.3:
+				continue
+			var n := maxi(1, int(ceil(L / 0.5)))
+			# Along the edge, where it is a cheek: [t0, t1, lower] runs.
+			var runs: Array = []
 			for j in n:
 				var p0 := a.lerp(b, float(j) / n)
 				var p1 := a.lerp(b, float(j + 1) / n)
@@ -659,13 +667,50 @@ func _cheeks() -> void:
 							lower = maxf(lower, hc)
 				if lower == -INF:
 					continue
-				var h0 := roof.body_height(bi, p0)
-				var h1 := roof.body_height(bi, p1)
-				if not is_finite(h0) or not is_finite(h1):
-					continue
-				var nn := (d.w(pm + (b - a).orthogonal().normalized()) - d.w(pm)).normalized()
-				for sd: float in [1.0, -1.0]:
-					k.m.quad("wall", d.w(p0, lower - 0.3), d.w(p1, lower - 0.3), d.w(p1, h1 - 0.05), d.w(p0, h0 - 0.05), nn * sd, brick)
+				if not runs.is_empty() and absf(float(runs[-1][1]) - float(j) / n) < 1e-6:
+					runs[-1][1] = float(j + 1) / n
+					runs[-1][2] = minf(float(runs[-1][2]), lower)
+				else:
+					runs.append([float(j) / n, float(j + 1) / n, lower])
+			for run: Array in runs:
+				var ra := a.lerp(b, float(run[0]))
+				var rb := a.lerp(b, float(run[1]))
+				var dir := (rb - ra).normalized()
+				var inward := Vector2(-dir.y, dir.x)
+				if not Geometry2D.is_point_in_polygon((ra + rb) / 2.0 + inward * 0.3, fp):
+					inward = -inward
+				_cheek(bi, ra, rb, inward, float(run[2]) - 0.3, material)
+
+
+## A cheek or a dormer's front: a wall on the body's footprint line from
+## the lower roof up under this body, its openings cut and dressed.
+func _cheek(bi: int, a: Vector2, b: Vector2, inward: Vector2, y0: float, material: String) -> void:
+	var n := maxi(1, int(ceil(a.distance_to(b) / 0.5)))
+	var tops := PackedFloat32Array()
+	for i in n + 1:
+		tops.append(roof.body_height(bi, a.lerp(b, float(i) / n) + inward * 0.05) - 0.05)
+	var wl := {"a": a, "b": b, "inward": inward, "thick": 0.5, "y0": y0, "tops": tops, "level": "", "space": "",
+		"other": "", "kind": "cheek", "material": material}
+	var fr := _frame(wl)
+	var f: Transform3D = fr[0]
+	var length: float = fr[1]
+	var forward: bool = fr[2]
+	var hi := -INF
+	for v: float in tops:
+		hi = maxf(hi, v)
+	var mine := _ops_on(wl, f, length, y0, hi)
+	var colr := _wall_color(material)
+	var strips := maxi(1, int(length / 0.2))
+	for i in strips:
+		var u0 := length * i / strips
+		var u1 := length * (i + 1) / strips
+		var ta := _sample(tops, (u0 / length) if forward else 1.0 - u0 / length)
+		var tb := _sample(tops, (u1 / length) if forward else 1.0 - u1 / length)
+		var top := minf(ta, tb)
+		if top > y0 + 0.05:
+			k.wall("wall", f, u0, u1, d.wy(y0), d.wy(top), 0.5 * d.ft, colr, mine, -1000.0)
+	for o: Dictionary in mine:
+		_dress(f, o, wl)
 
 
 func _on_space_edge(p: Vector2) -> bool:

@@ -136,6 +136,10 @@
   {
    "id": "third",
    "floor": 24.0
+  },
+  {
+   "id": "wing_attic",
+   "floor": 17.2
   }
  ],
  "groups": [
@@ -379,23 +383,17 @@
      "e_wall"
     ],
     {
-     "arc_at": [
-      54.8,
-      77.3,
-      6.6,
-      [
-       90,
-       105,
-       120,
-       136,
-       164,
-       196,
-       221,
-       236
-      ]
+     "arc": [
+      54.3,
+      78.2,
+      6.7,
+      58.3,
+      241.7,
+      14
      ]
     }
-   ]
+   ],
+   "note": "the round from the first floor plan: centre (54.3, 78.2), outer face 6.7 ft out, bulging past the east wall"
   },
   {
    "id": "dress_closets",
@@ -493,15 +491,47 @@
    ]
   },
   {
+   "id": "scullery",
+   "name": "scullery",
+   "level": "first",
+   "kind": "room",
+   "group": "wing",
+   "top": 9.8,
+   "poly": {
+    "rect": [
+     "pantry_wing",
+     "wing_w",
+     "kitch_w",
+     "w_wall"
+    ]
+   }
+  },
+  {
    "id": "kitchen",
-   "name": "kitchen wing",
+   "name": "kitchen",
+   "level": "first",
+   "kind": "room",
+   "group": "wing",
+   "top": 9.8,
+   "poly": {
+    "rect": [
+     "kitch_w",
+     "wing_w",
+     "kitch_n",
+     "wing_corr"
+    ]
+   }
+  },
+  {
+   "id": "servants_hall",
+   "name": "servants' hall",
    "level": "first",
    "kind": "room",
    "group": "wing",
    "top": 9.8,
    "poly": [
     [
-     "pantry_wing",
+     "kitch_n",
      "wing_w"
     ],
     [
@@ -518,25 +548,75 @@
     ],
     [
      "wing_n",
-     "wing_e"
+     "hall_n"
     ],
     [
-     "n_wall",
-     "wing_e"
-    ],
-    [
-     "n_wall",
-     "w_wall"
-    ],
-    [
-     "pantry_wing",
-     "w_wall"
+     "kitch_n",
+     "hall_n"
     ]
    ]
   },
   {
-   "id": "wing_upper",
-   "name": "servants' rooms",
+   "id": "service_entry",
+   "name": "service entry",
+   "level": "first",
+   "kind": "room",
+   "group": "wing",
+   "top": 9.8,
+   "poly": {
+    "rect": [
+     "entry_s",
+     "hall_n",
+     "wing_n",
+     "wing_e"
+    ]
+   }
+  },
+  {
+   "id": "back_passage",
+   "name": "back passage and stair",
+   "level": "first",
+   "kind": "hall",
+   "group": "wing",
+   "top": 9.8,
+   "poly": [
+    [
+     "n_wall",
+     "w_wall"
+    ],
+    [
+     "kitch_w",
+     "w_wall"
+    ],
+    [
+     "kitch_w",
+     "wing_corr"
+    ],
+    [
+     "kitch_n",
+     "wing_corr"
+    ],
+    [
+     "kitch_n",
+     "hall_n"
+    ],
+    [
+     "entry_s",
+     "hall_n"
+    ],
+    [
+     "entry_s",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "wing_e"
+    ]
+   ]
+  },
+  {
+   "id": "wing_upper_s",
+   "name": "servants' rooms, south",
    "level": "wing2",
    "kind": "room",
    "group": "wing",
@@ -547,6 +627,41 @@
      "wing_w"
     ],
     [
+     "upper_n",
+     "wing_w"
+    ],
+    [
+     "upper_n",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "w_wall"
+    ],
+    [
+     "pantry_wing",
+     "w_wall"
+    ]
+   ],
+   "note": "partition assumed, clear of the kitchen chimney and the wall dormer's window"
+  },
+  {
+   "id": "wing_upper_n",
+   "name": "servants' rooms, north",
+   "level": "wing2",
+   "kind": "room",
+   "group": "wing",
+   "top": 16.6,
+   "poly": [
+    [
+     "upper_n",
+     "wing_w"
+    ],
+    [
      "wing_step",
      "wing_w"
     ],
@@ -563,18 +678,11 @@
      "wing_e"
     ],
     [
-     "n_wall",
+     "upper_n",
      "wing_e"
-    ],
-    [
-     "n_wall",
-     "w_wall"
-    ],
-    [
-     "pantry_wing",
-     "w_wall"
     ]
-   ]
+   ],
+   "note": "partition assumed, clear of the kitchen chimney and the wall dormer's window"
   },
   {
    "id": "basement_wing",
@@ -1312,6 +1420,49 @@
      49.8
     ]
    }
+  },
+  {
+   "id": "wing_attic",
+   "name": "wing attic",
+   "level": "wing_attic",
+   "kind": "attic",
+   "group": "wing",
+   "top": "roof",
+   "poly": [
+    [
+     "pantry_wing",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "w_wall"
+    ],
+    [
+     "pantry_wing",
+     "w_wall"
+    ]
+   ],
+   "note": "the garret the wing's dormers light"
   }
  ],
  "walls": [
@@ -1841,10 +1992,10 @@
   {
    "at": {
     "arc_pt": [
-     54.8,
-     77.3,
-     6.6,
-     150
+     54.3,
+     78.2,
+     6.7,
+     88
     ]
    },
    "w": 2.3,
@@ -1854,10 +2005,10 @@
   {
    "at": {
     "arc_pt": [
-     54.8,
-     77.3,
-     6.6,
-     180
+     54.3,
+     78.2,
+     6.7,
+     158
     ]
    },
    "w": 2.3,
@@ -1867,10 +2018,10 @@
   {
    "at": {
     "arc_pt": [
-     54.8,
-     77.3,
-     6.6,
-     235
+     54.3,
+     78.2,
+     6.7,
+     205
     ]
    },
    "w": 2.3,
@@ -2702,6 +2853,50 @@
    "sill": 24.0,
    "head": 32.0,
    "kind": "ishut"
+  },
+  {
+   "at": [
+    121.2,
+    24.86
+   ],
+   "w": 5.0,
+   "sill": 22.5,
+   "head": 24.4,
+   "hood": false,
+   "kind": "win"
+  },
+  {
+   "at": [
+    144.8,
+    24.86
+   ],
+   "w": 5.0,
+   "sill": 22.5,
+   "head": 24.4,
+   "hood": false,
+   "kind": "win"
+  },
+  {
+   "at": [
+    129.1,
+    36.79
+   ],
+   "w": 4.8,
+   "sill": 23.6,
+   "head": 25.5,
+   "hood": false,
+   "kind": "win"
+  },
+  {
+   "at": [
+    151.04,
+    31.2
+   ],
+   "w": 6.0,
+   "sill": 22.4,
+   "head": 23.9,
+   "hood": false,
+   "kind": "win"
   }
  ],
  "roofs": [
@@ -3092,33 +3287,33 @@
    "id": "round_roof",
    "kind": "pyramid",
    "apex": [
-    57.5,
-    77.3
+    "s_wall",
+    78.2
    ],
    "eave": 13.0,
    "peak": 13.9,
    "footprint": [
     [
-     57.5,
-     85.3
+     "s_wall",
+     85.2
     ],
     {
      "arc": [
-      54.8,
-      77.3,
-      8.0,
-      90,
-      240,
-      15
+      54.3,
+      78.2,
+      8.1,
+      70,
+      236,
+      14
      ]
     },
     [
-     52.54,
-     71.1
+     51.2,
+     71.4
     ],
     [
-     57.5,
-     71.1
+     "s_wall",
+     71.4
     ]
    ],
    "overhang": 0.0
@@ -3184,35 +3379,35 @@
    "footprint": [
     [
      "pantry_wing",
-     22.3
+     "wing_w"
     ],
     [
-     137.0,
-     22.3
+     "wing_step",
+     "wing_w"
     ],
     [
-     137.0,
-     19.8
+     "wing_step",
+     "wing_w2"
     ],
     [
-     155.5,
-     19.8
+     "wing_n",
+     "wing_w2"
     ],
     [
-     155.5,
-     43.8
+     "wing_n",
+     "wing_e"
     ],
     [
-     114.5,
-     43.8
+     "n_wall",
+     "wing_e"
     ],
     [
-     114.5,
-     38.3
+     "n_wall",
+     "w_wall"
     ],
     [
      "pantry_wing",
-     38.3
+     "w_wall"
     ]
    ],
    "overhang": 1.8,
@@ -3255,35 +3450,35 @@
    "footprint": [
     [
      "pantry_wing",
-     22.3
+     "wing_w"
     ],
     [
-     137.0,
-     22.3
+     "wing_step",
+     "wing_w"
     ],
     [
-     137.0,
-     19.8
+     "wing_step",
+     "wing_w2"
     ],
     [
-     155.5,
-     19.8
+     "wing_n",
+     "wing_w2"
     ],
     [
-     155.5,
-     43.8
+     "wing_n",
+     "wing_e"
     ],
     [
-     114.5,
-     43.8
+     "n_wall",
+     "wing_e"
     ],
     [
-     114.5,
-     38.3
+     "n_wall",
+     "w_wall"
     ],
     [
      "pantry_wing",
-     38.3
+     "w_wall"
     ]
    ],
    "overhang": 1.8,
@@ -3327,35 +3522,35 @@
    "footprint": [
     [
      "pantry_wing",
-     22.3
+     "wing_w"
     ],
     [
-     137.0,
-     22.3
+     "wing_step",
+     "wing_w"
     ],
     [
-     137.0,
-     19.8
+     "wing_step",
+     "wing_w2"
     ],
     [
-     155.5,
-     19.8
+     "wing_n",
+     "wing_w2"
     ],
     [
-     155.5,
-     43.8
+     "wing_n",
+     "wing_e"
     ],
     [
-     114.5,
-     43.8
+     "n_wall",
+     "wing_e"
     ],
     [
-     114.5,
-     38.3
+     "n_wall",
+     "w_wall"
     ],
     [
      "pantry_wing",
-     38.3
+     "w_wall"
     ]
    ],
    "overhang": 1.8,
@@ -3619,6 +3814,102 @@
     0.5,
     0.5
    ]
+  },
+  {
+   "id": "wing_dormer_w1",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 24.6,
+   "peak": 25.9,
+   "trim": "gable",
+   "cheek": "clapboard",
+   "note": "a lattice dormer on the wing's roof (west, east and north elevations)",
+   "footprint": {
+    "rect": [
+     118.15,
+     24.86,
+     124.25,
+     31.2
+    ]
+   },
+   "overhang": [
+    2.6,
+    2.6,
+    0.4,
+    0.0
+   ]
+  },
+  {
+   "id": "wing_dormer_w2",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 24.6,
+   "peak": 25.9,
+   "trim": "gable",
+   "cheek": "clapboard",
+   "note": "a lattice dormer on the wing's roof (west, east and north elevations)",
+   "footprint": {
+    "rect": [
+     141.75,
+     24.86,
+     147.85,
+     31.2
+    ]
+   },
+   "overhang": [
+    2.6,
+    2.6,
+    0.4,
+    0.0
+   ]
+  },
+  {
+   "id": "wing_dormer_e",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 25.7,
+   "peak": 27.7,
+   "trim": "gable",
+   "cheek": "clapboard",
+   "note": "a lattice dormer on the wing's roof (west, east and north elevations)",
+   "footprint": {
+    "rect": [
+     126.2,
+     31.2,
+     132.0,
+     36.79
+    ]
+   },
+   "overhang": [
+    1.85,
+    1.85,
+    0.0,
+    0.4
+   ]
+  },
+  {
+   "id": "wing_dormer_n",
+   "kind": "gable",
+   "axis": "x",
+   "eave": 24.0,
+   "peak": 25.0,
+   "trim": "gable",
+   "cheek": "clapboard",
+   "note": "the lattice dormer on the wing's north end (north elevation)",
+   "footprint": {
+    "rect": [
+     146.0,
+     27.7,
+     151.04,
+     34.7
+    ]
+   },
+   "overhang": [
+    0.0,
+    0.4,
+    1.5,
+    1.5
+   ]
   }
  ],
  "chimneys": [
@@ -3629,12 +3920,12 @@
     56.9
    ],
    "size": [
-    7.6,
-    3.4
+    7.2,
+    3.0
    ],
    "base": 0.0,
    "top": 48.0,
-   "note": "roof plan's block; top from the four elevations (47.7-48.1)"
+   "note": "roof plan's block; top from the four elevations (47.7-48.1); the shaft inside the corbelled cap the roof plan draws"
   },
   {
    "id": "hall",
@@ -3728,13 +4019,17 @@
    "deck_n": 64.3,
    "hall3_serv": 97.0,
    "serv_attic": 109.95,
-   "pantry_wing": 112.9,
+   "pantry_wing": 112.55,
    "oct_s": 47.3,
-   "wing_n": 155.5,
+   "wing_n": 154.2,
    "wing_step": 137.0,
    "bay_n": 121.0,
    "closet_bath": 63.8,
-   "guest_hall2": 71.28
+   "guest_hall2": 71.28,
+   "kitch_w": 119.7,
+   "kitch_n": 137.75,
+   "entry_s": 143.5,
+   "upper_n": 138.6
   },
   "z": {
    "w_wall": 38.3,
@@ -3748,10 +4043,12 @@
    "passage": 60.47,
    "alc_w": 29.7,
    "wing_w": 22.3,
-   "wing_w2": 19.8,
-   "wing_e": 43.8,
+   "wing_w2": 20.3,
+   "wing_e": 43.6,
    "bay_s": 64.0,
-   "bay_e": 75.0
+   "bay_e": 75.0,
+   "wing_corr": 38.5,
+   "hall_n": 33.6
   }
  }
 }
