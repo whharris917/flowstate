@@ -1082,7 +1082,10 @@
      "oct_s",
      60.8
     ]
-   ]
+   ],
+   "exempt": {
+    "deck-headroom": "the gable's or pavilion's eave comes down over the balcony's ends, as the elevations draw it"
+   }
   },
   {
    "id": "alcove_deck",
@@ -1132,6 +1135,9 @@
      "s_wall",
      55.6
     ]
+   },
+   "exempt": {
+    "deck-headroom": "the gable's or pavilion's eave comes down over the balcony's ends, as the elevations draw it"
    }
   },
   {
@@ -1148,6 +1154,9 @@
      74.5,
      86.3
     ]
+   },
+   "exempt": {
+    "deck-headroom": "the gable's or pavilion's eave comes down over the balcony's ends, as the elevations draw it"
    }
   },
   {
@@ -1164,6 +1173,9 @@
      111.4,
      86.3
     ]
+   },
+   "exempt": {
+    "deck-headroom": "the gable's or pavilion's eave comes down over the balcony's ends, as the elevations draw it"
    }
   },
   {
@@ -2695,7 +2707,7 @@
   {
    "id": "main",
    "kind": "planes",
-   "note": "Steep lower slopes from each side's wall to the flat at 35.9 (roof plan, elevations). Open over the Texas deck (its pavilion covers it) and where the south-east gable's south slope is the roof.",
+   "note": "Steep lower slopes from each side's wall to the flat at 35.9 (roof plan, elevations): the north face meets the flat on x 105.5 (roof plan) from its eave at 18.9 (north elevation). Open over the Texas deck (its pavilion covers it) and where the south-east gable's south slope is the roof.",
    "footprint": {
     "rect": [
      57.5,
@@ -2722,9 +2734,9 @@
      -79.0
     ],
     [
-     -1.05,
+     -1.63,
      0.0,
-     139.725
+     207.9
     ],
     [
      0.0,
@@ -2769,15 +2781,15 @@
    "id": "ridge_roof",
    "kind": "gable",
    "axis": "x",
-   "eave": 29.51,
+   "eave": 28.0,
    "peak": 43.3,
-   "note": "One ridge at 43.3 the length of the main block, z 47.4 (south elevation's gable peak, the attic plan's framed strip, section B-B); the west slope from the cornice, the east slope down to the flat at 35.9.",
+   "note": "One ridge at 43.3 the length of the main block, z 47.4 (south elevation's gable peak, the attic plan's framed strip, section B-B); both slopes at the west roof's pitch (1.515, west elevation) from the cornice at 28.0 a foot out; the east slope meets the flat at 35.9 on z 52.3 (the roof plan's line).",
    "footprint": {
     "rect": [
      "s_wall",
      "w_wall",
      "n_wall",
-     56.5
+     57.5
     ]
    },
    "overhang": [
@@ -2983,102 +2995,97 @@
    ]
   },
   {
-   "id": "alcove_dormer",
-   "kind": "flat",
-   "y": 34.3,
-   "note": "Behind the alcove deck, through the long west roof, to the billiard room.",
-   "footprint": {
-    "rect": [
-     66.5,
-     37.1,
-     79.9,
-     41.3
-    ]
-   },
-   "overhang": 0.0
-  },
-  {
    "id": "texas_pavilion",
    "kind": "pyramid",
    "apex": [
     57.2,
-    63.45
+    64.8
    ],
    "eave": 34.7,
    "peak": 37.1,
    "trim": "pavilion",
    "footprint": [
     [
-     47.1,
-     59.47
+     48.75,
+     61.3
     ],
     [
-     47.1,
-     67.43
+     48.75,
+     68.3
     ],
     [
-     53.02,
-     73.05
+     53.7,
+     73.25
     ],
     [
-     61.38,
-     73.05
-    ],
-    [
-     64.3,
-     67.43
+     60.7,
+     73.25
     ],
     [
      64.3,
-     59.47
+     68.3
     ],
     [
-     61.38,
-     53.85
+     64.3,
+     61.3
     ],
     [
-     53.02,
-     53.85
+     60.7,
+     56.35
+    ],
+    [
+     53.7,
+     56.35
     ]
    ],
-   "overhang": 0.0
+   "overhang": 1.9,
+   "note": "The Texas deck's roof: one octagonal pavilion over the tower's top and the well, its point at x 57.2, z 64.8 and its eave octagon 20.7 ft across flats (roof plan), cut square on the top hall's wall; eave 34.7, point 37.1 (east elevation)."
   },
   {
    "id": "alcove_spire",
    "kind": "pyramid",
    "apex": [
     73.2,
-    34.2
+    37.2
    ],
    "eave": 33.2,
-   "peak": 46.6,
+   "peak": 47.25,
    "footprint": [
     [
-     66.5,
-     38.3
+     66.7,
+     34.51
     ],
     [
-     66.5,
-     33.6
+     66.7,
+     39.89
     ],
     [
-     70.5,
-     29.7
+     70.51,
+     43.7
     ],
     [
-     75.9,
-     29.7
+     75.89,
+     43.7
     ],
     [
-     79.9,
-     33.6
+     79.7,
+     39.89
     ],
     [
-     79.9,
-     38.3
+     79.7,
+     34.51
+    ],
+    [
+     75.89,
+     30.7
+    ],
+    [
+     70.51,
+     30.7
     ]
    ],
-   "overhang": 2.8
+   "overhang": 2.2,
+   "note": "An octagonal spire over the alcove's deck, centred where the roof plan and section A-A put its point (x 73.2, z 37.2, over the house's west wall), its eave octagon 17.4 ft across flats (roof plan); eave 33.2 and point 47.25 (the south elevation's mark, PEAK OF ROOF 47'-3\"). Its inner half dies into the long roof in valleys."
   },
   {
    "id": "round_roof",
@@ -3175,7 +3182,7 @@
    "note": "Ridge at 31.5 down the wing's middle from x 123.3 to 144.4 (roof plan, elevations).",
    "footprint": [
     [
-     113.0,
+     "pantry_wing",
      22.3
     ],
     [
@@ -3203,7 +3210,7 @@
      38.3
     ],
     [
-     113.0,
+     "pantry_wing",
      38.3
     ]
    ],
@@ -3246,7 +3253,7 @@
    "kind": "planes",
    "footprint": [
     [
-     113.0,
+     "pantry_wing",
      22.3
     ],
     [
@@ -3274,7 +3281,7 @@
      38.3
     ],
     [
-     113.0,
+     "pantry_wing",
      38.3
     ]
    ],
@@ -3318,7 +3325,7 @@
    "y": 17.7,
    "footprint": [
     [
-     113.0,
+     "pantry_wing",
      22.3
     ],
     [
@@ -3346,7 +3353,7 @@
      38.3
     ],
     [
-     113.0,
+     "pantry_wing",
      38.3
     ]
    ],
@@ -3514,7 +3521,10 @@
     ]
    },
    "overhang": 0.0,
-   "note": "Falls with the stair from 19.6 at x 120.2 to 10.2 at 136.7 on its outer edge, 1.5 higher against the wall."
+   "note": "Falls with the stair from 19.6 at x 120.2 to 10.2 at 136.7 on its outer edge, 1.5 higher against the wall.",
+   "exempt": {
+    "roof-over-nothing": "the back stair outside the wing's east wall, not yet modelled as a space"
+   }
   },
   {
    "id": "conservatory_roof",
@@ -3548,6 +3558,52 @@
     ]
    ],
    "overhang": 0.0
+  },
+  {
+   "id": "wing_east_dormer",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 19.0,
+   "peak": 20.6,
+   "trim": "gable",
+   "note": "The wall dormer over the wing's east window through the cornice (east elevation).",
+   "footprint": {
+    "rect": [
+     135.6,
+     40.8,
+     138.8,
+     43.8
+    ]
+   },
+   "overhang": [
+    0.3,
+    0.3,
+    0.0,
+    0.4
+   ]
+  },
+  {
+   "id": "bath_dormer",
+   "kind": "gable",
+   "axis": "x",
+   "eave": 21.6,
+   "peak": 26.9,
+   "trim": "gable",
+   "note": "The south-east bath's window rises into a small gable facing south (south and east elevations: eave 21.6, peak 26.9, 7.8 ft across; the roof plan's V), its ridge running back into the great gable's south slope.",
+   "footprint": {
+    "rect": [
+     "s_wall",
+     74.4,
+     63.0,
+     81.2
+    ]
+   },
+   "overhang": [
+    0.8,
+    0.0,
+    0.5,
+    0.5
+   ]
   }
  ],
  "chimneys": [

@@ -42,6 +42,7 @@ var stats: Dictionary = {}
 var materials: Dictionary = {}
 var inner_mesh: TownMesh
 var _edges: Dictionary = {}          # space id -> [{a, b, other}]
+var _debug_on := OS.get_environment("FLOWSTATE_BLD_DEBUG") != ""
 var _by_id: Dictionary = {}
 
 
@@ -83,6 +84,7 @@ func build() -> void:
 		_roof_faces()
 	if not skip.has("trim"):
 		_roof_trim()
+		_cheeks()
 	if not skip.has("chimneys"):
 		_chimneys()
 	if not skip.has("open"):
@@ -199,7 +201,7 @@ func _top_at(s: Dictionary, p: Vector2, finish := false) -> float:
 	var over := _above(str(s["level"]), p)
 	if own < INF and over > own + 3.0:
 		over = INF
-	var r := roof.height(p)
+	var r := roof.height(p, true)
 	# A roof over the space, even where it comes down to the floor at the
 	# eaves; a porch roof well below the floor is not its roof.
 	var roofed := r > fl - 3.0
@@ -512,11 +514,17 @@ func _solid_tri(q0: Vector2, q1: Vector2, q2: Vector2, y: float) -> void:
 
 # ---- the roof -------------------------------------------------------------------
 
+## Where a roof's underside is a room's ceiling: over the enclosed spaces,
+## less the porches, decks and balconies (a deck over a room has the
+## deck's roof over it).
 func _footprints() -> Array:
 	var out: Array = []
 	for s: Dictionary in d.spaces:
 		if not d.is_open(s):
 			out.append(s["poly"])
+	for s: Dictionary in d.spaces:
+		if d.is_open(s):
+			out = BuildingGeom.cut(out, s["poly"] as PackedVector2Array)
 	return out
 
 
@@ -609,11 +617,69 @@ func _roof_trim() -> void:
 					k.m.bar("wall", w0, w1, 0.13 if rake else 0.09, 4, trim)
 				elif out_h > -1e30:
 					# One body over another: a wall from the lower roof up.
+					if _debug_on and hm - out_h > 4.0:
+						print("[bld] cheek on %s from (%.1f, %.1f) to (%.1f, %.1f): %.1f up to %.1f" % [body["id"], p0.x, p0.y, p1.x, p1.y, out_h, hm])
 					var wa := d.w(p0, out_h - 0.3)
 					var wb := d.w(p1, out_h - 0.3)
 					var nn := (d.w(pm + outward) - d.w(pm)).normalized()
 					for sd: float in [1.0, -1.0]:
 						k.m.quad("wall", wa, wb, d.w(p1, h1), d.w(p0, h0), nn * sd, brick)
+
+
+## A dormer's or a gable's cheeks: along each roof body's footprint (its
+## walls' line, inside its overhang), where the body is the roof and
+## another body runs on lower under it, over a room, a wall from the
+## lower roof up to this one. Not on a line where a space's wall already
+## rises (a gable's front on the house's wall).
+func _cheeks() -> void:
+	var brick := c(col("brick", Color(0.60, 0.26, 0.17)), CourthouseKit.K_BRICK)
+	for bi in d.roofs.size():
+		var r: Dictionary = d.roofs[bi]
+		var fp: PackedVector2Array = r["footprint"]
+		var ext: PackedVector2Array = r["extent"]
+		if absf(BuildingGeom.area(ext) - BuildingGeom.area(fp)) < 0.5:
+			continue
+		for i in fp.size():
+			var a := fp[i]
+			var b := fp[(i + 1) % fp.size()]
+			var L := a.distance_to(b)
+			var n := maxi(1, int(ceil(L / 1.0)))
+			for j in n:
+				var p0 := a.lerp(b, float(j) / n)
+				var p1 := a.lerp(b, float(j + 1) / n)
+				var pm := (p0 + p1) / 2.0
+				var hm := roof.body_height(bi, pm)
+				if hm < roof.height(pm) - 0.05 or _on_space_edge(pm) or not _room_at(pm):
+					continue
+				var lower := -INF
+				for ci in d.roofs.size():
+					if ci != bi:
+						var hc := roof.body_height(ci, pm)
+						if hc < hm - 0.3:
+							lower = maxf(lower, hc)
+				if lower == -INF:
+					continue
+				var h0 := roof.body_height(bi, p0)
+				var h1 := roof.body_height(bi, p1)
+				if not is_finite(h0) or not is_finite(h1):
+					continue
+				var nn := (d.w(pm + (b - a).orthogonal().normalized()) - d.w(pm)).normalized()
+				for sd: float in [1.0, -1.0]:
+					k.m.quad("wall", d.w(p0, lower - 0.3), d.w(p1, lower - 0.3), d.w(p1, h1 - 0.05), d.w(p0, h0 - 0.05), nn * sd, brick)
+
+
+func _on_space_edge(p: Vector2) -> bool:
+	for s: Dictionary in d.spaces:
+		if not d.is_open(s) and BuildingGeom.on_boundary(p, s["poly"] as PackedVector2Array, 0.3):
+			return true
+	return false
+
+
+func _room_at(p: Vector2) -> bool:
+	for s: Dictionary in d.spaces:
+		if not d.is_open(s) and Geometry2D.is_point_in_polygon(p, s["poly"] as PackedVector2Array):
+			return true
+	return false
 
 
 # ---- chimneys -------------------------------------------------------------------
@@ -777,7 +843,6 @@ func _ceiling(pts: Array, y: float) -> void:
 	var idx := Geometry2D.triangulate_polygon(poly)
 	for i in range(0, idx.size(), 3):
 		inner_mesh.tri("wall", d.w(poly[idx[i]], y), d.w(poly[idx[i + 1]], y), d.w(poly[idx[i + 2]], y), Vector3.DOWN, ceil)
-		inner_mesh.tri("wall", d.w(poly[idx[i]], y + 0.1), d.w(poly[idx[i + 1]], y + 0.1), d.w(poly[idx[i + 2]], y + 0.1), Vector3.UP, ceil)
 
 
 ## FLOWSTATE_BLD_DEBUG=<space id>: print that space's edges and walls,
@@ -821,7 +886,7 @@ func _self_check() -> void:
 			var cover := -INF
 			for sd: float in [-1.0, 0.0, 1.0]:
 				var qq := q + inward * (float(wl["thick"]) / 2.0 + sd * 0.8)
-				cover = maxf(cover, roof.height(qq))
+				cover = maxf(cover, roof.height(qq, true))
 				var ab := _above(str(wl["level"]), qq)
 				if ab < INF:
 					cover = maxf(cover, ab)

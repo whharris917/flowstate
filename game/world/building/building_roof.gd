@@ -22,10 +22,12 @@ static func _same(p: Vector3, q: Vector3) -> bool:
 	return absf(p.x - q.x) < 1e-6 and absf(p.y - q.y) < 1e-6 and absf(p.z - q.z) < 1e-4
 
 
-## The body's own surface over a plan point, or -INF outside it.
-func body_height(bi: int, p: Vector2) -> float:
+## The body's own surface over a plan point, or -INF outside it. With
+## `walls`, only over the body's footprint (inside its walls, not under
+## its overhang): what a wall rises to.
+func body_height(bi: int, p: Vector2, walls := false) -> float:
 	var r: Dictionary = b.roofs[bi]
-	if not Geometry2D.is_point_in_polygon(p, r["extent"] as PackedVector2Array):
+	if not Geometry2D.is_point_in_polygon(p, r["footprint" if walls else "extent"] as PackedVector2Array):
 		return -INF
 	for h: PackedVector2Array in r["holes"]:
 		if Geometry2D.is_point_in_polygon(p, h):
@@ -43,10 +45,12 @@ func body_height(bi: int, p: Vector2) -> float:
 
 
 ## The roof's height over a plan point (feet), or -INF where none is.
-func height(p: Vector2) -> float:
+## With `walls`, the roof a wall there rises to: a higher roof's overhang
+## over a lower roof does not count.
+func height(p: Vector2, walls := false) -> float:
 	var y := -INF
 	for bi in b.roofs.size():
-		y = maxf(y, body_height(bi, p))
+		y = maxf(y, body_height(bi, p, walls))
 	return y
 
 

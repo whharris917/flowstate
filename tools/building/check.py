@@ -88,11 +88,13 @@ def run(bname: str, res: float) -> int:
         # at the eaves (headroom is the next rule).
         roof_over = np.where(H > fl - 1.0, H, np.inf)
         cover = np.minimum(over_space, roof_over)
+        if s["kind"] in OPEN and "deck-headroom" in s.get("exempt", {}):
+            continue
         if s["kind"] in OPEN:
             under_roof = m & np.isfinite(roof_over) & (roof_over < over_space)
             low = under_roof & (roof_over < fl + 6.0)
             for area, ax0, ax1, az0, az1 in blobs(low, xs, zs, res, 3.0):
-                found.append(("deck-headroom", "%s: the roof %.1f sq ft of it stands under 7 ft over its floor, x %.1f-%.1f, z %.1f-%.1f"
+                found.append(("deck-headroom", "%s: the roof %.1f sq ft of it stands under 6 ft over its floor, x %.1f-%.1f, z %.1f-%.1f"
                               % (s["id"], area, ax0, ax1, az0, az1)))
             continue
         for area, ax0, ax1, az0, az1 in blobs(m & ~np.isfinite(cover), xs, zs, res, 1.0):
@@ -118,7 +120,8 @@ def run(bname: str, res: float) -> int:
         near = []
         for s in b.spaces:
             fl = float(s["floor"])
-            if not (fl - 1.0 <= sill < fl + 11.5 or (kind in ("idoor", "ishut", "door", "open", "shut", "french") and abs(sill - fl) < 1.0)):
+            reach = 30.0 if s.get("top") == "roof" else 11.5
+            if not (fl - 1.0 <= sill < fl + reach or (kind in ("idoor", "ishut", "door", "open", "shut", "french") and abs(sill - fl) < 1.0)):
                 continue
             p = s["poly"]
             d = min(_seg_dist(at, p[i], p[(i + 1) % len(p)]) for i in range(len(p)))
@@ -170,7 +173,7 @@ def run(bname: str, res: float) -> int:
         anyspace |= masks[s["id"]]
     for bi, body in enumerate(b.bodies):
         mb = inside(body.footprint, X, Z)
-        if not (mb & anyspace).any():
+        if not (mb & anyspace).any() and "roof-over-nothing" not in body.spec.get("exempt", {}):
             found.append(("roof-over-nothing", "roof %s stands over no space" % body.id))
     for rule, text in found:
         print("%-18s %s" % (rule, text))
