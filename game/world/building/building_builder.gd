@@ -593,7 +593,7 @@ func _floors() -> void:
 	var ceil := c(col("ceiling", Color(0.86, 0.82, 0.72)), CourthouseKit.K_PLASTER)
 	var paint := c(col("trim", Color(0.33, 0.14, 0.09)), CourthouseKit.K_PAINT)
 	for s: Dictionary in d.spaces:
-		if str(s["kind"]) == "void":
+		if str(s["kind"]) == "void" or str(s["kind"]) == "canopy":
 			continue
 		var open := d.is_open(s)
 		var p: PackedVector2Array = s["poly"] if open else _inner_poly(s)
@@ -1081,6 +1081,8 @@ func _open_edges() -> void:
 				continue
 			var pa := d.w(a, fl)
 			var pb := d.w(b, fl)
+			if str(s["kind"]) == "canopy":
+				continue
 			_rail(pa, pb, RAIL_H * d.ft, trim)
 			if str(s["kind"]) == "porch":
 				_skirt(a, b, fl, trim)
@@ -1157,13 +1159,15 @@ func _posts(s: Dictionary, fl: float, trim: Color) -> void:
 			var inward: Vector2 = st[1]
 			var top := roof.height(q + inward * 0.3)
 			var body := roof.body_at(q + inward * 0.3)
-			if top < fl + 6.0 or top > fl + 30.0:
+			var base := fl if str(s["kind"]) != "canopy" else ground_at(q)
+			if top < base + 6.0 or top > base + 30.0:
 				prev_body = -1
 				continue
-			var foot := d.w(q, fl)
+			var foot := d.w(q, fl if str(s["kind"]) != "canopy" else ground_at(q))
 			var head := d.w(q, top - 0.3)
-			k.box("wall", Transform3D(), (foot + head) / 2.0, Vector3(0.18, head.y - foot.y, 0.18), trim)
-			k.solid(Transform3D(), (foot + head) / 2.0, Vector3(0.18, head.y - foot.y, 0.18))
+			var thick := 0.18 if str(s["kind"]) != "canopy" else 0.28
+			k.box("wall", Transform3D(), (foot + head) / 2.0, Vector3(thick, head.y - foot.y, thick), trim)
+			k.solid(Transform3D(), (foot + head) / 2.0, Vector3(thick, head.y - foot.y, thick))
 			if body == prev_body and absf(prev.y - head.y) < 0.6:
 				k.m.bar("wall", prev - Vector3(0, 0.1, 0), head - Vector3(0, 0.1, 0), 0.1, 4, trim)
 				_between_posts(prev, head, str(s["kind"]), trim)

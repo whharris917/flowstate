@@ -40,7 +40,9 @@ var origin := Vector2.ZERO
 var datum_m := 0.0
 var ft := 0.3048
 
-const OPEN_KINDS := ["porch", "balcony", "deck"]
+## A canopy is open ground under a roof on posts (a carriage porch, the
+## covered way of an outside stair): no floor of its own, no railing.
+const OPEN_KINDS := ["porch", "balcony", "deck", "canopy"]
 const NO_WALL_KINDS := ["porch", "balcony", "deck", "void"]
 
 

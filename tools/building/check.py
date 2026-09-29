@@ -17,6 +17,7 @@ opening, and where it is in the building's feet:
   chimney-room a chimney standing in a room's floor rather than in a wall
   chimney-low a chimney whose top does not clear the roof by 2 ft
   roof-over-nothing a roof body over no space
+  unsupported a roof body whose wall line runs where no wall or post is
   deck-headroom a porch or deck under a roof less than 6 ft over its floor
   window-ceiling / window-floor  an opening reaching over its room's
               ceiling or under its floor
@@ -40,7 +41,7 @@ from scipy import ndimage
 sys.path.insert(0, os.path.dirname(__file__))
 from model import Building, inside  # noqa: E402
 
-OPEN = {"porch", "balcony", "deck"}
+OPEN = {"porch", "balcony", "deck", "canopy"}
 LOW_OK = {"attic", "closet", "void"}
 
 
@@ -260,6 +261,34 @@ def run(bname: str, res: float) -> int:
         rt = np.max(np.where(cm, H, -np.inf))
         if np.isfinite(rt) and top < rt + 2.0:
             found.append(("chimney-low", "chimney %s tops out at %.1f, the roof round it at %.1f" % (ch["id"], top, rt)))
+    # Every roof body is carried: each point of its footprint's outline
+    # (its wall line) stands on a space's edge (a wall, or a porch's posts)
+    # or inside a space; anything else hangs in the air.
+    for bd in b.bodies:
+        if bd.spec.get("exempt", {}).get("unsupported"):
+            continue
+        fp = bd.footprint
+        loose = []
+        for i in range(len(fp)):
+            a0, c0 = fp[i], fp[(i + 1) % len(fp)]
+            L = math.hypot(c0[0] - a0[0], c0[1] - a0[1])
+            for k in range(max(1, int(L / 2.0)) + 1):
+                t = k / max(1, int(L / 2.0))
+                q = (a0[0] + (c0[0] - a0[0]) * t, a0[1] + (c0[1] - a0[1]) * t)
+                carried = False
+                for s in b.spaces:
+                    p = s["poly"]
+                    if inside(p, np.array([q[0]]), np.array([q[1]]))[0] or \
+                            min(_seg_dist(q, p[j], p[(j + 1) % len(p)]) for j in range(len(p))) < 1.5:
+                        carried = True
+                        break
+                if not carried:
+                    loose.append(q)
+        if loose:
+            xs_ = [q[0] for q in loose]
+            zs_ = [q[1] for q in loose]
+            found.append(("unsupported", "roof %s: %d points of its wall line stand on nothing, x %.1f-%.1f, z %.1f-%.1f"
+                          % (bd.id, len(loose), min(xs_), max(xs_), min(zs_), max(zs_))))
     # Roofs over nothing.
     anyspace = np.zeros(X.shape, dtype=bool)
     for s in b.spaces:

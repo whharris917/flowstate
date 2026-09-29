@@ -1555,6 +1555,40 @@
      "part2"
     ]
    ]
+  },
+  {
+   "id": "porte_cochere",
+   "name": "porte-cochere",
+   "level": "first",
+   "kind": "canopy",
+   "group": "porch",
+   "floor": -2.46,
+   "poly": {
+    "rect": [
+     85.3,
+     94.0,
+     96.3,
+     108.2
+    ]
+   },
+   "note": "the carriage porch over the drive, its four posts at its corners (east elevation, model-v1)"
+  },
+  {
+   "id": "back_stair_way",
+   "name": "the back stair's covered way",
+   "level": "first",
+   "kind": "canopy",
+   "group": "porch",
+   "floor": -2.8,
+   "poly": {
+    "rect": [
+     120.2,
+     "wing_e",
+     136.7,
+     48.0
+    ]
+   },
+   "note": "the outside stair down along the wing's east face, under its roof on posts"
   }
  ],
  "walls": [
@@ -3457,19 +3491,11 @@
    ],
    "eave": 21.1,
    "peak": 31.3,
-   "footprint": [
-    {
-     "arc": [
-      114.5,
-      69.5,
-      7.6,
-      -90,
-      90,
-      8
-     ]
-    }
-   ],
-   "overhang": 0.0
+   "footprint": {
+    "space": "bay_porch"
+   },
+   "overhang": 1.2,
+   "note": "the cone over the porch on the drawing room's bay, on the porch's posts"
   },
   {
    "id": "pantry_roof",
@@ -3742,13 +3768,18 @@
    "trim": "porch",
    "footprint": {
     "rect": [
-     82.5,
-     83.9,
-     99.0,
-     114.3
+     85.3,
+     94.0,
+     96.3,
+     108.2
     ]
    },
-   "overhang": 0.0,
+   "overhang": [
+    2.8,
+    2.7,
+    0.0,
+    6.1
+   ],
    "note": "A low hip, eave 10.2 rising to 13.5 (south elevation's end view, the director's photograph).",
    "cover": "tin"
   },
@@ -3790,9 +3821,6 @@
    },
    "overhang": 0.0,
    "note": "Falls with the stair from 19.6 at x 120.2 to 10.2 at 136.7 on its outer edge, 1.5 higher against the wall.",
-   "exempt": {
-    "roof-over-nothing": "the back stair outside the wing's east wall, not yet modelled as a space"
-   },
    "cover": "tin"
   },
   {

@@ -420,7 +420,7 @@ def run(name: str, h: float, out_dir: str) -> int:
                     start = c + al * u + n * 0.45
                     start[1] = yy
                     for yaw in range(-40, 41, 20):
-                        for pitch in (-5, 5, 15):
+                        for pitch in (-5, 5):
                             dvec = (n * math.cos(math.radians(yaw)) + al * math.sin(math.radians(yaw))) * math.cos(math.radians(pitch))
                             dvec = dvec + np.array([0, math.sin(math.radians(pitch)), 0])
                             total += 1
