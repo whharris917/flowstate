@@ -1,0 +1,3684 @@
+{
+ "name": "twain",
+ "title": "The Mark Twain house, 351 Farmington Avenue, Hartford (Edward Tuckerman Potter, 1874)",
+ "note": "Survey feet (HABS CT-359, 1995): x runs north up the house, z east, y over the first floor. Spaces tile each level: the building's outline on the outer faces of its walls, rooms meeting on the partitions' centre lines. Every value carries over from the model built before this file (src model-v1) until checked against the sheets.",
+ "world": {
+  "origin": [
+   85.0,
+   70.0
+  ],
+  "first_floor_m": 0.75,
+  "ft_to_m": 0.3048,
+  "axes": "x_north_z_east"
+ },
+ "sheets": {
+  "dir": "C:/Users/wilha/projects/habs/twain",
+  "px_per_ft": 100,
+  "list": [
+   {
+    "id": "basement",
+    "file": "m02.tif",
+    "kind": "plan",
+    "level": "basement",
+    "offset": [
+     1.3,
+     -0.3
+    ]
+   },
+   {
+    "id": "first",
+    "file": "m03.tif",
+    "kind": "plan",
+    "level": "first",
+    "offset": [
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "id": "second",
+    "file": "m04.tif",
+    "kind": "plan",
+    "level": "second",
+    "offset": [
+     -2.15,
+     0.7
+    ]
+   },
+   {
+    "id": "third",
+    "file": "m05.tif",
+    "kind": "plan",
+    "level": "third",
+    "offset": [
+     0.55,
+     0.0
+    ]
+   },
+   {
+    "id": "attic",
+    "file": "m06.tif",
+    "kind": "plan",
+    "level": "attic",
+    "offset": [
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "id": "roof",
+    "file": "m07.tif",
+    "kind": "roofplan",
+    "offset": [
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "id": "east",
+    "file": "m08.tif",
+    "kind": "elevation",
+    "view": "+z",
+    "sign": 1.0,
+    "offset": -1.7,
+    "ff": 83.5
+   },
+   {
+    "id": "north",
+    "file": "m09.tif",
+    "kind": "elevation",
+    "view": "+x",
+    "sign": -1.0,
+    "offset": 155.8,
+    "ff": 83.4
+   },
+   {
+    "id": "west",
+    "file": "m10.tif",
+    "kind": "elevation",
+    "view": "-z",
+    "sign": -1.0,
+    "offset": 176.5,
+    "ff": 83.4
+   },
+   {
+    "id": "south",
+    "file": "m11.tif",
+    "kind": "elevation",
+    "view": "-x",
+    "sign": 1.0,
+    "offset": 23.0,
+    "ff": 83.6
+   }
+  ]
+ },
+ "levels": [
+  {
+   "id": "basement",
+   "floor": -9.44
+  },
+  {
+   "id": "first",
+   "floor": 0.0,
+   "ceiling": 12.0
+  },
+  {
+   "id": "wing2",
+   "floor": 10.8,
+   "ceiling": 16.6
+  },
+  {
+   "id": "second",
+   "floor": 13.0,
+   "ceiling": 23.0
+  },
+  {
+   "id": "third",
+   "floor": 24.0
+  }
+ ],
+ "groups": [
+  {
+   "id": "main",
+   "wall": 1.0,
+   "material": "brick"
+  },
+  {
+   "id": "wing",
+   "wall": 1.0,
+   "material": "brick"
+  },
+  {
+   "id": "pantry",
+   "wall": 1.0,
+   "material": "brick"
+  },
+  {
+   "id": "conservatory",
+   "wall": 0.3,
+   "material": "glass"
+  },
+  {
+   "id": "porch",
+   "wall": 0.0,
+   "material": "none"
+  }
+ ],
+ "spaces": [
+  {
+   "id": "library",
+   "name": "library",
+   "level": "first",
+   "kind": "room",
+   "group": "main",
+   "top": 12.0,
+   "poly": [
+    [
+     "s_wall",
+     "w_wall"
+    ],
+    [
+     "alc_s",
+     "w_wall"
+    ],
+    [
+     "alc_s",
+     33.6
+    ],
+    [
+     70.5,
+     "alc_w"
+    ],
+    [
+     75.9,
+     "alc_w"
+    ],
+    [
+     "alc_n",
+     33.6
+    ],
+    [
+     "alc_n",
+     "w_wall"
+    ],
+    [
+     "lib_din",
+     "w_wall"
+    ],
+    [
+     "lib_din",
+     "zp"
+    ],
+    [
+     "s_wall",
+     "zp"
+    ]
+   ]
+  },
+  {
+   "id": "dining",
+   "name": "dining room",
+   "level": "first",
+   "kind": "room",
+   "group": "main",
+   "top": 12.0,
+   "poly": {
+    "rect": [
+     "lib_din",
+     "w_wall",
+     "n_wall",
+     "zp"
+    ]
+   }
+  },
+  {
+   "id": "hall",
+   "name": "hall",
+   "level": "first",
+   "kind": "hall",
+   "group": "main",
+   "top": 12.0,
+   "poly": [
+    [
+     "guest_hall",
+     "zp"
+    ],
+    [
+     "hall_draw",
+     "zp"
+    ],
+    [
+     "hall_draw",
+     "e_wall"
+    ],
+    [
+     "gbath_hall",
+     "e_wall"
+    ],
+    [
+     "gbath_hall",
+     "part1"
+    ],
+    [
+     "guest_hall",
+     "part1"
+    ]
+   ]
+  },
+  {
+   "id": "drawing",
+   "name": "drawing room",
+   "level": "first",
+   "kind": "room",
+   "group": "main",
+   "top": 12.0,
+   "poly": [
+    [
+     "hall_draw",
+     "zp"
+    ],
+    [
+     "n_wall",
+     "zp"
+    ],
+    [
+     "n_wall",
+     "bay_s"
+    ],
+    [
+     118.5,
+     "bay_s"
+    ],
+    [
+     "bay_n",
+     66.5
+    ],
+    [
+     "bay_n",
+     72.5
+    ],
+    [
+     118.5,
+     "bay_e"
+    ],
+    [
+     "n_wall",
+     "bay_e"
+    ],
+    [
+     "n_wall",
+     "e_wall"
+    ],
+    [
+     "hall_draw",
+     "e_wall"
+    ]
+   ]
+  },
+  {
+   "id": "guest",
+   "name": "mahogany guest room",
+   "level": "first",
+   "kind": "room",
+   "group": "main",
+   "top": 12.0,
+   "poly": [
+    [
+     "s_wall",
+     "oct_w"
+    ],
+    [
+     "s_wall",
+     "zp"
+    ],
+    [
+     "guest_hall",
+     "zp"
+    ],
+    [
+     "guest_hall",
+     "part1"
+    ],
+    [
+     51.2,
+     "part1"
+    ],
+    [
+     "oct_s",
+     68.1
+    ],
+    [
+     "oct_s",
+     60.8
+    ],
+    [
+     52.3,
+     "oct_w"
+    ]
+   ]
+  },
+  {
+   "id": "dressing",
+   "name": "dressing room",
+   "level": "first",
+   "kind": "room",
+   "group": "main",
+   "top": 12.9,
+   "poly": [
+    [
+     51.2,
+     "part1"
+    ],
+    [
+     "dress_gbath",
+     "part1"
+    ],
+    [
+     "dress_gbath",
+     "e_wall"
+    ],
+    {
+     "arc_at": [
+      54.8,
+      77.3,
+      6.6,
+      [
+       90,
+       105,
+       120,
+       136,
+       164,
+       196,
+       221,
+       236
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "id": "dress_closets",
+   "name": "dressing room's closets",
+   "level": "first",
+   "kind": "closet",
+   "group": "main",
+   "top": 12.0,
+   "poly": {
+    "rect": [
+     "dress_gbath",
+     "part1",
+     "closet_bath",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "guest_bath",
+   "name": "guest bath",
+   "level": "first",
+   "kind": "room",
+   "group": "main",
+   "top": 12.0,
+   "poly": {
+    "rect": [
+     "closet_bath",
+     "part1",
+     "gbath_hall",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "conservatory",
+   "name": "conservatory",
+   "level": "first",
+   "kind": "conservatory",
+   "group": "conservatory",
+   "top": 12.0,
+   "poly": [
+    [
+     "s_wall",
+     38.5
+    ],
+    {
+     "arc": [
+      52.3,
+      47.0,
+      8.5,
+      -90,
+      -270,
+      12
+     ]
+    },
+    [
+     "s_wall",
+     55.5
+    ]
+   ]
+  },
+  {
+   "id": "pantry",
+   "name": "butler's pantry",
+   "level": "first",
+   "kind": "room",
+   "group": "pantry",
+   "top": 7.6,
+   "poly": [
+    {
+     "arc_at": [
+      112.8,
+      38.3,
+      15.5,
+      [
+       180,
+       200,
+       214,
+       228,
+       242,
+       246,
+       262,
+       270
+      ]
+     ]
+    },
+    [
+     "pantry_wing",
+     22.8
+    ],
+    [
+     "pantry_wing",
+     "w_wall"
+    ]
+   ]
+  },
+  {
+   "id": "kitchen",
+   "name": "kitchen wing",
+   "level": "first",
+   "kind": "room",
+   "group": "wing",
+   "top": 9.8,
+   "poly": [
+    [
+     "pantry_wing",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "w_wall"
+    ],
+    [
+     "pantry_wing",
+     "w_wall"
+    ]
+   ]
+  },
+  {
+   "id": "wing_upper",
+   "name": "servants' rooms",
+   "level": "wing2",
+   "kind": "room",
+   "group": "wing",
+   "top": 16.6,
+   "poly": [
+    [
+     "pantry_wing",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "w_wall"
+    ],
+    [
+     "pantry_wing",
+     "w_wall"
+    ]
+   ]
+  },
+  {
+   "id": "basement_wing",
+   "name": "basement",
+   "level": "basement",
+   "kind": "room",
+   "group": "wing",
+   "top": -1.0,
+   "poly": [
+    [
+     "pantry_wing",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "w_wall"
+    ],
+    [
+     "pantry_wing",
+     "w_wall"
+    ]
+   ]
+  },
+  {
+   "id": "basement_pantry",
+   "name": "pantry basement",
+   "level": "basement",
+   "kind": "room",
+   "group": "pantry",
+   "top": -1.0,
+   "poly": [
+    {
+     "arc_at": [
+      112.8,
+      38.3,
+      15.5,
+      [
+       180,
+       200,
+       214,
+       228,
+       242,
+       246,
+       262,
+       270
+      ]
+     ]
+    },
+    [
+     "pantry_wing",
+     22.8
+    ],
+    [
+     "pantry_wing",
+     "w_wall"
+    ]
+   ]
+  },
+  {
+   "id": "school",
+   "name": "school room",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": [
+    [
+     "s_wall",
+     "w_wall"
+    ],
+    [
+     "alc_s",
+     "w_wall"
+    ],
+    [
+     "alc_s",
+     33.6
+    ],
+    [
+     70.5,
+     "alc_w"
+    ],
+    [
+     75.9,
+     "alc_w"
+    ],
+    [
+     "school_wb",
+     33.02
+    ],
+    [
+     "school_wb",
+     "zp"
+    ],
+    [
+     "s_wall",
+     "zp"
+    ]
+   ]
+  },
+  {
+   "id": "west_bath",
+   "name": "west bath",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": [
+    [
+     "school_wb",
+     33.02
+    ],
+    [
+     "alc_n",
+     33.6
+    ],
+    [
+     "alc_n",
+     "w_wall"
+    ],
+    [
+     "wb_langdon",
+     "w_wall"
+    ],
+    [
+     "wb_langdon",
+     "zp"
+    ],
+    [
+     "school_wb",
+     "zp"
+    ]
+   ]
+  },
+  {
+   "id": "langdon",
+   "name": "Langdon guest room",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": {
+    "rect": [
+     "wb_langdon",
+     "w_wall",
+     "langdon_office",
+     "zp"
+    ]
+   }
+  },
+  {
+   "id": "office",
+   "name": "the office",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": {
+    "rect": [
+     "langdon_office",
+     "w_wall",
+     "n_wall",
+     "zp"
+    ]
+   }
+  },
+  {
+   "id": "girls",
+   "name": "Clara and Jean's room",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": [
+    [
+     "s_wall",
+     "oct_w"
+    ],
+    [
+     "s_wall",
+     "zp"
+    ],
+    [
+     "guest_hall2",
+     "zp"
+    ],
+    [
+     "guest_hall2",
+     "part2"
+    ],
+    [
+     52.5,
+     "part2"
+    ],
+    [
+     "oct_s",
+     68.1
+    ],
+    [
+     "oct_s",
+     60.8
+    ],
+    [
+     52.3,
+     "oct_w"
+    ]
+   ]
+  },
+  {
+   "id": "hall2",
+   "name": "upstairs hall",
+   "level": "second",
+   "kind": "hall",
+   "group": "main",
+   "top": 23.0,
+   "poly": {
+    "rect": [
+     "guest_hall2",
+     "zp",
+     "hall2_clem",
+     "part2"
+    ]
+   }
+  },
+  {
+   "id": "se_bath",
+   "name": "south-east bath",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": {
+    "rect": [
+     "s_wall",
+     "part2",
+     "sebath_susy",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "susy",
+   "name": "Susy's room",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": {
+    "rect": [
+     "sebath_susy",
+     "part2",
+     "susy_small",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "small_room",
+   "name": "the small room",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": {
+    "rect": [
+     "susy_small",
+     "part2",
+     "hall2_clem",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "passage2",
+   "name": "passage",
+   "level": "second",
+   "kind": "hall",
+   "group": "main",
+   "top": 23.0,
+   "poly": {
+    "rect": [
+     "hall2_clem",
+     "zp",
+     "n_wall",
+     "passage"
+    ]
+   }
+  },
+  {
+   "id": "clemens",
+   "name": "the Clemenses' bedroom",
+   "level": "second",
+   "kind": "room",
+   "group": "main",
+   "top": 23.0,
+   "poly": {
+    "rect": [
+     "hall2_clem",
+     "passage",
+     "n_wall",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "bay_porch",
+   "name": "porch over the drawing room's bay",
+   "level": "second",
+   "kind": "balcony",
+   "group": "porch",
+   "floor": 13.7,
+   "poly": [
+    [
+     "n_wall",
+     "bay_s"
+    ],
+    [
+     118.5,
+     "bay_s"
+    ],
+    [
+     "bay_n",
+     66.5
+    ],
+    [
+     "bay_n",
+     72.5
+    ],
+    [
+     118.5,
+     "bay_e"
+    ],
+    [
+     "n_wall",
+     "bay_e"
+    ]
+   ]
+  },
+  {
+   "id": "billiard",
+   "name": "billiard room",
+   "level": "third",
+   "kind": "room",
+   "group": "main",
+   "top": "roof",
+   "poly": [
+    [
+     "s_wall",
+     "w_wall"
+    ],
+    [
+     "bill_guest3",
+     "w_wall"
+    ],
+    [
+     "bill_guest3",
+     "zp"
+    ],
+    [
+     "deck_n",
+     "zp"
+    ],
+    [
+     "deck_n",
+     "oct_w"
+    ],
+    [
+     "s_wall",
+     "oct_w"
+    ]
+   ]
+  },
+  {
+   "id": "guest3",
+   "name": "top guest room",
+   "level": "third",
+   "kind": "room",
+   "group": "main",
+   "top": "roof",
+   "poly": {
+    "rect": [
+     "bill_guest3",
+     "w_wall",
+     "n_wall",
+     "zp"
+    ]
+   }
+  },
+  {
+   "id": "hall3",
+   "name": "top hall",
+   "level": "third",
+   "kind": "hall",
+   "group": "main",
+   "top": "roof",
+   "poly": {
+    "rect": [
+     "deck_n",
+     "zp",
+     "hall3_serv",
+     "part3"
+    ]
+   }
+  },
+  {
+   "id": "store_s",
+   "name": "south storeroom",
+   "level": "third",
+   "kind": "room",
+   "group": "main",
+   "top": "roof",
+   "poly": {
+    "rect": [
+     "deck_n",
+     "part3",
+     "guest_hall",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "store_e",
+   "name": "east storeroom",
+   "level": "third",
+   "kind": "room",
+   "group": "main",
+   "top": "roof",
+   "poly": {
+    "rect": [
+     "guest_hall",
+     "part3",
+     "hall3_serv",
+     "store_e"
+    ]
+   }
+  },
+  {
+   "id": "attic_e",
+   "name": "east attic",
+   "level": "third",
+   "kind": "attic",
+   "group": "main",
+   "top": "roof",
+   "poly": {
+    "rect": [
+     "guest_hall",
+     "store_e",
+     "hall3_serv",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "servants3",
+   "name": "servants' room",
+   "level": "third",
+   "kind": "room",
+   "group": "main",
+   "top": "roof",
+   "poly": {
+    "rect": [
+     "hall3_serv",
+     "zp",
+     "serv_attic",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "attic_n",
+   "name": "north attic",
+   "level": "third",
+   "kind": "attic",
+   "group": "main",
+   "top": "roof",
+   "poly": {
+    "rect": [
+     "serv_attic",
+     "zp",
+     "n_wall",
+     "e_wall"
+    ]
+   }
+  },
+  {
+   "id": "texas_deck",
+   "name": "Texas deck",
+   "level": "third",
+   "kind": "deck",
+   "group": "porch",
+   "floor": 24.5,
+   "poly": [
+    [
+     52.3,
+     "oct_w"
+    ],
+    [
+     "deck_n",
+     "oct_w"
+    ],
+    [
+     "deck_n",
+     67.5
+    ],
+    [
+     60.5,
+     71.1
+    ],
+    [
+     52.5,
+     71.1
+    ],
+    [
+     "oct_s",
+     68.1
+    ],
+    [
+     "oct_s",
+     60.8
+    ]
+   ]
+  },
+  {
+   "id": "alcove_deck",
+   "name": "alcove deck",
+   "level": "third",
+   "kind": "deck",
+   "group": "porch",
+   "floor": 24.5,
+   "poly": [
+    [
+     "alc_s",
+     "w_wall"
+    ],
+    [
+     "alc_s",
+     33.6
+    ],
+    [
+     70.5,
+     "alc_w"
+    ],
+    [
+     75.9,
+     "alc_w"
+    ],
+    [
+     "alc_n",
+     33.6
+    ],
+    [
+     "alc_n",
+     "w_wall"
+    ]
+   ]
+  },
+  {
+   "id": "south_balcony",
+   "name": "south gable's balcony",
+   "level": "third",
+   "kind": "balcony",
+   "group": "porch",
+   "floor": 24.2,
+   "poly": {
+    "rect": [
+     55.2,
+     38.6,
+     "s_wall",
+     55.6
+    ]
+   }
+  },
+  {
+   "id": "se_balcony",
+   "name": "south-east gable's balcony",
+   "level": "third",
+   "kind": "balcony",
+   "group": "porch",
+   "floor": 24.0,
+   "poly": {
+    "rect": [
+     61.7,
+     "e_wall",
+     74.5,
+     86.3
+    ]
+   }
+  },
+  {
+   "id": "ne_balcony",
+   "name": "north-east gable's balcony",
+   "level": "third",
+   "kind": "balcony",
+   "group": "porch",
+   "floor": 23.9,
+   "poly": {
+    "rect": [
+     100.5,
+     "e_wall",
+     111.4,
+     86.3
+    ]
+   }
+  },
+  {
+   "id": "north_balcony",
+   "name": "north gable's balcony",
+   "level": "third",
+   "kind": "balcony",
+   "group": "porch",
+   "floor": 23.1,
+   "poly": {
+    "rect": [
+     "n_wall",
+     45.8,
+     117.0,
+     53.8
+    ]
+   }
+  },
+  {
+   "id": "ombra",
+   "name": "ombra",
+   "level": "first",
+   "kind": "porch",
+   "group": "porch",
+   "floor": -0.03,
+   "poly": [
+    [
+     48.4,
+     67.3
+    ],
+    [
+     29.2,
+     67.3
+    ],
+    [
+     22.8,
+     74.4
+    ],
+    [
+     22.8,
+     84.0
+    ],
+    [
+     29.3,
+     90.2
+    ],
+    [
+     48.4,
+     90.2
+    ]
+   ]
+  },
+  {
+   "id": "veranda",
+   "name": "veranda",
+   "level": "first",
+   "kind": "porch",
+   "group": "porch",
+   "floor": -0.03,
+   "poly": [
+    [
+     48.4,
+     81.5
+    ],
+    [
+     96.3,
+     83.4
+    ],
+    [
+     96.3,
+     92.8
+    ],
+    [
+     84.8,
+     92.8
+    ],
+    [
+     84.8,
+     90.0
+    ],
+    [
+     75.6,
+     90.0
+    ],
+    {
+     "arc": [
+      66.8,
+      83.65,
+      10.85,
+      35.8,
+      144.2,
+      12
+     ]
+    },
+    [
+     58.0,
+     90.0
+    ],
+    [
+     56.0,
+     90.0
+    ],
+    [
+     56.0,
+     93.0
+    ],
+    [
+     50.0,
+     93.0
+    ],
+    [
+     50.0,
+     90.2
+    ],
+    [
+     48.4,
+     90.2
+    ]
+   ]
+  },
+  {
+   "id": "side_porch",
+   "name": "side porch",
+   "level": "first",
+   "kind": "porch",
+   "group": "porch",
+   "floor": -0.1,
+   "poly": {
+    "rect": [
+     114.5,
+     43.9,
+     119.0,
+     49.8
+    ]
+   }
+  }
+ ],
+ "walls": [
+  {
+   "note": "The bath's south wall over the round: framed, half-timbered over herringbone brick (second floor plan, south elevation, photograph).",
+   "level": "second",
+   "from": [
+    57.5,
+    71.1
+   ],
+   "to": [
+    57.5,
+    83.9
+   ],
+   "material": "timber"
+  }
+ ],
+ "openings": [
+  {
+   "at": [
+    73.2,
+    "alc_w"
+   ],
+   "w": 3.6,
+   "sill": 3.0,
+   "head": 11.3
+  },
+  {
+   "at": [
+    68.5,
+    31.65
+   ],
+   "w": 2.4,
+   "sill": 3.8,
+   "head": 11.3
+  },
+  {
+   "at": [
+    77.9,
+    31.65
+   ],
+   "w": 2.4,
+   "sill": 3.8,
+   "head": 11.3
+  },
+  {
+   "at": [
+    73.2,
+    "alc_w"
+   ],
+   "w": 3.4,
+   "sill": 15.8,
+   "head": 21.5
+  },
+  {
+   "at": [
+    68.5,
+    31.65
+   ],
+   "w": 2.2,
+   "sill": 15.8,
+   "head": 21.5
+  },
+  {
+   "at": [
+    77.9,
+    31.65
+   ],
+   "w": 2.2,
+   "sill": 15.8,
+   "head": 21.5
+  },
+  {
+   "at": [
+    73.2,
+    "w_wall"
+   ],
+   "w": 2.6,
+   "sill": 24.3,
+   "head": 31.3,
+   "kind": "door",
+   "hood": false
+  },
+  {
+   "at": [
+    69.6,
+    "w_wall"
+   ],
+   "w": 2.0,
+   "sill": 27.3,
+   "head": 31.3,
+   "hood": false
+  },
+  {
+   "at": [
+    76.8,
+    "w_wall"
+   ],
+   "w": 2.0,
+   "sill": 27.3,
+   "head": 31.3,
+   "hood": false
+  },
+  {
+   "at": [
+    92.65,
+    "w_wall"
+   ],
+   "w": 3.4,
+   "sill": 2.3,
+   "head": 10.4
+  },
+  {
+   "at": [
+    107.5,
+    "w_wall"
+   ],
+   "w": 3.0,
+   "sill": 0.0,
+   "head": 9.3,
+   "kind": "open",
+   "hood": false
+  },
+  {
+   "at": [
+    108.45,
+    "w_wall"
+   ],
+   "w": 2.7,
+   "sill": 15.4,
+   "head": 21.1
+  },
+  {
+   "at": [
+    96.45,
+    "w_wall"
+   ],
+   "w": 2.5,
+   "sill": 15.4,
+   "head": 21.1,
+   "hood": false
+  },
+  {
+   "at": [
+    93.7,
+    "w_wall"
+   ],
+   "w": 2.5,
+   "sill": 15.4,
+   "head": 21.1
+  },
+  {
+   "at": [
+    91.15,
+    "w_wall"
+   ],
+   "w": 2.5,
+   "sill": 15.4,
+   "head": 21.1,
+   "hood": false
+  },
+  {
+   "at": [
+    84.05,
+    "w_wall"
+   ],
+   "w": 2.9,
+   "sill": 15.4,
+   "head": 21.1
+  },
+  {
+   "at": [
+    106.1,
+    "w_wall"
+   ],
+   "w": 2.2,
+   "sill": 27.1,
+   "head": 30.8,
+   "hood": false
+  },
+  {
+   "at": [
+    98.6,
+    "w_wall"
+   ],
+   "w": 2.2,
+   "sill": 27.1,
+   "head": 30.8,
+   "hood": false
+  },
+  {
+   "at": [
+    "n_wall",
+    48.8
+   ],
+   "w": 2.8,
+   "sill": 24.0,
+   "head": 31.8,
+   "kind": "shut",
+   "hood": false
+  },
+  {
+   "at": [
+    "n_wall",
+    51.7
+   ],
+   "w": 1.5,
+   "sill": 24.8,
+   "head": 29.8,
+   "hood": false
+  },
+  {
+   "at": [
+    "n_wall",
+    45.1
+   ],
+   "w": 1.5,
+   "sill": 24.8,
+   "head": 29.8,
+   "hood": false
+  },
+  {
+   "at": [
+    "n_wall",
+    48.6
+   ],
+   "w": 4.4,
+   "sill": 36.0,
+   "head": 40.2,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    "n_wall",
+    51.75
+   ],
+   "w": 1.5,
+   "sill": 17.5,
+   "head": 21.5
+  },
+  {
+   "at": [
+    "n_wall",
+    46.55
+   ],
+   "w": 1.5,
+   "sill": 17.5,
+   "head": 21.5
+  },
+  {
+   "at": [
+    "n_wall",
+    46.9
+   ],
+   "w": 2.8,
+   "sill": 0.0,
+   "head": 8.9,
+   "kind": "door"
+  },
+  {
+   "at": [
+    "n_wall",
+    49.9
+   ],
+   "w": 2.4,
+   "sill": 4.5,
+   "head": 11.7
+  },
+  {
+   "at": [
+    "bay_n",
+    69.5
+   ],
+   "w": 3.4,
+   "sill": 2.8,
+   "head": 10.2
+  },
+  {
+   "at": [
+    119.75,
+    65.25
+   ],
+   "w": 2.3,
+   "sill": 2.8,
+   "head": 10.2
+  },
+  {
+   "at": [
+    119.75,
+    73.75
+   ],
+   "w": 2.3,
+   "sill": 2.8,
+   "head": 10.2
+  },
+  {
+   "at": [
+    "n_wall",
+    69.5
+   ],
+   "w": 3.0,
+   "sill": 13.0,
+   "head": 19.1,
+   "kind": "shut",
+   "hood": false
+  },
+  {
+   "at": [
+    101.7,
+    "e_wall"
+   ],
+   "w": 3.6,
+   "sill": 2.7,
+   "head": 10.2
+  },
+  {
+   "at": [
+    110.8,
+    "e_wall"
+   ],
+   "w": 3.6,
+   "sill": 2.7,
+   "head": 10.2
+  },
+  {
+   "at": [
+    90.8,
+    "e_wall"
+   ],
+   "w": 4.4,
+   "sill": 0.0,
+   "head": 10.3,
+   "kind": "door"
+  },
+  {
+   "at": [
+    81.3,
+    "e_wall"
+   ],
+   "w": 3.2,
+   "sill": 3.8,
+   "head": 11.1
+  },
+  {
+   "at": [
+    68.4,
+    "e_wall"
+   ],
+   "w": 2.6,
+   "sill": 3.8,
+   "head": 13.6
+  },
+  {
+   "at": [
+    77.7,
+    "e_wall"
+   ],
+   "w": 2.6,
+   "sill": 3.8,
+   "head": 13.6
+  },
+  {
+   "at": [
+    64.5,
+    "e_wall"
+   ],
+   "w": 2.6,
+   "sill": 15.8,
+   "head": 21.6
+  },
+  {
+   "at": [
+    72.6,
+    "e_wall"
+   ],
+   "w": 2.6,
+   "sill": 15.8,
+   "head": 21.6
+  },
+  {
+   "at": [
+    82.9,
+    "e_wall"
+   ],
+   "w": 2.4,
+   "sill": 15.8,
+   "head": 21.4
+  },
+  {
+   "at": [
+    92.1,
+    "e_wall"
+   ],
+   "w": 2.4,
+   "sill": 15.8,
+   "head": 21.4
+  },
+  {
+   "at": [
+    103.2,
+    "e_wall"
+   ],
+   "w": 2.6,
+   "sill": 14.2,
+   "head": 20.6,
+   "hood": false
+  },
+  {
+   "at": [
+    106.25,
+    "e_wall"
+   ],
+   "w": 2.6,
+   "sill": 14.2,
+   "head": 20.6
+  },
+  {
+   "at": [
+    109.3,
+    "e_wall"
+   ],
+   "w": 2.6,
+   "sill": 14.2,
+   "head": 20.6,
+   "hood": false
+  },
+  {
+   "at": [
+    68.2,
+    "e_wall"
+   ],
+   "w": 4.0,
+   "sill": 24.0,
+   "head": 31.3,
+   "kind": "french",
+   "shape": "round"
+  },
+  {
+   "at": [
+    105.4,
+    "e_wall"
+   ],
+   "w": 2.9,
+   "sill": 24.0,
+   "head": 31.1,
+   "kind": "french",
+   "shape": "round"
+  },
+  {
+   "at": [
+    "oct_s",
+    63.6
+   ],
+   "w": 3.6,
+   "sill": 3.8,
+   "head": 11.3
+  },
+  {
+   "at": [
+    49.9,
+    58.1
+   ],
+   "w": 2.3,
+   "sill": 3.8,
+   "head": 11.3
+  },
+  {
+   "at": [
+    49.1,
+    69.9
+   ],
+   "w": 3.0,
+   "sill": 0.0,
+   "head": 9.8,
+   "kind": "door"
+  },
+  {
+   "at": [
+    "oct_s",
+    63.6
+   ],
+   "w": 3.4,
+   "sill": 15.8,
+   "head": 21.5
+  },
+  {
+   "at": [
+    49.9,
+    58.1
+   ],
+   "w": 2.2,
+   "sill": 15.8,
+   "head": 21.5
+  },
+  {
+   "at": [
+    49.1,
+    69.9
+   ],
+   "w": 2.2,
+   "sill": 15.8,
+   "head": 21.5
+  },
+  {
+   "at": [
+    "deck_n",
+    "bay_s"
+   ],
+   "w": 3.4,
+   "sill": 24.5,
+   "head": 32.0,
+   "kind": "french",
+   "hood": false
+  },
+  {
+   "at": [
+    61.2,
+    "oct_w"
+   ],
+   "w": 2.6,
+   "sill": 24.5,
+   "head": 31.6,
+   "kind": "door",
+   "hood": false
+  },
+  {
+   "at": {
+    "arc_pt": [
+     54.8,
+     77.3,
+     6.6,
+     150
+    ]
+   },
+   "w": 2.3,
+   "sill": 3.8,
+   "head": 11.3
+  },
+  {
+   "at": {
+    "arc_pt": [
+     54.8,
+     77.3,
+     6.6,
+     180
+    ]
+   },
+   "w": 2.3,
+   "sill": 3.8,
+   "head": 11.3
+  },
+  {
+   "at": {
+    "arc_pt": [
+     54.8,
+     77.3,
+     6.6,
+     235
+    ]
+   },
+   "w": 2.3,
+   "sill": 3.8,
+   "head": 11.3
+  },
+  {
+   "at": [
+    "s_wall",
+    77.8
+   ],
+   "w": 3.0,
+   "sill": 15.1,
+   "head": 19.8
+  },
+  {
+   "at": [
+    "s_wall",
+    47.0
+   ],
+   "w": 8.0,
+   "sill": 0.0,
+   "head": 11.8,
+   "kind": "open",
+   "shape": "segment",
+   "hood": false
+  },
+  {
+   "at": [
+    "s_wall",
+    44.0
+   ],
+   "w": 2.6,
+   "sill": 15.2,
+   "head": 21.4,
+   "hood": false
+  },
+  {
+   "at": [
+    "s_wall",
+    46.9
+   ],
+   "w": 2.6,
+   "sill": 15.2,
+   "head": 21.4
+  },
+  {
+   "at": [
+    "s_wall",
+    49.8
+   ],
+   "w": 2.6,
+   "sill": 15.2,
+   "head": 21.4,
+   "hood": false
+  },
+  {
+   "at": {
+    "arc_pt": [
+     112.8,
+     38.3,
+     15.5,
+     221
+    ]
+   },
+   "w": 2.2,
+   "sill": 2.8,
+   "head": 7.2,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": {
+    "arc_pt": [
+     112.8,
+     38.3,
+     15.5,
+     235
+    ]
+   },
+   "w": 2.2,
+   "sill": 2.8,
+   "head": 7.2,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": {
+    "arc_pt": [
+     112.8,
+     38.3,
+     15.5,
+     254
+    ]
+   },
+   "w": 2.2,
+   "sill": 2.8,
+   "head": 7.2,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": {
+    "arc_pt": [
+     112.8,
+     38.3,
+     15.5,
+     221
+    ]
+   },
+   "w": 2.0,
+   "sill": -5.5,
+   "head": -2.0,
+   "shape": "segment",
+   "hood": false
+  },
+  {
+   "at": {
+    "arc_pt": [
+     112.8,
+     38.3,
+     15.5,
+     235
+    ]
+   },
+   "w": 2.0,
+   "sill": -5.5,
+   "head": -2.0,
+   "shape": "segment",
+   "hood": false
+  },
+  {
+   "at": {
+    "arc_pt": [
+     112.8,
+     38.3,
+     15.5,
+     207
+    ]
+   },
+   "w": 2.4,
+   "sill": 0.0,
+   "head": 8.4,
+   "kind": "door"
+  },
+  {
+   "at": {
+    "arc_pt": [
+     112.8,
+     38.3,
+     15.5,
+     254
+    ]
+   },
+   "w": 3.8,
+   "sill": -9.1,
+   "head": -1.7,
+   "kind": "shut",
+   "hood": false
+  },
+  {
+   "at": [
+    150.0,
+    "wing_w2"
+   ],
+   "w": 2.5,
+   "sill": 2.6,
+   "head": 8.3
+  },
+  {
+   "at": [
+    142.5,
+    "wing_w2"
+   ],
+   "w": 2.5,
+   "sill": 2.6,
+   "head": 8.3
+  },
+  {
+   "at": [
+    133.3,
+    "wing_w"
+   ],
+   "w": 2.5,
+   "sill": 2.6,
+   "head": 8.3
+  },
+  {
+   "at": [
+    127.7,
+    "wing_w"
+   ],
+   "w": 2.5,
+   "sill": 2.6,
+   "head": 8.3
+  },
+  {
+   "at": [
+    122.7,
+    "wing_w"
+   ],
+   "w": 2.5,
+   "sill": 2.6,
+   "head": 8.3
+  },
+  {
+   "at": [
+    117.7,
+    "wing_w"
+   ],
+   "w": 2.5,
+   "sill": 2.6,
+   "head": 8.3
+  },
+  {
+   "at": [
+    149.0,
+    "wing_w2"
+   ],
+   "w": 2.2,
+   "sill": 12.3,
+   "head": 16.1,
+   "hood": false
+  },
+  {
+   "at": [
+    146.3,
+    "wing_w2"
+   ],
+   "w": 2.2,
+   "sill": 12.3,
+   "head": 16.1,
+   "hood": false
+  },
+  {
+   "at": [
+    143.6,
+    "wing_w2"
+   ],
+   "w": 2.2,
+   "sill": 12.3,
+   "head": 16.1,
+   "hood": false
+  },
+  {
+   "at": [
+    134.85,
+    "wing_w"
+   ],
+   "w": 2.1,
+   "sill": 12.3,
+   "head": 16.1,
+   "hood": false
+  },
+  {
+   "at": [
+    132.0,
+    "wing_w"
+   ],
+   "w": 2.1,
+   "sill": 12.3,
+   "head": 16.1,
+   "hood": false
+  },
+  {
+   "at": [
+    125.3,
+    "wing_w"
+   ],
+   "w": 2.1,
+   "sill": 12.3,
+   "head": 16.1,
+   "hood": false
+  },
+  {
+   "at": [
+    120.1,
+    "wing_w"
+   ],
+   "w": 2.1,
+   "sill": 12.3,
+   "head": 16.1,
+   "hood": false
+  },
+  {
+   "at": [
+    149.7,
+    "wing_w2"
+   ],
+   "w": 2.6,
+   "sill": -5.3,
+   "head": -1.3,
+   "shape": "segment",
+   "hood": false
+  },
+  {
+   "at": [
+    142.8,
+    "wing_w2"
+   ],
+   "w": 2.6,
+   "sill": -5.3,
+   "head": -1.3,
+   "shape": "segment",
+   "hood": false
+  },
+  {
+   "at": [
+    127.3,
+    "wing_w"
+   ],
+   "w": 2.6,
+   "sill": -5.3,
+   "head": -1.3,
+   "shape": "segment",
+   "hood": false
+  },
+  {
+   "at": [
+    123.1,
+    "wing_w"
+   ],
+   "w": 2.6,
+   "sill": -5.3,
+   "head": -1.3,
+   "shape": "segment",
+   "hood": false
+  },
+  {
+   "at": [
+    119.1,
+    "wing_w"
+   ],
+   "w": 2.6,
+   "sill": -5.3,
+   "head": -1.3,
+   "shape": "segment",
+   "hood": false
+  },
+  {
+   "at": [
+    "wing_n",
+    37.65
+   ],
+   "w": 2.6,
+   "sill": 2.8,
+   "head": 9.8
+  },
+  {
+   "at": [
+    "wing_n",
+    24.6
+   ],
+   "w": 2.6,
+   "sill": 2.8,
+   "head": 9.8
+  },
+  {
+   "at": [
+    "wing_n",
+    32.1
+   ],
+   "w": 7.4,
+   "sill": 12.9,
+   "head": 15.9,
+   "hood": false
+  },
+  {
+   "at": [
+    149.0,
+    "wing_e"
+   ],
+   "w": 2.4,
+   "sill": 2.4,
+   "head": 8.0
+  },
+  {
+   "at": [
+    141.0,
+    "wing_e"
+   ],
+   "w": 2.6,
+   "sill": 0.0,
+   "head": 8.3,
+   "kind": "door"
+  },
+  {
+   "at": [
+    144.25,
+    "wing_e"
+   ],
+   "w": 2.2,
+   "sill": 12.4,
+   "head": 15.8,
+   "hood": false
+  },
+  {
+   "at": [
+    146.75,
+    "wing_e"
+   ],
+   "w": 2.2,
+   "sill": 12.4,
+   "head": 15.8,
+   "hood": false
+  },
+  {
+   "at": [
+    149.25,
+    "wing_e"
+   ],
+   "w": 2.2,
+   "sill": 12.4,
+   "head": 15.8,
+   "hood": false
+  },
+  {
+   "at": [
+    137.2,
+    "wing_e"
+   ],
+   "w": 2.0,
+   "sill": 13.8,
+   "head": 18.5,
+   "hood": false
+  },
+  {
+   "at": [
+    127.2,
+    "wing_e"
+   ],
+   "w": 2.0,
+   "sill": 8.0,
+   "head": 13.5
+  },
+  {
+   "at": [
+    132.2,
+    "wing_e"
+   ],
+   "w": 2.0,
+   "sill": 5.0,
+   "head": 10.0
+  },
+  {
+   "at": [
+    "s_wall",
+    46.9
+   ],
+   "w": 3.0,
+   "sill": 24.0,
+   "head": 33.3,
+   "kind": "french"
+  },
+  {
+   "at": [
+    "s_wall",
+    46.9
+   ],
+   "w": 7.0,
+   "sill": 33.5,
+   "head": 36.9,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    "s_wall",
+    42.5
+   ],
+   "w": 1.8,
+   "sill": 26.7,
+   "head": 30.3,
+   "hood": false
+  },
+  {
+   "at": [
+    "s_wall",
+    51.0
+   ],
+   "w": 1.8,
+   "sill": 26.7,
+   "head": 30.3,
+   "hood": false
+  },
+  {
+   "at": [
+    80.1,
+    "store_e"
+   ],
+   "w": 1.6,
+   "sill": 32.3,
+   "head": 34.8,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    82.55,
+    "store_e"
+   ],
+   "w": 1.6,
+   "sill": 32.3,
+   "head": 34.8,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    85.0,
+    "store_e"
+   ],
+   "w": 1.6,
+   "sill": 32.3,
+   "head": 34.8,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    87.45,
+    "store_e"
+   ],
+   "w": 1.6,
+   "sill": 32.3,
+   "head": 34.8,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    89.9,
+    "store_e"
+   ],
+   "w": 1.6,
+   "sill": 32.3,
+   "head": 34.8,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    92.35,
+    "store_e"
+   ],
+   "w": 1.6,
+   "sill": 32.3,
+   "head": 34.8,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    94.8,
+    "store_e"
+   ],
+   "w": 1.6,
+   "sill": 32.3,
+   "head": 34.8,
+   "shape": "round",
+   "hood": false
+  },
+  {
+   "at": [
+    61.0,
+    "zp"
+   ],
+   "w": 3.0,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    84.3,
+    "zp"
+   ],
+   "w": 4.4,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    92.0,
+    "zp"
+   ],
+   "w": 3.6,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    103.5,
+    "zp"
+   ],
+   "w": 7.0,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "lib_din",
+    47.6
+   ],
+   "w": 8.0,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "hall_draw",
+    61.2
+   ],
+   "w": 3.2,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "hall_draw",
+    78.0
+   ],
+   "w": 3.2,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "guest_hall",
+    68.6
+   ],
+   "w": 3.0,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "s_wall",
+    "part1"
+   ],
+   "w": 2.8,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "gbath_hall",
+    74.2
+   ],
+   "w": 2.6,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "closet_bath",
+    77.0
+   ],
+   "w": 2.6,
+   "sill": 0.0,
+   "head": 8.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "pantry_wing",
+    35.0
+   ],
+   "w": 3.0,
+   "sill": 0.0,
+   "head": 7.4,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    62.6,
+    "zp"
+   ],
+   "w": 2.8,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    91.0,
+    "zp"
+   ],
+   "w": 3.0,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    106.0,
+    "zp"
+   ],
+   "w": 2.8,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "ishut"
+  },
+  {
+   "at": [
+    "wb_langdon",
+    51.5
+   ],
+   "w": 2.6,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    "guest_hall2",
+    68.6
+   ],
+   "w": 3.0,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    60.0,
+    "part2"
+   ],
+   "w": 2.6,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "ishut"
+  },
+  {
+   "at": [
+    80.0,
+    "part2"
+   ],
+   "w": 3.0,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    91.0,
+    "part2"
+   ],
+   "w": 2.8,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "ishut"
+  },
+  {
+   "at": [
+    "hall2_clem",
+    62.6
+   ],
+   "w": 3.2,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    108.3,
+    "passage"
+   ],
+   "w": 2.6,
+   "sill": 13.0,
+   "head": 21.0,
+   "kind": "ishut"
+  },
+  {
+   "at": [
+    87.4,
+    "zp"
+   ],
+   "w": 2.8,
+   "sill": 24.0,
+   "head": 32.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    93.5,
+    "zp"
+   ],
+   "w": 2.8,
+   "sill": 24.0,
+   "head": 32.0,
+   "kind": "idoor"
+  },
+  {
+   "at": [
+    69.0,
+    "part3"
+   ],
+   "w": 2.6,
+   "sill": 24.0,
+   "head": 32.0,
+   "kind": "ishut"
+  },
+  {
+   "at": [
+    86.0,
+    "part3"
+   ],
+   "w": 2.6,
+   "sill": 24.0,
+   "head": 32.0,
+   "kind": "ishut"
+  },
+  {
+   "at": [
+    "hall3_serv",
+    "bay_s"
+   ],
+   "w": 2.8,
+   "sill": 24.0,
+   "head": 32.0,
+   "kind": "ishut"
+  }
+ ],
+ "roofs": [
+  {
+   "id": "main",
+   "kind": "planes",
+   "note": "Steep lower slopes from each side's wall to the flat at 35.9 (roof plan, elevations). Open over the Texas deck (its pavilion covers it) and where the south-east gable's south slope is the roof.",
+   "footprint": {
+    "rect": [
+     57.5,
+     38.3,
+     114.5,
+     83.9
+    ]
+   },
+   "overhang": 1.4,
+   "planes": [
+    [
+     0.0,
+     1.515,
+     -28.51
+    ],
+    [
+     0.0,
+     -0.86,
+     96.154
+    ],
+    [
+     1.8,
+     0.0,
+     -79.0
+    ],
+    [
+     -1.05,
+     0.0,
+     139.725
+    ],
+    [
+     0.0,
+     0.0,
+     35.9
+    ]
+   ],
+   "holes": [
+    [
+     [
+      57.5,
+      55.8
+     ],
+     [
+      64.3,
+      55.8
+     ],
+     [
+      64.3,
+      67.5
+     ],
+     [
+      60.5,
+      71.1
+     ],
+     [
+      57.5,
+      71.1
+     ]
+    ],
+    {
+     "rect": [
+      56.0,
+      70.8,
+      68.5,
+      86.7
+     ]
+    }
+   ]
+  },
+  {
+   "id": "long_west",
+   "kind": "planes",
+   "note": "The west half of the main block: one plane from the west cornice (28 ft, a foot out) to the ridge at 43.3 (west elevation).",
+   "footprint": {
+    "rect": [
+     57.5,
+     38.3,
+     114.5,
+     47.4
+    ]
+   },
+   "overhang": [
+    2.3,
+    4.7,
+    1.0,
+    0.0
+   ],
+   "planes": [
+    [
+     0.0,
+     1.515,
+     -28.49
+    ]
+   ]
+  },
+  {
+   "id": "south_gable",
+   "kind": "gable",
+   "axis": "x",
+   "eave": 30.04,
+   "peak": 43.3,
+   "footprint": {
+    "rect": [
+     57.5,
+     38.65,
+     86.5,
+     56.15
+    ]
+   },
+   "overhang": [
+    3.0,
+    0.0,
+    1.6,
+    1.6
+   ],
+   "trim": "gable"
+  },
+  {
+   "id": "north_gable",
+   "kind": "gable",
+   "axis": "x",
+   "eave": 31.94,
+   "peak": 43.3,
+   "footprint": {
+    "rect": [
+     86.0,
+     39.9,
+     114.5,
+     54.9
+    ]
+   },
+   "overhang": [
+    0.0,
+    5.0,
+    2.0,
+    2.0
+   ],
+   "trim": "gable"
+  },
+  {
+   "id": "west_gable",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 32.4,
+   "peak": 39.4,
+   "footprint": {
+    "rect": [
+     96.2,
+     38.3,
+     108.4,
+     46.3
+    ]
+   },
+   "overhang": [
+    1.4,
+    1.4,
+    1.4,
+    0.0
+   ],
+   "trim": "gable"
+  },
+  {
+   "id": "se_gable",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 19.3,
+   "peak": 35.7,
+   "footprint": {
+    "rect": [
+     57.5,
+     70.8,
+     79.5,
+     83.9
+    ]
+   },
+   "overhang": [
+    1.0,
+    1.0,
+    0.0,
+    2.8
+   ],
+   "trim": "gable"
+  },
+  {
+   "id": "ne_gable",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 19.3,
+   "peak": 35.7,
+   "footprint": {
+    "rect": [
+     96.7,
+     69.4,
+     115.3,
+     83.9
+    ]
+   },
+   "overhang": [
+    1.0,
+    1.0,
+    0.0,
+    3.0
+   ],
+   "trim": "gable"
+  },
+  {
+   "id": "e_gable_1",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 20.8,
+   "peak": 27.3,
+   "footprint": {
+    "rect": [
+     80.4,
+     77.65,
+     86.9,
+     83.9
+    ]
+   },
+   "overhang": [
+    0.6,
+    0.6,
+    0.0,
+    0.6
+   ],
+   "trim": "gable"
+  },
+  {
+   "id": "e_gable_2",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 20.8,
+   "peak": 27.3,
+   "footprint": {
+    "rect": [
+     88.0,
+     77.65,
+     96.3,
+     83.9
+    ]
+   },
+   "overhang": [
+    0.6,
+    0.6,
+    0.0,
+    0.6
+   ],
+   "trim": "gable"
+  },
+  {
+   "id": "east_dormer",
+   "kind": "planes",
+   "note": "Seven arched windows under a low hipped roof, back into the main roof.",
+   "footprint": {
+    "rect": [
+     78.6,
+     70.88,
+     96.0,
+     74.5
+    ]
+   },
+   "overhang": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "planes": [
+    [
+     0.0,
+     -0.4,
+     65.4
+    ],
+    [
+     0.4,
+     0.0,
+     4.16
+    ],
+    [
+     -0.4,
+     0.0,
+     74.0
+    ],
+    [
+     0.0,
+     0.0,
+     36.4
+    ]
+   ]
+  },
+  {
+   "id": "alcove_dormer",
+   "kind": "flat",
+   "y": 34.3,
+   "note": "Behind the alcove deck, through the long west roof, to the billiard room.",
+   "footprint": {
+    "rect": [
+     66.5,
+     37.1,
+     79.9,
+     41.3
+    ]
+   },
+   "overhang": 0.0
+  },
+  {
+   "id": "texas_pavilion",
+   "kind": "pyramid",
+   "apex": [
+    57.2,
+    63.45
+   ],
+   "eave": 34.7,
+   "peak": 37.1,
+   "trim": "pavilion",
+   "footprint": [
+    [
+     47.1,
+     59.47
+    ],
+    [
+     47.1,
+     67.43
+    ],
+    [
+     53.02,
+     73.05
+    ],
+    [
+     61.38,
+     73.05
+    ],
+    [
+     64.3,
+     67.43
+    ],
+    [
+     64.3,
+     59.47
+    ],
+    [
+     61.38,
+     53.85
+    ],
+    [
+     53.02,
+     53.85
+    ]
+   ],
+   "overhang": 0.0
+  },
+  {
+   "id": "alcove_spire",
+   "kind": "pyramid",
+   "apex": [
+    73.2,
+    34.2
+   ],
+   "eave": 33.2,
+   "peak": 46.6,
+   "footprint": [
+    [
+     66.5,
+     38.3
+    ],
+    [
+     66.5,
+     33.6
+    ],
+    [
+     70.5,
+     29.7
+    ],
+    [
+     75.9,
+     29.7
+    ],
+    [
+     79.9,
+     33.6
+    ],
+    [
+     79.9,
+     38.3
+    ]
+   ],
+   "overhang": 2.8
+  },
+  {
+   "id": "round_roof",
+   "kind": "pyramid",
+   "apex": [
+    57.5,
+    77.3
+   ],
+   "eave": 13.0,
+   "peak": 13.9,
+   "footprint": [
+    [
+     57.5,
+     85.3
+    ],
+    {
+     "arc": [
+      54.8,
+      77.3,
+      8.0,
+      90,
+      240,
+      15
+     ]
+    },
+    [
+     52.54,
+     71.1
+    ],
+    [
+     57.5,
+     71.1
+    ]
+   ],
+   "overhang": 0.0
+  },
+  {
+   "id": "bay_cone",
+   "kind": "pyramid",
+   "apex": [
+    117.6,
+    69.5
+   ],
+   "eave": 21.1,
+   "peak": 31.3,
+   "footprint": [
+    {
+     "arc": [
+      114.5,
+      69.5,
+      7.6,
+      -90,
+      90,
+      8
+     ]
+    }
+   ],
+   "overhang": 0.0
+  },
+  {
+   "id": "pantry_roof",
+   "kind": "pyramid",
+   "apex": [
+    112.8,
+    38.3
+   ],
+   "eave": 9.0,
+   "peak": 13.3,
+   "footprint": [
+    {
+     "arc": [
+      112.8,
+      38.3,
+      16.5,
+      180,
+      270,
+      12
+     ]
+    },
+    [
+     113.0,
+     21.3
+    ],
+    [
+     113.0,
+     38.3
+    ]
+   ],
+   "overhang": 0.0
+  },
+  {
+   "id": "wing_main",
+   "kind": "planes",
+   "note": "Ridge at 31.5 down the wing's middle from x 123.3 to 144.4 (roof plan, elevations).",
+   "footprint": [
+    [
+     113.0,
+     22.3
+    ],
+    [
+     137.0,
+     22.3
+    ],
+    [
+     137.0,
+     19.8
+    ],
+    [
+     155.5,
+     19.8
+    ],
+    [
+     155.5,
+     43.8
+    ],
+    [
+     114.5,
+     43.8
+    ],
+    [
+     114.5,
+     38.3
+    ],
+    [
+     113.0,
+     38.3
+    ]
+   ],
+   "overhang": 1.8,
+   "holes": [
+    {
+     "rect": [
+      57.5,
+      38.3,
+      114.5,
+      85.9
+     ]
+    }
+   ],
+   "planes": [
+    [
+     0.0,
+     1.45,
+     -13.74
+    ],
+    [
+     0.0,
+     -1.45,
+     76.74
+    ],
+    [
+     1.78,
+     0.0,
+     -187.974
+    ],
+    [
+     -2.1,
+     0.0,
+     334.74
+    ]
+   ]
+  },
+  {
+   "id": "wing_cross",
+   "kind": "planes",
+   "footprint": [
+    [
+     113.0,
+     22.3
+    ],
+    [
+     137.0,
+     22.3
+    ],
+    [
+     137.0,
+     19.8
+    ],
+    [
+     155.5,
+     19.8
+    ],
+    [
+     155.5,
+     43.8
+    ],
+    [
+     114.5,
+     43.8
+    ],
+    [
+     114.5,
+     38.3
+    ],
+    [
+     113.0,
+     38.3
+    ]
+   ],
+   "overhang": 1.8,
+   "holes": [
+    {
+     "rect": [
+      57.5,
+      38.3,
+      114.5,
+      85.9
+     ]
+    }
+   ],
+   "planes": [
+    [
+     0.0,
+     2.1,
+     -27.79
+    ],
+    [
+     0.0,
+     -2.1,
+     106.61
+    ],
+    [
+     1.27,
+     0.0,
+     -156.72
+    ],
+    [
+     -1.27,
+     0.0,
+     214.12
+    ]
+   ]
+  },
+  {
+   "id": "wing_cornice",
+   "kind": "flat",
+   "y": 17.7,
+   "footprint": [
+    [
+     113.0,
+     22.3
+    ],
+    [
+     137.0,
+     22.3
+    ],
+    [
+     137.0,
+     19.8
+    ],
+    [
+     155.5,
+     19.8
+    ],
+    [
+     155.5,
+     43.8
+    ],
+    [
+     114.5,
+     43.8
+    ],
+    [
+     114.5,
+     38.3
+    ],
+    [
+     113.0,
+     38.3
+    ]
+   ],
+   "overhang": 1.8,
+   "holes": [
+    {
+     "rect": [
+      57.5,
+      38.3,
+      114.5,
+      85.9
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ombra_roof",
+   "kind": "flat",
+   "y": 9.9,
+   "trim": "porch",
+   "footprint": [
+    [
+     48.4,
+     67.3
+    ],
+    [
+     29.2,
+     67.3
+    ],
+    [
+     22.8,
+     74.4
+    ],
+    [
+     22.8,
+     84.0
+    ],
+    [
+     29.3,
+     90.2
+    ],
+    [
+     48.4,
+     90.2
+    ]
+   ],
+   "overhang": 1.0
+  },
+  {
+   "id": "veranda_roof",
+   "kind": "flat",
+   "y": 9.9,
+   "trim": "porch",
+   "footprint": [
+    [
+     48.4,
+     81.5
+    ],
+    [
+     96.3,
+     83.4
+    ],
+    [
+     96.3,
+     94.0
+    ],
+    [
+     84.8,
+     94.0
+    ],
+    [
+     84.8,
+     91.2
+    ],
+    [
+     75.6,
+     91.2
+    ],
+    {
+     "arc": [
+      66.8,
+      83.65,
+      12.05,
+      35.8,
+      144.2,
+      12
+     ]
+    },
+    [
+     58.0,
+     91.2
+    ],
+    [
+     56.0,
+     91.2
+    ],
+    [
+     56.0,
+     94.2
+    ],
+    [
+     50.0,
+     94.2
+    ],
+    [
+     50.0,
+     91.4
+    ],
+    [
+     48.4,
+     91.4
+    ]
+   ],
+   "overhang": 0.0
+  },
+  {
+   "id": "porte_cochere",
+   "kind": "hip",
+   "eave": 12.3,
+   "pitch": 0.2,
+   "top": 12.9,
+   "trim": "porch",
+   "footprint": {
+    "rect": [
+     82.5,
+     83.9,
+     99.0,
+     114.3
+    ]
+   },
+   "overhang": 0.0
+  },
+  {
+   "id": "side_porch_hood",
+   "kind": "flat",
+   "y": 9.9,
+   "trim": "porch",
+   "footprint": {
+    "rect": [
+     114.5,
+     43.4,
+     119.6,
+     50.3
+    ]
+   },
+   "overhang": 0.0
+  },
+  {
+   "id": "back_stair",
+   "kind": "planes",
+   "planes": [
+    [
+     -0.5697,
+     -0.3571,
+     105.22
+    ]
+   ],
+   "trim": "porch",
+   "footprint": {
+    "rect": [
+     120.2,
+     43.8,
+     136.7,
+     48.0
+    ]
+   },
+   "overhang": 0.0,
+   "note": "Falls with the stair from 19.6 at x 120.2 to 10.2 at 136.7 on its outer edge, 1.5 higher against the wall."
+  }
+ ],
+ "chimneys": [
+  {
+   "id": "library",
+   "at": [
+    70.6,
+    56.0
+   ],
+   "size": [
+    6.8,
+    3.2
+   ],
+   "base": 0.0,
+   "top": 47.6
+  },
+  {
+   "id": "hall",
+   "at": [
+    97.25,
+    68.8
+   ],
+   "size": [
+    1.6,
+    7.2
+   ],
+   "base": 0.0,
+   "top": 48.2
+  },
+  {
+   "id": "west_gable",
+   "at": [
+    101.9,
+    37.3
+   ],
+   "size": [
+    3.0,
+    2.0
+   ],
+   "base": 0.0,
+   "top": 47.6
+  },
+  {
+   "id": "kitchen",
+   "at": [
+    137.8,
+    28.8
+   ],
+   "size": [
+    2.4,
+    3.6
+   ],
+   "base": 0.0,
+   "top": 40.6
+  },
+  {
+   "id": "great_north",
+   "at": [
+    115.2,
+    59.3
+   ],
+   "size": [
+    2.8,
+    9.2
+   ],
+   "base": -2.5,
+   "top": 36.5,
+   "note": "base 9.2 ft across to 8.8 ft, in to 4.7 at 16, shaft to a crown at 33.2-36.5"
+  },
+  {
+   "id": "great_north_stack",
+   "at": [
+    113.9,
+    59.3
+   ],
+   "size": [
+    2.6,
+    5.4
+   ],
+   "base": 30.0,
+   "top": 48.3
+  }
+ ],
+ "grid": {
+  "x": {
+   "s_wall": 57.5,
+   "n_wall": 114.5,
+   "lib_din": 88.25,
+   "hall_draw": 95.95,
+   "guest_hall": 72.65,
+   "gbath_hall": 75.95,
+   "dress_gbath": 59.76,
+   "alc_s": 66.5,
+   "alc_n": 79.9,
+   "school_wb": 79.3,
+   "wb_langdon": 87.72,
+   "langdon_office": 101.38,
+   "sebath_susy": 67.7,
+   "susy_small": 85.65,
+   "hall2_clem": 96.95,
+   "bill_guest3": 89.5,
+   "deck_n": 64.3,
+   "hall3_serv": 97.0,
+   "serv_attic": 109.95,
+   "pantry_wing": 112.9,
+   "oct_s": 47.3,
+   "wing_n": 155.5,
+   "wing_step": 137.0,
+   "bay_n": 121.0,
+   "closet_bath": 63.8,
+   "guest_hall2": 71.28
+  },
+  "z": {
+   "w_wall": 38.3,
+   "e_wall": 83.9,
+   "zp": 56.35,
+   "oct_w": 55.8,
+   "part1": 72.3,
+   "part2": 70.8,
+   "part3": 70.6,
+   "store_e": 74.5,
+   "passage": 60.47,
+   "alc_w": 29.7,
+   "wing_w": 22.3,
+   "wing_w2": 19.8,
+   "wing_e": 43.8,
+   "bay_s": 64.0,
+   "bay_e": 75.0
+  }
+ }
+}
