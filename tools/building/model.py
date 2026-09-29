@@ -177,14 +177,28 @@ class Body:
     holes: list = field(default_factory=list)
     trim: str = "eave"
     spec: dict = field(default_factory=dict)
+    # A pyramid or cone: each plane owns its sector (the triangle from its
+    # eave edge to the apex), which holds whatever the footprint's shape.
+    sectors: list = field(default_factory=list)
 
     def height(self, X: np.ndarray, Z: np.ndarray) -> np.ndarray:
+        if self.sectors:
+            h = np.full(X.shape, -np.inf)
+            for (a, b, c), tri in zip(self.planes, self.sectors):
+                m = inside(tri, X, Z)
+                h = np.where(m, a * X + b * Z + c, h)
+            return h
         h = np.full(X.shape, np.inf)
         for a, b, c in self.planes:
             h = np.minimum(h, a * X + b * Z + c)
         return h
 
     def plane_index(self, X: np.ndarray, Z: np.ndarray) -> np.ndarray:
+        if self.sectors:
+            idx = np.zeros(X.shape, dtype=np.int64)
+            for k, tri in enumerate(self.sectors):
+                idx = np.where(inside(tri, X, Z), k, idx)
+            return idx
         stack = np.stack([a * X + b * Z + c for a, b, c in self.planes])
         return np.argmin(stack, axis=0)
 
@@ -216,7 +230,7 @@ def _planes_for(spec: dict, fp, ext) -> list:
         s = (p - e) / ((x1 - x0) / 2.0)
         return [(s, 0.0, p - s * xc), (-s, 0.0, p + s * xc)]
     if kind == "pyramid":
-        ax, az = spec["apex"]
+        ax, az = gx(spec["apex"][0]), gz(spec["apex"][1])
         e, p = float(spec["eave"]), float(spec["peak"])
         # Through the eave line: the footprint grown by its overhang.
         pl = []
@@ -269,7 +283,18 @@ class Building:
             over = r.get("overhang", 0.0)
             ext = rect_overhang(fp, over) if isinstance(over, list) else offset_poly(fp, float(over))
             holes = [expand_poly(h) for h in r.get("holes", [])]
-            self.bodies.append(Body(r["id"], r["kind"], fp, ext, _planes_for(r, fp, ext), holes, r.get("trim", "eave"), r))
+            body = Body(r["id"], r["kind"], fp, ext, _planes_for(r, fp, ext), holes, r.get("trim", "eave"), r)
+            if r["kind"] == "pyramid":
+                ax, az = gx(r["apex"][0]), gz(r["apex"][1])
+                body.planes, body.sectors = [], []
+                n = len(ext)
+                for i in range(n):
+                    a, c = ext[i], ext[(i + 1) % n]
+                    pl = _planes_for({"kind": "pyramid", "apex": r["apex"], "eave": r["eave"], "peak": r["peak"]}, [a, c], [a, c])
+                    if pl:
+                        body.planes.append(pl[0])
+                        body.sectors.append([a, c, (ax, az)])
+            self.bodies.append(body)
         self.chimneys = data.get("chimneys", [])
 
     @staticmethod

@@ -135,6 +135,8 @@ func _orthos(world: TwainMap) -> void:
 	world.grounds.visible = false
 	world.player.visible = false
 	var only := OS.get_environment("FLOWSTATE_TW_ORTHO")
+	if only.split(",").has("top") or only == "all":
+		await _ortho_top()
 	var ops_out: Array = []
 	for d: Dictionary in world.house.dressed:
 		var c: Vector3 = d["c"]
@@ -192,6 +194,36 @@ func _orthos(world: TwainMap) -> void:
 		vp.debug_draw = Viewport.DEBUG_DRAW_DISABLED
 		print("[probe] ortho %s written" % front)
 		vp.queue_free()
+
+
+## The house straight down at the roof plan's scale, laid out as the
+## survey's plans are (x north to the right, z east downward), survey x
+## 10 to 170 and z 10 to 125 at ORTHO_PX to the foot: user://ortho_top.png,
+## and its surface directions as user://ortho_top_n.png.
+func _ortho_top() -> void:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(160 * ORTHO_PX, 115 * ORTHO_PX)
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vp.msaa_3d = Viewport.MSAA_4X
+	add_child(vp)
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.keep_aspect = Camera3D.KEEP_HEIGHT
+	cam.size = 115.0 * TwainHouse.FT
+	cam.far = 400.0
+	vp.add_child(cam)
+	var target := TwainHouse.w(90.0, 67.5, 0.0)
+	cam.look_at_from_position(target + Vector3(0, 150, 0), target, Vector3(-1, 0, 0))
+	cam.current = true
+	for i in 12:
+		await RenderingServer.frame_post_draw
+	vp.get_texture().get_image().save_png("user://ortho_top.png")
+	vp.debug_draw = Viewport.DEBUG_DRAW_NORMAL_BUFFER
+	for i in 8:
+		await RenderingServer.frame_post_draw
+	vp.get_texture().get_image().save_png("user://ortho_top_n.png")
+	print("[probe] ortho top written")
+	vp.queue_free()
 
 
 ## Stand the camera at `from` and aim it at `to`, then photograph.

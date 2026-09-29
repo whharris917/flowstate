@@ -6,6 +6,7 @@ class_name TwainMap
 ## everything unlocked, its own save. The gas is lit as the day goes.
 
 var house: TwainHouse
+var built: BuildingBuilder
 var grounds: TwainGrounds
 
 
@@ -31,8 +32,19 @@ func _build_ground() -> void:
 		body.add_child(shape)
 	add_child(body)
 	house = TwainHouse.new()
-	add_child(house)
-	house.build()
+	# FLOWSTATE_TW_BUILDER=data: the house built from its data file
+	# (game/data/buildings/twain.json) by the general builder instead.
+	if OS.get_environment("FLOWSTATE_TW_BUILDER") == "data":
+		house.name = "TwainHouseUnbuilt"
+		house._materials()
+		add_child(house)
+		built = BuildingBuilder.new()
+		built.setup(BuildingData.load_file("res://data/buildings/twain.json"), TwainStyle.style())
+		add_child(built)
+		built.build()
+	else:
+		add_child(house)
+		house.build()
 	grounds = TwainGrounds.new()
 	add_child(grounds)
 	grounds.build(house)
@@ -68,8 +80,13 @@ func _after_plant() -> void:
 		player.global_position = Vector3(20.0, 0.3, -24.0)
 		player.rotation.y = PI * 0.82
 	hud.toast("Hartford, Connecticut: the Mark Twain house (1874) as the Clemenses knew it. The front door is under the porte-cochere; the stair in the hall climbs to the billiard room. O options · F5/F9 save/load")
-	print("[flowstate] twain house: %d triangles (%d inside), %d solids, built in %d ms; grounds %d triangles, %d ms"
-		% [int(house.stats["triangles"]), int(house.stats["inside"]), int(house.stats["solids"]), int(house.stats["ms"]),
-		int(grounds.stats.get("triangles", 0)), int(grounds.stats.get("ms", 0))])
+	if built != null:
+		print("[flowstate] twain house from its data: %d triangles, %d walls, %d roof faces, %d solids, built in %d ms"
+			% [int(built.stats["triangles"]), int(built.stats["walls"]), int(built.stats["faces"]), int(built.stats["solids"]),
+			int(built.stats["ms"])])
+	else:
+		print("[flowstate] twain house: %d triangles (%d inside), %d solids, built in %d ms; grounds %d triangles, %d ms"
+			% [int(house.stats["triangles"]), int(house.stats["inside"]), int(house.stats["solids"]), int(house.stats["ms"]),
+			int(grounds.stats.get("triangles", 0)), int(grounds.stats.get("ms", 0))])
 	if DisplayServer.get_name() == "headless":
 		_report_in = 20

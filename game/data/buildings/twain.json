@@ -2798,15 +2798,18 @@
    ]
   },
   {
-   "id": "long_west",
-   "kind": "planes",
-   "note": "The west half of the main block: one plane from the west cornice (28 ft, a foot out) to the ridge at 43.3 (west elevation).",
+   "id": "ridge_roof",
+   "kind": "gable",
+   "axis": "x",
+   "eave": 29.51,
+   "peak": 43.3,
+   "note": "One ridge at 43.3 the length of the main block, z 47.4 (south elevation's gable peak, the attic plan's framed strip, section B-B); the west slope from the cornice, the east slope down to the flat at 35.9.",
    "footprint": {
     "rect": [
-     57.5,
-     38.3,
-     114.5,
-     47.4
+     "s_wall",
+     "w_wall",
+     "n_wall",
+     56.5
     ]
    },
    "overhang": [
@@ -2814,13 +2817,6 @@
     4.7,
     1.0,
     0.0
-   ],
-   "planes": [
-    [
-     0.0,
-     1.515,
-     -28.49
-    ]
    ]
   },
   {
@@ -3178,7 +3174,7 @@
    "id": "pantry_roof",
    "kind": "pyramid",
    "apex": [
-    112.8,
+    113.0,
     38.3
    ],
    "eave": 9.0,
@@ -3551,6 +3547,39 @@
    },
    "overhang": 0.0,
    "note": "Falls with the stair from 19.6 at x 120.2 to 10.2 at 136.7 on its outer edge, 1.5 higher against the wall."
+  },
+  {
+   "id": "conservatory_roof",
+   "kind": "pyramid",
+   "apex": [
+    "s_wall",
+    47.0
+   ],
+   "eave": 11.2,
+   "peak": 15.5,
+   "trim": "glass",
+   "note": "A glass roof on ribs rising to the library's wall (model-v1).",
+   "footprint": [
+    [
+     "s_wall",
+     38.5
+    ],
+    {
+     "arc": [
+      52.3,
+      47.0,
+      8.5,
+      -90,
+      -270,
+      12
+     ]
+    },
+    [
+     "s_wall",
+     55.5
+    ]
+   ],
+   "overhang": 0.0
   }
  ],
  "chimneys": [
