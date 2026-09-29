@@ -787,6 +787,11 @@ func _chimneys() -> void:
 	_chimney(Vector2(97.25, 68.8), Vector2(1.6, 7.2), 29.3, 48.2)
 	_chimney(Vector2(101.9, 37.3), Vector2(3.0, 2.0), 31.3, 47.6)
 	_chimney(Vector2(137.8, 28.8), Vector2(2.4, 3.6), 20.0, 40.6)
+	great_north()
+	_chimney(Vector2(113.9, 59.3), Vector2(2.6, 5.4), 36.4, 48.3)
+
+
+func great_north() -> void:
 	# The great chimney on the north front, as the north elevation draws
 	# it: a base 9.2 ft across standing to 8.8 ft, drawn in to 4.7 at
 	# 16 ft; the shaft 4.7 across up the wall and through the roof to a
@@ -817,7 +822,6 @@ func _chimneys() -> void:
 		var c0 := w(xc - 0.2, zc, 33.2 + i * 1.1)
 		var c1 := w(xc - 0.2, zc, 33.2 + (i + 1) * 1.1)
 		k.box("wall", g, (c0 + c1) / 2.0, Vector3((5.0 + i * 0.5) * FT, c1.y - c0.y, 2.8 * FT), dark if i == 1 else brick)
-	_chimney(Vector2(113.9, 59.3), Vector2(2.6, 5.4), 36.4, 48.3)
 
 
 ## A chimney standing from y0 to y1 feet: the shaft, and near its top a

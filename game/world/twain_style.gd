@@ -36,4 +36,9 @@ static func style(house: TwainHouse = null) -> Dictionary:
 		st["bands"] = func(f: Transform3D, length: float, y0: float, y1: float, mine: Array) -> void:
 			house._bands(f, length, y0, y1, mine)
 		st["extra_meshes"] = [house.dress_m]
+		st["chimney"] = func(ch: Dictionary, at: Vector2, size: Vector2, y0: float, y1: float) -> void:
+			if str(ch["id"]) == "great_north":
+				house.great_north()
+			else:
+				house._chimney(at, size, y0, y1)
 	return st

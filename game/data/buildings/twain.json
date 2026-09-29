@@ -70,9 +70,10 @@
     "file": "m07.tif",
     "kind": "roofplan",
     "offset": [
-     0.0,
-     0.0
-    ]
+     -0.8,
+     -0.5
+    ],
+    "note": "registered by the alcove's walls and the house's west wall, dashed under the roof"
    },
    {
     "id": "east",
@@ -3371,8 +3372,7 @@
   },
   {
    "id": "ombra_roof",
-   "kind": "flat",
-   "y": 9.9,
+   "kind": "pyramid",
    "trim": "porch",
    "footprint": [
     [
@@ -3400,12 +3400,18 @@
      90.2
     ]
    ],
-   "overhang": 1.0
+   "overhang": 1.0,
+   "apex": [
+    33.7,
+    79.6
+   ],
+   "eave": 9.8,
+   "peak": 11.3,
+   "note": "A low hipped roof, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 11.3 (east and south elevations, fascia 9.2-10.2)."
   },
   {
    "id": "veranda_roof",
-   "kind": "flat",
-   "y": 9.9,
+   "kind": "planes",
    "trim": "porch",
    "footprint": [
     [
@@ -3467,14 +3473,22 @@
      91.4
     ]
    ],
-   "overhang": 0.0
+   "overhang": 0.0,
+   "planes": [
+    [
+     0.0,
+     -0.08,
+     17.2
+    ]
+   ],
+   "note": "Nearly flat, falling from 10.5 at the house wall to 9.7 at its outer edge (east elevation)."
   },
   {
    "id": "porte_cochere",
    "kind": "hip",
-   "eave": 12.3,
-   "pitch": 0.2,
-   "top": 12.9,
+   "eave": 10.2,
+   "pitch": 0.4,
+   "top": 13.5,
    "trim": "porch",
    "footprint": {
     "rect": [
@@ -3484,7 +3498,8 @@
      114.3
     ]
    },
-   "overhang": 0.0
+   "overhang": 0.0,
+   "note": "A low hip, eave 10.2 rising to 13.5 (south elevation's end view, the director's photograph)."
   },
   {
    "id": "side_porch_hood",
@@ -3610,54 +3625,58 @@
   {
    "id": "library",
    "at": [
-    70.6,
-    56.0
+    69.6,
+    56.9
    ],
    "size": [
-    6.8,
-    3.2
+    7.6,
+    3.4
    ],
    "base": 0.0,
-   "top": 47.6
+   "top": 48.0,
+   "note": "roof plan's block; top from the four elevations (47.7-48.1)"
   },
   {
    "id": "hall",
    "at": [
-    97.25,
-    68.8
+    96.4,
+    70.0
    ],
    "size": [
-    1.6,
-    7.2
+    2.4,
+    7.8
    ],
    "base": 0.0,
-   "top": 48.2
+   "top": 48.0,
+   "note": "roof plan; elevations 47.8-48.1"
   },
   {
    "id": "west_gable",
    "at": [
-    101.9,
-    37.3
+    101.7,
+    37.7
    ],
    "size": [
-    3.0,
-    2.0
+    3.6,
+    2.6
    ],
    "base": 0.0,
-   "top": 47.6
+   "top": 46.2,
+   "note": "roof plan; elevations 46.0-46.5"
   },
   {
    "id": "kitchen",
    "at": [
-    137.8,
-    28.8
+    137.1,
+    30.55
    ],
    "size": [
-    2.4,
-    3.6
+    2.2,
+    4.9
    ],
    "base": 0.0,
-   "top": 40.6
+   "top": 40.1,
+   "note": "roof plan, on the wing's ridge; elevations 39.8-40.5"
   },
   {
    "id": "great_north",
@@ -3676,15 +3695,16 @@
   {
    "id": "great_north_stack",
    "at": [
-    113.9,
-    59.3
+    114.1,
+    59.5
    ],
    "size": [
     2.6,
     5.4
    ],
    "base": 30.0,
-   "top": 48.3
+   "top": 48.1,
+   "note": "roof plan; elevations 47.8-48.4"
   }
  ],
  "grid": {

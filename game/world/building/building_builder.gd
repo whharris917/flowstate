@@ -693,6 +693,18 @@ func _chimneys() -> void:
 		var size := Vector2(float(sz[0]), float(sz[1]))
 		var y0 := float(ch.get("base", 0.0))
 		var y1 := float(ch["top"])
+		# Inside the house only the part above the roof is drawn (a breast
+		# in a room belongs to the room's finish).
+		var low := INF
+		for q: Vector2 in [at + size / 2.0, at - size / 2.0, at + Vector2(size.x, -size.y) / 2.0, at + Vector2(-size.x, size.y) / 2.0]:
+			var r := roof.height(q)
+			if r > -1e30:
+				low = minf(low, r)
+		if low < INF and _room_at(at):
+			y0 = maxf(y0, low - 1.0)
+		if style.has("chimney"):
+			(style["chimney"] as Callable).call(ch, at, size, y0, y1)
+			continue
 		var cen := d.w(at, (y0 + y1) / 2.0)
 		var box := Vector3(size.y * d.ft, (y1 - y0) * d.ft, size.x * d.ft)
 		k.box("wall", Transform3D(), cen, box, brick)

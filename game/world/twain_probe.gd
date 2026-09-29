@@ -49,8 +49,27 @@ func _run(world: TwainMap) -> void:
 			for f: Node in get_tree().root.find_children("*", "", true, false):
 				if f is Forest:
 					(f as Node3D).visible = false
-		# name:fov:x,y,z:tx,ty,tz;... for looking at one thing closely.
+		# name:fov:x,y,z:tx,ty,tz;... for looking at one thing closely. A
+		# name starting "cam_" is shot from a free camera standing exactly
+		# there (a photograph's camera, solved from the photograph), with no
+		# player's body or its eye height in the way.
 		for v: String in views.split(";"):
+			if v.begins_with("cam_"):
+				var cp := v.split(":")
+				var cpos := cp[2].split_floats(",")
+				var ctgt := cp[3].split_floats(",")
+				var cam := Camera3D.new()
+				cam.fov = float(cp[1])
+				add_child(cam)
+				cam.look_at_from_position(Vector3(cpos[0], cpos[1], cpos[2]), Vector3(ctgt[0], ctgt[1], ctgt[2]), Vector3.UP)
+				cam.current = true
+				world.player.visible = false
+				for i in 20:
+					await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png("user://probe_tw_%s.png" % cp[0])
+				print("[probe] %s written" % cp[0])
+				cam.queue_free()
+				continue
 			var parts := v.split(":")
 			var p := parts[2].split_floats(",")
 			var t := parts[3].split_floats(",")
