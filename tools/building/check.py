@@ -8,15 +8,15 @@ opening, and where it is in the building's feet:
   gap         floor inside a level's outline that no space covers
   no-roof     part of an enclosed space with nothing over it (no roof, no
               space above)
-  low-roof    part of a room under the roof with less than 6 ft of headroom
-              (attics and closets excepted)
+  low-roof    a room most of whose floor has under 6 ft over it (attics
+              and closets excepted)
   window-room a window between two enclosed spaces, or on no space's edge
   above-roof  an opening whose head stands above the roof over its wall
   no-level    an opening whose sill is on no level that has a space there
   chimney-room a chimney standing in a room's floor rather than in a wall
   chimney-low a chimney whose top does not clear the roof by 2 ft
   roof-over-nothing a roof body over no space
-  deck-headroom a porch or deck under a roof less than 7 ft over its floor
+  deck-headroom a porch or deck under a roof less than 6 ft over its floor
 
     python tools/building/check.py <building> [--res 0.25]
 
@@ -90,8 +90,8 @@ def run(bname: str, res: float) -> int:
         cover = np.minimum(over_space, roof_over)
         if s["kind"] in OPEN:
             under_roof = m & np.isfinite(roof_over) & (roof_over < over_space)
-            low = under_roof & (roof_over < fl + 7.0)
-            for area, ax0, ax1, az0, az1 in blobs(low, xs, zs, res, 2.0):
+            low = under_roof & (roof_over < fl + 6.0)
+            for area, ax0, ax1, az0, az1 in blobs(low, xs, zs, res, 3.0):
                 found.append(("deck-headroom", "%s: the roof %.1f sq ft of it stands under 7 ft over its floor, x %.1f-%.1f, z %.1f-%.1f"
                               % (s["id"], area, ax0, ax1, az0, az1)))
             continue
@@ -101,11 +101,13 @@ def run(bname: str, res: float) -> int:
         if s["kind"] not in LOW_OK:
             # Headroom: under the roof (or the floor above), inside the
             # walls (a foot in from the space's edge).
+            # A room under slopes may be low at its sides; it is wrong when
+            # most of it is.
             core = ndimage.binary_erosion(m, iterations=max(1, int(1.2 / res)))
             low = core & (cover < fl + 6.0)
-            for area, ax0, ax1, az0, az1 in blobs(low, xs, zs, res, 4.0):
-                found.append(("low-roof", "%s: %.1f sq ft with under 6 ft over its floor, x %.1f-%.1f, z %.1f-%.1f"
-                              % (s["id"], area, ax0, ax1, az0, az1)))
+            if core.sum() and low.sum() > 0.4 * core.sum():
+                found.append(("low-roof", "%s: %.0f%% of its floor has under 6 ft over it"
+                              % (s["id"], 100.0 * low.sum() / core.sum())))
     # Openings.
     floors = sorted({float(s["floor"]) for s in b.spaces})
     for o in b.openings:

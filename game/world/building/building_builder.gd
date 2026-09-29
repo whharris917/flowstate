@@ -17,7 +17,10 @@ extends Node3D
 ##
 ## A style (a Dictionary of colours and optional Callables) dresses it:
 ## "dress": func(f: Transform3D, o: Dictionary, wall: Dictionary) for an
-## opening's joinery; "ground_at": func(p: Vector2) -> float for the grade.
+## opening's joinery; "bands": func(f, length, y0, y1, openings) over an
+## outer face of brick; "ground_at": func(p: Vector2) -> float for the
+## grade; "on_kit": func(k: CourthouseKit) once the kit exists;
+## "extra_meshes": TownMeshes the style draws into, committed with the rest.
 
 const SLAB := 1.0            # a floor's thickness, feet
 const PART := 0.5            # a partition's thickness
@@ -62,6 +65,8 @@ func build() -> void:
 	solids.name = "Solids"
 	add_child(solids)
 	k = CourthouseKit.new(solids)
+	if style.has("on_kit"):
+		(style["on_kit"] as Callable).call(k)
 	inner_mesh = TownMesh.new()
 	for s: Dictionary in d.spaces:
 		_by_id[str(s["id"])] = s
@@ -89,9 +94,14 @@ func build() -> void:
 	for mi: MeshInstance3D in inner_mesh.commit(self, materials, []).values():
 		mi.visibility_range_end = 120.0
 		drawn.append(mi)
+	for tm: TownMesh in style.get("extra_meshes", []):
+		var node := Node3D.new()
+		add_child(node)
+		drawn.append_array(tm.commit(node, materials, ["wall"]).values())
 	for mi: MeshInstance3D in drawn:
 		if mi.name.ends_with("glass"):
 			mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	_self_check()
 	if OS.get_environment("FLOWSTATE_BLD_DEBUG") != "":
 		_debug(OS.get_environment("FLOWSTATE_BLD_DEBUG"))
 	stats = {"triangles": k.m.triangles + inner_mesh.triangles, "walls": walls.size(), "faces": roof.faces.size(),
@@ -190,7 +200,11 @@ func _top_at(s: Dictionary, p: Vector2, finish := false) -> float:
 	if own < INF and over > own + 3.0:
 		over = INF
 	var r := roof.height(p)
-	var roofed := r > fl + 1.0
+	# A roof over the space, even where it comes down to the floor at the
+	# eaves; a porch roof well below the floor is not its roof.
+	var roofed := r > fl - 3.0
+	if roofed:
+		r = maxf(r, fl)
 	if finish:
 		var t := own
 		if roofed:
@@ -204,7 +218,9 @@ func _top_at(s: Dictionary, p: Vector2, finish := false) -> float:
 	if roofed and r < t:
 		t = r
 	if t == INF:
-		t = own if own < INF else fl + 10.0
+		# Nothing over it: its own top, or, open to a roof that is not
+		# there, no wall at all (check.py lists the space).
+		t = own if own < INF else fl
 	return t
 
 
@@ -273,6 +289,12 @@ func _wall(s: Dictionary, e: Dictionary, kind: String, thick: float, material: S
 		var t := _top_at(s, q + inward * 0.5)
 		if kind == "part" and not o.is_empty():
 			t = minf(t, _top_at(o, q - inward * 0.5))
+			# A partition ends at its rooms' ceiling (the floor over it), not
+			# in the attic above.
+			for sp: Dictionary in [s, o]:
+				var tp: Variant = sp.get("top", "roof")
+				if not tp is String:
+					t = minf(t, float(tp) + SLAB)
 		tops.append(t)
 	walls.append({"a": a, "b": b, "inward": inward, "thick": thick, "y0": y0, "tops": tops, "level": level,
 		"space": str(s["id"]), "other": str(o.get("id", "")), "kind": kind, "material": material})
@@ -382,6 +404,9 @@ func _build_wall(wl: Dictionary) -> void:
 			var top := minf(ta, tb)
 			if top > y0 + 0.05:
 				k.wall(key, f, u0, u1, d.wy(y0), d.wy(top), t, colr, mine, 1000.0)
+	# The style's bands on an outer face of brick, up to its lowest top.
+	if style.has("bands") and str(wl["kind"]) != "part" and str(wl["material"]) == "brick" and lo > y0 + 0.5:
+		(style["bands"] as Callable).call(f, length, y0, lo, mine)
 	for o: Dictionary in mine:
 		_dress(f, o, wl)
 
@@ -772,3 +797,42 @@ func _debug(sid: String) -> void:
 			hi = maxf(hi, BuildingGeom.ph(fc["plane"], q))
 		if hi - lo > 20.0 or lo < -5.0:
 			print("[bld] face of %s from %.1f to %.1f ft: %s" % [d.roofs[int(fc["body"])]["id"], lo, hi, fc["poly"]])
+
+
+## What the builder can see is wrong with what it built, printed so the
+## data can be fixed: a wall whose top stands clear of every roof and
+## floor over it (a wall with nothing to carry, open to the sky on both
+## sides).
+var findings: Array[String] = []
+
+
+func _self_check() -> void:
+	for wl: Dictionary in walls:
+		var a: Vector2 = wl["a"]
+		var b: Vector2 = wl["b"]
+		var inward: Vector2 = wl["inward"]
+		var tops: PackedFloat32Array = wl["tops"]
+		var bad := 0
+		var worst := 0.0
+		var where := Vector2.ZERO
+		for i in tops.size():
+			var q := a.lerp(b, float(i) / maxf(tops.size() - 1, 1))
+			var top := tops[i]
+			var cover := -INF
+			for sd: float in [-1.0, 0.0, 1.0]:
+				var qq := q + inward * (float(wl["thick"]) / 2.0 + sd * 0.8)
+				cover = maxf(cover, roof.height(qq))
+				var ab := _above(str(wl["level"]), qq)
+				if ab < INF:
+					cover = maxf(cover, ab)
+			if cover < top - 1.0:
+				bad += 1
+				if top - cover > worst:
+					worst = top - cover
+					where = q
+		if bad > 0:
+			findings.append("wall of %s (%s) from (%.1f, %.1f) to (%.1f, %.1f): %d ft stand up to %.1f ft clear of any roof, near (%.1f, %.1f)"
+				% [wl["space"], wl["kind"], a.x, a.y, b.x, b.y, bad, worst, where.x, where.y])
+	for f: String in findings:
+		print("[building] " + f)
+	print("[building] %s: %d findings" % [d.name, findings.size()])

@@ -1,56 +1,47 @@
 # Modelling a real building
 
-How a real building is brought into the game from its survey drawings and photographs. Written from the Mark Twain house (HABS CT-359), where most of the time went on errors this method prevents. Follow it in order; each step's checks pass before the next begins.
+How a real building is brought into the game from its survey drawings and photographs. Written from the Mark Twain house (HABS CT-359), where most of the time went on errors this method prevents: a first model built by hand, piece by piece, then fixed one fault at a time as they were found.
 
 ## The rule behind the method
 
-A house is not a picture to be matched. It is a set of spaces (rooms, stairs, porches, balconies, decks, attics, the basement) joined by openings and closed by walls, floors and roofs. Almost every visible error comes from authoring those parts separately so they disagree: a window drawn where no wall is cut, a railing round no floor, a door that opens onto a roof, a room that pokes through the roof over it. So the spaces are authored first, and walls, openings, railings and roof holes are derived from them or checked against them. Matching the elevations comes after the building makes sense, never instead of it.
+A building is data, not code. It is a set of spaces (rooms, halls, stairs, porches, balconies, decks, attics) on levels, joined by openings, covered by roof bodies. Everything else (every wall, a gable's end, a dormer's cheeks, where one roof dies into another, eaves, bargeboards, railings, a room's ceiling under a slope) is derived from those by one general builder, so the parts cannot disagree. Every number in the data is read off a drawing and checked against every drawing that shows it, by tools, before and after the building is built.
 
-## 1. Gather and register the sources
+The faults the hand-built Twain house kept producing, and what now prevents each:
 
-- Get every sheet: each floor plan, the roof plan, all elevations, sections, details. Get photographs from known viewpoints (survey photographs, a good modern view).
-- Register every sheet to one frame, in the drawings' own feet, using the drawings' own references: the outline walls on the plans, the level marks beside the elevations (0'-0", floor heights, ridge). Record each sheet's offset and datum in one table in the code and in the comparison tools.
-- Check the registration before modelling: a plan's outer walls fall on the first plan's; an elevation's level marks fall on the floor heights. The Twain house lost a whole pass to a first-floor line read 1.3 ft off its sheet's own mark.
+| Fault | Cause | Prevented by |
+|---|---|---|
+| A wall across a room at ceiling height (the north-east gable's closing triangle in the Clemenses' bedroom) | roof pieces drawn with no knowledge of the rooms | walls and roofs derived from spaces; nothing is drawn inside a space |
+| Outer brick showing inside rooms (about 250 audit findings) | rooms with a flat ceiling under a sloping roof; walls with a fixed top per side | a room's finish stops at its ceiling or the roof's underside, whichever is lower; walls rise to what is over them |
+| A steep roof face hiding a gable; a slot or a step between two roofs | each roof and gable placed by hand, the join patched per case | the roof is the highest of its bodies at every point; a body standing over another's edge closes the step itself |
+| A partition 1.5 ft from where the plan draws it; a tower drawn on its wall's inner face | numbers read by eye from a picture of the sheet | the measuring tool reads each wall off the sheet; the comparison tool lists every line with no ink under it |
+| A floor plan read 2 ft off | each floor drawn on its own sheet, placed differently | each sheet registered to the frame by fitting the outer walls |
+| A window on solid brick, a railing round no floor, a door onto a roof | openings, walls and rails authored separately | openings stand on space edges; railings are derived from open edges; the data check lists any opening on no edge |
+| A roof cone 4 ft high inside a room | a cone whose point sits on its own edge treated as the lowest of its planes | each face of a pyramid or cone owns its sector |
 
-## 2. Author the spaces, level by level
+## The files and tools
 
-From the plans, for every level including the basement and the attic: each space as a polygon with its name, its floor height, its ceiling (or "up to the roof"), and its kind: room, stair, porch (covered, open to the air at the sides), balcony or deck (open above or under its own roof), attic, void. Nothing else in the building is authored before this list exists and is complete for every level that has an opening.
+- **The building file**, `game/data/buildings/<name>.json`: sheets and their registration, grid lines, levels, groups (the main block, a wing: which owns the wall between them), spaces, openings, roofs, chimneys, wall overrides (a framed wall, a different thickness). The format is described at the top of `tools/building/model.py`. Every coordinate is in the drawings' own feet. A coordinate may be a grid line's name, so one measurement moves every wall that stands on it.
+- **`tools/building/register.py`** finds where each plan sheet sits in the building's frame, by fitting the building's outer walls to the sheet's drawn outer faces (a line, the wall's hatched body inside, bare paper outside). The first floor's plan is the frame.
+- **`tools/building/measure.py`** reads the walls off a plan: across each wall in the data it samples the sheet, finds the drawn wall band, and proposes the grid line's position (an outer wall's outer face, a partition's centre), pooling every wall on a grid line and reporting how well they agree.
+- **`tools/building/overlay.py`** draws the data over each sheet (spaces, openings and chimneys on the plans; the roof's eaves, ridges, hips and valleys on the roof plan; skyline and visible edges on the elevations) and lists every run of the building's lines with no ink under it, longest first, with a score per sheet.
+- **`tools/building/check.py`** checks the data against the rules any building keeps: spaces that overlap or leave gaps, rooms with no roof or too little headroom, windows between two rooms or on no edge, openings above the roof, chimneys standing in a room's floor or not clearing the roof, roofs over nothing, porches with no headroom. A few seconds; run it after every edit.
+- **The builder**, `game/world/building/` (`BuildingData`, `BuildingRoof`, `BuildingBuilder`, `BuildingGeom`): builds any building file. A style (`twain_style.gd` for the Twain house) supplies colours, the ground and the joinery; nothing in the builder knows which building it is.
+- **Pictures**: the probe's straight-on elevations and top view of the built house (`ortho_<front>.png`, `ortho_top.png`) at the sheets' scale, for laying over the drawings; views from the photographs' viewpoints.
 
-## 3. Author the openings as connections
+## The steps
 
-Each window and door is a connection between two spaces on one wall: its position and width from the plan, its sill and head from the elevation. An outside window joins a room (or attic) to the air; an outside door joins a room to a porch, balcony, deck or the ground; an inside door joins two rooms. An opening whose two sides are not both known spaces is not authored until they are. Stacked openings (a door and the fan light over it) are allowed and cut together.
+Each step's checks pass before the next begins.
 
-## 4. Derive the rest
+1. **Gather and register the sources.** Every sheet (plans of every level, roof plan, elevations, sections), every photograph. List the sheets in the building file; register the plans with `register.py`, the elevations and sections by their own level marks (0'-0", the floors, the ridge). A sheet whose registration is doubtful is registered by hand on distinct features before anything is read from it.
+2. **Spaces, level by level.** From the plans, every space on every level with an opening, including the attic and the basement: its kind, its polygon (outer walls on their outer faces, rooms meeting on the partitions' centre lines), its floor and its top (a ceiling height, or "roof"). Put every wall line shared by more than one space on a named grid line. Then `measure.py` on each plan, `overlay.py` on each plan, until every wall in the data stands on a drawn wall (a remaining disagreement is named with its reason). `check.py` clean of overlaps and gaps.
+3. **Openings.** Each window and door from the plan (position, width) and an elevation (sill, head), on its wall's grid line. `check.py`: none on no edge, none between two rooms.
+4. **The roof.** From the roof plan, the sections and the elevations together: each body's footprint, form (hip, gable, pyramid or cone, flat, shed, or planes), heights and overhang; holes where a deck or a well is open to the sky. The attic plan and the sections show where the roof is over each room; the elevations show heights; the roof plan shows which body is the roof where. `overlay.py` on the roof plan and every elevation until the ridges, hips, valleys, eaves and skylines stand on drawn lines. `check.py`: no room without a roof, headroom where the plan puts rooms under the roof.
+5. **Chimneys.** Each from its hearth to its top, placed from the plan and both elevations that see it. `check.py`: none in a room's floor, all clear the roof.
+6. **Build and look.** Build it; lay the top view over the roof plan and the elevations over their sheets (the built house must follow the data: where it does not, the builder is wrong, not the data); walk it; photograph it from the photographs' viewpoints. A fault found by eye is traced to the data or the builder and becomes a rule in `check.py` or the builder, so it cannot come back.
+7. **Then the interiors.** Finishes (per space in the data), stairs, furniture.
 
-- Walls: every edge between spaces of different kinds, or between rooms, is a wall; an outside wall runs up until a roof meets it, and wherever it carries on past the roof (a gable, a dormer, a deck's well) it stands to the roof above that.
-- Railings: every open edge of a balcony, deck or porch floor that is not against a wall or a stair.
-- Roof holes: wherever a space rises through a roof (a tower, a dormer, a deck's well), the roof is cut round it. A hole wholly inside a roof face is cut by splitting the face, never left as an outline filled again.
-- Eaves and fascias only where a roof actually starts at a wall's top.
-- Chimneys: a flue from each hearth on the plans to the top on the elevations; its position must agree on the plan and on both elevations that see it.
-- Things built from a derived height (a wall up to the roof) are built after what they follow.
-
-## 5. Check that it is a building
-
-The Twain audit (`world/twain_audit.tscn`, the `arch` group) checks what was built, not what the code meant. The rules, which hold for any building:
-
-- orphan: every opening is carried by exactly one wall.
-- blind: rays through every opening pass: no solid wall behind a sash.
-- faces: every opening has open air in front of it, not a wall or roof.
-- nowhere: behind every window and door is a space (a window high in a gable may light the attic over a room).
-- straddle: no window or door stands across the partition between two rooms.
-- landing: every door has a floor at its sill on both sides.
-- rail: every railing stands on a floor.
-
-With the room checks already there (leak, roof, poke, reach, clash, float, fight), a building passes when every rule is clean or each exception is named with its reason. A failure is fixed in the spaces or openings, the source data, never by nudging geometry until the check goes quiet.
-
-## 6. Match the drawings and photographs
-
-Only now: the straight-on pictures against each elevation (`tools/twain_overlay.py`, `tools/twain_diff.py` with `--skyline`, and a drawing-over-model crop for any region), and views from the photographs' viewpoints. Where two sheets disagree, the plan decides position, the elevation height, and a photograph decides between drawings. Every correction goes back into the space and opening lists, and the building checks run again after each batch.
-
-## 7. Then the interiors
-
-Finishes and furniture go in after the shell and the spaces pass. The same checks cover them.
+Where two sources disagree: the plan decides position, the elevation height, a section what is inside the roof, a photograph between drawings. Record in the data which sheet each number came from when it is not the obvious one.
 
 ## For the next building
 
-Start with steps 1 to 3 as data files (sheet table, space list per level, opening list), and a builder that derives walls, railings and roof holes from them (step 4). The Twain house was built the other way round, outside first, and is being brought to the same checks after the fact; the next one should not be.
+Start with an empty building file and the sheet table; register; spaces level by level with the measuring and comparison tools; openings; roof bodies; chimneys; check; build; look. The builder, the tools and the checks are general; what is particular to a building is its file and its style.

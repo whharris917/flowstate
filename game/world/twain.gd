@@ -7,6 +7,9 @@ class_name TwainMap
 
 var house: TwainHouse
 var built: BuildingBuilder
+## Built from the data file by the general builder (twain_data.tscn, or
+## FLOWSTATE_TW_BUILDER=data) rather than by hand.
+var from_data := false
 var grounds: TwainGrounds
 
 
@@ -34,12 +37,12 @@ func _build_ground() -> void:
 	house = TwainHouse.new()
 	# FLOWSTATE_TW_BUILDER=data: the house built from its data file
 	# (game/data/buildings/twain.json) by the general builder instead.
-	if OS.get_environment("FLOWSTATE_TW_BUILDER") == "data":
+	if from_data or OS.get_environment("FLOWSTATE_TW_BUILDER") == "data":
 		house.name = "TwainHouseUnbuilt"
 		house._materials()
 		add_child(house)
 		built = BuildingBuilder.new()
-		built.setup(BuildingData.load_file("res://data/buildings/twain.json"), TwainStyle.style())
+		built.setup(BuildingData.load_file("res://data/buildings/twain.json"), TwainStyle.style(house))
 		add_child(built)
 		built.build()
 	else:

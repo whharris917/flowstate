@@ -7,8 +7,11 @@ extends RefCounted
 ## four elevations).
 
 
-static func style() -> Dictionary:
-	return {
+## With `house` (a TwainHouse left unbuilt), its joinery and bands dress
+## the openings and the brick: the stepped sunburst hoods, sashes, casings,
+## doors standing open, the painted black and vermilion bands.
+static func style(house: TwainHouse = null) -> Dictionary:
+	var st := {
 		"brick": TwainHouse.BRICK,
 		"brick_dark": TwainHouse.BLACK,
 		"nogging": TwainHouse.NOGGING,
@@ -24,3 +27,13 @@ static func style() -> Dictionary:
 			TwainHouse.SLATE_RED],
 		"ground_at": func(p: Vector2) -> float: return TwainHouse.grade_at(p),
 	}
+	if house != null:
+		st["on_kit"] = func(kit: CourthouseKit) -> void: house.k = kit
+		st["dress"] = func(f: Transform3D, o: Dictionary, _wl: Dictionary) -> void:
+			if str(o["kind"]) == "idoor" or str(o["kind"]) == "ishut":
+				return
+			house._dress(f, o)
+		st["bands"] = func(f: Transform3D, length: float, y0: float, y1: float, mine: Array) -> void:
+			house._bands(f, length, y0, y1, mine)
+		st["extra_meshes"] = [house.dress_m]
+	return st

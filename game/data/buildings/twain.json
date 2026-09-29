@@ -1031,22 +1031,6 @@
    }
   },
   {
-   "id": "attic_e",
-   "name": "east attic",
-   "level": "third",
-   "kind": "attic",
-   "group": "main",
-   "top": "roof",
-   "poly": {
-    "rect": [
-     "guest_hall",
-     "store_e",
-     "hall3_serv",
-     "e_wall"
-    ]
-   }
-  },
-  {
    "id": "servants3",
    "name": "servants' room",
    "level": "third",
@@ -1058,22 +1042,6 @@
      "hall3_serv",
      "zp",
      "serv_attic",
-     "e_wall"
-    ]
-   }
-  },
-  {
-   "id": "attic_n",
-   "name": "north attic",
-   "level": "third",
-   "kind": "attic",
-   "group": "main",
-   "top": "roof",
-   "poly": {
-    "rect": [
-     "serv_attic",
-     "zp",
-     "n_wall",
      "e_wall"
     ]
    }

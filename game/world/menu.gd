@@ -18,6 +18,8 @@ const WORLDS: Array[Dictionary] = [
 		"scene": "res://world/courthouse.tscn"},
 	{"title": "MARK TWAIN HOUSE", "note": "The Clemens house of 1874 on Farmington Avenue in Hartford, Connecticut, outside and in, as the family knew it in the 1880s.",
 		"scene": "res://world/twain.tscn"},
+	{"title": "MARK TWAIN HOUSE, FROM ITS DATA", "note": "The same house built by the general builder from its data file, for comparison; its outside only so far.",
+		"scene": "res://world/twain_data.tscn"},
 	{"title": "SHOWCASE", "note": "The commissioned plant: Unit 100 to Unit 500, running.",
 		"scene": "res://world/sandbox.tscn"},
 	{"title": "THE HALL", "note": "The manufacturing hall and aseptic annex, parked.",
