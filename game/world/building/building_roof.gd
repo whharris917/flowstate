@@ -123,7 +123,30 @@ func _higher(ci: int, pl: Vector3, bi: int) -> Array:
 				out.append_array(own)
 			continue
 		out.append_array(BuildingGeom.meet(own, BuildingGeom.under(pl, q)))
-	return out
+	# A higher body's eaves stand over a lower roof without cutting it where
+	# the lower roof covers a room or is itself over its own footprint (a
+	# dormer's eaves over the slope, the main eave over a porch roof): the
+	# lower roof runs on underneath to the wall. Its footprint (inside its
+	# walls) always cuts.
+	var fp: PackedVector2Array = r["footprint"]
+	var kept: Array = BuildingGeom.meet(out, fp)
+	var eaves: Array = BuildingGeom.cut(out, fp)
+	for room: PackedVector2Array in _rooms():
+		eaves = BuildingGeom.cut(eaves, room)
+	eaves = BuildingGeom.cut(eaves, b.roofs[bi]["footprint"] as PackedVector2Array)
+	kept.append_array(eaves)
+	return kept
+
+
+var _rooms_cache: Array = []
+
+
+func _rooms() -> Array:
+	if _rooms_cache.is_empty():
+		for s: Dictionary in b.spaces:
+			if not b.is_open(s):
+				_rooms_cache.append(s["poly"])
+	return _rooms_cache
 
 
 func _faces() -> void:

@@ -42,6 +42,19 @@ var stats: Dictionary = {}
 var materials: Dictionary = {}
 var inner_mesh: TownMesh
 var _edges: Dictionary = {}          # space id -> [{a, b, other}]
+## What each drawn triangle belongs to ("wall library", "roof main",
+## "dress 12"...), by TownMesh.current_tag; and every opening as built
+## (world centre, outward normal, width, sill, head, kind, whether on an
+## outer wall), for tools/building/validity.py.
+var tag_names: Array[String] = ["untagged"]
+var built_openings: Array[Dictionary] = []
+
+
+func _tag(label: String) -> void:
+	tag_names.append(label)
+	TownMesh.current_tag = tag_names.size() - 1
+
+
 var _debug_on := OS.get_environment("FLOWSTATE_BLD_DEBUG") != ""
 var _by_id: Dictionary = {}
 
@@ -106,6 +119,9 @@ func build() -> void:
 		if mi.name.ends_with("glass"):
 			mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	_self_check()
+	TownMesh.current_tag = 0
+	if OS.get_environment("FLOWSTATE_BLD_EXPORT") != "":
+		export_geometry("user://bld_%s" % d.name)
 	if OS.get_environment("FLOWSTATE_BLD_DEBUG") != "":
 		_debug(OS.get_environment("FLOWSTATE_BLD_DEBUG"))
 	stats = {"triangles": k.m.triangles + inner_mesh.triangles, "walls": walls.size(), "faces": roof.faces.size(),
@@ -300,6 +316,7 @@ func _wall(s: Dictionary, e: Dictionary, kind: String, thick: float, material: S
 				if not tp is String:
 					t = minf(t, float(tp) + SLAB)
 		tops.append(t)
+	_tag("wall %s %s" % [kind, str(s["id"])])
 	walls.append({"a": a, "b": b, "inward": inward, "thick": thick, "y0": y0, "tops": tops, "level": level,
 		"space": str(s["id"]), "other": str(o.get("id", "")), "kind": kind, "material": material})
 	_build_wall(walls[walls.size() - 1])
@@ -427,6 +444,16 @@ func _sample(arr: PackedFloat32Array, t: float) -> float:
 
 ## An opening's joinery: the style's, or a plain sash, door or nothing.
 func _dress(f: Transform3D, o: Dictionary, wl: Dictionary) -> void:
+	var before := TownMesh.current_tag
+	_tag("dress %d" % int(o.get("id", -1)))
+	built_openings.append({"c": f * Vector3(float(o["u"]), 0, 0), "n": (f.basis.z).normalized(), "along": f.basis.x.normalized(),
+		"w": float(o["w"]), "y0": float(o["y0"]), "ys": float(o["ys"]), "yt": float(o["yt"]), "kind": str(o["kind"]),
+		"id": int(o.get("id", -1)), "outer": str(wl["kind"]) != "part", "wall": str(wl.get("space", ""))})
+	_dress_inner(f, o, wl)
+	TownMesh.current_tag = before
+
+
+func _dress_inner(f: Transform3D, o: Dictionary, wl: Dictionary) -> void:
 	if style.has("dress"):
 		(style["dress"] as Callable).call(f, o, wl)
 		return
@@ -458,6 +485,7 @@ func _floors() -> void:
 		for q: Vector2 in p:
 			pts.append(q)
 		var fl := float(s["floor"])
+		_tag("floor %s" % str(s["id"]))
 		var thick := SLAB if _below(str(s["level"]), _centre(p)) or fl > 2.0 else fl - ground_at(_centre(p)) + 0.5
 		# A porch's boards on joists, its skirt of lattice under them.
 		if open:
@@ -541,6 +569,7 @@ func _roof_faces() -> void:
 	var soffit := c(col("trim", Color(0.33, 0.14, 0.09)), CourthouseKit.K_PAINT)
 	var inside := _footprints()
 	for fc: Dictionary in roof.faces:
+		_tag("roof %s" % str(d.roofs[int(fc["body"])]["id"]))
 		var pl: Vector3 = fc["plane"]
 		var poly: PackedVector2Array = fc["poly"]
 		var cover := str((d.roofs[int(fc["body"])]["spec"] as Dictionary).get("cover", ""))
@@ -598,6 +627,7 @@ func _roof_trim() -> void:
 		var pl: Vector3 = fc["plane"]
 		var poly: PackedVector2Array = fc["poly"]
 		var body: Dictionary = d.roofs[int(fc["body"])]
+		_tag("eave %s" % str(body["id"]))
 		var ext: PackedVector2Array = body["extent"]
 		var ccw := BuildingGeom.area(poly) > 0.0
 		for i in poly.size():
@@ -688,6 +718,7 @@ func _cheeks() -> void:
 				var inward := Vector2(-dir.y, dir.x)
 				if not Geometry2D.is_point_in_polygon((ra + rb) / 2.0 + inward * 0.3, fp):
 					inward = -inward
+				_tag("cheek %s" % str(r["id"]))
 				_cheek(bi, ra, rb, inward, float(run[2]) - 0.3, material)
 
 
@@ -735,6 +766,7 @@ func _brackets() -> void:
 		if not spec.has("brackets"):
 			continue
 		var step := float(spec["brackets"])
+		_tag("brackets %s" % str(r["id"]))
 		var fp: PackedVector2Array = r["footprint"]
 		var ext: PackedVector2Array = r["extent"]
 		for i in fp.size():
@@ -790,6 +822,7 @@ func _gable_ends() -> void:
 			lo = lo.min(q)
 			hi = hi.max(q)
 		var along_x := str(spec["axis"]) == "x"
+		_tag("gable end %s" % str(r["id"]))
 		for end: float in [0.0, 1.0]:
 			var out := Vector2(-1.0 if end == 0.0 else 1.0, 0.0) if along_x else Vector2(0.0, -1.0 if end == 0.0 else 1.0)
 			var mid := Vector2(lerpf(lo.x, hi.x, end), (lo.y + hi.y) / 2.0) if along_x else Vector2((lo.x + hi.x) / 2.0, lerpf(lo.y, hi.y, end))
@@ -865,6 +898,7 @@ func _chimneys() -> void:
 	var brick := c(col("brick", Color(0.60, 0.26, 0.17)), CourthouseKit.K_BRICK)
 	var dark := c(col("brick_dark", Color(0.11, 0.09, 0.08)), CourthouseKit.K_BRICK)
 	for ch: Dictionary in d.chimneys:
+		_tag("chimney %s" % str(ch["id"]))
 		var at := d.point(ch["at"])
 		var sz: Array = ch["size"]
 		var size := Vector2(float(sz[0]), float(sz[1]))
@@ -901,6 +935,7 @@ func _open_edges() -> void:
 		if not d.is_open(s):
 			continue
 		var fl := float(s["floor"])
+		_tag("porch %s" % str(s["id"]))
 		for e: Dictionary in _edges[str(s["id"])]:
 			var o: Dictionary = e["other"]
 			if not o.is_empty():
@@ -1087,6 +1122,7 @@ func _rooms() -> void:
 	for s: Dictionary in d.spaces:
 		if d.is_open(s) or str(s["kind"]) == "void":
 			continue
+		_tag("finish %s" % str(s["id"]))
 		var edges: Array = _edges[str(s["id"])]
 		var p := PackedVector2Array()
 		var ins := PackedFloat32Array()
@@ -1203,3 +1239,72 @@ func _self_check() -> void:
 	for f: String in findings:
 		print("[building] " + f)
 	print("[building] %s: %d findings" % [d.name, findings.size()])
+
+
+## Writes the building as built for tools/building/validity.py: every
+## triangle (<base>_tris.bin, 9 float32 each, world metres), its tag
+## (<base>_tags.bin, int32), and <base>.json: the tag names, the
+## openings as built, the spaces (plan feet, floor, top) and the frame.
+func export_geometry(base: String) -> void:
+	var pts := PackedFloat32Array()
+	var tags := PackedInt32Array()
+	var inner_tags := {}
+	var meshes: Array = [k.m, inner_mesh]
+	meshes.append_array(style.get("extra_meshes", []))
+	for mi in meshes.size():
+		var tm: TownMesh = meshes[mi]
+		var dmp: Array = tm.dump(global_transform)
+		pts.append_array(dmp[0] as PackedFloat32Array)
+		var tg: PackedInt32Array = dmp[1]
+		var keys: Array = dmp[2]
+		for i in tg.size():
+			# Room finishes and glass are marked so the checks can tell them.
+			var t := tg[i]
+			if mi == 1:
+				t = -t - 1
+			elif str(keys[i]) == "glass":
+				t = -1000000 - t
+			tags.append(t)
+	var f := FileAccess.open(base + "_tris.bin", FileAccess.WRITE)
+	f.store_buffer(pts.to_byte_array())
+	f.close()
+	f = FileAccess.open(base + "_tags.bin", FileAccess.WRITE)
+	f.store_buffer(tags.to_byte_array())
+	f.close()
+	var ops: Array = []
+	for o: Dictionary in built_openings:
+		var cc: Vector3 = o["c"]
+		var nn: Vector3 = o["n"]
+		var al: Vector3 = o["along"]
+		ops.append({"c": [cc.x, cc.y, cc.z], "n": [nn.x, nn.y, nn.z], "along": [al.x, al.y, al.z], "w": o["w"], "y0": o["y0"],
+			"ys": o["ys"], "yt": o["yt"], "kind": o["kind"], "id": o["id"], "outer": o["outer"], "wall": o["wall"],
+			"ground_out": d.wy(ground_at(d.plan_of(cc + nn * 0.8)))})
+	var sp: Array = []
+	for s: Dictionary in d.spaces:
+		var poly: Array = []
+		for q: Vector2 in s["poly"]:
+			poly.append([q.x, q.y])
+		sp.append({"id": s["id"], "kind": s["kind"], "floor": s["floor"], "top": s.get("top", "roof"), "poly": poly,
+			"open": d.is_open(s)})
+	# The ground round the building, every foot over its plan's bounds
+	# and 40 ft beyond (feet over the datum).
+	var lo := Vector2(1e9, 1e9)
+	var hi := Vector2(-1e9, -1e9)
+	for s: Dictionary in d.spaces:
+		for q: Vector2 in s["poly"]:
+			lo = lo.min(q)
+			hi = hi.max(q)
+	lo -= Vector2(40, 40)
+	hi += Vector2(40, 40)
+	var gvals: Array = []
+	var nx := int(hi.x - lo.x) + 1
+	var nz := int(hi.y - lo.y) + 1
+	for i in nx:
+		for j in nz:
+			gvals.append(snappedf(ground_at(lo + Vector2(i, j)), 0.01))
+	var meta := {"ground": {"x0": lo.x, "z0": lo.y, "nx": nx, "nz": nz, "ft": gvals}, "tags": tag_names, "openings": ops, "spaces": sp, "origin": [d.origin.x, d.origin.y], "datum_m": d.datum_m,
+		"ft": d.ft}
+	f = FileAccess.open(base + ".json", FileAccess.WRITE)
+	f.store_string(JSON.stringify(meta))
+	f.close()
+	print("[building] geometry written to %s_*" % base)
