@@ -1262,6 +1262,7 @@ func _between_posts(pa: Vector3, pb: Vector3, kind: String, trim: Color) -> void
 ## of at most seven inches, as wide as the way plus a foot, and a slope
 ## under them for the player's feet.
 func _steps() -> void:
+	_tag("steps")
 	var stone := c(col("stone", Color(0.50, 0.46, 0.42)), CourthouseKit.K_STONE)
 	var ways: Array = []    # [plan point on the threshold, outward (plan), width ft, top ft]
 	for o: Dictionary in built_openings:
