@@ -11,6 +11,9 @@ extends RefCounted
 
 var _surfaces: Dictionary = {}   # key -> Surface
 var triangles := 0
+## What each triangle belongs to, for tools that check a building: every
+## triangle appended takes the tag current at the time (0 by default).
+static var current_tag := 0
 
 
 ## One material's arrays. Appends go through its own methods: a packed
@@ -21,6 +24,7 @@ class Surface:
 	var c := PackedColorArray()
 	var uv := PackedVector2Array()
 	var i := PackedInt32Array()
+	var t := PackedInt32Array()      # a tag per triangle
 
 	func vertex(p: Vector3, normal: Vector3, col: Color, tex: Vector2) -> void:
 		v.append(p)
@@ -30,6 +34,8 @@ class Surface:
 
 	func index(k: int) -> void:
 		i.append(k)
+		if i.size() % 3 == 0:
+			t.append(TownMesh.current_tag)
 
 
 func _s(key: String) -> Surface:
@@ -205,3 +211,22 @@ func commit(parent: Node3D, materials: Dictionary, shadows: Array = []) -> Dicti
 		parent.add_child(inst)
 		out[key] = inst
 	return out
+
+
+## Every triangle as world points (9 floats each) and its tag, for the
+## building checks: [PackedFloat32Array, PackedInt32Array, key per triangle].
+func dump(xf: Transform3D = Transform3D()) -> Array:
+	var pts := PackedFloat32Array()
+	var tags := PackedInt32Array()
+	var keys: Array[String] = []
+	for key: String in _surfaces:
+		var s: Surface = _surfaces[key]
+		for k in range(0, s.i.size(), 3):
+			for m in 3:
+				var p := xf * s.v[s.i[k + m]]
+				pts.append(p.x)
+				pts.append(p.y)
+				pts.append(p.z)
+			tags.append(s.t[k / 3] if k / 3 < s.t.size() else 0)
+			keys.append(key)
+	return [pts, tags, keys]
