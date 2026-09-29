@@ -281,7 +281,16 @@ def run(name: str, h: float, out_dir: str) -> int:
     # Where the outside air gets into the building: outside air inside the
     # house's shell (over its plan, under its roof) next to outside air
     # beyond the shell. One finding per gap, with what is drawn round it.
-    shell = rooms_m[:, None, :] & (yft[None, :, None] < roofH[:, None, :] - 0.3) & ~earth
+    # The shell: over the rooms' plan and under a roof's own footprint (the
+    # air under an eave's overhang is outside).
+    roofFP = np.full(PX.shape, -np.inf)
+    for body in b.bodies:
+        m = inside(body.footprint, plan_x, plan_z)
+        for hole in body.holes:
+            m &= ~inside(hole, plan_x, plan_z)
+        if m.any():
+            roofFP = np.where(m, np.maximum(roofFP, body.height(plan_x, plan_z)), roofFP)
+    shell = rooms_m[:, None, :] & (yft[None, :, None] < roofFP[:, None, :] - 0.3) & ~earth
     # Over a deck, a balcony or a porch it is open air.
     for s in meta["spaces"]:
         if s["open"]:

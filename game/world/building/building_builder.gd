@@ -439,6 +439,10 @@ func _build_wall(wl: Dictionary) -> void:
 			var top := minf(ta, tb)
 			if top > y0 + 0.05:
 				k.wall(key, f, u0, u1, d.wy(y0), d.wy(top), t, colr, mine, 1000.0)
+				# The wedge between the strip's flat top and the sloped line
+				# of the roof over it, so the wall meets the roof with no slot.
+				if absf(ta - tb) > 0.02:
+					_wedge(f, u0, u1, d.wy(top), d.wy(ta), d.wy(tb), t, colr)
 	# The sloped top where the roof rises over the wall's thickness.
 	var tin: PackedFloat32Array = wl.get("tops_in", PackedFloat32Array())
 	if tin.size() == tops.size():
@@ -468,6 +472,20 @@ func _build_wall(wl: Dictionary) -> void:
 		(style["bands"] as Callable).call(f, length, y0, lo, mine)
 	for o: Dictionary in mine:
 		_dress(f, o, wl)
+
+
+## A wall's triangular top between u0 and u1: from the flat line y up to
+## ya at u0 and yb at u1 (one of them equal to y), both faces and the
+## sloped top.
+func _wedge(f: Transform3D, u0: float, u1: float, y: float, ya: float, yb: float, t: float, colr: Color) -> void:
+	var nz := f.basis.z.normalized()
+	for z: float in [0.0, -t]:
+		var nn := nz if z == 0.0 else -nz
+		k.m.tri("wall", f * Vector3(u0, y, z), f * Vector3(u1, y, z), f * Vector3(u0 if ya > yb else u1, maxf(ya, yb), z), nn, colr)
+	var top_n := ((f * Vector3(u1, yb, 0.0)) - (f * Vector3(u0, ya, 0.0))).cross(f.basis.z).normalized()
+	if top_n.y < 0.0:
+		top_n = -top_n
+	k.m.quad("wall", f * Vector3(u0, ya, 0.0), f * Vector3(u1, yb, 0.0), f * Vector3(u1, yb, -t), f * Vector3(u0, ya, -t), top_n, colr)
 
 
 func _sample(arr: PackedFloat32Array, t: float) -> float:

@@ -1196,11 +1196,11 @@
     ],
     [
      60.5,
-     71.1
+     "part2"
     ],
     [
      52.5,
-     71.1
+     "part2"
     ],
     [
      "oct_s",
@@ -1519,6 +1519,42 @@
     ]
    ],
    "note": "the garret the wing's dormers light"
+  },
+  {
+   "id": "attic_se",
+   "name": "south-east attic",
+   "level": "third",
+   "kind": "attic",
+   "group": "main",
+   "floor": 23.0,
+   "top": "roof",
+   "note": "under the south-east gable's south slope, over the bath and Clara and Jean's room's corner; its wall closes the Texas deck's well on the diagonal; its knee wall where the gable's slope passes 23 ft",
+   "poly": [
+    [
+     60.5,
+     "part2"
+    ],
+    [
+     "deck_n",
+     67.5
+    ],
+    [
+     "deck_n",
+     "part3"
+    ],
+    [
+     "deck_n",
+     "e_wall"
+    ],
+    [
+     60.2,
+     "e_wall"
+    ],
+    [
+     60.2,
+     "part2"
+    ]
+   ]
   }
  ],
  "walls": [
@@ -3339,36 +3375,9 @@
    "eave": 34.7,
    "peak": 37.1,
    "trim": "pavilion",
-   "footprint": [
-    [
-     52.3,
-     "oct_w"
-    ],
-    [
-     "deck_n",
-     "oct_w"
-    ],
-    [
-     "deck_n",
-     67.5
-    ],
-    [
-     60.5,
-     71.1
-    ],
-    [
-     52.5,
-     71.1
-    ],
-    [
-     "oct_s",
-     68.1
-    ],
-    [
-     "oct_s",
-     60.8
-    ]
-   ],
+   "footprint": {
+    "space": "texas_deck"
+   },
    "overhang": 1.9,
    "note": "The Texas deck's roof: one octagonal pavilion over the tower's top and the well, its point at x 57.2, z 64.8 and its eave octagon 20.7 ft across flats (roof plan), cut square on the top hall's wall; eave 34.7, point 37.1 (east elevation)."
   },
@@ -3443,15 +3452,20 @@
      ]
     },
     [
-     51.2,
-     71.4
+     "oct_s",
+     68.1
+    ],
+    [
+     52.5,
+     "part2"
     ],
     [
      "s_wall",
-     71.4
+     "part2"
     ]
    ],
-   "overhang": 0.0
+   "overhang": 0.0,
+   "note": "the round's low roof, running up to the second floor's walls over the guest room's strip and the round"
   },
   {
    "id": "bay_cone",
@@ -3705,56 +3719,9 @@
    "id": "ombra_roof",
    "kind": "pyramid",
    "trim": "porch",
-   "footprint": [
-    [
-     29.2,
-     67.3
-    ],
-    [
-     "oct_s",
-     67.3
-    ],
-    [
-     "oct_s",
-     68.1
-    ],
-    [
-     51.2,
-     "part1"
-    ],
-    {
-     "arc_at": [
-      54.3,
-      78.2,
-      6.7,
-      [
-       241.7,
-       225,
-       210,
-       195,
-       180,
-       165,
-       150
-      ]
-     ]
-    },
-    [
-     48.4,
-     90.2
-    ],
-    [
-     29.3,
-     90.2
-    ],
-    [
-     22.8,
-     84.0
-    ],
-    [
-     22.8,
-     74.4
-    ]
-   ],
+   "footprint": {
+    "space": "ombra"
+   },
    "overhang": 1.0,
    "apex": [
     33.7,
@@ -3770,77 +3737,9 @@
    "id": "veranda_roof",
    "kind": "planes",
    "trim": "porch",
-   "footprint": [
-    {
-     "arc_at": [
-      54.3,
-      78.2,
-      6.7,
-      [
-       150,
-       130,
-       110,
-       90,
-       70,
-       58.3
-      ]
-     ]
-    },
-    [
-     96.3,
-     "e_wall"
-    ],
-    [
-     96.3,
-     92.8
-    ],
-    [
-     84.8,
-     92.8
-    ],
-    [
-     84.8,
-     90.0
-    ],
-    [
-     75.6,
-     90.0
-    ],
-    {
-     "arc": [
-      66.8,
-      83.65,
-      10.85,
-      35.8,
-      144.2,
-      12
-     ]
-    },
-    [
-     58.0,
-     90.0
-    ],
-    [
-     56.0,
-     90.0
-    ],
-    [
-     56.0,
-     93.0
-    ],
-    [
-     50.0,
-     93.0
-    ],
-    [
-     50.0,
-     90.2
-    ],
-    [
-     48.4,
-     90.2
-    ]
-   ],
+   "footprint": {
+    "space": "veranda"
+   },
    "overhang": 1.2,
    "planes": [
     [

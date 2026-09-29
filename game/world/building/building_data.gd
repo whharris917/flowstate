@@ -180,7 +180,15 @@ func plan_of(v: Vector3) -> Vector2:
 # ---- roofs -------------------------------------------------------------------
 
 func _roof(r: Dictionary) -> Dictionary:
-	var fp := poly(r["footprint"])
+	# A roof over a space may take the space's outline ({"space": id}).
+	var fps: Variant = r["footprint"]
+	var fp := PackedVector2Array()
+	if fps is Dictionary and (fps as Dictionary).has("space"):
+		for s: Dictionary in spaces:
+			if str(s["id"]) == str(fps["space"]):
+				fp = s["poly"]
+	else:
+		fp = poly(fps)
 	var over: Variant = r.get("overhang", 0.0)
 	var ext: PackedVector2Array
 	if over is Array:

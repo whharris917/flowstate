@@ -108,7 +108,7 @@ def run(bname: str, res: float) -> int:
                           % (s["id"], area, ax0, ax1, az0, az1)))
         # The roof over a room coming down below its floor: the room would
         # stand out through the roof there.
-        through = m & np.isfinite(H) & (H > fl - 12.0) & (H < fl + 0.5) & ~np.isfinite(over_space)
+        through = ndimage.binary_erosion(m, iterations=max(1, int(1.0 / res))) & np.isfinite(H) & (H > fl - 12.0) & (H < fl + 0.5) & ~np.isfinite(over_space)
         for area, ax0, ax1, az0, az1 in blobs(through, xs, zs, res, 2.0):
             found.append(("through-roof", "%s: %.1f sq ft of its floor stand above the roof there, x %.1f-%.1f, z %.1f-%.1f"
                           % (s["id"], area, ax0, ax1, az0, az1)))

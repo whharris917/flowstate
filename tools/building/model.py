@@ -278,8 +278,11 @@ class Building:
             o["at"] = expand_point(o["at"])
             self.openings.append(o)
         self.bodies: list[Body] = []
+        by_id = {sp["id"]: sp for sp in self.spaces}
         for r in data.get("roofs", []):
-            fp = expand_poly(r["footprint"])
+            # A roof over a space may take the space's outline.
+            fps = r["footprint"]
+            fp = list(by_id[fps["space"]]["poly"]) if isinstance(fps, dict) and "space" in fps else expand_poly(fps)
             over = r.get("overhang", 0.0)
             ext = rect_overhang(fp, over) if isinstance(over, list) else offset_poly(fp, float(over))
             holes = [expand_poly(h) for h in r.get("holes", [])]
