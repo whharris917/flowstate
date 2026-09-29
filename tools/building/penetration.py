@@ -43,7 +43,7 @@ CELL = 0.5
 
 def kind_of(name: str) -> tuple[str, str]:
     """(kind, owner) of a tag: the kind of part and whose it is."""
-    for k in ("gable end", "roof", "eave", "brackets", "cheek", "chimney", "porch", "floor", "dress", "finish"):
+    for k in ("gable end", "soffit", "roof", "eave", "brackets", "cheek", "chimney", "porch", "floor", "dress", "finish"):
         if name.startswith(k + " "):
             return k, name[len(k) + 1:]
     if name.startswith("wall "):
@@ -68,6 +68,10 @@ def allowed(ka: str, oa: str, kb: str, ob: str) -> bool:
         return True
     # Masonry and the things built into it.
     if pair <= {"wall", "cheek", "chimney", "floor", "steps"}:
+        return True
+    # A roof's underside lies within the roof's thickness, under the slates
+    # and against the walls and chimneys it meets.
+    if "soffit" in pair and not pair & {"dress", "glass"}:
         return True
     if "dress" in pair and pair & {"wall", "cheek"}:
         return True

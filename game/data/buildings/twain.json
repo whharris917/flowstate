@@ -1761,22 +1761,22 @@
   },
   {
    "at": [
-    106.1,
+    105.0,
     "w_wall"
    ],
-   "w": 2.2,
-   "sill": 27.1,
-   "head": 30.8,
+   "w": 2.0,
+   "sill": 26.4,
+   "head": 30.5,
    "hood": false
   },
   {
    "at": [
-    98.6,
+    99.5,
     "w_wall"
    ],
-   "w": 2.2,
-   "sill": 27.1,
-   "head": 30.8,
+   "w": 2.0,
+   "sill": 26.4,
+   "head": 30.5,
    "hood": false
   },
   {
@@ -1921,17 +1921,19 @@
    ],
    "w": 4.4,
    "sill": 0.0,
-   "head": 10.3,
-   "kind": "door"
+   "head": 9.0,
+   "kind": "door",
+   "note": "the entrance, under its porch's gable (east elevation)"
   },
   {
    "at": [
-    81.3,
+    80.25,
     "e_wall"
    ],
-   "w": 3.2,
-   "sill": 3.8,
-   "head": 11.1
+   "w": 4.5,
+   "sill": 2.6,
+   "head": 7.1,
+   "note": "the hall's triple window under the veranda (east elevation)"
   },
   {
    "at": [
@@ -2065,8 +2067,9 @@
    ],
    "w": 3.0,
    "sill": 0.0,
-   "head": 9.8,
-   "kind": "door"
+   "head": 9.2,
+   "kind": "door",
+   "note": "under the ombra's roof"
   },
   {
    "at": [
@@ -2093,7 +2096,8 @@
    ],
    "w": 2.2,
    "sill": 15.8,
-   "head": 21.5
+   "head": 9.2,
+   "note": "under the ombra's roof"
   },
   {
    "at": [
@@ -3225,23 +3229,24 @@
    "id": "west_gable",
    "kind": "gable",
    "axis": "z",
-   "eave": 32.4,
-   "peak": 39.4,
+   "eave": 30.9,
+   "peak": 39.3,
    "footprint": {
     "rect": [
-     96.2,
-     38.3,
-     108.4,
+     97.4,
+     "w_wall",
+     106.9,
      46.3
     ]
    },
    "overhang": [
-    1.4,
-    1.4,
-    1.4,
+    1.0,
+    1.0,
+    1.0,
     0.0
    ],
-   "trim": "gable"
+   "trim": "gable",
+   "note": "a wall dormer: the west wall rises through the long roof's cornice into it, a window either side of the chimney (west elevation: feet 30.9, peak 39.3)"
   },
   {
    "id": "se_gable",
@@ -3999,6 +4004,30 @@
     0.4,
     1.5,
     1.5
+   ]
+  },
+  {
+   "id": "entrance_porch",
+   "kind": "gable",
+   "axis": "z",
+   "eave": 10.9,
+   "peak": 13.7,
+   "trim": "gable",
+   "cover": "tin",
+   "note": "the gable over the front door, standing out of the veranda on its posts (east elevation)",
+   "footprint": {
+    "rect": [
+     84.6,
+     "e_wall",
+     95.7,
+     92.8
+    ]
+   },
+   "overhang": [
+    3.4,
+    3.7,
+    0.0,
+    0.5
    ]
   }
  ],

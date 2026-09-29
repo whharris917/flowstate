@@ -97,8 +97,8 @@ func build() -> void:
 	if not skip.has("roof"):
 		_roof_faces()
 	if not skip.has("trim"):
-		_roof_trim()
 		_cheeks()
+		_roof_trim()
 		_brackets()
 		_gable_ends()
 	if not skip.has("chimneys"):
@@ -607,6 +607,40 @@ func _sample(arr: PackedFloat32Array, t: float) -> float:
 ## An opening's joinery: the style's, or a plain sash, door or nothing.
 func _dress(f: Transform3D, o: Dictionary, wl: Dictionary) -> void:
 	var before := TownMesh.current_tag
+	# Room for the hood over its head and the sill under it: no roof, no
+	# balcony's floor just outside in either band.
+	var wd := float(o["w"])
+	var yt := float(o["yt"])
+	var y0 := float(o["y0"])
+	var hood_ok := true
+	var sill_ok := true
+	for u: float in [-wd / 2.0 - 0.15, 0.0, wd / 2.0 + 0.15]:
+		for v: float in [0.1, 0.35]:
+			var pw := f * Vector3(float(o["u"]) + u, 0.0, v)
+			var q := d.plan_of(pw)
+			# Every roof there, not only the highest: a porch's hood runs
+			# under the house's own eave.
+			for bi in d.roofs.size():
+				var hb := roof.body_height(bi, q)
+				if not is_finite(hb):
+					continue
+				var rh := d.wy(hb)
+				if rh > yt - 0.05 and rh < yt + 0.75:
+					hood_ok = false
+				if rh > y0 - 0.25 and rh < y0 + 0.1:
+					sill_ok = false
+			for sp: Dictionary in d.spaces:
+				if d.is_open(sp) and str(sp["kind"]) != "canopy" and Geometry2D.is_point_in_polygon(q, sp["poly"] as PackedVector2Array):
+					var fy := d.wy(float(sp["floor"]))
+					if fy - 0.25 > yt - 0.05 and fy - 0.25 < yt + 0.75:
+						hood_ok = false
+					if absf(fy - y0) < 0.25:
+						sill_ok = false
+	if not hood_ok:
+		o["hood"] = false
+	if _debug_on and int(o.get("id", -1)) == int(OS.get_environment("FLOWSTATE_BLD_DEBUG")):
+		print("[bld] opening %d on wall of %s (%s): hood_ok %s sill_ok %s, out %s" % [int(o["id"]), wl.get("space", ""), wl.get("kind", ""), hood_ok, sill_ok, d.plan_of(f * Vector3(float(o["u"]), 0, 0.3))])
+	o["sill_ok"] = sill_ok
 	_tag("dress %d" % int(o.get("id", -1)))
 	built_openings.append({"c": f * Vector3(float(o["u"]), 0, 0), "n": (f.basis.z).normalized(), "along": f.basis.x.normalized(),
 		"w": float(o["w"]), "y0": float(o["y0"]), "ys": float(o["ys"]), "yt": float(o["yt"]), "kind": str(o["kind"]),
@@ -776,6 +810,7 @@ func _roof_faces() -> void:
 			for i in range(0, idx.size(), 3):
 				k.m.tri("wall", world.call(q[idx[i]]), world.call(q[idx[i + 1]]), world.call(q[idx[i + 2]]), n, band[1] as Color)
 		# The underside: plaster over the rooms, painted where it overhangs.
+		_tag("soffit %s" % str(d.roofs[int(fc["body"])]["id"]))
 		var inner: Array = []
 		var outer: Array = [poly]
 		for fp: PackedVector2Array in inside:
@@ -811,7 +846,7 @@ func _roof_trim() -> void:
 				continue
 			var dir := (b - a) / L
 			var outward := Vector2(dir.y, -dir.x) if ccw else Vector2(-dir.y, dir.x)
-			var n := maxi(1, int(ceil(L / 1.0)))
+			var n := maxi(1, int(ceil(L / 0.5)))
 			# Walk the edge; where the roof drops away, trim or wall it.
 			for j in n:
 				var p0 := a.lerp(b, float(j) / n)
@@ -830,7 +865,9 @@ func _roof_trim() -> void:
 					var rake := absf(h1 - h0) > 0.15 * p0.distance_to(p1)
 					var w0 := d.w(p0, h0) - Vector3(0, 0.08, 0)
 					var w1 := d.w(p1, h1) - Vector3(0, 0.08, 0)
-					k.m.bar("wall", w0, w1, 0.13 if rake else 0.09, 4, trim)
+					var rad := 0.13 if rake else 0.09
+					if _clear(w0, w1, rad, int(fc["body"])):
+						k.m.bar("wall", w0, w1, rad, 4, trim)
 				elif out_h > -1e30:
 					# One body over another: a wall from the lower roof up.
 					if _debug_on and hm - out_h > 4.0:
@@ -985,6 +1022,8 @@ func _brackets() -> void:
 				var top := d.w(q + out * 0.05, y_eave - 0.15)
 				var tip := d.w(q + out * (reach - 0.3), y_eave - 0.15)
 				var foot := d.w(q + out * 0.05, y_eave - 1.6)
+				if not (_clear(top, tip, 0.06, bi) and _clear(foot, top, 0.06, bi) and _clear(foot, tip.lerp(top, 0.35), 0.05, bi)):
+					continue
 				k.m.bar("wall", top, tip, 0.06, 4, trim)
 				k.m.bar("wall", foot, tip.lerp(top, 0.35), 0.05, 4, trim)
 				k.m.bar("wall", foot, top, 0.05, 4, trim)
@@ -992,7 +1031,13 @@ func _brackets() -> void:
 			var ya := roof.body_height(bi, a + out * 0.3)
 			var yb := roof.body_height(bi, b + out * 0.3)
 			if is_finite(ya) and is_finite(yb) and absf(ya - yb) < 0.3 and not _open_at((a + b) / 2.0 - out * 0.5):
-				k.m.bar("wall", d.w(a + out * 0.08, ya - 1.2), d.w(b + out * 0.08, yb - 1.2), 0.08, 4, trim)
+				# In lengths of a foot, each where it stands clear.
+				var m := maxi(1, int(L))
+				for j in m:
+					var fa := d.w(a.lerp(b, float(j) / m) + out * 0.08, lerpf(ya, yb, float(j) / m) - 1.2)
+					var fb := d.w(a.lerp(b, float(j + 1) / m) + out * 0.08, lerpf(ya, yb, float(j + 1) / m) - 1.2)
+					if _clear(fa, fb, 0.08, bi):
+						k.m.bar("wall", fa, fb, 0.08, 4, trim)
 
 
 ## Each gable body's open ends ("trim": "gable"): a scalloped bargeboard
@@ -1032,7 +1077,8 @@ func _gable_ends() -> void:
 				var n := maxi(1, int(pa.distance_to(apex) / 0.35))
 				for j in n:
 					var p := pa.lerp(apex, (j + 0.5) / n) - Vector3(0, 0.3, 0)
-					k.m.bar("wall", p - Vector3(0, 0.06, 0), p + Vector3(0, 0.06, 0), 0.07, 4, trim)
+					if _clear(p - Vector3(0, 0.06, 0), p + Vector3(0, 0.06, 0), 0.07, bi):
+						k.m.bar("wall", p - Vector3(0, 0.06, 0), p + Vector3(0, 0.06, 0), 0.07, 4, trim)
 			var rise := apex_h - minf(h0, h1)
 			var collar_h := apex_h - rise * 0.22
 			var cw := side.normalized() * (side.length() * 0.22)
@@ -1059,6 +1105,46 @@ func _gable_ends() -> void:
 					if j > 0:
 						k.m.bar("wall", prev, p, 0.07, 4, trim)
 					prev = p
+
+
+## Whether a piece of trim from world point pa to pb, of radius r
+## metres, belonging to roof body `own`, stands clear: no other roof's
+## surface over it, no chimney, no window or door's dressing and no
+## balcony's or deck's floor where it passes. Trim is left out where it
+## is not: it stops against what it meets, as a joiner's would.
+func _clear(pa: Vector3, pb: Vector3, r: float, own: int) -> bool:
+	for t: float in [0.0, 0.5, 1.0]:
+		var p := pa.lerp(pb, t)
+		var q := d.plan_of(p)
+		var y := (p.y - d.datum_m) / d.ft
+		var rf := r / d.ft
+		# Under another roof's surface (any other body over it there, even
+		# one that meets this roof in the same plane).
+		for bi in d.roofs.size():
+			if bi == own:
+				continue
+			var hb := roof.body_height(bi, q)
+			if is_finite(hb) and hb > y - rf + 0.02 and hb < y + 6.0:
+				return false
+		for ch: Dictionary in d.chimneys:
+			var at := d.point(ch["at"])
+			var sz: Array = ch["size"]
+			if absf(q.x - at.x) < float(sz[0]) / 2.0 + rf + 0.2 and absf(q.y - at.y) < float(sz[1]) / 2.0 + rf + 0.2 \
+					and y > float(ch.get("base", 0.0)) - 1.0 and y < float(ch["top"]) + 0.5:
+				return false
+		for o: Dictionary in built_openings:
+			var rel: Vector3 = p - (o["c"] as Vector3)
+			var u := rel.dot(o["along"] as Vector3)
+			var v := rel.dot(o["n"] as Vector3)
+			if absf(u) < float(o["w"]) / 2.0 + 0.3 + r and v > -0.15 and v < 0.5 + r \
+					and p.y > float(o["y0"]) - 0.2 - r and p.y < float(o["yt"]) + 0.8 + r:
+				return false
+		for sp: Dictionary in d.spaces:
+			if d.is_open(sp) and str(sp["kind"]) != "canopy" and Geometry2D.is_point_in_polygon(q, sp["poly"] as PackedVector2Array):
+				var fl := float(sp["floor"])
+				if y > fl - 0.7 - rf and y < fl + 0.2 + rf:
+					return false
+	return true
 
 
 ## Whether a plan point lies in a porch, deck or balcony.

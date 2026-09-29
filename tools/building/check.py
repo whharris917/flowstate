@@ -229,7 +229,7 @@ def run(bname: str, res: float) -> int:
                     j = int((ez - z0) / res)
                     if 0 <= i < H.shape[0] and 0 <= j < H.shape[1] and np.isfinite(H[i, j]):
                         top_eff = head - (float(o["w"]) * 0.3 if o.get("shape") == "round" else 0.0)
-                        if sill + 0.3 < H[i, j] < top_eff - 0.3:
+                        if sill + 0.3 < H[i, j] < top_eff + 0.25:
                             found.append(("roof-crosses", tag + ": a roof (%.1f ft) crosses it just outside" % H[i, j]))
                             break
         # A space counts on the far side only where its cover stands above

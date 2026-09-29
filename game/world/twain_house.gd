@@ -601,7 +601,8 @@ func _dress_parts(f: Transform3D, o: Dictionary) -> void:
 	var trim := c(TRIM, CourthouseKit.K_PAINT)
 	if kind == "win":
 		k.sash(f, o, -0.14, sash, -1.0, 0, false)
-		k.box("wall", f, Vector3(u, y0 - 0.04, 0.02), Vector3(wd + 0.2, 0.1, 0.2), c(STONE, CourthouseKit.K_STONE))
+		if bool(o.get("sill_ok", true)):
+			k.box("wall", f, Vector3(u, y0 - 0.04, 0.02), Vector3(wd + 0.2, 0.1, 0.2), c(STONE, CourthouseKit.K_STONE))
 	elif kind == "french":
 		k.glass(f, o, -0.16)
 		for s: float in [-1.0, 1.0]:
@@ -626,7 +627,8 @@ func _dress_parts(f: Transform3D, o: Dictionary) -> void:
 	if str(o["head"]) == "flat":
 		for s: float in [-1.0, 1.0]:
 			k.box("wall", f, Vector3(u + s * (wd / 2.0 + 0.05), (y0 + yt) / 2.0, 0.026), Vector3(0.1, yt - y0, 0.05), trim)
-		k.box("wall", f, Vector3(u, yt + 0.06, 0.042), Vector3(wd + 0.3, 0.12, 0.08), trim)
+		if bool(o["hood"]) or bool(o.get("sill_ok", true)):
+			k.box("wall", f, Vector3(u, yt + 0.06, 0.042), Vector3(wd + 0.3, 0.12, 0.08), trim)
 	else:
 		var circ := CourthouseKit.head_circle(o)
 		var a0 := atan2(float(o["ys"]) - circ.y, -wd / 2.0)
