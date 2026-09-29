@@ -285,9 +285,12 @@ static func _partitions() -> void:
 	part(Vector2(89.5, Z0), Vector2(89.5, zp), y3, -1.0)
 	part(Vector2(TwainHouse.DECK_X, zp), Vector2(97.0, zp), y3, -1.0, [[Vector2(87.4, zp), 2.8, true], [Vector2(93.5, zp), 2.8, true]])
 	part(Vector2(WELL_X0, zp), Vector2(WELL_X0, 67.45), y3, -1.0, [[Vector2(WELL_X0, 58.2), 2.8, true]])
-	part(Vector2(TwainHouse.DECK_X, 67.45), Vector2(WELL_X0, 67.45), y3, -1.0, [[Vector2(69.0, 67.45), 2.6, false]])
-	part(Vector2(WELL_X0, 67.45), Vector2(WELL_X0, Z1), y3, -1.0)
-	part(Vector2(WELL_X0, 70.6), Vector2(97.0, 70.6), y3, -1.0, [[Vector2(86.0, 70.6), 2.6, false]])
+	# The storerooms' wall, on the line where the south-east gable ends
+	# under the flat top; the lobby before the south storeroom opens off
+	# the top hall.
+	part(Vector2(TwainHouse.DECK_X, 70.6), Vector2(97.0, 70.6), y3, -1.0, [[Vector2(69.0, 70.6), 2.6, false],
+		[Vector2(86.0, 70.6), 2.6, false]])
+	part(Vector2(WELL_X0, 70.6), Vector2(WELL_X0, Z1), y3, -1.0)
 	part(Vector2(WELL_X0, 74.25), Vector2(97.0, 74.25), y3, -1.0)
 	part(Vector2(109.95, zp), Vector2(109.95, Z1), y3, -1.0)
 	part(Vector2(97.0, zp), Vector2(97.0, Z1), y3, -1.0, [[Vector2(97.0, 64.0), 2.8, false]])
@@ -466,9 +469,9 @@ static func _rooms() -> void:
 	# along the east front.
 	var billiard: Array = [Vector2(TwainHouse.MX0 + 1.0, 39.3), Vector2(89.25, 39.3), Vector2(89.25, 55.45), Vector2(TwainHouse.MX0 + 1.0, 55.45)]
 	var guest3: Array = [Vector2(89.75, 39.3), Vector2(TwainHouse.MX1 - 1.0, 39.3), Vector2(TwainHouse.MX1 - 1.0, 55.7), Vector2(89.75, 55.7)]
-	var hall3: Array = [Vector2(TwainHouse.DECK_X + 0.5, 56.2), Vector2(96.75, 56.2), Vector2(96.75, 70.35), Vector2(72.9, 70.35),
-		Vector2(72.9, 67.2), Vector2(TwainHouse.DECK_X + 0.5, 67.2)]
-	var store_s: Array = [Vector2(TwainHouse.DECK_X + 0.5, 67.7), Vector2(72.4, 67.7), Vector2(72.4, TwainHouse.MZ1 - 1.0),
+	var hall3: Array = [Vector2(TwainHouse.DECK_X + 0.5, 56.2), Vector2(96.75, 56.2), Vector2(96.75, 70.35),
+		Vector2(TwainHouse.DECK_X + 0.5, 70.35)]
+	var store_s: Array = [Vector2(TwainHouse.DECK_X + 0.5, 70.85), Vector2(72.4, 70.85), Vector2(72.4, TwainHouse.MZ1 - 1.0),
 		Vector2(TwainHouse.DECK_X + 0.5, TwainHouse.MZ1 - 1.0)]
 	var store_e: Array = [Vector2(72.9, 70.85), Vector2(96.75, 70.85), Vector2(96.75, 74.0), Vector2(72.9, 74.0)]
 	var servants3: Array = [Vector2(97.25, 56.2), Vector2(109.8, 56.2), Vector2(109.8, TwainHouse.MZ1 - 1.0),
