@@ -41,6 +41,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from model import Building, inside  # noqa: E402
 
 USER = os.path.join(os.environ.get("APPDATA", ""), "Godot", "app_userdata", "flowstate")
+SEAL = 0
 INTRUDERS = ("roof", "eave", "cheek", "gable end", "brackets", "chimney", "porch")
 
 
@@ -142,7 +143,10 @@ def run(name: str, h: float, out_dir: str) -> int:
     ys0 = g.lo[1] + (np.arange(g.shape[1]) + 0.5) * h
     earth = ys0[None, :, None] < ground_m[:, None, :]
     # Shut every opening on an outer wall: its rectangle, in the wall's face.
-    shut = solid | earth
+    # With --seal n the drawn surfaces are thickened by n cells first, so a
+    # slope sampled onto the grid cannot let the flood through between its
+    # cells: only gaps wider than about 2n+1 cells are then found.
+    shut = (ndimage.binary_dilation(solid, iterations=SEAL) if SEAL else solid) | earth
     near_open = np.zeros(g.shape, dtype=bool)
     for o in meta["openings"]:
         if not o["outer"]:
@@ -489,10 +493,15 @@ def run(name: str, h: float, out_dir: str) -> int:
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    global_seal = 0
     h, out = 0.1, USER
     if "--cell" in args:
         i = args.index("--cell")
         h = float(args[i + 1])
+        del args[i:i + 2]
+    if "--seal" in args:
+        i = args.index("--seal")
+        SEAL = int(args[i + 1])
         del args[i:i + 2]
     if "--out" in args:
         i = args.index("--out")

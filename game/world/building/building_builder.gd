@@ -85,6 +85,7 @@ func build() -> void:
 	for s: Dictionary in d.spaces:
 		_by_id[str(s["id"])] = s
 	roof = BuildingRoof.new(d)
+	_knee_walls()
 	_prepare_edges()
 	# FLOWSTATE_BLD_SKIP=walls,floors,roof,trim,chimneys,open,rooms leaves
 	# parts out, to find what drew something.
@@ -149,6 +150,66 @@ func _materials() -> void:
 
 
 # ---- spaces' edges ------------------------------------------------------------
+
+const KNEE := 3.0            # a room under the roof stops where the roof comes this low
+
+
+## A room open to the roof ("top": "roof") stops at a knee wall where the
+## roof comes down to KNEE feet over its floor: its outline is clipped to
+## where the roof stands higher, and the eaves beyond are closed off
+## behind the knee wall. The outline as drawn is kept as "plan".
+func _knee_walls() -> void:
+	for s: Dictionary in d.spaces:
+		var top: Variant = s.get("top", "roof")
+		if not top is String or d.is_open(s):
+			continue
+		var fl := float(s["floor"])
+		var flat := Vector3(0, 0, fl + KNEE)
+		var poly: PackedVector2Array = s["poly"]
+		var high: Array = []
+		for fc: Dictionary in roof.faces:
+			var r: Dictionary = d.roofs[int(fc["body"])]
+			var pieces := BuildingGeom.meet([fc["poly"]], r["footprint"] as PackedVector2Array)
+			pieces = BuildingGeom.meet(pieces, BuildingGeom.under(flat, fc["plane"] as Vector3))
+			for pc: PackedVector2Array in pieces:
+				high.append_array(Geometry2D.intersect_polygons(poly, pc))
+		if high.is_empty():
+			continue
+		# Merge the pieces into one outline.
+		var merged: Array = [high[0]]
+		for i in range(1, high.size()):
+			var next: Array = []
+			var cur: PackedVector2Array = high[i]
+			for m: PackedVector2Array in merged:
+				var u := Geometry2D.merge_polygons(m, cur)
+				if u.size() == 1 or (u.size() > 1 and not Geometry2D.is_polygon_clockwise(u[1]) == Geometry2D.is_polygon_clockwise(u[0]) and false):
+					cur = u[0]
+				else:
+					next.append(m)
+			next.append(cur)
+			merged = next
+		var best := PackedVector2Array()
+		for m: PackedVector2Array in merged:
+			if absf(BuildingGeom.area(m)) > absf(BuildingGeom.area(best)):
+				best = m
+		if absf(BuildingGeom.area(best)) < absf(BuildingGeom.area(poly)) - 1.0 and absf(BuildingGeom.area(best)) > 4.0:
+			s["plan"] = poly
+			s["poly"] = _simplify(best)
+
+
+## A polygon with nearly collinear and repeated points removed.
+func _simplify(p: PackedVector2Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for i in p.size():
+		var a := p[(i - 1 + p.size()) % p.size()]
+		var b := p[i]
+		var c := p[(i + 1) % p.size()]
+		if b.distance_to(a) < 0.05:
+			continue
+		if absf((b - a).cross(c - b)) < 0.02 * (b - a).length() * (c - b).length() and (b - a).dot(c - b) > 0.0:
+			continue
+		out.append(b)
+	return out
 
 ## Each space's polygon split wherever another space's corner on its level
 ## lies on it, so shared edges match end to end; each edge then learns
@@ -238,8 +299,8 @@ func _top_at(s: Dictionary, p: Vector2, finish := false) -> float:
 	var t := over
 	# A wall stops inside the roof's thickness, under its surface: its top
 	# never shows through the slate or the tin.
-	if roofed and r - 0.2 < t:
-		t = r - 0.2
+	if roofed and r - 0.05 < t:
+		t = r - 0.05
 	if t == INF:
 		# Nothing over it: its own top, or, open to a roof that is not
 		# there, no wall at all (check.py lists the space).
@@ -1287,16 +1348,24 @@ func _rooms() -> void:
 				var q1 := a.lerp(b, float(j + 1) / n)
 				var t0 := _top_at(s, q0, true)
 				var t1 := _top_at(s, q1, true)
-				var nn := (d.w((q0 + q1) / 2.0) - d.w((q0 + q1) / 2.0 + (q1 - q0).orthogonal())).normalized()
+				# Facing into the room.
+				var dir := (q1 - q0).normalized()
+				var into := Vector2(-dir.y, dir.x) if BuildingGeom.area(inner) > 0.0 else Vector2(dir.y, -dir.x)
+				var mid := (q0 + q1) / 2.0
+				var nn := (d.w(mid + into) - d.w(mid)).normalized()
 				inner_mesh.quad("wall", d.w(q0, fl), d.w(q1, fl), d.w(q1, t1), d.w(q0, t0), nn, wall_c)
-				inner_mesh.quad("wall", d.w(q0, fl), d.w(q1, fl), d.w(q1, t1), d.w(q0, t0), -nn, wall_c)
-		# Its own ceiling where only roof is over it and the space stops lower.
+		# Its own ceiling wherever no space stands over it.
 		var top: Variant = s.get("top", "roof")
 		if not top is String:
-			var cen := _centre(inner)
-			if _above(str(s["level"]), cen) == INF and roof.height(cen) > float(top) + 0.3:
+			var open_pieces: Array = [inner]
+			for o: Dictionary in d.spaces:
+				if float(o["floor"]) > fl + 1.5 and float(o["floor"]) < float(top) + 3.0:
+					open_pieces = BuildingGeom.cut(open_pieces, o["poly"] as PackedVector2Array)
+			for pc: PackedVector2Array in open_pieces:
+				if absf(BuildingGeom.area(pc)) < 0.5:
+					continue
 				var pts: Array = []
-				for q: Vector2 in inner:
+				for q: Vector2 in pc:
 					pts.append(q)
 				_ceiling(pts, float(top))
 
