@@ -54,8 +54,12 @@ func _run(world: TwainMap) -> void:
 			var at: Array = f["at"]
 			var p := TwainHouse.w(float(at[0]), float(at[1]), float(at[2]))
 			var out := Vector3(p.x - centre.x, 0, p.z - centre.z).normalized()
-			var eye := p + out * 5.0 + Vector3(0, 1.5, 0)
-			parts.append("cam_find_%d:55:%.2f,%.2f,%.2f:%.2f,%.2f,%.2f" % [n, eye.x, eye.y, eye.z, p.x, p.y, p.z])
+			# From outside and above, where the finding's spot shows.
+			var eye := p + out * 5.0 + Vector3(0, 4.0, 0)
+			if f.has("from"):
+				var fa: Array = f["from"]
+				eye = TwainHouse.w(float(fa[0]), float(fa[1]), float(fa[2]))
+			parts.append("cam_find_%d:50:%.2f,%.2f,%.2f:%.2f,%.2f,%.2f" % [n, eye.x, eye.y, eye.z, p.x, p.y, p.z])
 			print("[probe] find_%d: %s" % [n, f["text"]])
 			n += 1
 			if n >= 16:

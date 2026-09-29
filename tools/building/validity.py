@@ -361,7 +361,7 @@ def run(name: str, h: float, out_dir: str) -> int:
             fwd = np.roll(oa, 3, axis=ax)
             bwd = np.roll(oa, -3, axis=ax)
             both |= fwd & bwd
-        above = m & both
+        above = m & both & ~near_open
         if above.sum() < 10:
             continue
         cells = np.argwhere(above)
@@ -445,6 +445,29 @@ def run(name: str, h: float, out_dir: str) -> int:
                                  "text": "door %d at (%.1f, %.1f) opens onto a drop of %.1f ft, with no floor or step outside"
                                          % (o["id"], px, pz, drop / ft)})
 
+    # A viewpoint for each finding: outside air about 4 m from it, with a
+    # clear line to it.
+    oa_pts = np.argwhere(out_air[::5, ::5, ::5]) * 5
+    oa_w = g.lo + (oa_pts + 0.5) * h
+    for f in findings:
+        x, z, y = f["at"]
+        tgt = np.array([(z - meta["origin"][1]) * meta["ft"], world_y(meta, y), -(x - meta["origin"][0]) * meta["ft"]])
+        dd = np.linalg.norm(oa_w - tgt, axis=1)
+        order = np.argsort(np.abs(dd - 4.5))
+        for k2 in order[:200]:
+            e = oa_w[k2]
+            if e[1] < tgt[1]:
+                continue
+            ok = True
+            for t in np.linspace(0.1, 0.85, 12):
+                q = g.idx(e + (tgt - e) * t)
+                if g.ok(q) and shut[tuple(q)]:
+                    ok = False
+                    break
+            if ok:
+                px_, pz_ = plan_of(meta, e)
+                f["from"] = [float(px_), float(pz_), float(ft_y(meta, e[1]))]
+                break
     findings.sort(key=lambda f: (f["rule"], -f["size"]))
     for f in findings:
         print("%-11s %s" % (f["rule"], f["text"]))

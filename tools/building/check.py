@@ -8,6 +8,7 @@ opening, and where it is in the building's feet:
   gap         floor inside a level's outline that no space covers
   no-roof     part of an enclosed space with nothing over it (no roof, no
               space above)
+  through-roof  part of a room's floor above the roof over it
   low-roof    a room most of whose floor has under 6 ft over it (attics
               and closets excepted)
   window-room a window between two enclosed spaces, or on no space's edge
@@ -104,6 +105,12 @@ def run(bname: str, res: float) -> int:
             continue
         for area, ax0, ax1, az0, az1 in blobs(m & ~np.isfinite(cover), xs, zs, res, 1.0):
             found.append(("no-roof", "%s: %.1f sq ft with nothing over it, x %.1f-%.1f, z %.1f-%.1f"
+                          % (s["id"], area, ax0, ax1, az0, az1)))
+        # The roof over a room coming down below its floor: the room would
+        # stand out through the roof there.
+        through = m & np.isfinite(H) & (H > fl - 12.0) & (H < fl + 0.5) & ~np.isfinite(over_space)
+        for area, ax0, ax1, az0, az1 in blobs(through, xs, zs, res, 2.0):
+            found.append(("through-roof", "%s: %.1f sq ft of its floor stand above the roof there, x %.1f-%.1f, z %.1f-%.1f"
                           % (s["id"], area, ax0, ax1, az0, az1)))
         if s["kind"] not in LOW_OK:
             # Headroom: under the roof (or the floor above), inside the

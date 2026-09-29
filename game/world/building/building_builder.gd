@@ -236,8 +236,10 @@ func _top_at(s: Dictionary, p: Vector2, finish := false) -> float:
 			t = fl + 10.0
 		return t
 	var t := over
-	if roofed and r < t:
-		t = r
+	# A wall stops inside the roof's thickness, under its surface: its top
+	# never shows through the slate or the tin.
+	if roofed and r - 0.2 < t:
+		t = r - 0.2
 	if t == INF:
 		# Nothing over it: its own top, or, open to a roof that is not
 		# there, no wall at all (check.py lists the space).
@@ -305,9 +307,18 @@ func _wall(s: Dictionary, e: Dictionary, kind: String, thick: float, material: S
 	var o: Dictionary = e["other"]
 	var n := maxi(1, int(ceil(a.distance_to(b) / 1.0)))
 	var tops := PackedFloat32Array()
+	var tops_in := PackedFloat32Array()
 	for i in n + 1:
 		var q := a.lerp(b, float(i) / n)
 		var t := _top_at(s, q + inward * 0.5)
+		if kind != "part":
+			# An outer wall stops under the roof over its outer face; where
+			# the roof rises over its thickness a sloped top closes it up
+			# to the roof over its inner face.
+			var t_in := _top_at(s, q + inward * (thick - 0.05))
+			var t_out := _top_at(s, q + inward * 0.05)
+			t = minf(t_in, t_out)
+			tops_in.append(maxf(t_in, t))
 		if kind == "part" and not o.is_empty():
 			t = minf(t, _top_at(o, q - inward * 0.5))
 			# A partition ends at its rooms' ceiling (the floor over it), not
@@ -318,7 +329,7 @@ func _wall(s: Dictionary, e: Dictionary, kind: String, thick: float, material: S
 					t = minf(t, float(tp) + SLAB)
 		tops.append(t)
 	_tag("wall %s %s" % [kind, str(s["id"])])
-	walls.append({"a": a, "b": b, "inward": inward, "thick": thick, "y0": y0, "tops": tops, "level": level,
+	walls.append({"a": a, "b": b, "inward": inward, "thick": thick, "y0": y0, "tops": tops, "tops_in": tops_in, "level": level,
 		"space": str(s["id"]), "other": str(o.get("id", "")), "kind": kind, "material": material})
 	_build_wall(walls[walls.size() - 1])
 
@@ -428,6 +439,30 @@ func _build_wall(wl: Dictionary) -> void:
 			var top := minf(ta, tb)
 			if top > y0 + 0.05:
 				k.wall(key, f, u0, u1, d.wy(y0), d.wy(top), t, colr, mine, 1000.0)
+	# The sloped top where the roof rises over the wall's thickness.
+	var tin: PackedFloat32Array = wl.get("tops_in", PackedFloat32Array())
+	if tin.size() == tops.size():
+		var strips2 := maxi(n, int(length / 0.25))
+		for i in strips2:
+			var u0 := length * i / strips2
+			var u1 := length * (i + 1) / strips2
+			var s0 := (u0 / length) if forward else 1.0 - u0 / length
+			var s1 := (u1 / length) if forward else 1.0 - u1 / length
+			var o0 := _sample(tops, s0)
+			var o1 := _sample(tops, s1)
+			var i0 := _sample(tin, s0)
+			var i1 := _sample(tin, s1)
+			if i0 < o0 + 0.05 and i1 < o1 + 0.05:
+				continue
+			var zi := -t
+			var nin := -(f.basis.z).normalized()
+			k.m.quad("wall", f * Vector3(u0, d.wy(o0), zi), f * Vector3(u1, d.wy(o1), zi), f * Vector3(u1, d.wy(i1), zi),
+				f * Vector3(u0, d.wy(i0), zi), nin, colr)
+			var top_n := (f * Vector3(u0, d.wy(i0), zi) - f * Vector3(u0, d.wy(o0), 0.0)).cross(f.basis.x).normalized()
+			if top_n.y < 0.0:
+				top_n = -top_n
+			k.m.quad("wall", f * Vector3(u0, d.wy(o0), 0.0), f * Vector3(u1, d.wy(o1), 0.0), f * Vector3(u1, d.wy(i1), zi),
+				f * Vector3(u0, d.wy(i0), zi), top_n, colr)
 	# The style's bands on an outer face of brick, up to its lowest top.
 	if style.has("bands") and str(wl["kind"]) != "part" and str(wl["material"]) == "brick" and lo > y0 + 0.5:
 		(style["bands"] as Callable).call(f, length, y0, lo, mine)
