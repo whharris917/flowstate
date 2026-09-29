@@ -6,9 +6,10 @@ class_name TwainMap
 ## everything unlocked, its own save. The gas is lit as the day goes.
 
 var house: TwainHouse
-var built: BuildingBuilder
-## Built from the data file by the general builder (twain_data.tscn, or
-## FLOWSTATE_TW_BUILDER=data) rather than by hand.
+var built: BuildingMesh
+## Generated from its data file and checked by tools/building/build.py
+## (twain_data.tscn, or FLOWSTATE_TW_BUILDER=data) rather than built by
+## hand.
 var from_data := false
 var grounds: TwainGrounds
 
@@ -35,16 +36,16 @@ func _build_ground() -> void:
 		body.add_child(shape)
 	add_child(body)
 	house = TwainHouse.new()
-	# FLOWSTATE_TW_BUILDER=data: the house built from its data file
-	# (game/data/buildings/twain.json) by the general builder instead.
+	# FLOWSTATE_TW_BUILDER=data: the house generated from its data file
+	# (game/data/buildings/twain.json, written out as twain.bld) instead;
+	# FLOWSTATE_BLD_FILE names another generated building to stand here.
 	if from_data or OS.get_environment("FLOWSTATE_TW_BUILDER") == "data":
 		house.name = "TwainHouseUnbuilt"
 		house._materials()
 		add_child(house)
-		built = BuildingBuilder.new()
-		built.setup(BuildingData.load_file("res://data/buildings/twain.json"), TwainStyle.style(house))
+		var bld := OS.get_environment("FLOWSTATE_BLD_FILE")
+		built = BuildingMesh.open(bld if bld != "" else "res://data/buildings/twain.bld")
 		add_child(built)
-		built.build()
 	else:
 		add_child(house)
 		house.build()
@@ -84,9 +85,9 @@ func _after_plant() -> void:
 		player.rotation.y = PI * 0.82
 	hud.toast("Hartford, Connecticut: the Mark Twain house (1874) as the Clemenses knew it. The front door is under the porte-cochere; the stair in the hall climbs to the billiard room. O options · F5/F9 save/load")
 	if built != null:
-		print("[flowstate] twain house from its data: %d triangles, %d walls, %d roof faces, %d solids, built in %d ms"
-			% [int(built.stats["triangles"]), int(built.stats["walls"]), int(built.stats["faces"]), int(built.stats["solids"]),
-			int(built.stats["ms"])])
+		print("[flowstate] twain house from its data: %d faces, %d triangles, loaded in %d ms%s"
+			% [int(built.stats.get("faces", 0)), int(built.stats.get("triangles", 0)), int(built.stats.get("ms", 0)),
+			" (BROKEN: it fails its checks)" if built.broken else ""])
 	else:
 		print("[flowstate] twain house: %d triangles (%d inside), %d solids, built in %d ms; grounds %d triangles, %d ms"
 			% [int(house.stats["triangles"]), int(house.stats["inside"]), int(house.stats["solids"]), int(house.stats["ms"]),
