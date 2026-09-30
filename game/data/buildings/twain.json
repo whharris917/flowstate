@@ -1837,6 +1837,7 @@
       78.2,
       6.7,
       [
+       241.714465,
        219,
        191,
        172,
@@ -4054,8 +4055,18 @@
    "footprint": [
     [
      "s_wall",
-     84.042097
+     "e_wall"
     ],
+    {
+     "arc_at": [
+      54.3,
+      78.2,
+      6.7,
+      [
+       58.292931
+      ]
+     ]
+    },
     {
      "arc_at": [
       54.3,
@@ -4119,6 +4130,13 @@
      "at": [
       55.0,
       70.8
+     ],
+     "kind": "abut"
+    },
+    {
+     "at": [
+      57.65,
+      83.9
      ],
      "kind": "abut"
     }
@@ -4238,7 +4256,7 @@
    "footprint": {
     "rect": [
      115.55,
-     21.69,
+     "wing_w",
      150.97,
      40.72
     ]
@@ -4252,13 +4270,14 @@
      "pitch": 2.1
     },
     "z0": {
+     "plate": 18.59,
      "pitch": 1.45
     },
     "z1": {
      "pitch": 1.45
     }
    },
-   "note": "Ridge at 31.5 down the wing's middle from x 123.3 to 144.4 (roof plan, elevations)."
+   "note": "Ridge at 31.5 down the wing's middle from x 123.3 to 144.4 (roof plan, elevations).; its west eave on the west wall (18.59), rising from the cornice elsewhere"
   },
   {
    "id": "wing_cross",
@@ -4340,7 +4359,7 @@
     "side": "z0",
     "center": 121.2,
     "width": 6.1,
-    "setback": 3.17
+    "setback": 2.56
    },
    "plate": 24.6,
    "pitch": 0.426,
@@ -4572,7 +4591,16 @@
    "cover": "tin",
    "plate": 9.3,
    "pitch": 0.0,
-   "overhang": 0.6
+   "overhang": 0.6,
+   "edges_at": [
+    {
+     "at": [
+      115.3,
+      46.5
+     ],
+     "over": 0.0
+    }
+   ]
   },
   {
    "id": "back_stair",

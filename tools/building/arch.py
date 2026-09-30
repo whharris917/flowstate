@@ -1006,6 +1006,9 @@ class Model:
                     continue
                 eid = "part:%s:%d" % (lv, len(self.runs))
                 cells = self._cap(quad, pf, eid)
+                rooms = [prism(q) for s2 in self.spaces if s2["level"] == lv and not s2["open"]
+                         for q in P.convex_parts(s2["poly"])]
+                cells = disjoint([x for c_ in cells for r_ in rooms if r_ is not None for x in [overlap(c_, r_)] if x is not None])
                 for c_ in cells:
                     c_.mat = "partition"
                 self.add(eid, "partition", cells, "partition", level=lv)
@@ -1353,6 +1356,32 @@ class Model:
                                   s1, s1 + 0.3, "sill")
                     self.add(oid + ":sill", "sill", [sl], "stone", opening=oid, host=run.element)
 
+    def _under_covering(self, col: Cell, p) -> list:
+        """A column cut to the underside of the lowest roof covering over
+        its middle (as the roofs stand, not as their planes run)."""
+        best = None
+        for e in self.elements.values():
+            if e.kind != "roof":
+                continue
+            for c_ in e.cells:
+                lo, hi = c_.aabb()
+                if not (lo[0] - 1e-6 <= p[0] <= hi[0] + 1e-6 and lo[2] - 1e-6 <= p[1] <= hi[2] + 1e-6):
+                    continue
+                for f in c_.faces:
+                    pl = c_.planes[f.plane]
+                    if pl.n[1] > -1e-6:
+                        continue
+                    # the underside plane: n.x <= d with n pointing down
+                    y = (pl.d - pl.n[0] * p[0] - pl.n[2] * p[1]) / pl.n[1]
+                    q = (p[0], y + 0.01, p[1])
+                    if contains(c_, q, 1e-5):
+                        if best is None or y < best[0]:
+                            best = (y, e.id)
+        if best is None:
+            return []
+        R = self.roofs[best[1].split(":", 1)[1]]
+        return disjoint([x for u in R.under for x in [overlap(col, u)] if x is not None])
+
     def _obstacles(self, lo, hi) -> list:
         """Every solid but the walls within a box, for trim to keep clear of."""
         out = []
@@ -1494,7 +1523,7 @@ class Model:
                     y0 = self.grade(*p) - 0.5 if canopy else fl
                     sq = [(p[0] - 0.25, p[1] - 0.25), (p[0] + 0.25, p[1] - 0.25), (p[0] + 0.25, p[1] + 0.25), (p[0] - 0.25, p[1] + 0.25)]
                     col = prism(sq, y0, HI)
-                    parts = disjoint([x for u in R.under for x in [overlap(col, u)] if x is not None])
+                    parts = self._under_covering(col, p)
                     walls_ = [c_ for e_ in self.elements.values() if e_.kind in ("wall", "cheek", "chimney")
                               for c_ in e_.cells]
                     if any(overlap(pc_, wc_) is not None for pc_ in parts for wc_ in walls_):
@@ -1687,7 +1716,21 @@ class Model:
                                 break
                         if clash:
                             break
-                    if not clash and not any(overlap(c_, d_) is not None for d_ in cells):
+                    if clash or any(overlap(c_, d_) is not None for d_ in cells):
+                        continue
+                    bears = True
+                    for uu in (uc - 0.15, uc + 0.15):
+                        for ss in (0.1, depth - 0.1):
+                            pt = run.plan(uu, ss)
+                            ys = pl[0] * pt[0] + pl[1] * pt[1] + pl[2] - R.t
+                            if not any(contains(d_, (pt[0], ys + 0.02, pt[1]), 1e-4) for d_ in self.elements["roof:" + R.id].cells):
+                                bears = False
+                        for yy in (ysoff - 1.1, ysoff - 0.1):
+                            pt = run.plan(uu, -0.05)
+                            if not any(contains(d_, (pt[0], yy, pt[1]), 1e-4) for ee in self.elements.values()
+                                       if ee.kind in ("wall", "cheek") for d_ in ee.cells):
+                                bears = False
+                    if bears:
                         cells.append(c_)
             self.add("brackets:" + R.id, "bracket", cells, "trim", roof=R.id)
 
