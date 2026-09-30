@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 EPS = 1e-7          # distance from a plane that counts as on it, feet
 VOL_EPS = 1e-6      # cubic feet: smaller is numerical noise, not a solid
 AREA_EPS = 1e-6     # square feet
+THIN = 1e-4         # feet: a piece thinner than this across a face is no piece
 BOUND = 1.0e4       # the box every cell starts from
 
 
@@ -319,6 +320,13 @@ def make_cell(planes: list, mat: str = "", color=(1.0, 1.0, 1.0), start: Cell | 
     c = Cell(all_planes, faces, mat, color)
     if c.volume() < VOL_EPS:
         return None
+    # a piece thinner than THIN across any of its faces is a cut's rounding,
+    # not a solid, however long it is
+    vs = c.vset()
+    for f in c.faces:
+        pl = all_planes[f.plane]
+        if max(pl.d - (pl.n[0] * p[0] + pl.n[1] * p[1] + pl.n[2] * p[2]) for p in vs) < THIN:
+            return None
     for f in c.faces:
         if all_planes[f.plane].role == "unbounded":
             raise Unbounded("a cell is open to infinity")

@@ -778,7 +778,12 @@ class Model:
     def _collinear(s, t) -> bool:
         a, b, c = s["a"], s["b"], t["b"]
         dt = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])
-        return dt > 0 and P.seg_dist(b, a, c) < 0.02 and math.dist(a, c) > 1e-6
+        off = P.seg_dist(b, a, c)
+        if dt > 0 and 1e-5 < off < 0.02:
+            # a point a hair off a wall's line would tilt the whole wall
+            raise GenError("a wall bends by %.4f ft at (%.3f, %.3f): put the point on the line"
+                           % (off, b[0], b[1]))
+        return dt > 0 and off <= 1e-5 and math.dist(a, c) > 1e-6
 
     def _level_region(self, lv: str) -> list:
         """The level's enclosed spaces as convex plan pieces."""
