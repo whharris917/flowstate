@@ -51,7 +51,8 @@ import model as M                 # grid names and polygon shorthands
 import plan as P
 from solid import (Cell, Plane, cell, make_cell, subtract, subtract_all, overlap, clip_all,
                    vertical, floor_at, ceiling_at, below_y, above_y, prism_planes,
-                   ccw, is_convex, poly_area, poly_less, poly_meet, offset_poly, boxes_apart, prism_roles)
+                   ccw, is_convex, poly_area, poly_less, poly_meet, offset_poly, boxes_apart, prism_roles,
+                   clip_poly)
 
 LO, HI = -500.0, 1000.0          # the far floor and sky every open column stops at
 
@@ -740,7 +741,21 @@ class Model:
             if s["floor"] < below and P.point_in((x, z), s["poly"]):
                 if best is None or s["floor"] > best["floor"]:
                     best = s
-        return best is not None and not best["open"]
+        if best is None or best["open"]:
+            return False
+        # and nothing of a roof between the point and that room
+        for R in self.roofs.values():
+            for c_ in R.infield + R.eave:
+                lo, hi = c_.aabb()
+                if not (lo[0] <= x <= hi[0] and lo[2] <= z <= hi[2]) or lo[1] >= below or hi[1] <= best["floor"]:
+                    continue
+                for f in c_.faces:
+                    pl = c_.planes[f.plane]
+                    if pl.n[1] > 1e-6 and pl.role in ("slope", "deck"):
+                        y = (pl.d - pl.n[0] * x - pl.n[2] * z) / pl.n[1]
+                        if best["floor"] < y < below and contains(c_, (x, y - 0.01, z), 1e-4):
+                            return False
+        return True
 
     def _covering_elements(self) -> None:
         for A in self.roofs.values():
@@ -917,7 +932,7 @@ class Model:
         out.extend(roofed)
         # what is under nothing
         cov = [prism(q) for R in self.roofs.values() for q in R.parts]
-        for r in remaining:
+        for r in (remaining if label else []):
             for x in subtract_all([r], [q for q in cov if q is not None]):
                 self.notes.append("%s: part of it has nothing over it (at %s)"
                                   % (label, tuple(round(v, 1) for v in x.centroid())))
@@ -1024,7 +1039,7 @@ class Model:
                     self.wall_plan.append((quad, pf))
                     continue
                 eid = "part:%s:%d" % (lv, len(self.runs))
-                cells = self._cap(quad, pf, eid)
+                cells = self._cap(quad, pf, None)
                 rooms = [prism(q) for s2 in self.spaces if s2["level"] == lv and not s2["open"]
                          for q in P.convex_parts(s2["poly"])]
                 cells = disjoint([x for c_ in cells for r_ in rooms if r_ is not None for x in [overlap(c_, r_)] if x is not None])
@@ -1048,8 +1063,6 @@ class Model:
             n = len(fp)
             mat = B.spec.get("cheek", self._host_mat(B))
             for i in range(n):
-                if B.edges[i]["kind"] == "abut":
-                    continue
                 a, b = fp[i], fp[(i + 1) % n]
                 L = math.dist(a, b)
                 d = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
@@ -1370,9 +1383,13 @@ class Model:
                 self.add(oid + ":hood", "hood", [hood], "trim", opening=oid, host=run.element)
             if "sill" in trim and not door and kind != "french":
                 dn = self._clear_below(run, u - w / 2 - cl - min(0.15, xl), u + w / 2 + cr_ + min(0.15, xr), sill, s1, min(down, 0.6))
-                if dn >= 0.35:
-                    sl = run_cell(run, rect(u - w / 2 - cl - min(0.15, xl), u + w / 2 + cr_ + min(0.15, xr), sill - 0.3, sill),
-                                  s1, s1 + 0.3, "sill")
+                su0, su1 = u - w / 2 - cl - min(0.15, xl), u + w / 2 + cr_ + min(0.15, xr)
+                backed = all(any(contains(c_, (q[0], yy, q[1]), 1e-6) for e_ in self.elements.values()
+                                 if e_.kind in ("wall", "cheek", "chimney") for c_ in e_.cells)
+                             for uu in (su0 + 0.02, (su0 + su1) / 2.0, su1 - 0.02) for yy in (sill - 0.28, sill - 0.02)
+                             for q in [run.plan(uu, s1 - 0.02)])
+                if dn >= 0.35 and backed:
+                    sl = run_cell(run, rect(su0, su1, sill - 0.3, sill), s1, s1 + 0.3, "sill")
                     self.add(oid + ":sill", "sill", [sl], "stone", opening=oid, host=run.element)
 
     def _under_covering(self, col: Cell, p) -> list:
@@ -1799,13 +1816,39 @@ def _grown_pieces(fp: list, parts: list, overs: list) -> list:
         L = math.dist(a, b)
         t = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
         norms.append(((t[1], -t[0]), t))
+    def mitre(j):
+        """At footprint corner j (between edges j-1 and j), where the two
+        grown lines meet, or None at an inward corner."""
+        i = (j - 1) % n
+        v, a, c = fp[j], fp[i], fp[(j + 1) % n]
+        cr = (v[0] - a[0]) * (c[1] - v[1]) - (v[1] - a[1]) * (c[0] - v[0])
+        if cr <= 1e-9:
+            return None
+        (oi, ti), (oj, tj) = norms[i], norms[j]
+        pi = (v[0] + oi[0] * overs[i], v[1] + oi[1] * overs[i])
+        pj = (v[0] + oj[0] * overs[j], v[1] + oj[1] * overs[j])
+        return _hit(pi, ti, pj, tj)
+
     for i in range(n):
         d = overs[i]
         if d <= 1e-9:
             continue
         a, b = fp[i], fp[(i + 1) % n]
         o = norms[i][0]
-        pieces.append(ccw([a, b, (b[0] + o[0] * d, b[1] + o[1] * d), (a[0] + o[0] * d, a[1] + o[1] * d)]))
+        strip = ccw([a, b, (b[0] + o[0] * d, b[1] + o[1] * d), (a[0] + o[0] * d, a[1] + o[1] * d)])
+        # a strip ends at the mitre of each outward corner: never past the
+        # line where its eave meets the next one's
+        mid = ((a[0] + b[0]) / 2.0 + o[0] * d / 2.0, (a[1] + b[1]) / 2.0 + o[1] * d / 2.0)
+        for j, v in ((i, a), ((i + 1) % n, b)):
+            mpt = mitre(j)
+            if mpt is None or math.dist(mpt, v) < 1e-9:
+                continue
+            side = (mpt[0] - v[0]) * (mid[1] - v[1]) - (mpt[1] - v[1]) * (mid[0] - v[0])
+            strip = clip_poly(strip, v, mpt) if side > 0 else clip_poly(strip, mpt, v)
+            if len(strip) < 3:
+                break
+        if len(strip) >= 3 and abs(poly_area(strip)) > 1e-6:
+            pieces.append(ccw(strip))
     for j in range(n):
         i = (j - 1) % n
         v = fp[j]
@@ -1823,7 +1866,11 @@ def _grown_pieces(fp: list, parts: list, overs: list) -> list:
         else:
             q = [v, pi, m, pj]
         q = P.simplify(ccw(q))
-        if len(q) >= 3 and abs(poly_area(q)) > 1e-6 and is_convex(q):
+        # the corner's mitre, only where it lies outside both edges
+        if len(q) >= 3 and abs(poly_area(q)) > 1e-6 and is_convex(q) and \
+                (m[0] - v[0]) * oi[0] + (m[1] - v[1]) * oi[1] > -1e-9 and \
+                (m[0] - v[0]) * oj[0] + (m[1] - v[1]) * oj[1] > -1e-9 and \
+                (m[0] - v[0]) * ti[0] + (m[1] - v[1]) * ti[1] >= -1e-9:
             pieces.append(q)
     out: list = []
     for p in pieces:

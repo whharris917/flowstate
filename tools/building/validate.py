@@ -49,6 +49,7 @@ from solid import Cell, overlap, boxes_apart, Plane, cell, prism_planes
 from surface import boundary, analyse
 
 VOL_TOL = 2e-4          # cubic feet (about 6 cm3): smaller is not a finding
+CRICKET = 2.0           # feet: the longest level valley a flashed saddle drains
 AREA_TOL = 2e-3         # square feet of face left unsupported
 
 
@@ -367,6 +368,7 @@ class Validator:
         import numpy as np
         counts = defaultdict(int)
         bad = []
+        trough_len = {}
         for pi, pj, a, b in rep.pairs:
             ri, rj = self._role(polys[pi]), self._role(polys[pj])
             ei, ej = self.m.elements[self.owner[polys[pi].owner]], self.m.elements[self.owner[polys[pj].owner]]
@@ -397,9 +399,17 @@ class Validator:
                     else:
                         kind = "hip" if convex else "valley"
                     if kind is None:
-                        bad.append(("a level trough between two roof faces", (a + b) / 2.0))
-                        continue
-            elif ej.kind == "roof" and ej is not ei and rj in ("fascia", "rake"):
+                        # a short level valley is a saddle flashed like a
+                        # cricket (water leaves at its ends); a long one holds it
+                        run_ = trough_len.get((min(pi, pj), max(pi, pj)), 0.0) + L
+                        trough_len[(min(pi, pj), max(pi, pj))] = run_
+                        if run_ <= CRICKET:
+                            kind = "cricket"
+                        else:
+                            bad.append(("a level trough %.1f ft long between two roof faces" % run_, (a + b) / 2.0))
+                            continue
+            elif ej.kind == "roof" and ej is not ei and rj in ("fascia", "rake", "abut", "meet", "wallline", "seam"):
+                # against another roof's end standing over it: flashed
                 kind = "abutment"
             elif ej.kind == "roof" and ej is not ei and rj == "soffit":
                 kind = "tuck"
@@ -416,7 +426,7 @@ class Validator:
                 kind = "eave" if level else "rake"
             elif rj == "hole":
                 kind = "well"
-            elif ej.kind in ("wall", "cheek", "chimney", "slab") or rj in ("chimney_joint",):
+            elif ej.kind in ("wall", "cheek", "chimney", "slab", "casing", "hood", "sill") or rj in ("chimney_joint",):
                 kind = "abutment"
             elif rj == "soffit" or rj == "underside" or rj == "attic":
                 bad.append(("a roof face meets the underside of %s" % ej.id, (a + b) / 2.0))

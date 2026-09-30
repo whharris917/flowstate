@@ -3676,7 +3676,7 @@
    "footprint": {
     "rect": [
      57.5,
-     38.3,
+     52.3,
      114.5,
      70.8
     ]
@@ -3685,8 +3685,8 @@
    "brackets": 2.5,
    "sides": {
     "z0": {
-     "plate": 29.52,
-     "pitch": 1.515
+     "kind": "gable",
+     "rake": 0.0
     },
     "x1": {
      "plate": 21.27,
@@ -3709,7 +3709,7 @@
      "space": "texas_deck"
     }
    ],
-   "note": "The main block north of the south-east gable: steep slopes from the west and north walls to the flat at 35.9 (roof plan, elevations), the north face meeting the flat on x 105.5 from its eave at 18.9 (north elevation); the east face runs on from the south part. No south slope: round the Texas deck the flat comes to the well, whose walls rise to it. Open over the deck, which its pavilion covers."
+   "note": "The main block's flat at 35.9 and its steep north slope (plate 21.27 on the north wall, 1.63; it meets the flat on x 105.5, roof plan) from where the long roof's east slope meets the flat (z 52.3) to the south-east gable; the east face runs on from the south part. No south slope: round the Texas deck the flat comes to the well, whose walls rise to it. Open over the deck, which its pavilion covers."
   },
   {
    "id": "main_s",
@@ -3726,7 +3726,8 @@
    "sides": {
     "x0": {
      "plate": 19.3,
-     "pitch": 1.491
+     "pitch": 1.491,
+     "over": 1.13
     },
     "x1": {
      "plate": 21.27,
@@ -3878,28 +3879,28 @@
    "dormer": {
     "host": "main_s",
     "side": "z1",
-    "center": 82.9,
-    "width": 6.5
+    "center": 83.0,
+    "width": 4.8
    },
-   "plate": 19.3,
-   "pitch": 2.123,
-   "overhang": 0.6,
+   "plate": 23.8,
+   "pitch": 1.57,
+   "overhang": 1.9,
    "rake": 1.4,
-   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2); centred on its window"
+   "note": "a wall dormer on the east front: face 4.8 ft wide, its corners at 23.8, peak 27.4, the flared eaves down to 20.8 (east elevation)"
   },
   {
    "id": "e_gable_2",
    "dormer": {
     "host": "main_s",
     "side": "z1",
-    "center": 92.15,
-    "width": 6.5
+    "center": 92.2,
+    "width": 4.8
    },
-   "plate": 19.3,
-   "pitch": 2.123,
-   "overhang": 0.6,
+   "plate": 23.8,
+   "pitch": 1.57,
+   "overhang": 1.9,
    "rake": 1.4,
-   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2); centred on its window"
+   "note": "a wall dormer on the east front: face 4.8 ft wide, its corners at 23.8, peak 27.4, the flared eaves down to 20.8 (east elevation)"
   },
   {
    "id": "east_dormer",
@@ -4010,12 +4011,8 @@
      39.89
     ],
     [
-     70.51,
-     43.7
-    ],
-    [
-     75.89,
-     43.7
+     73.2,
+     46.39
     ],
     [
      79.7,
@@ -4041,7 +4038,7 @@
    ],
    "peak": 47.25,
    "overhang": 2.2,
-   "note": "An octagonal spire over the alcove's deck, centred where the roof plan and section A-A put its point (x 73.2, z 37.2, over the house's west wall), its eave octagon 17.4 ft across flats (roof plan); eave 33.2 and point 47.25 (the south elevation's mark, PEAK OF ROOF 47'-3\"). Its inner half dies into the long roof in valleys.",
+   "note": "An octagonal spire over the alcove's deck, its point at x 73.2, z 37.2 over the house's west wall (roof plan, section A-A), 47.25 (south elevation); eave octagon 17.4 ft across flats. On the house side its two diagonal faces run on to a ridge that dies into the long roof (roof plan: the V east of the octagon).",
    "plate": 36.75
   },
   {
@@ -4103,6 +4100,13 @@
       83.9
      ],
      "kind": "abut"
+    },
+    {
+     "at": [
+      50.1,
+      73.1
+     ],
+     "over": 0.0
     }
    ],
    "note": "the round's low cone, its point on the house wall (x 57.5, z 78.2), 13.9, its eave 12.9 round the round"
@@ -4179,8 +4183,17 @@
    ],
    "peak": 31.3,
    "overhang": 1.2,
-   "note": "the cone over the bay's porch, on its posts, its back rising from the house wall to the point",
-   "eave": 21.1
+   "note": "the cone over the bay's porch on its posts; its back a wall rising from the main roof's north slope against the house",
+   "eave": 21.1,
+   "edges_at": [
+    {
+     "at": [
+      114.5,
+      69.5
+     ],
+     "kind": "abut"
+    }
+   ]
   },
   {
    "id": "pantry_roof",
@@ -4278,7 +4291,7 @@
     "rect": [
      115.55,
      "wing_w",
-     150.97,
+     145.3,
      40.72
     ]
    },
@@ -4288,23 +4301,23 @@
      "pitch": 1.78
     },
     "x1": {
-     "pitch": 2.1
+     "kind": "gable",
+     "rake": 0.3
     },
     "z0": {
-     "plate": 18.59,
      "pitch": 1.45
     },
     "z1": {
      "pitch": 1.45
     }
    },
-   "note": "Ridge at 31.5 down the wing's middle from x 123.3 to 144.4 (roof plan, elevations).; its west eave on the west wall (18.59), rising from the cornice elsewhere"
+   "note": "The wing hip rising from its cornice (17.7) all round, its west eave on the west wall; ridge about 31.1 from x 123 (roof plan, elevations: 31.5); its north end a small gable standing over the cross hip (north elevation)"
   },
   {
    "id": "wing_cross",
    "footprint": {
     "rect": [
-     137.34,
+     "wing_step",
      21.66,
      "wing_n",
      42.34
@@ -4313,19 +4326,19 @@
    "plate": 17.7,
    "sides": {
     "x0": {
-     "pitch": 1.27
+     "pitch": 1.31
     },
     "x1": {
-     "pitch": 1.27
+     "pitch": 1.225
     },
     "z0": {
-     "pitch": 2.1
+     "pitch": 1.87
     },
     "z1": {
-     "pitch": 2.1
+     "pitch": 2.0
     }
    },
-   "note": "the cross hip over the wing's north end, its ridge at 28.7 running east-west"
+   "note": "The cross hip over the wing north end, its ridge at 28.6 running east-west from z 27.5 to 36.9 (north elevation, roof plan); the wing main ridge ends over it in a small gable"
   },
   {
    "id": "wing_east_dormer",
@@ -4384,7 +4397,7 @@
    },
    "plate": 24.6,
    "pitch": 0.426,
-   "overhang": 2.6,
+   "overhang": 1.2,
    "rake": 0.4,
    "cheek": "clapboard",
    "note": "a lattice dormer on the wing's roof (west, east and north elevations)"
@@ -4400,7 +4413,7 @@
    },
    "plate": 24.6,
    "pitch": 0.426,
-   "overhang": 2.6,
+   "overhang": 1.2,
    "rake": 0.4,
    "cheek": "clapboard",
    "note": "a lattice dormer on the wing's roof (west, east and north elevations); its face where the cross hip at the wing's north end comes down to its sill"
