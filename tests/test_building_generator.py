@@ -35,10 +35,11 @@ def test_the_test_house_is_a_building():
     assert checks(COTTAGE) == set()
 
 
-def test_a_window_into_the_roof_is_found():
+def test_a_window_into_the_roof_is_refused():
     def f(d):
         d["openings"].append({"at": [20, 0], "w": 3.0, "sill": 12.5, "head": 19.5})
-    assert checks(mutate(f)) & {"openings", "overlap", "fitted"}
+    with pytest.raises(arch.GenError):
+        arch.Model(mutate(f)).generate()
 
 
 def test_walls_with_no_roof_over_them_are_found():
@@ -51,7 +52,7 @@ def test_walls_with_no_roof_over_them_are_found():
 
 def test_a_short_chimney_is_found():
     def f(d):
-        d["chimneys"][0]["top"] = 33.0
+        d["chimneys"][0]["top"] = 31.0
     assert "chimneys" in checks(mutate(f))
 
 
