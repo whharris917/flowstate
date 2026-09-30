@@ -53,6 +53,64 @@ AREA_TOL = 2e-3         # square feet of face left unsupported
 
 
 INTERIOR = {"inner", "floor", "ceiling", "attic", "partition"}
+# faces that are certainly outside: roofs' tops and edges, porch floors, steps
+OUTSIDE = {"slope", "deck", "fascia", "rake", "soffit", "deck_top", "step:side", "step:top", "post:side",
+           "rail:side", "rail:face", "rail:back", "skirt:side"}
+
+
+def _min_cut(adj, sources, sinks) -> list:
+    """The edges (their midpoints) of a minimum cut between two sets of
+    faces, by repeated shortest augmenting paths on unit capacities."""
+    import collections
+    S, T = -1, -2
+    cap = collections.defaultdict(int)
+    nbr = collections.defaultdict(set)
+    where = {}
+    for i, lst in adj.items():
+        for j, at in lst:
+            cap[(i, j)] = 1
+            nbr[i].add(j)
+            where[(i, j)] = at
+    for i in sources:
+        cap[(S, i)] = 10 ** 6
+        nbr[S].add(i)
+        nbr[i].add(S)
+    for i in sinks:
+        cap[(i, T)] = 10 ** 6
+        nbr[i].add(T)
+        nbr[T].add(i)
+    flow = 0
+    while flow < 60:
+        prev = {S: None}
+        dq = collections.deque([S])
+        while dq and T not in prev:
+            u = dq.popleft()
+            for v in nbr[u]:
+                if v not in prev and cap[(u, v)] > 0:
+                    prev[v] = u
+                    dq.append(v)
+        if T not in prev:
+            break
+        v = T
+        while prev[v] is not None:
+            u = prev[v]
+            cap[(u, v)] -= 1
+            cap[(v, u)] += 1
+            v = u
+        flow += 1
+    reach = {S}
+    dq = collections.deque([S])
+    while dq:
+        u = dq.popleft()
+        for v in nbr[u]:
+            if v not in reach and cap[(u, v)] > 0:
+                reach.add(v)
+                dq.append(v)
+    out = []
+    for (i, j), at in where.items():
+        if i in reach and j not in reach:
+            out.append(at)
+    return out
 
 
 class Finding:
@@ -263,38 +321,40 @@ class Validator:
             start = [pi for pi in oset if roles[pi] in ("slope", "deck") and
                      self.m.elements[self.owner[polys[pi].owner]].kind == "roof"]
             import collections
-            # breadth first from the roof; each face remembers where its
-            # path last crossed from an outside face to an inside one
-            seen = {pi: None for pi in start}
-            door = {pi: None for pi in start}
-            dq = collections.deque(start)
-            first = []
-            while dq:
-                i = dq.popleft()
-                if roles[i] in INTERIOR and not floors:
-                    first.append(i)
-                    continue
-                for j, at in adj[i]:
-                    if j not in seen:
-                        seen[j] = at
-                        door[j] = door[i] if roles[i] in INTERIOR else (at, j)
-                        dq.append(j)
-            if floors:
-                first = [i for i in floors if i in door]
             spots = []
-            for i in first:
-                d_ = door.get(i) if floors else (seen[i], i)
-                if d_ is None or d_[0] is None:
-                    continue
-                at, j = d_
-                if any(sum((at[k] - q[0][k]) ** 2 for k in range(3)) < 9.0 for q in spots):
-                    continue
-                spots.append((at, j))
+            if floors:
+                # where the leaks are: the fewest edges of the surface that part
+                # the outside's faces from the rooms' floors (a minimum cut)
+                outside = [pi for pi in oset if roles[pi] in OUTSIDE]
+                for at in _min_cut(adj, outside, floors):
+                    if any(sum((at[k] - q[0][k]) ** 2 for k in range(3)) < 4.0 for q in spots):
+                        continue
+                    spots.append((at, None))
+            else:
+                seen = {pi: None for pi in start}
+                dq = collections.deque(start)
+                first = []
+                while dq:
+                    i = dq.popleft()
+                    if roles[i] in INTERIOR:
+                        first.append(i)
+                        continue
+                    for j, at in adj[i]:
+                        if j not in seen:
+                            seen[j] = at
+                            dq.append(j)
+                for i in first:
+                    at = seen[i]
+                    if at is None or any(sum((at[k] - q[0][k]) ** 2 for k in range(3)) < 9.0 for q in spots):
+                        continue
+                    spots.append((at, i))
             check = "sealed" if floors else "finish"
-            what = ("the rooms are open to the outside here: %s meets the outside"
-                    if floors else "an inside finish shows to the weather: %s")
             for at, i in spots[:30]:
-                self.add(check, what % ("%s's %s" % (self.owner[polys[i].owner], roles[i])), tuple(at))
+                if floors:
+                    self.add(check, "the rooms are open to the outside here", tuple(at))
+                else:
+                    self.add(check, "an inside finish shows to the weather: %s's %s"
+                             % (self.owner[polys[i].owner], roles[i]), tuple(at))
             self.stats["floors reached from outside"] = len(floors)
         self.roof_edges(polys, rep)
 

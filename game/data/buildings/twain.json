@@ -1174,11 +1174,11 @@
      "wing_e"
     ],
     [
-     "entry_s",
+     128.5,
      "wing_e"
     ],
     [
-     "entry_s",
+     128.5,
      "wing_corr"
     ],
     [
@@ -1186,7 +1186,7 @@
      "wing_corr"
     ]
    ],
-   "note": "partition assumed, clear of the kitchen chimney and the wall dormer's window"
+   "note": "the upper floor north of the corridor, and along the east wall the rooms from the back stair (ending at x 128.5) to the north end: a box room, the room under the east wall dormer, the bath and the store (second floor plan)"
   },
   {
    "id": "basement_wing",
@@ -3010,7 +3010,8 @@
    ],
    "w": 2.6,
    "sill": 2.8,
-   "head": 9.8
+   "head": 9.6,
+   "note": "head under the first floor's ceiling (9.8) with its lintel"
   },
   {
    "at": [
@@ -3019,7 +3020,8 @@
    ],
    "w": 2.6,
    "sill": 2.8,
-   "head": 9.8
+   "head": 9.6,
+   "note": "head under the first floor's ceiling (9.8) with its lintel"
   },
   {
    "at": [
@@ -3052,33 +3054,36 @@
   },
   {
    "at": [
-    144.25,
+    142.75,
     "wing_e"
    ],
-   "w": 2.2,
+   "w": 2.1,
    "sill": 12.4,
    "head": 15.8,
-   "hood": false
+   "hood": false,
+   "note": "the triple window of the bath and store (second floor plan)"
   },
   {
    "at": [
-    146.75,
+    145.45,
     "wing_e"
    ],
-   "w": 2.2,
+   "w": 2.1,
    "sill": 12.4,
    "head": 15.8,
-   "hood": false
+   "hood": false,
+   "note": "the triple window of the bath and store (second floor plan)"
   },
   {
    "at": [
-    149.25,
+    148.1,
     "wing_e"
    ],
-   "w": 2.2,
+   "w": 2.1,
    "sill": 12.4,
    "head": 15.8,
-   "hood": false
+   "hood": false,
+   "note": "the triple window of the bath and store (second floor plan)"
   },
   {
    "at": [
@@ -3106,7 +3111,8 @@
    ],
    "w": 2.0,
    "sill": 5.0,
-   "head": 10.0
+   "head": 9.6,
+   "note": "under the upper floor (second floor plan: the rooms along the east wall run from x 128.5)"
   },
   {
    "at": [
@@ -3403,8 +3409,9 @@
    ],
    "w": 2.6,
    "sill": 13.0,
-   "head": 21.0,
-   "kind": "ishut"
+   "head": 20.1,
+   "kind": "ishut",
+   "note": "under the bath ceiling, which follows the south-east gable slope down toward the south wall"
   },
   {
    "at": [
@@ -3502,7 +3509,7 @@
     24.86
    ],
    "w": 4.4,
-   "sill": 22.8,
+   "sill": 23.0,
    "head": 24.1,
    "hood": false
   },
@@ -3512,7 +3519,7 @@
     23.85
    ],
    "w": 4.4,
-   "sill": 22.8,
+   "sill": 23.0,
    "head": 24.1,
    "hood": false
   },
@@ -3522,7 +3529,7 @@
     36.79
    ],
    "w": 4.2,
-   "sill": 23.6,
+   "sill": 23.8,
    "head": 25.2,
    "hood": false
   },
@@ -3533,8 +3540,9 @@
    ],
    "w": 6.0,
    "sill": 22.4,
-   "head": 23.9,
-   "hood": false
+   "head": 23.35,
+   "hood": false,
+   "note": "the north lattice dormer's window, under the dormer's eaves (its roof comes down to 23.4 at its sides)"
   },
   {
    "at": [

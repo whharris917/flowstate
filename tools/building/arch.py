@@ -764,7 +764,7 @@ class Model:
             for s in loop:
                 if merged:
                     m = merged[-1]
-                    if m["on"] == s["on"] and self._collinear(m, s) and m.get("mat") == s.get("mat"):
+                    if m["on"] == s["on"] and self._collinear(m, s) and m.get("mat") == s.get("mat") and                             self.space[m["of"]]["floor"] == self.space[s["of"]]["floor"]:
                         m["b"] = s["b"]
                         continue
                 merged.append(dict(s))
@@ -963,6 +963,8 @@ class Model:
             if poly_area(quad) <= 1e-6 or not is_convex(quad):
                 raise GenError("wall at level %s from %s to %s: shorter than its thickness allows at a corner"
                                % (lv, _r(s["a"]), _r(s["b"])))
+            # it stands on the floor of the room it closes
+            f = self.space[s["of"]]["floor"] if s.get("of") in self.space else self.y(lv)
             if self._dry:
                 self.wall_plan.append((quad, f))
                 continue
@@ -993,11 +995,12 @@ class Model:
                 h = self.PART / 2.0
                 quad = [(a[0] - mx * h, a[1] - mz * h), (b[0] - mx * h, b[1] - mz * h),
                         (b[0] + mx * h, b[1] + mz * h), (a[0] + mx * h, a[1] + mz * h)]
+                pf = min(self.space[s["of"]]["floor"], self.space[s["other"]]["floor"])                     if s.get("other") in self.space else self.y(lv)
                 if getattr(self, "_dry", False):
-                    self.wall_plan.append((quad, self.y(lv)))
+                    self.wall_plan.append((quad, pf))
                     continue
                 eid = "part:%s:%d" % (lv, len(self.runs))
-                cells = self._cap(quad, self.y(lv), eid)
+                cells = self._cap(quad, pf, eid)
                 for c_ in cells:
                     c_.mat = "partition"
                 self.add(eid, "partition", cells, "partition", level=lv)
@@ -1054,9 +1057,17 @@ class Model:
                     for A in self.roofs.values():
                         if A is B:
                             continue
-                        for k, (pa, pb, pc, _) in enumerate(A.planes):
-                            others = [Plane.of((pa - q[0], 0.0, pb - q[1]), q[2] - pc) for q in A.planes
-                                      if q is not A.planes[k] and not (abs(pa - q[0]) < 1e-12 and abs(pb - q[1]) < 1e-12)]
+                        # the lower roof's covering as it stands (a part of it cut
+                        # away under a higher roof carries nothing)
+                        for cov in self.elements["roof:" + A.id].cells:
+                            topf = [cov.planes[f.plane] for f in cov.faces if cov.planes[f.plane].role in ("slope", "deck")]
+                            if not topf:
+                                continue
+                            tn = topf[0]
+                            if tn.n[1] < 1e-6:
+                                continue
+                            pa, pb, pc = -tn.n[0] / tn.n[1], -tn.n[2] / tn.n[1], tn.d / tn.n[1]
+                            others = []
                             clear = []
                             empty = False
                             for (qa, qb, qc, _) in B.planes:
@@ -1069,7 +1080,13 @@ class Model:
                                 clear.append(Plane.of((nx, 0.0, nz), rhs, "end"))
                             if empty:
                                 continue
-                            for part in A.extent_parts:
+                            # the lower roof's covering, and a cheek's width beyond
+                            # its edge: a step between two roofs is closed by a
+                            # wall standing at the lower one's edge
+                            hull = _swept([(q[0], q[2]) for q in cov.vset()], (-d[1] * (t + 0.02), d[0] * (t + 0.02)))
+                            for part in [hull]:
+                                if len(part) < 3:
+                                    continue
                                 region = prism_planes(part, None, None, "side") + others + clear + \
                                     [above_y(pa, pb, pc - A.t, "seat")]
                                 for tp in tops:
@@ -1142,15 +1159,31 @@ class Model:
             e = self.elements.get(r.element)
             if e is None or not e.cells:
                 continue
-            lo = min(c.aabb()[0][1] for c in e.cells)
-            hi = max(c.aabb()[1][1] for c in e.cells)
-            if lo - 0.01 <= sill and head <= hi + 0.01:
+            # the wall that stands at the opening's middle
+            q = r.plan(u, (s0 + s1) / 2.0)
+            ym = (sill + head) / 2.0
+            if any(contains(c_, (q[0], ym, q[1]), 1e-6) for c_ in e.cells):
                 score = abs(s - face)
                 if best is None or score < best[0]:
                     best = (score, r, u)
         if best is None:
             raise GenError("opening at %s (sill %.2f, head %.2f) is in no wall" % (o["at"], sill, head))
         return best[1], best[2]
+
+    def _face_runs(self, run: Run) -> list:
+        """The walls whose faces lie in one plane with this one, the same
+        way: one facade, however its storeys divide it."""
+        out = []
+        for r2 in self.runs:
+            if r2.kind != run.kind or r2.centred != run.centred:
+                continue
+            d1, d2 = run.dir, r2.dir
+            if d1[0] * d2[0] + d1[1] * d2[1] < 1 - 1e-6:
+                continue
+            if abs(run.uv(r2.a)[1]) > 0.02 or abs(run.uv(r2.b)[1]) > 0.02:
+                continue
+            out.append(r2)
+        return out
 
     def _profile(self, u: float, w: float, sill: float, head: float, shape: str, rise: float) -> list:
         u0, u1 = u - w / 2.0, u + w / 2.0
@@ -1175,14 +1208,22 @@ class Model:
         FR = float(self.data.get("defaults", {}).get("frame", 0.25))
         CW = float(self.data.get("defaults", {}).get("casing", 0.4))
         errors = []
+        self._uncut = {}
         self._placed = []
         for k, o in enumerate(self.data.get("openings", [])):
             try:
                 run, u = self._find_run(o)
                 w = float(o["w"])
-                if u - w / 2.0 < 0.15 or u + w / 2.0 > run.length - 0.15:
-                    raise GenError("opening at %s: %.2f ft wide, it runs off its wall (%.2f ft long)"
-                                   % (o["at"], w, run.length))
+                # the face it is in: every wall on the same line, the same way
+                spans = sorted((min(a_, b_), max(a_, b_)) for r2 in self._face_runs(run)
+                               for a_, b_ in [(run.uv(r2.a)[0], run.uv(r2.b)[0])])
+                lo_, hi_ = u - w / 2.0 - 0.15, u + w / 2.0 + 0.15
+                cover = lo_
+                for a_, b_ in spans:
+                    if a_ <= cover + 1e-6:
+                        cover = max(cover, b_)
+                if cover < hi_ - 1e-6 or not any(a_ <= lo_ + 1e-6 for a_, b_ in spans):
+                    raise GenError("opening at %s: %.2f ft wide, it runs off its wall" % (o["at"], w))
                 self._placed.append((run, u, w, k))
             except GenError as ex:
                 errors.append(str(ex))
@@ -1209,9 +1250,31 @@ class Model:
             cutter = run_cell(run, prof, s0 - 0.5, s1 + 0.5)
             if cutter is None or head - sill < 0.5 or w < 0.5:
                 raise GenError("opening at %s: no opening (width %.2f, sill %.2f, head %.2f)" % (o["at"], w, sill, head))
+            # the wall must stand all round the hole: a band 0.15 ft wide
+            # outside the opening (the foot of a door excepted) is wall
+            door_foot = kind in ("door", "idoor", "shut", "ishut", "open", "french")
+            ring = offset_poly(prof, [0.0 if door_foot else 0.15] + [0.15] * (len(prof) - 1))
+            face = self._face_runs(run)
+            host = [c_ for r2 in face for c_ in self._uncut.setdefault(r2.element, list(self.elements[r2.element].cells))]
+            # a chimney's brick is wall enough round an opening beside it
+            host += [c_ for e_ in self.elements.values() if e_.kind == "chimney" for c_ in e_.cells]
+            for i in range(len(ring)):
+                pa, pb = ring[i], ring[(i + 1) % len(ring)]
+                if door_foot and i == 0:
+                    continue
+                n_ = max(2, int(math.dist(pa, pb) / 0.25))
+                for j in range(n_):
+                  uu = pa[0] + (pb[0] - pa[0]) * j / n_
+                  yy = pa[1] + (pb[1] - pa[1]) * j / n_
+                  for ss in (s0 + 0.02, (s0 + s1) / 2.0, s1 - 0.02):
+                    q = run.plan(uu, ss)
+                    if not any(contains(c_, (q[0], yy, q[1]), 1e-6) for c_ in host):
+                        raise GenError("opening at %s (sill %.2f, head %.2f): its wall does not stand round it "
+                                       "(nothing at u %.2f, height %.2f)" % (o["at"], sill, head, uu, yy))
             self.openings.append({"id": oid, "run": run, "u": u, "w": w, "sill": sill, "head": head,
                                   "kind": kind, "prof": prof, "index": k, "spec": o})
-            self.yield_to(run.element, [cutter], oid, "reveal")
+            for r2 in face:
+                self.yield_to(r2.element, [cutter], oid, "reveal")
             if kind not in ("window", "french", "door", "idoor", "shut", "ishut", "open"):
                 raise GenError("opening at %s: no kind %r" % (o["at"], kind))
             leaf = kind in ("door", "idoor", "shut", "ishut")
@@ -1579,6 +1642,27 @@ def _grown_pieces(fp: list, parts: list, overs: list) -> list:
         out.extend(pp)
     out = [P.simplify(ccw(p)) for p in out if abs(poly_area(p)) > 1e-6]
     return [p for p in out if len(p) >= 3]
+
+
+def _swept(p: list, v: tuple) -> list:
+    """A convex polygon swept along a vector: the hull of it and its copy
+    moved by v."""
+    pts = [tuple(q) for q in p] + [(q[0] + v[0], q[1] + v[1]) for q in p]
+    pts = sorted(set((round(x, 9), round(z, 9)) for x, z in pts))
+
+    def cr(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lo, up = [], []
+    for q in pts:
+        while len(lo) >= 2 and cr(lo[-2], lo[-1], q) <= 1e-12:
+            lo.pop()
+        lo.append(q)
+    for q in reversed(pts):
+        while len(up) >= 2 and cr(up[-2], up[-1], q) <= 1e-12:
+            up.pop()
+        up.append(q)
+    return lo[:-1] + up[:-1]
 
 
 def poly_less_all(p, qs) -> list:
