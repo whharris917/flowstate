@@ -611,8 +611,7 @@ class Model:
                     hi = self._higher(B, pl, A, B.extent_parts, above=lowest)
                     # where B's front rises from A's wall, A's eave stops across
                     # the width of that front, however high B stands
-                    face = self._same_wall_line(A, B)
-                    if face is not None:
+                    for face in self._same_wall_line(A, B):
                         b0, b1 = face
                         L = math.dist(b0, b1)
                         t = ((b1[0] - b0[0]) / L, (b1[1] - b0[1]) / L)
@@ -658,7 +657,8 @@ class Model:
     def _same_wall_line(A: Roof, B: Roof):
         """Whether an edge of B's footprint runs along an edge of A's, the
         same way (B's front rises from A's wall, as a wall dormer's or a
-        gable's end does)."""
+        gable's end does): every such edge of B."""
+        out = []
         for i in range(len(B.footprint)):
             b0, b1 = B.footprint[i], B.footprint[(i + 1) % len(B.footprint)]
             for j in range(len(A.footprint)):
@@ -674,8 +674,8 @@ class Model:
                 u0 = (b0[0] - a0[0]) * t[0] + (b0[1] - a0[1]) * t[1]
                 u1 = (b1[0] - a0[0]) * t[0] + (b1[1] - a0[1]) * t[1]
                 if min(u1, L) - max(u0, 0.0) > 0.1:
-                    return (b0, b1)
-        return None
+                    out.append((b0, b1))
+        return out
 
     def _keep_plane(self, fn, cells, cutters, role):
         out = []
@@ -1409,8 +1409,12 @@ class Model:
                     y0 = self.grade(*p) - 0.5 if canopy else fl
                     sq = [(p[0] - 0.25, p[1] - 0.25), (p[0] + 0.25, p[1] - 0.25), (p[0] + 0.25, p[1] + 0.25), (p[0] - 0.25, p[1] + 0.25)]
                     col = prism(sq, y0, HI)
-                    parts = [x for u in R.under for x in [overlap(col, u)] if x is not None]
-                    posts.extend(disjoint(parts))
+                    parts = disjoint([x for u in R.under for x in [overlap(col, u)] if x is not None])
+                    walls_ = [c_ for e_ in self.elements.values() if e_.kind in ("wall", "cheek", "chimney")
+                              for c_ in e_.cells]
+                    if any(overlap(pc_, wc_) is not None for pc_ in parts for wc_ in walls_):
+                        continue
+                    posts.extend(parts)
                 self.add("posts:" + s["id"], "post", posts, "trim", space=s["id"])
             if canopy:
                 continue
@@ -1459,6 +1463,10 @@ class Model:
             self.add("rail:" + s["id"], "rail", disjoint([r_ for r_ in rails if r_ is not None]), "trim", space=s["id"])
             for R2 in self.roofs.values():
                 self.yield_to("rail:" + s["id"], self._above_underside(R2), "roof:" + R2.id)
+            # and stop at the walls they meet
+            for e_ in list(self.elements.values()):
+                if e_.kind in ("wall", "cheek", "chimney", "post"):
+                    self.yield_to("rail:" + s["id"], e_.cells, e_.id)
             # a skirt from the ground to a porch floor standing clear of it
             if s["level"] == self._lowest_level():
                 sk = []

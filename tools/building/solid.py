@@ -456,7 +456,10 @@ def poly_meet(p, q) -> list:
     """Convex p within convex q (both anticlockwise)."""
     out = list(p)
     for i in range(len(q)):
-        out = clip_poly(out, q[i], q[(i + 1) % len(q)])
+        a, b = q[i], q[(i + 1) % len(q)]
+        if abs(a[0] - b[0]) + abs(a[1] - b[1]) < 1e-12:
+            continue
+        out = clip_poly(out, a, b)
         if len(out) < 3:
             return []
     return out if abs(poly_area(out)) > AREA_EPS else []
@@ -470,6 +473,8 @@ def poly_less(p, q) -> list[list]:
     cur = list(p)
     for i in range(len(q)):
         a, b = q[i], q[(i + 1) % len(q)]
+        if abs(a[0] - b[0]) + abs(a[1] - b[1]) < 1e-12:
+            continue
         piece = clip_poly(cur, b, a)
         if len(piece) >= 3 and abs(poly_area(piece)) > AREA_EPS:
             out.append(piece)

@@ -2051,9 +2051,8 @@
    "level": "third",
    "kind": "attic",
    "group": "main",
-   "floor": 23.0,
    "top": "roof",
-   "note": "its west side on the Texas deck corner (x 60.5), not a third of a foot short of it",
+   "note": "its west side on the Texas deck corner (x 60.5), not a third of a foot short of it; its floor the third floor's (24)",
    "poly": [
     [
      60.5,
@@ -3603,7 +3602,7 @@
    "id": "hall",
    "at": [
     96.4,
-    70.0
+    69.6
    ],
    "size": [
     2.4,
@@ -3611,7 +3610,7 @@
    ],
    "base": 0.0,
    "top": 48.0,
-   "note": "roof plan; elevations 47.8-48.1"
+   "note": "roof plan; elevations 47.8-48.1; its east face on the inside of the east dormer's front wall (z 73.5)"
   },
   {
    "id": "west_gable",
