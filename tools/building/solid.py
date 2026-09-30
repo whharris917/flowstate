@@ -113,7 +113,8 @@ def vertical(p0, p1, role: str = "") -> Plane:
 def prism_planes(poly, y0: float | None, y1: float | None, side_role: str = "side",
                  bottom_role: str = "bottom", top_role: str = "top") -> list[Plane]:
     """A vertical prism over a convex anticlockwise plan polygon."""
-    out = [vertical(poly[i], poly[(i + 1) % len(poly)], side_role) for i in range(len(poly))]
+    out = [vertical(poly[i], poly[(i + 1) % len(poly)], side_role) for i in range(len(poly))
+           if abs(poly[i][0] - poly[(i + 1) % len(poly)][0]) + abs(poly[i][1] - poly[(i + 1) % len(poly)][1]) > 1e-9]
     if y0 is not None:
         out.append(floor_at(y0, bottom_role))
     if y1 is not None:

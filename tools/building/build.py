@@ -76,7 +76,9 @@ def finish(v: Validator, poly) -> str:
     k = e.kind
     if k == "roof":
         R = m.roofs[e.id.split(":", 1)[1]]
-        if role in ("slope", "deck"):
+        if role == "deck":
+            return R.spec.get("deck_cover", R.cover)
+        if role == "slope":
             return R.cover
         if role == "attic":
             return "attic"
@@ -156,9 +158,10 @@ def write(v: Validator, path: str, failed: bool) -> int:
     ox, oz = w.get("origin", [0.0, 0.0])
     ft = float(w.get("ft_to_m", 0.3048))
     datum = float(w.get("first_floor_m", 0.0))
-    # the surface without door leaves, which are drawn open
-    solid_ids = [i for i, o in enumerate(v.owner) if m.elements[o].kind != "door"]
-    leaf_ids = [i for i, o in enumerate(v.owner) if m.elements[o].kind == "door"]
+    # the surface without the door leaves that are drawn standing open
+    swung = lambda o: m.elements[o].kind == "door" and m.elements[o].info.get("swung")
+    solid_ids = [i for i, o in enumerate(v.owner) if not swung(o)]
+    leaf_ids = [i for i, o in enumerate(v.owner) if swung(o)]
     cells = [v.cells[i] for i in solid_ids]
     sub = Validator.__new__(Validator)
     sub.m, sub.cells, sub.owner = m, cells, [v.owner[i] for i in solid_ids]

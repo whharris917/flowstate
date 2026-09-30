@@ -124,6 +124,8 @@ def run_cell(run: Run, prof: list, s0: float, s1: float, mat: str = "", color=(1
     for i in range(n):
         (ua, ya), (ub, yb) = prof[i], prof[(i + 1) % n]
         du, dy = ub - ua, yb - ya
+        if abs(du) + abs(dy) < 1e-9:
+            continue
         # outward normal of a ccw profile edge in (u, y): (dy, -du)
         nu, ny = dy, -du
         nrm = (d[0] * nu, ny, d[1] * nu)
@@ -179,29 +181,8 @@ class Roof:
         return min(a * x + b * z + c for a, b, c, _ in self.planes)
 
     def peak(self) -> float:
-        return max(self.top(*q) for q in self._corners())
-
-    def _corners(self) -> list:
-        # the surface's highest point is at a vertex of the plan cells
-        pts = list(self.footprint)
-        for i in range(len(self.planes)):
-            for j in range(i + 1, len(self.planes)):
-                for k in range(j + 1, len(self.planes)):
-                    a = self.planes[i]
-                    b = self.planes[j]
-                    c = self.planes[k]
-                    # solve a.x = b.x = c.x in plan
-                    m11, m12 = a[0] - b[0], a[1] - b[1]
-                    m21, m22 = a[0] - c[0], a[1] - c[1]
-                    det = m11 * m22 - m12 * m21
-                    if abs(det) < 1e-12:
-                        continue
-                    r1, r2 = b[2] - a[2], c[2] - a[2]
-                    x = (r1 * m22 - m12 * r2) / det
-                    z = (m11 * r2 - r1 * m21) / det
-                    if any(P.point_in((x, z), q) or P.seg_dist((x, z), q[0], q[1]) < 1e-6 for q in self.parts):
-                        pts.append((x, z))
-        return pts
+        """The surface's highest point over the footprint."""
+        return max(c.aabb()[1][1] for c in self.solid)
 
 
 def _edge_plane(a, b, plate: float, pitch: float):
@@ -330,7 +311,7 @@ class Model:
         those lines); `edges` gives them by index; `at` finds an edge by a
         point on it."""
         base = {
-            "kind": spec.get("edge", "eave"),
+            "kind": spec.get("edge", "gable" if "shed" in spec else "eave"),
             "plate": spec.get("plate"),
             "pitch": spec.get("pitch"),
             "over": spec.get("overhang", 0.0),
@@ -364,11 +345,32 @@ class Model:
         fp = ccw(fp)
         planes = []
         overs = []
+        apex = None
+        if "apex" in spec:
+            # a pyramid or cone: every eave rises to one point
+            apex = M.expand_point(spec["apex"])
+            on_edge = any(P.seg_dist(apex, fp[i], fp[(i + 1) % len(fp)]) < 1e-3 for i in range(len(fp)))
+            if not P.point_in(apex, fp) and not on_edge:
+                raise GenError("roof %s: its apex stands outside its footprint" % rid)
+            if spec.get("peak") is None:
+                raise GenError("roof %s: an apex needs a peak height" % rid)
         for i, e in enumerate(edges):
+            if apex is not None and e["kind"] == "eave" and e.get("pitch") is None:
+                a, b = fp[i], fp[(i + 1) % len(fp)]
+                dist = abs((b[0] - a[0]) * (apex[1] - a[1]) - (b[1] - a[1]) * (apex[0] - a[0])) / math.dist(a, b)
+                if dist < 1e-3:
+                    raise GenError("roof %s: edge %d runs through its apex (make it abut)" % (rid, i))
+                rise = float(spec["peak"]) - self.y(e["plate"])
+                if rise <= 0:
+                    raise GenError("roof %s: its peak is under its plate" % rid)
+                e = dict(e, pitch=rise / dist)
+                edges[i] = e
             kind = e["kind"]
             if kind not in ("eave", "gable", "abut"):
                 raise GenError("roof %s edge %d: kind %r" % (rid, i, kind))
-            if kind == "eave":
+            if kind == "eave" and "shed" in spec:
+                over = float(e["over"])
+            elif kind == "eave":
                 if e.get("plate") is None or e.get("pitch") is None:
                     raise GenError("roof %s edge %d: an eave needs a plate and a pitch" % (rid, i))
                 pitch = float(e["pitch"])
@@ -385,6 +387,14 @@ class Model:
             if not (0.0 <= over <= OVERHANG_MAX):
                 raise GenError("roof %s edge %d: overhang %.2f out of range" % (rid, i, over))
             overs.append(over)
+        if "shed" in spec:
+            # one plane, rising from a line (inward to its left) at a pitch
+            sh = spec["shed"]
+            p0, p1 = M.expand_point(sh["from"][0]), M.expand_point(sh["from"][1])
+            pitch = float(sh["pitch"])
+            if not (0.0 <= pitch <= PITCH_MAX):
+                raise GenError("roof %s: pitch %.2f out of range" % (rid, pitch))
+            planes.append(_edge_plane(p0, p1, self.y(sh["plate"]), pitch) + (-2,))
         if "deck" in spec:
             planes.append((0.0, 0.0, float(spec["deck"]), -1))
         if not planes:
@@ -394,12 +404,23 @@ class Model:
             raise GenError("roof %s: a roof of several planes needs a convex footprint "
                            "(compose it from convex roofs)" % rid)
         parts = [fp] if is_convex(fp) else P.convex_parts(fp)
-        extent = offset_poly(fp, overs)
-        if not is_convex(extent) and not single:
-            raise GenError("roof %s: its overhangs make its outline concave" % rid)
-        extent_parts = [extent] if is_convex(extent) else P.convex_parts(extent)
+        if is_convex(fp):
+            ext = offset_poly(fp, overs)
+            if not is_convex(ext):
+                raise GenError("roof %s: its overhangs make its outline concave" % rid)
+            extent_parts = [ext]
+        else:
+            extent_parts = _grown_pieces(fp, parts, overs)
+        extent = [q for p in extent_parts for q in p]
         r = Roof(rid, spec, fp, parts, edges, extent, extent_parts, planes,
                  float(spec.get("depth", self.ROOF_T)), spec.get("cover", "slate"), order)
+        r.lines = []
+        for i in range(len(fp)):
+            a, b = fp[i], fp[(i + 1) % len(fp)]
+            L = math.dist(a, b)
+            t = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
+            n_ = (t[1], -t[0])
+            r.lines.append(((a[0] + n_[0] * overs[i], a[1] + n_[1] * overs[i]), t))
         # the surface must close over the footprint
         for q in r.footprint:
             for (a, b, c, _) in planes:
@@ -410,7 +431,7 @@ class Model:
             raise GenError("roof %s: its planes do not close over its footprint (%s)" % (rid, ex))
         pk = r.peak()
         for i, e in enumerate(edges):
-            if e["kind"] == "eave" and pk < self.y(e["plate"]) - 1e-6:
+            if e["kind"] == "eave" and "shed" not in spec and pk < self.y(e["plate"]) - 1e-6:
                 raise GenError("roof %s: peak under its plate" % rid)
         return r
 
@@ -525,7 +546,12 @@ class Model:
             c_ = cell(prism_planes(poly, LO, HI, "meet") + extra)
             if c_ is not None:
                 out.append(c_)
-        return out
+        return subtract_all(out, self._hole_cells(B))
+
+    def _hole_cells(self, R: Roof) -> list:
+        if getattr(R, "_holes", None) is None:
+            R._holes = [prism(q, LO, HI, "hole") for h in R.spec.get("holes", []) for q in P.convex_parts(self._poly(h))]
+        return R._holes
 
     def _compose_roofs(self) -> None:
         roofs = list(self.roofs.values())
@@ -535,7 +561,7 @@ class Model:
                 a, b, c, ei = pl
                 others = [Plane.of((a - q[0], 0.0, b - q[1]), q[2] - c, "hip") for q in A.planes if q is not pl
                           and not (abs(a - q[0]) < 1e-12 and abs(b - q[1]) < 1e-12)]
-                top = below_y(a, b, c, "deck" if ei < 0 else "slope")
+                top = below_y(a, b, c, "deck" if ei == -1 else "slope")
                 bot = above_y(a, b, c - A.t, "underside")
                 for part in A.extent_parts:
                     ends = self._extent_planes(A, part)
@@ -583,9 +609,23 @@ class Model:
                     # other's lowest edge runs on under it
                     lowest = min(B.top(*q) for q in B.extent) - B.t
                     hi = self._higher(B, pl, A, B.extent_parts, above=lowest)
+                    # where B's front rises from A's wall, A's eave stops across
+                    # the width of that front, however high B stands
+                    face = self._same_wall_line(A, B)
+                    if face is not None:
+                        b0, b1 = face
+                        L = math.dist(b0, b1)
+                        t = ((b1[0] - b0[0]) / L, (b1[1] - b0[1]) / L)
+                        span = []
+                        for part in B.extent_parts:
+                            q = poly_meet(ccw(part), ccw([(b0[0] - t[1] * 50, b0[1] + t[0] * 50), (b0[0] + t[1] * 50, b0[1] - t[0] * 50),
+                                                          (b1[0] + t[1] * 50, b1[1] - t[0] * 50), (b1[0] - t[1] * 50, b1[1] + t[0] * 50)]))
+                            if q:
+                                span.append(q)
+                        hi = hi + self._higher(B, pl, A, span)
                     if hi:
                         cut = subtract_all(cut, hi, "meet")
-                    cut = subtract_all(cut, B.solid, "meet")
+                    cut = subtract_all(cut, subtract_all(B.solid, self._hole_cells(B)), "meet")
                     self.joints.add(("roof:" + A.id, "roof:" + B.id))
                 for x in cut:
                     x.plane = c_.plane
@@ -599,6 +639,43 @@ class Model:
                 A.infield = self._keep_plane(subtract_all, A.infield, cutters, "hole")
                 A.eave = self._keep_plane(subtract_all, A.eave, cutters, "hole")
                 A.under = subtract_all(A.under, cutters)
+
+    def _above_underside(self, R: Roof) -> list:
+        """Everything over a roof's underside within its outline, as cells."""
+        if getattr(R, "_above", None) is None:
+            out = []
+            for i, (a, b, c, _) in enumerate(R.planes):
+                others = [Plane.of((a - q[0], 0.0, b - q[1]), q[2] - c) for q in R.planes if q is not R.planes[i]
+                          and not (abs(a - q[0]) < 1e-12 and abs(b - q[1]) < 1e-12)]
+                for part in R.extent_parts:
+                    x = cell(prism_planes(part, None, HI) + others + [above_y(a, b, c - R.t)])
+                    if x is not None:
+                        out.append(x)
+            R._above = subtract_all(out, self._hole_cells(R))
+        return R._above
+
+    @staticmethod
+    def _same_wall_line(A: Roof, B: Roof):
+        """Whether an edge of B's footprint runs along an edge of A's, the
+        same way (B's front rises from A's wall, as a wall dormer's or a
+        gable's end does)."""
+        for i in range(len(B.footprint)):
+            b0, b1 = B.footprint[i], B.footprint[(i + 1) % len(B.footprint)]
+            for j in range(len(A.footprint)):
+                a0, a1 = A.footprint[j], A.footprint[(j + 1) % len(A.footprint)]
+                L = math.dist(a0, a1)
+                t = ((a1[0] - a0[0]) / L, (a1[1] - a0[1]) / L)
+                off0 = (b0[0] - a0[0]) * t[1] - (b0[1] - a0[1]) * t[0]
+                off1 = (b1[0] - a0[0]) * t[1] - (b1[1] - a0[1]) * t[0]
+                if abs(off0) > 0.05 or abs(off1) > 0.05:
+                    continue
+                if (b1[0] - b0[0]) * t[0] + (b1[1] - b0[1]) * t[1] <= 0:
+                    continue
+                u0 = (b0[0] - a0[0]) * t[0] + (b0[1] - a0[1]) * t[1]
+                u1 = (b1[0] - a0[0]) * t[0] + (b1[1] - a0[1]) * t[1]
+                if min(u1, L) - max(u0, 0.0) > 0.1:
+                    return (b0, b1)
+        return None
 
     def _keep_plane(self, fn, cells, cutters, role):
         out = []
@@ -620,25 +697,31 @@ class Model:
         gable's bargeboard where the outline follows the roof's own edge,
         a seam elsewhere."""
         out = []
-        n = len(A.footprint)
         for k in range(len(part)):
             a, b = part[k], part[(k + 1) % len(part)]
+            if math.dist(a, b) < 1e-9:
+                continue
             role = "seam"
-            for i in range(n):
-                # the grown edge i runs parallel to footprint edge i
-                ga, gb = A.extent[i], A.extent[(i + 1) % n]
-                if P.seg_dist(a, ga, gb) < 1e-4 and P.seg_dist(b, ga, gb) < 1e-4:
+            for i, (q, t) in enumerate(A.lines):
+                # on the line footprint edge i is grown to
+                da = abs((a[0] - q[0]) * t[1] - (a[1] - q[1]) * t[0])
+                db = abs((b[0] - q[0]) * t[1] - (b[1] - q[1]) * t[0])
+                if da < 1e-4 and db < 1e-4:
                     kind = A.edges[i]["kind"]
                     role = "fascia" if kind == "eave" else "rake" if kind == "gable" else "abut"
+                    break
             out.append(vertical(a, b, role))
         return out
 
     def enclosed_at(self, x: float, z: float, below: float) -> bool:
-        """Whether an enclosed space lies at a plan point under a height."""
+        """Whether the space nearest under a point (at a plan point, the one
+        with the highest floor under the height) is enclosed."""
+        best = None
         for s in self.spaces:
-            if not s["open"] and s["floor"] < below and P.point_in((x, z), s["poly"]):
-                return True
-        return False
+            if s["floor"] < below and P.point_in((x, z), s["poly"]):
+                if best is None or s["floor"] > best["floor"]:
+                    best = s
+        return best is not None and not best["open"]
 
     def _covering_elements(self) -> None:
         for A in self.roofs.values():
@@ -694,9 +777,8 @@ class Model:
     @staticmethod
     def _collinear(s, t) -> bool:
         a, b, c = s["a"], s["b"], t["b"]
-        cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
         dt = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])
-        return abs(cr) < 1e-6 * max(1.0, math.dist(a, c)) ** 2 and dt > 0
+        return dt > 0 and P.seg_dist(b, a, c) < 0.02 and math.dist(a, c) > 1e-6
 
     def _level_region(self, lv: str) -> list:
         """The level's enclosed spaces as convex plan pieces."""
@@ -791,7 +873,9 @@ class Model:
             return []
         remaining = [col]
         capped = []
-        for (poly, bottom, top, lv, sid) in sorted(self.slab_plan, key=lambda s: s[1]):
+        caps = [(poly, bottom) for (poly, bottom, top, lv, sid) in self.slab_plan] + \
+            [(ccw(q), f) for (q, f) in getattr(self, "wall_plan", [])]
+        for (poly, bottom) in sorted(caps, key=lambda s: s[1]):
             if bottom <= y0 + 0.05:
                 continue
             sp = prism(poly)
@@ -828,6 +912,14 @@ class Model:
         return self.groups.get(group, {}).get("material", "brick")
 
     def _walls(self) -> None:
+        self.wall_plan = []
+        self._dry = True
+        self._each_wall()
+        self._partitions()
+        self._dry = False
+        self._each_wall()
+
+    def _each_wall(self) -> None:
         for lv, segs in self.outlines.items():
             groups = []
             for s in segs:
@@ -871,6 +963,9 @@ class Model:
             if poly_area(quad) <= 1e-6 or not is_convex(quad):
                 raise GenError("wall at level %s from %s to %s: shorter than its thickness allows at a corner"
                                % (lv, _r(s["a"]), _r(s["b"])))
+            if self._dry:
+                self.wall_plan.append((quad, f))
+                continue
             mat = self._wall_mat(group, s["a"], s["b"], lv)
             eid = "wall:%s:%s:%d" % (lv, group, len(self.runs))
             cells = self._cap(quad, f, eid, ("outer", "end", "inner", "end"))
@@ -898,6 +993,9 @@ class Model:
                 h = self.PART / 2.0
                 quad = [(a[0] - mx * h, a[1] - mz * h), (b[0] - mx * h, b[1] - mz * h),
                         (b[0] + mx * h, b[1] + mz * h), (a[0] + mx * h, a[1] + mz * h)]
+                if getattr(self, "_dry", False):
+                    self.wall_plan.append((quad, self.y(lv)))
+                    continue
                 eid = "part:%s:%d" % (lv, len(self.runs))
                 cells = self._cap(quad, self.y(lv), eid)
                 for c_ in cells:
@@ -959,23 +1057,39 @@ class Model:
                         for k, (pa, pb, pc, _) in enumerate(A.planes):
                             others = [Plane.of((pa - q[0], 0.0, pb - q[1]), q[2] - pc) for q in A.planes
                                       if q is not A.planes[k] and not (abs(pa - q[0]) < 1e-12 and abs(pb - q[1]) < 1e-12)]
-                            for part in A.parts:
-                                region = prism_planes(part, None, None, "side") + others + [above_y(pa, pb, pc - A.t, "seat")]
+                            clear = []
+                            empty = False
+                            for (qa, qb, qc, _) in B.planes:
+                                nx, nz = pa - qa, pb - qb
+                                rhs = qc - B.t - pc
+                                if abs(nx) < 1e-12 and abs(nz) < 1e-12:
+                                    if rhs <= 1e-6:
+                                        empty = True
+                                    continue
+                                clear.append(Plane.of((nx, 0.0, nz), rhs, "end"))
+                            if empty:
+                                continue
+                            for part in A.extent_parts:
+                                region = prism_planes(part, None, None, "side") + others + clear + \
+                                    [above_y(pa, pb, pc - A.t, "seat")]
                                 for tp in tops:
                                     x = tp.with_planes(region)
                                     if x is not None:
                                         pieces.append(x)
                     pieces = disjoint(pieces)
+                    # it stops at the walls, floors and cheeks already there
+                    for e in list(self.elements.values()):
+                        if e.kind in ("wall", "slab", "cheek") and pieces:
+                            n0 = sum(c.volume() for c in pieces)
+                            pieces = subtract_all(pieces, e.cells)
+                            if abs(sum(c.volume() for c in pieces) - n0) > 1e-5:
+                                self.joints.add((run.element, e.id))
                     if not pieces:
                         continue
                     for c_ in pieces:
                         c_.mat = mat
                     self.add(run.element, "cheek", pieces, mat, roof=B.id)
                     self.runs.append(run)
-                    # at a corner it stops against the roof's cheeks built before it
-                    for e in list(self.elements.values()):
-                        if e.kind == "cheek" and e.info.get("roof") == B.id and e.id != run.element:
-                            self.yield_to(run.element, e.cells, e.id)
                     # partitions under it stop at it
                     for e in list(self.elements.values()):
                         if e.kind == "partition":
@@ -1003,6 +1117,9 @@ class Model:
             crown = prism(poly, top - 0.5, top, "chimney", "chimney")
             eid = "chimney:" + ch["id"]
             self.add(eid, "chimney", [stack, band, crown], "chimney", top=top)
+            for e in list(self.elements.values()):
+                if e.kind == "chimney" and e.id != eid:
+                    self.yield_to(eid, e.cells, e.id)
             shaft = [prism(poly, base, top), prism(big, top - 1.0, top - 0.5)]
             for e in list(self.elements.values()):
                 if e.kind in ("roof", "slab", "wall", "partition", "cheek") and e.id != eid:
@@ -1039,6 +1156,8 @@ class Model:
         u0, u1 = u - w / 2.0, u + w / 2.0
         if shape == "flat" or rise <= 0.01:
             return rect(u0, u1, sill, head)
+        # an arch taller than the opening makes a lunette: all arch
+        rise = min(rise, head - sill)
         # the head is an arc from (u0, head - rise) through (u, head)
         spring = head - rise
         r = (w * w / 4.0 + rise * rise) / (2.0 * rise)
@@ -1055,10 +1174,32 @@ class Model:
     def _openings(self) -> None:
         FR = float(self.data.get("defaults", {}).get("frame", 0.25))
         CW = float(self.data.get("defaults", {}).get("casing", 0.4))
+        errors = []
+        self._placed = []
         for k, o in enumerate(self.data.get("openings", [])):
+            try:
+                run, u = self._find_run(o)
+                w = float(o["w"])
+                if u - w / 2.0 < 0.15 or u + w / 2.0 > run.length - 0.15:
+                    raise GenError("opening at %s: %.2f ft wide, it runs off its wall (%.2f ft long)"
+                                   % (o["at"], w, run.length))
+                self._placed.append((run, u, w, k))
+            except GenError as ex:
+                errors.append(str(ex))
+                self._placed.append(None)
+        if not errors:
+            for k, o in enumerate(self.data.get("openings", [])):
+                try:
+                    self._opening(k, o, FR, CW)
+                except GenError as ex:
+                    errors.append(str(ex))
+        if errors:
+            raise GenError("%d openings cannot be made:\n  " % len(errors) + "\n  ".join(errors))
+
+    def _opening(self, k: int, o: dict, FR: float, CW: float) -> None:
+        if True:
             kind = o.get("kind", "window")
-            run, u = self._find_run(o)
-            w = float(o["w"])
+            run, u, w, _ = self._placed[k]
             sill, head = float(o["sill"]), float(o["head"])
             shape = o.get("head_shape", "flat")
             rise = float(o.get("rise", w / 2.0 if shape == "round" else w * 0.16 if shape == "segment" else 0.0))
@@ -1066,13 +1207,17 @@ class Model:
             s0, s1 = run.s_range()
             oid = "opening:%d" % k
             cutter = run_cell(run, prof, s0 - 0.5, s1 + 0.5)
+            if cutter is None or head - sill < 0.5 or w < 0.5:
+                raise GenError("opening at %s: no opening (width %.2f, sill %.2f, head %.2f)" % (o["at"], w, sill, head))
             self.openings.append({"id": oid, "run": run, "u": u, "w": w, "sill": sill, "head": head,
                                   "kind": kind, "prof": prof, "index": k, "spec": o})
             self.yield_to(run.element, [cutter], oid, "reveal")
-            door = kind in ("door", "idoor")
-            shut = kind == "ishut"
-            inner = offset_poly(prof, [0.0 if door else -FR] + [-FR] * (len(prof) - 1)) if not door else \
-                offset_poly(prof, [0.0] + [-FR] * (len(prof) - 1))
+            if kind not in ("window", "french", "door", "idoor", "shut", "ishut", "open"):
+                raise GenError("opening at %s: no kind %r" % (o["at"], kind))
+            leaf = kind in ("door", "idoor", "shut", "ishut")
+            door = leaf or kind == "open"           # no frame across the foot
+            swung = kind in ("door", "idoor")
+            inner = offset_poly(prof, [0.0 if door else -FR] + [-FR] * (len(prof) - 1))
             mid = (s0 + s1) / 2.0
             fd = min(0.35, s1 - s0)
             # the frame: a board along each edge of the hole, mitred at the
@@ -1085,10 +1230,12 @@ class Model:
                 frame.append(run_cell(run, q, mid - fd / 2.0, mid + fd / 2.0, "frame",
                                       edge_roles=["fit", "mitre", "inside", "mitre"]))
             self.add(oid + ":frame", "frame", frame, "frame", opening=oid)
-            if door or shut:
+            if kind == "open":
+                pass
+            elif leaf:
                 lt = 0.15
-                leaf = run_cell(run, ccw(inner), mid - fd / 2.0, mid - fd / 2.0 + lt, "door")
-                self.add(oid + ":leaf", "door", [leaf], "door", opening=oid, hinge=True, closed_only=door)
+                lc = run_cell(run, ccw(inner), mid - fd / 2.0, mid - fd / 2.0 + lt, "door")
+                self.add(oid + ":leaf", "door", [lc], "door", opening=oid, swung=swung)
             else:
                 ys = [q[1] for q in inner]
                 us = [q[0] for q in inner]
@@ -1105,17 +1252,54 @@ class Model:
                     self.add(oid + ":rail", "frame", [run_cell(run, q, mid - 0.06, mid + 0.06, "frame") for q in rail],
                              "frame", opening=oid)
             if run.kind == "partition":
-                continue
-            # outside: casing, sill, hood
-            grown = offset_poly(prof, [0.0] + [CW] * (len(prof) - 1))
-            casing = [run_cell(run, q, s1, s1 + 0.12, "casing") for q in poly_less(ccw(grown), ccw(prof))]
-            self.add(oid + ":casing", "casing", casing, "trim", opening=oid, host=run.element)
+                return
+            # outside: casing, sill, hood, as wide as the wall and the
+            # openings beside it leave room for
+            trim = o.get("trim", ["casing", "hood", "sill"])
+            if not o.get("hood", True) and "hood" in trim:
+                trim = [t_ for t_ in trim if t_ != "hood"]
+            left, right = self._room_beside(k, run, u, w)
+            cl, cr_ = min(CW, left), min(CW, right)
+            xl, xr = min(0.2, left - cl), min(0.2, right - cr_)
+            n_ = len(prof)
+            widths = [0.0] + [CW] * (n_ - 1)
+            widths[1] = cr_
+            widths[n_ - 1] = cl
+            grown = offset_poly(prof, widths)
             ytop = max(q[1] for q in grown)
-            hood = run_cell(run, rect(u - w / 2 - CW - 0.2, u + w / 2 + CW + 0.2, ytop, ytop + 0.3), s1, s1 + 0.3, "hood")
-            self.add(oid + ":hood", "hood", [hood], "trim", opening=oid, host=run.element)
-            if not door:
-                sl = run_cell(run, rect(u - w / 2 - CW - 0.15, u + w / 2 + CW + 0.15, sill - 0.3, sill), s1, s1 + 0.3, "sill")
+            if "casing" in trim:
+                casing = [run_cell(run, q, s1, s1 + 0.12, "casing") for q in poly_less(ccw(grown), ccw(prof))]
+                self.add(oid + ":casing", "casing", casing, "trim", opening=oid, host=run.element)
+            if "hood" in trim:
+                hood = run_cell(run, rect(u - w / 2 - cl - xl, u + w / 2 + cr_ + xr, ytop, ytop + 0.3), s1, s1 + 0.3, "hood")
+                self.add(oid + ":hood", "hood", [hood], "trim", opening=oid, host=run.element)
+            if "sill" in trim and not door and kind != "french":
+                sl = run_cell(run, rect(u - w / 2 - cl - min(0.15, xl), u + w / 2 + cr_ + min(0.15, xr), sill - 0.3, sill),
+                              s1, s1 + 0.3, "sill")
                 self.add(oid + ":sill", "sill", [sl], "stone", opening=oid, host=run.element)
+
+    def _room_beside(self, k: int, run: Run, u: float, w: float) -> tuple:
+        """How far the trim of opening k may reach along its wall's face,
+        each side: to the wall's end, or half way to the next opening on the
+        same face."""
+        left, right = u - w / 2.0, run.length - (u + w / 2.0)
+        for pl in self._placed:
+            if pl is None or pl[3] == k:
+                continue
+            r2, u2, w2, _ = pl
+            if r2.kind == "partition":
+                continue
+            # the same face: the same line, the same way
+            c = r2.plan(u2, 0.0)
+            uu, ss = run.uv(c)
+            d2 = r2.dir
+            if abs(ss) > 0.05 or d2[0] * run.dir[0] + d2[1] * run.dir[1] < 0.99:
+                continue
+            if uu > u:
+                right = min(right, ((uu - w2 / 2.0) - (u + w / 2.0)) / 2.0)
+            else:
+                left = min(left, ((u - w / 2.0) - (uu + w2 / 2.0)) / 2.0)
+        return max(0.0, left - 0.02), max(0.0, right - 0.02)
 
     # ---- porches ------------------------------------------------------------
 
@@ -1138,6 +1322,7 @@ class Model:
             open_edges = self._open_edges(s)
             # posts on the open edges' corners and along them
             spots = []
+            gaps = self._entries(s, open_edges)
             if R is not None:
                 ins = 0.4
                 for (a, b) in open_edges:
@@ -1148,7 +1333,8 @@ class Model:
                     for j in range(k + 1):
                         uu = ins + (L - 2 * ins) * j / k
                         p = (a[0] + d[0] * uu + m[0] * ins, a[1] + d[1] * uu + m[1] * ins)
-                        if not any(math.dist(p, q) < 1.0 for q in spots):
+                        in_gap = any(P.seg_dist(p, g0, g1) < 0.6 for g0, g1 in gaps)
+                        if not in_gap and not any(math.dist(p, q) < 1.0 for q in spots):
                             spots.append(p)
                 posts = []
                 for p in spots:
@@ -1171,9 +1357,28 @@ class Model:
                 run = Run(a, b, 0.25, "rail", "rail")
                 stops = sorted([run.uv(p)[0] for p in spots if abs(run.uv(p)[1] + ins) < 0.05])
                 cuts = [0.0] + stops + [L]
+                pieces = []
                 for j in range(len(cuts) - 1):
-                    u0 = cuts[j] + (0.25 if j > 0 else ins + 0.25 if self._post_at(spots, run, cuts[j]) else 0.0)
+                    u0 = cuts[j] + (0.25 if j > 0 else 0.0)
                     u1 = cuts[j + 1] - (0.25 if j + 1 < len(cuts) - 1 else 0.0)
+                    free = [(u0, u1)]
+                    for g0, g1 in gaps:
+                        ga, gb = run.uv(g0)[0], run.uv(g1)[0]
+                        if abs(run.uv(g0)[1]) > 0.05 or abs(run.uv(g1)[1]) > 0.05:
+                            continue
+                        ga, gb = min(ga, gb), max(ga, gb)
+                        nxt = []
+                        for f0, f1 in free:
+                            if gb <= f0 or ga >= f1:
+                                nxt.append((f0, f1))
+                                continue
+                            if ga > f0:
+                                nxt.append((f0, ga))
+                            if gb < f1:
+                                nxt.append((gb, f1))
+                        free = nxt
+                    pieces.extend(free)
+                for u0, u1 in pieces:
                     if u1 - u0 < 0.5:
                         continue
                     s0, s1 = -ins - 0.12, -ins + 0.12
@@ -1183,7 +1388,9 @@ class Model:
                     for q in range(nb):
                         uc = u0 + (u1 - u0) * (q + 0.5) / nb
                         rails.append(run_cell(run, rect(uc - 0.06, uc + 0.06, fl + 0.45, fl + 2.7), -ins - 0.06, -ins + 0.06, "rail"))
-            self.add("rail:" + s["id"], "rail", rails, "trim", space=s["id"])
+            self.add("rail:" + s["id"], "rail", disjoint([r_ for r_ in rails if r_ is not None]), "trim", space=s["id"])
+            for R2 in self.roofs.values():
+                self.yield_to("rail:" + s["id"], self._above_underside(R2), "roof:" + R2.id)
             # a skirt from the ground to a porch floor standing clear of it
             if s["level"] == self._lowest_level():
                 sk = []
@@ -1199,8 +1406,41 @@ class Model:
                     sk.append(run_cell(run, rect(0.3, L - 0.3, g - 0.5, top), -0.4, -0.3, "skirt"))
                 self.add("skirt:" + s["id"], "skirt", sk, "lattice", space=s["id"])
 
-    def _post_at(self, spots, run, u) -> bool:
-        return False
+    def _entries(self, s: dict, open_edges: list) -> list:
+        """An open space's entries: gaps in its railing, each with steps
+        down to the ground in front of it. [(a, b)] along the edges."""
+        out = []
+        for k, en in enumerate(s.get("entries", [])):
+            p = M.expand_point(en["at"])
+            w = float(en["w"])
+            best = None
+            for a, b in open_edges:
+                dd = P.seg_dist(p, a, b)
+                if dd < 0.3 and (best is None or dd < best[0]):
+                    best = (dd, a, b)
+            if best is None:
+                raise GenError("%s: entry at %s is on no open edge" % (s["id"], en["at"]))
+            _, a, b = best
+            run = Run(a, b, 0.0, "steps", "steps")
+            u = run.uv(p)[0]
+            u0, u1 = max(0.0, u - w / 2.0), min(run.length, u + w / 2.0)
+            out.append((run.plan(u0, 0.0), run.plan(u1, 0.0)))
+            if s["kind"] == "canopy":
+                continue
+            g = self.grade(*run.plan(u, 2.0))
+            drop = s["floor"] - g
+            if drop < 0.4:
+                continue
+            n = max(1, math.ceil(drop / 0.6))
+            h = drop / n
+            steps = []
+            for i in range(1, n + 1):
+                top = s["floor"] - i * h
+                if top - (g - 0.5) < 0.05:
+                    continue
+                steps.append(run_cell(run, rect(u0, u1, g - 0.5, top), float(i - 1), float(i), "step"))
+            self.add("steps:%s:%d" % (s["id"], k), "step", steps, "stone", space=s["id"])
+        return out
 
     def _lowest_level(self) -> str:
         return min(self.levels, key=lambda k: abs(self.y(k)))
@@ -1208,13 +1448,26 @@ class Model:
     def _open_edges(self, s: dict) -> list:
         """The edges of an open space that meet no enclosed space and no
         wall at its level."""
-        polys = {x["id"]: x["poly"] for x in self.spaces if not x["open"] and abs(x["floor"] - s["floor"]) < 8.0}
+        # a canopy has no floor: a porch's edge under one is still open
+        polys = {x["id"]: x["poly"] for x in self.spaces if abs(x["floor"] - s["floor"]) < 8.0
+                 and (x["kind"] != "canopy" or x is s)}
         polys[s["id"]] = s["poly"]
+        encl = [x["poly"] for x in self.spaces if not x["open"] and abs(x["floor"] - s["floor"]) < 8.0]
         out = []
         for e in P.edge_parts(polys):
             if e["of"] != s["id"] or e["other"] is not None:
                 continue
-            out.append((e["a"], e["b"]))
+            a, b = e["a"], e["b"]
+            # along a room's wall though drawn with other points
+            against = True
+            for f in (0.0, 0.25, 0.5, 0.75, 1.0):
+                p = (a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f)
+                if not any(P.seg_dist(p, q[i], q[(i + 1) % len(q)]) < 0.35 for q in encl for i in range(len(q))):
+                    against = False
+                    break
+            if against:
+                continue
+            out.append((a, b))
         # merge collinear
         merged = []
         for a, b in out:
@@ -1242,7 +1495,7 @@ class Model:
                 run = Run(a, b, 1.0, "bracket", "bracket")
                 L = run.length
                 k = max(1, int((L - 1.0) / sp))
-                pl = next(p for p in R.planes if p[3] == i)
+                pl = _edge_plane(a, b, self.y(e["plate"]), float(e["pitch"]))
                 for j in range(k + 1):
                     uc = 0.5 + (L - 1.0) * j / max(1, k)
                     # the soffit over it and the wall behind it must be there
@@ -1262,9 +1515,70 @@ class Model:
                     if c_ is None:
                         continue
                     c_ = c_.with_planes([below_y(pl[0], pl[1], pl[2] - R.t, "seat")])
-                    if c_ is not None:
+                    if c_ is None:
+                        continue
+                    clash = False
+                    for ee in self.elements.values():
+                        for d_ in ee.cells:
+                            if not boxes_apart(c_, d_, 1e-4) and overlap(c_, d_) is not None and overlap(c_, d_).volume() > 1e-5:
+                                clash = True
+                                break
+                        if clash:
+                            break
+                    if not clash and not any(overlap(c_, d_) is not None for d_ in cells):
                         cells.append(c_)
             self.add("brackets:" + R.id, "bracket", cells, "trim", roof=R.id)
+
+
+def _grown_pieces(fp: list, parts: list, overs: list) -> list:
+    """A concave footprint grown by each edge's overhang, as disjoint
+    convex pieces: the footprint's own pieces, a strip outside each edge,
+    and at each outward corner the mitre between two strips."""
+    n = len(fp)
+    pieces = [list(p) for p in parts]
+    norms = []
+    for i in range(n):
+        a, b = fp[i], fp[(i + 1) % n]
+        L = math.dist(a, b)
+        t = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
+        norms.append(((t[1], -t[0]), t))
+    for i in range(n):
+        d = overs[i]
+        if d <= 1e-9:
+            continue
+        a, b = fp[i], fp[(i + 1) % n]
+        o = norms[i][0]
+        pieces.append(ccw([a, b, (b[0] + o[0] * d, b[1] + o[1] * d), (a[0] + o[0] * d, a[1] + o[1] * d)]))
+    for j in range(n):
+        i = (j - 1) % n
+        v = fp[j]
+        a = fp[i]
+        c = fp[(j + 1) % n]
+        cr = (v[0] - a[0]) * (c[1] - v[1]) - (v[1] - a[1]) * (c[0] - v[0])
+        if cr <= 1e-9 or (overs[i] <= 1e-9 and overs[j] <= 1e-9):
+            continue
+        (oi, ti), (oj, tj) = norms[i], norms[j]
+        pi = (v[0] + oi[0] * overs[i], v[1] + oi[1] * overs[i])
+        pj = (v[0] + oj[0] * overs[j], v[1] + oj[1] * overs[j])
+        m = _hit(pi, ti, pj, tj)
+        if math.dist(m, v) > 4.0 * max(overs[i], overs[j]):
+            q = [v, pi, pj]
+        else:
+            q = [v, pi, m, pj]
+        q = P.simplify(ccw(q))
+        if len(q) >= 3 and abs(poly_area(q)) > 1e-6 and is_convex(q):
+            pieces.append(q)
+    out: list = []
+    for p in pieces:
+        pp = [p]
+        for q in out:
+            nxt = []
+            for x in pp:
+                nxt.extend(poly_less(x, q))
+            pp = nxt
+        out.extend(pp)
+    out = [P.simplify(ccw(p)) for p in out if abs(poly_area(p)) > 1e-6]
+    return [p for p in out if len(p) >= 3]
 
 
 def poly_less_all(p, qs) -> list:

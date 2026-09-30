@@ -1,7 +1,6 @@
 {
  "name": "twain",
  "title": "The Mark Twain house, 351 Farmington Avenue, Hartford (Edward Tuckerman Potter, 1874)",
- "note": "Survey feet (HABS CT-359, 1995): x runs north up the house, z east, y over the first floor. Spaces tile each level: the building's outline on the outer faces of its walls, rooms meeting on the partitions' centre lines. Every value carries over from the model built before this file (src model-v1) until checked against the sheets.",
  "world": {
   "origin": [
    85.0,
@@ -113,6 +112,59 @@
    }
   ]
  },
+ "grid": {
+  "x": {
+   "s_wall": 57.5,
+   "n_wall": 114.5,
+   "lib_din": 88.25,
+   "hall_draw": 95.95,
+   "guest_hall": 72.65,
+   "gbath_hall": 75.95,
+   "dress_gbath": 59.76,
+   "alc_s": 66.5,
+   "alc_n": 79.9,
+   "school_wb": 79.3,
+   "wb_langdon": 87.72,
+   "langdon_office": 101.38,
+   "sebath_susy": 67.7,
+   "susy_small": 85.65,
+   "hall2_clem": 96.95,
+   "bill_guest3": 89.5,
+   "deck_n": 64.3,
+   "hall3_serv": 97.0,
+   "serv_attic": 109.95,
+   "pantry_wing": 112.55,
+   "oct_s": 47.3,
+   "wing_n": 154.2,
+   "wing_step": 137.0,
+   "bay_n": 121.0,
+   "closet_bath": 63.8,
+   "guest_hall2": 71.28,
+   "kitch_w": 119.7,
+   "kitch_n": 137.75,
+   "entry_s": 143.5,
+   "upper_n": 138.6
+  },
+  "z": {
+   "w_wall": 38.3,
+   "e_wall": 83.9,
+   "zp": 56.35,
+   "oct_w": 55.8,
+   "part1": 72.3,
+   "part2": 70.8,
+   "part3": 70.6,
+   "store_e": 74.5,
+   "passage": 60.47,
+   "alc_w": 29.7,
+   "wing_w": 22.3,
+   "wing_w2": 20.3,
+   "wing_e": 43.6,
+   "bay_s": 64.0,
+   "bay_e": 75.0,
+   "wing_corr": 38.5,
+   "hall_n": 33.6
+  }
+ },
  "levels": [
   {
    "id": "basement",
@@ -139,7 +191,8 @@
   },
   {
    "id": "wing_attic",
-   "floor": 17.2
+   "floor": 19.5,
+   "note": "no section cuts the wing: set where the dormer windows sills stand 3 to 4 ft over it and the rooms below have their height (was 17.2, which left 5.4 ft rooms and 5 to 6 ft sills)"
   }
  ],
  "groups": [
@@ -169,6 +222,432 @@
    "material": "none"
   }
  ],
+ "note": "Survey feet (HABS CT-359, 1995): x runs north up the house, z east, y over the first floor. Spaces tile each level: the building's outline on the outer faces of its walls, rooms meeting on the partitions' centre lines. Roofs are given as an architect would give them: footprint, plate height at the wall line, pitch (rise per foot) and overhang per edge; everything else is generated (tools/building/arch.py) and checked (validate.py).",
+ "defaults": {
+  "wall": 1.0,
+  "partition": 0.5,
+  "slab": 1.0,
+  "roof_depth": 0.6,
+  "frame": 0.25,
+  "casing": 0.4
+ },
+ "site": {
+  "grade": -2.46,
+  "foundation": -11.0,
+  "grade_points": [
+   [
+    50.0,
+    14.0,
+    -6.4
+   ],
+   [
+    50.0,
+    21.0,
+    -4.7
+   ],
+   [
+    52.0,
+    28.0,
+    -4.4
+   ],
+   [
+    52.0,
+    37.0,
+    -4.2
+   ],
+   [
+    48.0,
+    42.0,
+    -4.0
+   ],
+   [
+    46.0,
+    47.0,
+    -3.6
+   ],
+   [
+    44.0,
+    52.0,
+    -3.0
+   ],
+   [
+    46.0,
+    57.0,
+    -2.3
+   ],
+   [
+    46.0,
+    62.0,
+    -1.9
+   ],
+   [
+    46.0,
+    70.0,
+    -2.2
+   ],
+   [
+    46.0,
+    80.0,
+    -2.46
+   ],
+   [
+    26.0,
+    40.0,
+    -3.4
+   ],
+   [
+    37.0,
+    40.0,
+    -3.7
+   ],
+   [
+    56.0,
+    36.0,
+    -3.9
+   ],
+   [
+    66.0,
+    28.0,
+    -3.9
+   ],
+   [
+    80.0,
+    28.0,
+    -3.9
+   ],
+   [
+    86.0,
+    36.0,
+    -4.2
+   ],
+   [
+    91.0,
+    36.0,
+    -4.4
+   ],
+   [
+    96.0,
+    34.0,
+    -5.3
+   ],
+   [
+    101.0,
+    30.0,
+    -6.1
+   ],
+   [
+    107.0,
+    24.0,
+    -7.3
+   ],
+   [
+    112.0,
+    20.0,
+    -8.4
+   ],
+   [
+    118.0,
+    20.0,
+    -8.3
+   ],
+   [
+    126.0,
+    20.0,
+    -7.9
+   ],
+   [
+    136.0,
+    20.0,
+    -7.6
+   ],
+   [
+    146.0,
+    18.0,
+    -7.1
+   ],
+   [
+    154.0,
+    18.0,
+    -6.8
+   ],
+   [
+    158.0,
+    14.0,
+    -8.5
+   ],
+   [
+    158.0,
+    22.0,
+    -8.5
+   ],
+   [
+    158.0,
+    32.0,
+    -8.1
+   ],
+   [
+    158.0,
+    43.0,
+    -7.6
+   ],
+   [
+    118.0,
+    46.0,
+    -6.4
+   ],
+   [
+    118.0,
+    55.0,
+    -6.4
+   ],
+   [
+    118.0,
+    58.0,
+    -2.46
+   ],
+   [
+    123.0,
+    67.0,
+    -2.46
+   ],
+   [
+    118.0,
+    81.0,
+    -2.46
+   ],
+   [
+    118.0,
+    95.0,
+    -2.46
+   ],
+   [
+    118.0,
+    112.0,
+    -2.46
+   ],
+   [
+    60.0,
+    90.0,
+    -2.46
+   ],
+   [
+    90.0,
+    92.0,
+    -2.46
+   ],
+   [
+    110.0,
+    90.0,
+    -2.46
+   ],
+   [
+    130.0,
+    48.0,
+    -2.8
+   ],
+   [
+    142.0,
+    48.0,
+    -3.5
+   ],
+   [
+    147.0,
+    48.0,
+    -4.4
+   ],
+   [
+    152.0,
+    48.0,
+    -5.5
+   ],
+   [
+    160.0,
+    48.0,
+    -5.8
+   ]
+  ]
+ },
+ "style": {
+  "materials": {
+   "brick": {
+    "color": [
+     0.6,
+     0.26,
+     0.17
+    ],
+    "kind": "brick"
+   },
+   "black": {
+    "color": [
+     0.11,
+     0.09,
+     0.08
+    ],
+    "kind": "brick"
+   },
+   "vermilion": {
+    "color": [
+     0.66,
+     0.17,
+     0.1
+    ],
+    "kind": "brick"
+   },
+   "timber": {
+    "color": [
+     0.33,
+     0.14,
+     0.09
+    ],
+    "kind": "timber"
+   },
+   "clapboard": {
+    "color": [
+     0.33,
+     0.14,
+     0.09
+    ],
+    "kind": "clapboard"
+   },
+   "stone": {
+    "color": [
+     0.44,
+     0.34,
+     0.29
+    ],
+    "kind": "stone"
+   },
+   "trim": {
+    "color": [
+     0.33,
+     0.14,
+     0.09
+    ],
+    "kind": "paint"
+   },
+   "sash": {
+    "color": [
+     0.22,
+     0.1,
+     0.07
+    ],
+    "kind": "paint"
+   },
+   "slate": {
+    "color": [
+     0.37,
+     0.42,
+     0.4
+    ],
+    "kind": "slate"
+   },
+   "slate_red": {
+    "color": [
+     0.44,
+     0.26,
+     0.24
+    ],
+    "kind": "slate"
+   },
+   "slate_dark": {
+    "color": [
+     0.26,
+     0.3,
+     0.29
+    ],
+    "kind": "slate"
+   },
+   "tin": {
+    "color": [
+     0.38,
+     0.47,
+     0.41
+    ],
+    "kind": "paint"
+   },
+   "copper": {
+    "color": [
+     0.36,
+     0.52,
+     0.45
+    ],
+    "kind": "paint"
+   },
+   "asphalt": {
+    "color": [
+     0.22,
+     0.21,
+     0.2
+    ],
+    "kind": "tar"
+   },
+   "builtup": {
+    "color": [
+     0.27,
+     0.25,
+     0.23
+    ],
+    "kind": "tar"
+   },
+   "deck": {
+    "color": [
+     0.36,
+     0.34,
+     0.31
+    ],
+    "kind": "plank"
+   }
+  },
+  "bands": [
+   [
+    -11.0,
+    0.2,
+    "stone"
+   ],
+   [
+    0.2,
+    0.8,
+    "black"
+   ],
+   [
+    3.2,
+    3.7,
+    "black"
+   ],
+   [
+    11.9,
+    12.4,
+    "vermilion"
+   ],
+   [
+    13.9,
+    14.8,
+    "black"
+   ],
+   [
+    22.9,
+    23.5,
+    "black"
+   ]
+  ],
+  "courses": {
+   "height": 0.8,
+   "materials": [
+    "slate",
+    "slate",
+    "slate",
+    "slate_dark",
+    "slate",
+    "slate",
+    "slate_red",
+    "slate",
+    "slate",
+    "slate_dark",
+    "slate",
+    "slate_red"
+   ]
+  }
+ },
  "spaces": [
   {
    "id": "library",
@@ -383,17 +862,25 @@
      "e_wall"
     ],
     {
-     "arc": [
+     "arc_at": [
       54.3,
       78.2,
       6.7,
-      58.3,
-      241.7,
-      14
+      [
+       58.3,
+       74,
+       102,
+       123,
+       144,
+       172,
+       191,
+       219,
+       241.7
+      ]
      ]
     }
    ],
-   "note": "the round from the first floor plan: centre (54.3, 78.2), outer face 6.7 ft out, bulging past the east wall"
+   "note": "the round drawn as facets, one under each of its windows"
   },
   {
    "id": "dress_closets",
@@ -475,8 +962,7 @@
        228,
        242,
        246,
-       262,
-       270
+       262
       ]
      ]
     },
@@ -764,8 +1250,7 @@
        228,
        242,
        246,
-       262,
-       270
+       262
       ]
      ]
     },
@@ -1352,13 +1837,10 @@
       78.2,
       6.7,
       [
-       241.7,
-       225,
-       210,
-       195,
-       180,
-       165,
-       150
+       219,
+       191,
+       172,
+       144
       ]
      ]
     },
@@ -1379,7 +1861,16 @@
      74.4
     ]
    ],
-   "note": "its inner edge on the house's outer faces (first floor plan)"
+   "note": "its inner edge on the house's outer faces (first floor plan)",
+   "entries": [
+    {
+     "at": [
+      22.8,
+      79.0
+     ],
+     "w": 5.0
+    }
+   ]
   },
   {
    "id": "veranda",
@@ -1395,11 +1886,10 @@
       78.2,
       6.7,
       [
-       150,
-       130,
-       110,
-       90,
-       70,
+       144,
+       123,
+       102,
+       74,
        58.3
       ]
      ]
@@ -1459,7 +1949,16 @@
      90.2
     ]
    ],
-   "note": "its inner edge on the round and the east wall (first floor plan)"
+   "note": "its inner edge on the round and the east wall (first floor plan)",
+   "entries": [
+    {
+     "at": [
+      90.5,
+      92.8
+     ],
+     "w": 8.0
+    }
+   ]
   },
   {
    "id": "side_porch",
@@ -1476,7 +1975,16 @@
      49.0
     ]
    },
-   "note": "a hood on two posts over the steps down to the basement door (north elevation)"
+   "note": "a hood on two posts over the steps down to the basement door (north elevation)",
+   "entries": [
+    {
+     "at": [
+      119.0,
+      46.9
+     ],
+     "w": 4.0
+    }
+   ]
   },
   {
    "id": "wing_attic",
@@ -1507,6 +2015,22 @@
      "wing_e"
     ],
     [
+     138.8,
+     "wing_e"
+    ],
+    [
+     138.8,
+     40.8
+    ],
+    [
+     135.6,
+     40.8
+    ],
+    [
+     135.6,
+     "wing_e"
+    ],
+    [
      "n_wall",
      "wing_e"
     ],
@@ -1519,7 +2043,7 @@
      "w_wall"
     ]
    ],
-   "note": "the garret the wing's dormers light"
+   "note": "the garret the wing dormers light; open under the east wall dormer, where the room below rises into it round its tall window (east elevation)"
   },
   {
    "id": "attic_se",
@@ -1529,7 +2053,7 @@
    "group": "main",
    "floor": 23.0,
    "top": "roof",
-   "note": "under the south-east gable's south slope, over the bath and Clara and Jean's room's corner; its wall closes the Texas deck's well on the diagonal; its knee wall where the gable's slope passes 23 ft",
+   "note": "its west side on the Texas deck corner (x 60.5), not a third of a foot short of it",
    "poly": [
     [
      60.5,
@@ -1548,12 +2072,8 @@
      "e_wall"
     ],
     [
-     60.2,
+     60.5,
      "e_wall"
-    ],
-    [
-     60.2,
-     "part2"
     ]
    ]
   },
@@ -1567,12 +2087,12 @@
    "poly": {
     "rect": [
      85.3,
-     94.0,
+     92.8,
      96.3,
      108.2
     ]
    },
-   "note": "the carriage porch over the drive, its four posts at its corners (east elevation, model-v1)"
+   "note": "the carriage porch over the drive, carried on its outer posts and on the veranda it abuts"
   },
   {
    "id": "back_stair_way",
@@ -1819,7 +2339,7 @@
    "w": 3.6,
    "sill": 35.2,
    "head": 39.4,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false,
    "note": "centred under the north gable's peak (z 47.4), as the gable's own window"
   },
@@ -1849,11 +2369,7 @@
    "w": 3.8,
    "sill": 4.2,
    "head": 10.9,
-   "hood": true,
-   "note": "the leaded window over the dining room's fireplace (first floor plan, north elevation)",
-   "exempt": {
-    "roof-crosses": "the hood over the areaway steps stands before it, as the north elevation draws it"
-   }
+   "note": "the leaded window over the dining room's fireplace (first floor plan, north elevation)"
   },
   {
    "at": [
@@ -1924,33 +2440,14 @@
   },
   {
    "at": [
-    80.25,
+    80.8,
     "e_wall"
    ],
-   "w": 4.5,
+   "w": 4.8,
    "sill": 2.6,
    "head": 7.1,
-   "note": "the hall's triple window under the veranda (east elevation)"
-  },
-  {
-   "at": [
-    68.4,
-    "e_wall"
-   ],
-   "w": 2.6,
-   "sill": 3.8,
-   "head": 9.3,
-   "note": "under the veranda's roof (east elevation)"
-  },
-  {
-   "at": [
-    77.7,
-    "e_wall"
-   ],
-   "w": 2.6,
-   "sill": 3.8,
-   "head": 9.3,
-   "note": "under the veranda's roof (east elevation)"
+   "note": "the hall's triple window under the veranda (first floor plan: x 78.4 to 83.2)",
+   "hood": false
   },
   {
    "at": [
@@ -1977,7 +2474,8 @@
    ],
    "w": 2.4,
    "sill": 16.3,
-   "head": 21.5
+   "head": 21.5,
+   "hood": false
   },
   {
    "at": [
@@ -1986,7 +2484,8 @@
    ],
    "w": 2.4,
    "sill": 16.3,
-   "head": 21.5
+   "head": 21.5,
+   "hood": false
   },
   {
    "at": [
@@ -2026,7 +2525,8 @@
    "sill": 24.0,
    "head": 31.3,
    "kind": "french",
-   "shape": "round"
+   "head_shape": "round",
+   "hood": false
   },
   {
    "at": [
@@ -2037,7 +2537,8 @@
    "sill": 24.0,
    "head": 31.1,
    "kind": "french",
-   "shape": "round"
+   "head_shape": "round",
+   "hood": false
   },
   {
    "at": [
@@ -2066,7 +2567,8 @@
    "sill": 0.0,
    "head": 9.2,
    "kind": "door",
-   "note": "under the ombra's roof"
+   "note": "under the ombra's roof",
+   "hood": false
   },
   {
    "at": [
@@ -2088,13 +2590,13 @@
   },
   {
    "at": [
-    49.1,
-    69.9
+    49.9,
+    69.45
    ],
    "w": 2.2,
    "sill": 15.8,
-   "head": 9.2,
-   "note": "under the ombra's roof"
+   "head": 21.5,
+   "note": "the octagon east diagonal window over the ombra, mirroring the west one (49.9, 58.1)"
   },
   {
    "at": [
@@ -2129,8 +2631,11 @@
     ]
    },
    "w": 2.3,
-   "sill": 3.8,
-   "head": 11.3
+   "sill": 0.4,
+   "head": 7.4,
+   "kind": "french",
+   "hood": false,
+   "note": "glazed to the porch floor under the veranda's beam (east elevation)"
   },
   {
    "at": {
@@ -2142,8 +2647,11 @@
     ]
    },
    "w": 2.3,
-   "sill": 3.8,
-   "head": 11.3
+   "sill": 0.4,
+   "head": 7.4,
+   "kind": "french",
+   "hood": false,
+   "note": "glazed to the porch floor under the veranda's beam (east elevation)"
   },
   {
    "at": {
@@ -2155,8 +2663,11 @@
     ]
    },
    "w": 2.3,
-   "sill": 3.8,
-   "head": 11.3
+   "sill": 0.4,
+   "head": 7.4,
+   "kind": "french",
+   "hood": false,
+   "note": "glazed to the porch floor under the veranda's beam (east elevation)"
   },
   {
    "at": [
@@ -2176,7 +2687,7 @@
    "sill": 0.0,
    "head": 11.8,
    "kind": "open",
-   "shape": "segment",
+   "head_shape": "segment",
    "hood": false
   },
   {
@@ -2220,7 +2731,7 @@
    "w": 2.2,
    "sill": 2.8,
    "head": 7.2,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2235,7 +2746,7 @@
    "w": 2.2,
    "sill": 2.8,
    "head": 7.2,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2250,7 +2761,7 @@
    "w": 2.2,
    "sill": 2.8,
    "head": 7.2,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2265,7 +2776,7 @@
    "w": 2.0,
    "sill": -5.5,
    "head": -2.0,
-   "shape": "segment",
+   "head_shape": "segment",
    "hood": false
   },
   {
@@ -2280,7 +2791,7 @@
    "w": 2.0,
    "sill": -5.5,
    "head": -2.0,
-   "shape": "segment",
+   "head_shape": "segment",
    "hood": false
   },
   {
@@ -2295,7 +2806,8 @@
    "w": 2.4,
    "sill": 0.0,
    "head": 8.4,
-   "kind": "door"
+   "kind": "door",
+   "hood": false
   },
   {
    "at": {
@@ -2444,7 +2956,7 @@
    "w": 2.6,
    "sill": -5.3,
    "head": -1.3,
-   "shape": "segment",
+   "head_shape": "segment",
    "hood": false
   },
   {
@@ -2455,7 +2967,7 @@
    "w": 2.6,
    "sill": -5.3,
    "head": -1.3,
-   "shape": "segment",
+   "head_shape": "segment",
    "hood": false
   },
   {
@@ -2466,7 +2978,7 @@
    "w": 2.6,
    "sill": -5.3,
    "head": -1.3,
-   "shape": "segment",
+   "head_shape": "segment",
    "hood": false
   },
   {
@@ -2477,7 +2989,7 @@
    "w": 2.6,
    "sill": -5.3,
    "head": -1.3,
-   "shape": "segment",
+   "head_shape": "segment",
    "hood": false
   },
   {
@@ -2488,7 +3000,7 @@
    "w": 2.6,
    "sill": -5.3,
    "head": -1.3,
-   "shape": "segment",
+   "head_shape": "segment",
    "hood": false
   },
   {
@@ -2614,7 +3126,7 @@
    "w": 7.0,
    "sill": 33.5,
    "head": 36.9,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2645,7 +3157,7 @@
    "w": 1.6,
    "sill": 32.3,
    "head": 34.8,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2656,7 +3168,7 @@
    "w": 1.6,
    "sill": 32.3,
    "head": 34.8,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2667,7 +3179,7 @@
    "w": 1.6,
    "sill": 32.3,
    "head": 34.8,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2678,7 +3190,7 @@
    "w": 1.6,
    "sill": 32.3,
    "head": 34.8,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2689,7 +3201,7 @@
    "w": 1.6,
    "sill": 32.3,
    "head": 34.8,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2700,7 +3212,7 @@
    "w": 1.6,
    "sill": 32.3,
    "head": 34.8,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2711,7 +3223,7 @@
    "w": 1.6,
    "sill": 32.3,
    "head": 34.8,
-   "shape": "round",
+   "head_shape": "round",
    "hood": false
   },
   {
@@ -2992,8 +3504,7 @@
    "w": 4.4,
    "sill": 22.8,
    "head": 24.1,
-   "hood": false,
-   "kind": "win"
+   "hood": false
   },
   {
    "at": [
@@ -3003,8 +3514,7 @@
    "w": 4.4,
    "sill": 22.8,
    "head": 24.1,
-   "hood": false,
-   "kind": "win"
+   "hood": false
   },
   {
    "at": [
@@ -3014,8 +3524,7 @@
    "w": 4.2,
    "sill": 23.6,
    "head": 25.2,
-   "hood": false,
-   "kind": "win"
+   "hood": false
   },
   {
    "at": [
@@ -3025,40 +3534,6 @@
    "w": 6.0,
    "sill": 22.4,
    "head": 23.9,
-   "hood": false,
-   "kind": "win"
-  },
-  {
-   "at": [
-    22.8,
-    79.0
-   ],
-   "w": 5.0,
-   "sill": 0.0,
-   "head": 0.0,
-   "kind": "gap",
-   "hood": false
-  },
-  {
-   "at": [
-    90.5,
-    92.8
-   ],
-   "w": 10.0,
-   "sill": 0.0,
-   "head": 0.0,
-   "kind": "gap",
-   "hood": false
-  },
-  {
-   "at": [
-    119.0,
-    46.9
-   ],
-   "w": 4.0,
-   "sill": 0.0,
-   "head": 0.0,
-   "kind": "gap",
    "hood": false
   },
   {
@@ -3069,9 +3544,10 @@
    "w": 2.4,
    "sill": 10.3,
    "head": 11.8,
-   "kind": "win",
-   "hood": true,
-   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation)"
+   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation); they stand on the veranda roof, with no sill board of their own",
+   "trim": [
+    "casing"
+   ]
   },
   {
    "at": [
@@ -3081,9 +3557,10 @@
    "w": 2.8,
    "sill": 10.3,
    "head": 11.8,
-   "kind": "win",
-   "hood": true,
-   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation)"
+   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation); they stand on the veranda roof, with no sill board of their own",
+   "trim": [
+    "casing"
+   ]
   },
   {
    "at": [
@@ -3093,943 +3570,9 @@
    "w": 2.8,
    "sill": 10.3,
    "head": 11.8,
-   "kind": "win",
-   "hood": true,
-   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation)"
-  }
- ],
- "roofs": [
-  {
-   "id": "main",
-   "kind": "planes",
-   "note": "Steep lower slopes from each side's wall to the flat at 35.9 (roof plan, elevations): the north face meets the flat on x 105.5 (roof plan) from its eave at 18.9 (north elevation). Open over the Texas deck (its pavilion covers it) and where the south-east gable's south slope is the roof. The east slope rises from the cornice at 19.3 between the small gables (east elevation) to the flat's edge at z 70.",
-   "footprint": {
-    "rect": [
-     57.5,
-     38.3,
-     114.5,
-     83.9
-    ]
-   },
-   "overhang": 1.4,
-   "planes": [
-    [
-     0.0,
-     1.515,
-     -28.51
-    ],
-    [
-     0.0,
-     -1.2,
-     119.98
-    ],
-    [
-     1.8,
-     0.0,
-     -79.0
-    ],
-    [
-     -1.63,
-     0.0,
-     207.9
-    ],
-    [
-     0.0,
-     0.0,
-     35.9
-    ]
-   ],
-   "holes": [
-    {
-     "space": "texas_deck"
-    },
-    {
-     "rect": [
-      56.0,
-      70.8,
-      68.5,
-      86.7
-     ]
-    }
-   ],
-   "brackets": 2.5
-  },
-  {
-   "id": "ridge_roof",
-   "kind": "gable",
-   "axis": "x",
-   "eave": 28.0,
-   "peak": 43.3,
-   "note": "One ridge at 43.3 the length of the main block, z 47.4 (south elevation's gable peak, the attic plan's framed strip, section B-B); both slopes at the west roof's pitch (1.515, west elevation) from the cornice at 28.0 a foot out; the east slope meets the flat at 35.9 on z 52.3 (the roof plan's line). Its ends are the south and north gables', which carry the overhangs there.",
-   "footprint": {
-    "rect": [
-     "s_wall",
-     "w_wall",
-     "n_wall",
-     57.5
-    ]
-   },
-   "overhang": [
-    0.0,
-    0.0,
-    1.0,
-    0.0
-   ],
-   "brackets": 2.5
-  },
-  {
-   "id": "south_gable",
-   "kind": "gable",
-   "axis": "x",
-   "eave": 27.62,
-   "peak": 43.3,
-   "footprint": {
-    "rect": [
-     57.5,
-     38.65,
-     86.5,
-     56.15
-    ]
-   },
-   "overhang": [
-    3.0,
-    0.0,
-    1.6,
-    1.6
-   ],
-   "trim": "gable",
-   "note": "pitched as the long roof (1.515), so its slopes are the long roof's own; only its front stands out"
-  },
-  {
-   "id": "north_gable",
-   "kind": "gable",
-   "axis": "x",
-   "eave": 28.91,
-   "peak": 43.3,
-   "footprint": {
-    "rect": [
-     86.0,
-     39.9,
-     114.5,
-     54.9
-    ]
-   },
-   "overhang": [
-    0.0,
-    5.0,
-    2.0,
-    2.0
-   ],
-   "trim": "gable",
-   "note": "pitched as the long roof (1.515), so its slopes are the long roof's own; only its front stands out"
-  },
-  {
-   "id": "west_gable",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 30.9,
-   "peak": 39.3,
-   "footprint": {
-    "rect": [
-     97.4,
-     "w_wall",
-     106.9,
-     46.3
-    ]
-   },
-   "overhang": [
-    1.0,
-    1.0,
-    1.0,
-    0.0
-   ],
-   "trim": "gable",
-   "note": "a wall dormer: the west wall rises through the long roof's cornice into it, a window either side of the chimney (west elevation: feet 30.9, peak 39.3)"
-  },
-  {
-   "id": "se_gable",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 19.3,
-   "peak": 35.7,
-   "footprint": {
-    "rect": [
-     57.5,
-     70.8,
-     79.5,
-     83.9
-    ]
-   },
-   "overhang": [
-    1.0,
-    1.0,
-    0.0,
-    2.8
-   ],
-   "trim": "gable",
-   "arch": [
-    18.7,
-    23.3
-   ]
-  },
-  {
-   "id": "ne_gable",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 19.3,
-   "peak": 35.7,
-   "footprint": {
-    "rect": [
-     96.7,
-     69.4,
-     115.3,
-     83.9
-    ]
-   },
-   "overhang": [
-    1.0,
-    1.0,
-    0.0,
-    3.0
-   ],
-   "trim": "gable",
-   "arch": [
-    25.9,
-    29.2
-   ]
-  },
-  {
-   "id": "e_gable_1",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 19.3,
-   "peak": 26.2,
-   "footprint": {
-    "rect": [
-     79.65,
-     77.65,
-     86.15,
-     "e_wall"
-    ]
-   },
-   "overhang": [
-    0.6,
-    0.6,
-    0.0,
-    1.4
-   ],
-   "trim": "gable",
-   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2); centred on its window"
-  },
-  {
-   "id": "e_gable_2",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 19.3,
-   "peak": 26.2,
-   "footprint": {
-    "rect": [
-     88.9,
-     77.65,
-     95.4,
-     "e_wall"
-    ]
-   },
-   "overhang": [
-    0.6,
-    0.6,
-    0.0,
-    1.4
-   ],
-   "trim": "gable",
-   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2); centred on its window"
-  },
-  {
-   "id": "east_dormer",
-   "kind": "planes",
-   "note": "Seven arched windows under a low hipped roof, back into the main roof.",
-   "footprint": {
-    "rect": [
-     78.6,
-     70.88,
-     96.0,
-     74.5
-    ]
-   },
-   "overhang": [
-    1.0,
-    1.0,
-    1.0,
-    1.0
-   ],
-   "planes": [
-    [
-     0.0,
-     -0.4,
-     65.4
-    ],
-    [
-     0.4,
-     0.0,
-     4.16
-    ],
-    [
-     -0.4,
-     0.0,
-     74.0
-    ],
-    [
-     0.0,
-     0.0,
-     36.4
-    ]
-   ]
-  },
-  {
-   "id": "texas_pavilion",
-   "kind": "pyramid",
-   "apex": [
-    57.2,
-    64.8
-   ],
-   "eave": 34.7,
-   "peak": 37.1,
-   "trim": "pavilion",
-   "footprint": {
-    "space": "texas_deck"
-   },
-   "overhang": 1.9,
-   "note": "The Texas deck's roof: one octagonal pavilion over the tower's top and the well, its point at x 57.2, z 64.8 and its eave octagon 20.7 ft across flats (roof plan), cut square on the top hall's wall; eave 34.7, point 37.1 (east elevation)."
-  },
-  {
-   "id": "alcove_spire",
-   "kind": "pyramid",
-   "apex": [
-    73.2,
-    37.2
-   ],
-   "eave": 33.2,
-   "peak": 47.25,
-   "footprint": [
-    [
-     66.7,
-     34.51
-    ],
-    [
-     66.7,
-     39.89
-    ],
-    [
-     70.51,
-     43.7
-    ],
-    [
-     75.89,
-     43.7
-    ],
-    [
-     79.7,
-     39.89
-    ],
-    [
-     79.7,
-     34.51
-    ],
-    [
-     75.89,
-     30.7
-    ],
-    [
-     70.51,
-     30.7
-    ]
-   ],
-   "overhang": 2.2,
-   "note": "An octagonal spire over the alcove's deck, centred where the roof plan and section A-A put its point (x 73.2, z 37.2, over the house's west wall), its eave octagon 17.4 ft across flats (roof plan); eave 33.2 and point 47.25 (the south elevation's mark, PEAK OF ROOF 47'-3\"). Its inner half dies into the long roof in valleys."
-  },
-  {
-   "id": "round_roof",
-   "kind": "pyramid",
-   "apex": [
-    "s_wall",
-    78.2
-   ],
-   "eave": 13.0,
-   "peak": 13.9,
-   "footprint": [
-    [
-     "s_wall",
-     85.2
-    ],
-    {
-     "arc": [
-      54.3,
-      78.2,
-      8.1,
-      70,
-      236,
-      14
-     ]
-    },
-    [
-     "oct_s",
-     68.1
-    ],
-    [
-     52.5,
-     "part2"
-    ],
-    [
-     "s_wall",
-     "part2"
-    ]
-   ],
-   "overhang": 0.0,
-   "note": "the round's low roof, running up to the second floor's walls over the guest room's strip and the round"
-  },
-  {
-   "id": "bay_cone",
-   "kind": "pyramid",
-   "apex": [
-    117.6,
-    69.5
-   ],
-   "eave": 21.1,
-   "peak": 31.3,
-   "footprint": {
-    "space": "bay_porch"
-   },
-   "overhang": 1.2,
-   "note": "the cone over the porch on the drawing room's bay, on the porch's posts"
-  },
-  {
-   "id": "pantry_roof",
-   "kind": "pyramid",
-   "apex": [
-    113.0,
-    38.3
-   ],
-   "eave": 9.0,
-   "peak": 13.3,
-   "footprint": [
-    {
-     "arc": [
-      112.8,
-      38.3,
-      16.5,
-      180,
-      270,
-      12
-     ]
-    },
-    [
-     113.0,
-     21.3
-    ],
-    [
-     113.0,
-     38.3
-    ]
-   ],
-   "overhang": 0.0
-  },
-  {
-   "id": "wing_main",
-   "kind": "planes",
-   "note": "Ridge at 31.5 down the wing's middle from x 123.3 to 144.4 (roof plan, elevations).",
-   "footprint": [
-    [
-     "pantry_wing",
-     "wing_w"
-    ],
-    [
-     "wing_step",
-     "wing_w"
-    ],
-    [
-     "wing_step",
-     "wing_w2"
-    ],
-    [
-     "wing_n",
-     "wing_w2"
-    ],
-    [
-     "wing_n",
-     "wing_e"
-    ],
-    [
-     "n_wall",
-     "wing_e"
-    ],
-    [
-     "n_wall",
-     "w_wall"
-    ],
-    [
-     "pantry_wing",
-     "w_wall"
-    ]
-   ],
-   "overhang": 1.8,
-   "holes": [
-    {
-     "rect": [
-      57.5,
-      38.3,
-      114.5,
-      85.9
-     ]
-    }
-   ],
-   "planes": [
-    [
-     0.0,
-     1.45,
-     -13.74
-    ],
-    [
-     0.0,
-     -1.45,
-     76.74
-    ],
-    [
-     1.78,
-     0.0,
-     -187.974
-    ],
-    [
-     -2.1,
-     0.0,
-     334.74
-    ]
-   ]
-  },
-  {
-   "id": "wing_cross",
-   "kind": "planes",
-   "footprint": [
-    [
-     "pantry_wing",
-     "wing_w"
-    ],
-    [
-     "wing_step",
-     "wing_w"
-    ],
-    [
-     "wing_step",
-     "wing_w2"
-    ],
-    [
-     "wing_n",
-     "wing_w2"
-    ],
-    [
-     "wing_n",
-     "wing_e"
-    ],
-    [
-     "n_wall",
-     "wing_e"
-    ],
-    [
-     "n_wall",
-     "w_wall"
-    ],
-    [
-     "pantry_wing",
-     "w_wall"
-    ]
-   ],
-   "overhang": 1.8,
-   "holes": [
-    {
-     "rect": [
-      57.5,
-      38.3,
-      114.5,
-      85.9
-     ]
-    }
-   ],
-   "planes": [
-    [
-     0.0,
-     2.1,
-     -27.79
-    ],
-    [
-     0.0,
-     -2.1,
-     106.61
-    ],
-    [
-     1.27,
-     0.0,
-     -156.72
-    ],
-    [
-     -1.27,
-     0.0,
-     214.12
-    ]
-   ]
-  },
-  {
-   "id": "wing_cornice",
-   "kind": "flat",
-   "y": 17.7,
-   "footprint": [
-    [
-     "pantry_wing",
-     "wing_w"
-    ],
-    [
-     "wing_step",
-     "wing_w"
-    ],
-    [
-     "wing_step",
-     "wing_w2"
-    ],
-    [
-     "wing_n",
-     "wing_w2"
-    ],
-    [
-     "wing_n",
-     "wing_e"
-    ],
-    [
-     "n_wall",
-     "wing_e"
-    ],
-    [
-     "n_wall",
-     "w_wall"
-    ],
-    [
-     "pantry_wing",
-     "w_wall"
-    ]
-   ],
-   "overhang": 1.8,
-   "holes": [
-    {
-     "rect": [
-      57.5,
-      38.3,
-      114.5,
-      85.9
-     ]
-    }
-   ],
-   "brackets": 2.5
-  },
-  {
-   "id": "ombra_roof",
-   "kind": "pyramid",
-   "trim": "porch",
-   "footprint": {
-    "space": "ombra"
-   },
-   "overhang": 1.0,
-   "apex": [
-    33.7,
-    79.6
-   ],
-   "eave": 9.8,
-   "peak": 11.3,
-   "note": "A low hipped roof, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 11.3 (east and south elevations, fascia 9.2-10.2).",
-   "cover": "tin",
-   "clear_rooms": "first"
-  },
-  {
-   "id": "veranda_roof",
-   "kind": "planes",
-   "trim": "porch",
-   "footprint": {
-    "space": "veranda"
-   },
-   "overhang": 1.2,
-   "planes": [
-    [
-     0.0,
-     -0.044,
-     13.8
-    ]
-   ],
-   "note": "Nearly flat: 9.7 at its outer edge, 10.1 at the house wall, under the upper lights' sills (east elevation).",
-   "cover": "tin",
-   "clear_rooms": "first"
-  },
-  {
-   "id": "porte_cochere",
-   "kind": "hip",
-   "eave": 10.2,
-   "pitch": 0.4,
-   "top": 13.5,
-   "trim": "porch",
-   "footprint": {
-    "rect": [
-     85.3,
-     94.0,
-     96.3,
-     108.2
-    ]
-   },
-   "overhang": [
-    2.8,
-    2.7,
-    0.0,
-    6.1
-   ],
-   "note": "A low hip, eave 10.2 rising to 13.5 (south elevation's end view, the director's photograph).",
-   "cover": "tin"
-  },
-  {
-   "id": "side_porch_hood",
-   "kind": "flat",
-   "y": 9.3,
-   "trim": "porch",
-   "footprint": {
-    "rect": [
-     115.3,
-     44.0,
-     119.0,
-     49.0
-    ]
-   },
-   "overhang": [
-    0.0,
-    0.6,
-    0.0,
-    0.0
-   ],
-   "cover": "tin"
-  },
-  {
-   "id": "back_stair",
-   "kind": "planes",
-   "planes": [
-    [
-     -0.5697,
-     -0.3571,
-     105.22
-    ]
-   ],
-   "trim": "porch",
-   "footprint": {
-    "rect": [
-     120.2,
-     43.8,
-     136.7,
-     48.0
-    ]
-   },
-   "overhang": 0.0,
-   "note": "Falls with the stair from 19.6 at x 120.2 to 10.2 at 136.7 on its outer edge, 1.5 higher against the wall.",
-   "cover": "tin"
-  },
-  {
-   "id": "conservatory_roof",
-   "kind": "pyramid",
-   "apex": [
-    "s_wall",
-    47.0
-   ],
-   "eave": 11.2,
-   "peak": 15.5,
-   "trim": "none",
-   "note": "A glass roof on ribs rising to the library's wall (model-v1).",
-   "footprint": [
-    [
-     "s_wall",
-     38.5
-    ],
-    {
-     "arc": [
-      52.3,
-      47.0,
-      8.5,
-      -90,
-      -270,
-      12
-     ]
-    },
-    [
-     "s_wall",
-     55.5
-    ]
-   ],
-   "overhang": 0.0,
-   "cover": "glass"
-  },
-  {
-   "id": "wing_east_dormer",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 19.0,
-   "peak": 20.6,
-   "trim": "gable",
-   "note": "The wall dormer over the wing's east window through the cornice (east elevation).",
-   "footprint": {
-    "rect": [
-     135.6,
-     40.8,
-     138.8,
-     43.8
-    ]
-   },
-   "overhang": [
-    0.3,
-    0.3,
-    0.0,
-    1.9
-   ]
-  },
-  {
-   "id": "bath_dormer",
-   "kind": "gable",
-   "axis": "x",
-   "eave": 21.6,
-   "peak": 26.9,
-   "trim": "gable",
-   "note": "The south-east bath's window rises into a small gable facing south (south and east elevations: eave 21.6, peak 26.9, 7.8 ft across; the roof plan's V), its ridge running back into the great gable's south slope.",
-   "footprint": {
-    "rect": [
-     "s_wall",
-     74.4,
-     63.0,
-     81.2
-    ]
-   },
-   "overhang": [
-    1.2,
-    0.0,
-    0.5,
-    0.5
-   ]
-  },
-  {
-   "id": "wing_dormer_w1",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 24.6,
-   "peak": 25.9,
-   "trim": "gable",
-   "cheek": "clapboard",
-   "note": "a lattice dormer on the wing's roof (west, east and north elevations)",
-   "footprint": {
-    "rect": [
-     118.15,
-     24.86,
-     124.25,
-     31.2
-    ]
-   },
-   "overhang": [
-    2.6,
-    2.6,
-    0.4,
-    0.0
-   ]
-  },
-  {
-   "id": "wing_dormer_w2",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 24.6,
-   "peak": 25.9,
-   "trim": "gable",
-   "cheek": "clapboard",
-   "note": "a lattice dormer on the wing's roof (west, east and north elevations); its face where the cross hip at the wing's north end comes down to its sill",
-   "footprint": {
-    "rect": [
-     141.75,
-     23.85,
-     147.85,
-     31.2
-    ]
-   },
-   "overhang": [
-    2.6,
-    2.6,
-    0.4,
-    0.0
-   ]
-  },
-  {
-   "id": "wing_dormer_e",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 25.7,
-   "peak": 27.7,
-   "trim": "gable",
-   "cheek": "clapboard",
-   "note": "a lattice dormer on the wing's roof (west, east and north elevations)",
-   "footprint": {
-    "rect": [
-     126.2,
-     31.2,
-     132.0,
-     36.79
-    ]
-   },
-   "overhang": [
-    1.85,
-    1.85,
-    0.0,
-    0.4
-   ]
-  },
-  {
-   "id": "wing_dormer_n",
-   "kind": "gable",
-   "axis": "x",
-   "eave": 24.0,
-   "peak": 25.0,
-   "trim": "gable",
-   "cheek": "clapboard",
-   "note": "the lattice dormer on the wing's north end (north elevation)",
-   "footprint": {
-    "rect": [
-     146.0,
-     27.7,
-     151.04,
-     34.7
-    ]
-   },
-   "overhang": [
-    0.0,
-    0.4,
-    1.5,
-    1.5
-   ]
-  },
-  {
-   "id": "entrance_porch",
-   "kind": "gable",
-   "axis": "z",
-   "eave": 10.9,
-   "peak": 13.7,
-   "trim": "gable",
-   "cover": "tin",
-   "note": "the gable over the front door, standing out of the veranda on its posts (east elevation)",
-   "footprint": {
-    "rect": [
-     84.6,
-     "e_wall",
-     95.7,
-     92.8
-    ]
-   },
-   "overhang": [
-    3.4,
-    3.7,
-    0.0,
-    0.5
+   "note": "the upper lights over the veranda's roof, under sunburst hoods (east elevation); they stand on the veranda roof, with no sill board of their own",
+   "trim": [
+    "casing"
    ]
   }
  ],
@@ -4119,57 +3662,967 @@
    "note": "roof plan; elevations 47.8-48.4"
   }
  ],
- "grid": {
-  "x": {
-   "s_wall": 57.5,
-   "n_wall": 114.5,
-   "lib_din": 88.25,
-   "hall_draw": 95.95,
-   "guest_hall": 72.65,
-   "gbath_hall": 75.95,
-   "dress_gbath": 59.76,
-   "alc_s": 66.5,
-   "alc_n": 79.9,
-   "school_wb": 79.3,
-   "wb_langdon": 87.72,
-   "langdon_office": 101.38,
-   "sebath_susy": 67.7,
-   "susy_small": 85.65,
-   "hall2_clem": 96.95,
-   "bill_guest3": 89.5,
-   "deck_n": 64.3,
-   "hall3_serv": 97.0,
-   "serv_attic": 109.95,
-   "pantry_wing": 112.55,
-   "oct_s": 47.3,
-   "wing_n": 154.2,
-   "wing_step": 137.0,
-   "bay_n": 121.0,
-   "closet_bath": 63.8,
-   "guest_hall2": 71.28,
-   "kitch_w": 119.7,
-   "kitch_n": 137.75,
-   "entry_s": 143.5,
-   "upper_n": 138.6
+ "roofs": [
+  {
+   "id": "main",
+   "footprint": {
+    "rect": [
+     57.5,
+     38.3,
+     114.5,
+     70.8
+    ]
+   },
+   "overhang": 1.4,
+   "brackets": 2.5,
+   "sides": {
+    "z0": {
+     "plate": 29.52,
+     "pitch": 1.515
+    },
+    "x1": {
+     "plate": 21.27,
+     "pitch": 1.63
+    },
+    "z1": {
+     "plate": 35.02,
+     "pitch": 1.2,
+     "over": 0.0
+    },
+    "x0": {
+     "kind": "gable",
+     "rake": 0.0
+    }
+   },
+   "deck": 35.9,
+   "deck_cover": "asphalt",
+   "holes": [
+    {
+     "space": "texas_deck"
+    }
+   ],
+   "note": "The main block north of the south-east gable: steep slopes from the west and north walls to the flat at 35.9 (roof plan, elevations), the north face meeting the flat on x 105.5 from its eave at 18.9 (north elevation); the east face runs on from the south part. No south slope: round the Texas deck the flat comes to the well, whose walls rise to it. Open over the deck, which its pavilion covers."
   },
-  "z": {
-   "w_wall": 38.3,
-   "e_wall": 83.9,
-   "zp": 56.35,
-   "oct_w": 55.8,
-   "part1": 72.3,
-   "part2": 70.8,
-   "part3": 70.6,
-   "store_e": 74.5,
-   "passage": 60.47,
-   "alc_w": 29.7,
-   "wing_w": 22.3,
-   "wing_w2": 20.3,
-   "wing_e": 43.6,
-   "bay_s": 64.0,
-   "bay_e": 75.0,
-   "wing_corr": 38.5,
-   "hall_n": 33.6
+  {
+   "id": "main_s",
+   "footprint": {
+    "rect": [
+     57.5,
+     70.8,
+     114.5,
+     83.9
+    ]
+   },
+   "overhang": 1.4,
+   "brackets": 2.5,
+   "sides": {
+    "x0": {
+     "plate": 19.3,
+     "pitch": 1.491
+    },
+    "x1": {
+     "plate": 21.27,
+     "pitch": 1.63
+    },
+    "z1": {
+     "plate": 19.3,
+     "pitch": 1.2
+    },
+    "z0": {
+     "kind": "gable",
+     "rake": 0.0
+    }
+   },
+   "deck": 35.9,
+   "deck_cover": "asphalt",
+   "note": "The main block along the east front: slopes from the east wall (19.3) and the north wall to the flat; its south face is the south-east gable own south slope (19.3, 1.491), down to the south wall."
+  },
+  {
+   "id": "ridge_roof",
+   "footprint": {
+    "rect": [
+     57.5,
+     38.3,
+     114.5,
+     57.5
+    ]
+   },
+   "brackets": 2.5,
+   "sides": {
+    "z0": {
+     "plate": 29.52,
+     "pitch": 1.515,
+     "over": 1.0
+    },
+    "z1": {
+     "plate": 28.0,
+     "pitch": 1.515
+    },
+    "x0": {
+     "kind": "gable",
+     "rake": 3.0
+    },
+    "x1": {
+     "kind": "gable",
+     "rake": 5.0
+    }
+   },
+   "note": "One ridge at 43.3 the length of the main block, z 47.4 (south elevation's gable peak, the attic plan, section B-B); both slopes at the west elevation's pitch 1.515 from the cornice at 28.0 a foot out from the west wall; the east slope meets the flat at 35.9 on z 52.3 (the roof plan's line). Its ends are the south and north gables, their fronts standing out 3 and 5 ft over the balconies."
+  },
+  {
+   "id": "west_gable",
+   "footprint": {
+    "rect": [
+     97.4,
+     "w_wall",
+     106.9,
+     46.3
+    ]
+   },
+   "sides": {
+    "x0": {
+     "plate": 30.9,
+     "pitch": 1.768,
+     "over": 1.0
+    },
+    "x1": {
+     "plate": 30.9,
+     "pitch": 1.768,
+     "over": 1.0
+    },
+    "z0": {
+     "kind": "gable",
+     "rake": 1.0
+    },
+    "z1": {
+     "kind": "gable",
+     "rake": 0.0
+    }
+   },
+   "note": "a wall dormer: the west wall rises through the long roof's cornice into it, a window either side of the chimney (west elevation: feet 30.9, peak 39.3)"
+  },
+  {
+   "id": "se_gable",
+   "footprint": {
+    "rect": [
+     57.5,
+     70.8,
+     79.5,
+     83.9
+    ]
+   },
+   "sides": {
+    "x0": {
+     "plate": 19.3,
+     "pitch": 1.491,
+     "over": 1.0
+    },
+    "x1": {
+     "plate": 19.3,
+     "pitch": 1.491,
+     "over": 1.0
+    },
+    "z1": {
+     "kind": "gable",
+     "rake": 2.8
+    },
+    "z0": {
+     "kind": "gable",
+     "rake": 0.0
+    }
+   },
+   "note": "the great south-east gable facing east: rakes from 19.3, peak 35.7 (east elevation)"
+  },
+  {
+   "id": "ne_gable",
+   "footprint": {
+    "rect": [
+     96.7,
+     69.4,
+     114.5,
+     83.9
+    ]
+   },
+   "sides": {
+    "x0": {
+     "plate": 19.3,
+     "pitch": 1.763,
+     "over": 1.0
+    },
+    "x1": {
+     "plate": 20.71,
+     "pitch": 1.763,
+     "over": 1.8
+    },
+    "z1": {
+     "kind": "gable",
+     "rake": 3.0
+    },
+    "z0": {
+     "kind": "gable",
+     "rake": 0.0
+    }
+   },
+   "note": "the great north-east gable facing east: peak 35.7 (east elevation)"
+  },
+  {
+   "id": "e_gable_1",
+   "dormer": {
+    "host": "main_s",
+    "side": "z1",
+    "center": 82.9,
+    "width": 6.5
+   },
+   "plate": 19.3,
+   "pitch": 2.123,
+   "overhang": 0.6,
+   "rake": 1.4,
+   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2); centred on its window"
+  },
+  {
+   "id": "e_gable_2",
+   "dormer": {
+    "host": "main_s",
+    "side": "z1",
+    "center": 92.15,
+    "width": 6.5
+   },
+   "plate": 19.3,
+   "pitch": 2.123,
+   "overhang": 0.6,
+   "rake": 1.4,
+   "note": "a wall dormer: the wall rises through the cornice into its gable, the second-floor window and its sunburst in the face (east elevation: rake feet 19.3, peak 26.2); centred on its window"
+  },
+  {
+   "id": "east_dormer",
+   "footprint": {
+    "rect": [
+     78.6,
+     70.88,
+     96.0,
+     74.5
+    ]
+   },
+   "overhang": 1.0,
+   "sides": {
+    "x0": {
+     "plate": 35.6,
+     "pitch": 0.4
+    },
+    "x1": {
+     "plate": 35.6,
+     "pitch": 0.4
+    },
+    "z1": {
+     "plate": 35.6,
+     "pitch": 0.4
+    },
+    "z0": {
+     "kind": "gable",
+     "rake": 1.0
+    }
+   },
+   "deck": 36.4,
+   "note": "Seven arched windows under a low hipped roof, back into the main roof."
+  },
+  {
+   "id": "texas_pavilion",
+   "footprint": [
+    [
+     52.3,
+     55.8
+    ],
+    [
+     64.3,
+     55.8
+    ],
+    [
+     64.3,
+     67.5
+    ],
+    [
+     60.5,
+     70.8
+    ],
+    [
+     52.5,
+     70.8
+    ],
+    [
+     47.3,
+     68.1
+    ],
+    [
+     47.3,
+     60.8
+    ]
+   ],
+   "porch": "texas_deck",
+   "apex": [
+    57.2,
+    64.8
+   ],
+   "peak": 37.1,
+   "cover": "asphalt",
+   "note": "The Texas deck's roof: a pavilion on the deck's posts, its point at x 57.2, z 64.8 (roof plan), 37.1 (east elevation); its eaves at 34.7 reach the roof plan's octagon, 20.7 ft across flats.",
+   "edges": {
+    "0": {
+     "plate": 35.013,
+     "over": 1.35
+    },
+    "1": {
+     "plate": 35.454,
+     "over": 3.25
+    },
+    "2": {
+     "plate": 35.54,
+     "over": 3.61
+    },
+    "3": {
+     "plate": 35.709,
+     "over": 4.35
+    },
+    "4": {
+     "plate": 35.204,
+     "over": 1.99
+    },
+    "5": {
+     "plate": 34.804,
+     "over": 0.45
+    },
+    "6": {
+     "plate": 34.821,
+     "over": 0.52
+    }
+   }
+  },
+  {
+   "id": "alcove_spire",
+   "footprint": [
+    [
+     66.7,
+     34.51
+    ],
+    [
+     66.7,
+     39.89
+    ],
+    [
+     70.51,
+     43.7
+    ],
+    [
+     75.89,
+     43.7
+    ],
+    [
+     79.7,
+     39.89
+    ],
+    [
+     79.7,
+     34.51
+    ],
+    [
+     75.89,
+     30.7
+    ],
+    [
+     70.51,
+     30.7
+    ]
+   ],
+   "porch": "alcove_deck",
+   "apex": [
+    73.2,
+    37.2
+   ],
+   "peak": 47.25,
+   "plate": 36.75,
+   "overhang": 2.2,
+   "note": "An octagonal spire over the alcove's deck, centred where the roof plan and section A-A put its point (x 73.2, z 37.2, over the house's west wall), its eave octagon 17.4 ft across flats (roof plan); eave 33.2 and point 47.25 (the south elevation's mark, PEAK OF ROOF 47'-3\"). Its inner half dies into the long roof in valleys."
+  },
+  {
+   "id": "round_roof",
+   "footprint": [
+    [
+     "s_wall",
+     84.042
+    ],
+    {
+     "arc_at": [
+      54.3,
+      78.2,
+      6.7,
+      [
+       74,
+       102,
+       123,
+       144,
+       172,
+       191,
+       219,
+       241.7
+      ]
+     ]
+    },
+    [
+     "oct_s",
+     68.1
+    ],
+    [
+     52.5,
+     "part2"
+    ],
+    [
+     "s_wall",
+     "part2"
+    ]
+   ],
+   "shed": {
+    "from": [
+     [
+      46.2,
+      95.0
+     ],
+     [
+      46.2,
+      60.0
+     ]
+    ],
+    "plate": 13.0,
+    "pitch": 0.155
+   },
+   "edges_at": [
+    {
+     "at": [
+      57.5,
+      77.0
+     ],
+     "kind": "abut"
+    },
+    {
+     "at": [
+      49.9,
+      69.45
+     ],
+     "kind": "abut"
+    },
+    {
+     "at": [
+      55.0,
+      70.8
+     ],
+     "kind": "abut"
+    }
+   ],
+   "cover": "tin",
+   "note": "the round's low roof, rising gently to the second floor's wall",
+   "edge": "eave",
+   "overhang": 1.2
+  },
+  {
+   "id": "bay_cone",
+   "footprint": {
+    "space": "bay_porch"
+   },
+   "porch": "bay_porch",
+   "apex": [
+    117.6,
+    69.5
+   ],
+   "peak": 31.3,
+   "plate": 23.2,
+   "overhang": 1.2,
+   "note": "the cone over the bay's porch, on its posts, its back rising from the house wall to the point"
+  },
+  {
+   "id": "pantry_roof",
+   "footprint": {
+    "space": "pantry"
+   },
+   "apex": [
+    "pantry_wing",
+    "w_wall"
+   ],
+   "peak": 13.3,
+   "plate": 9.26,
+   "overhang": 1.0,
+   "cover": "asphalt",
+   "edges_at": [
+    {
+     "at": [
+      112.55,
+      30.0
+     ],
+     "kind": "abut"
+    },
+    {
+     "at": [
+      105.0,
+      38.3
+     ],
+     "kind": "abut"
+    }
+   ],
+   "note": "the butler's pantry's quarter cone against the wing and the house"
+  },
+  {
+   "id": "wing_cornice",
+   "footprint": [
+    [
+     "pantry_wing",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w"
+    ],
+    [
+     "wing_step",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_w2"
+    ],
+    [
+     "wing_n",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "wing_e"
+    ],
+    [
+     "n_wall",
+     "w_wall"
+    ],
+    [
+     "pantry_wing",
+     "w_wall"
+    ]
+   ],
+   "plate": 17.7,
+   "pitch": 0.0,
+   "overhang": 1.8,
+   "brackets": 2.5,
+   "cover": "tin",
+   "edges_at": [
+    {
+     "at": [
+      114.5,
+      40.0
+     ],
+     "kind": "abut"
+    },
+    {
+     "at": [
+      113.5,
+      38.3
+     ],
+     "kind": "abut"
+    }
+   ],
+   "note": "the wing's deep cornice: a flat band at 17.7 round the wing, its slopes rising from it"
+  },
+  {
+   "id": "wing_main",
+   "footprint": {
+    "rect": [
+     115.55,
+     21.69,
+     150.97,
+     40.72
+    ]
+   },
+   "plate": 17.7,
+   "sides": {
+    "x0": {
+     "pitch": 1.78
+    },
+    "x1": {
+     "pitch": 2.1
+    },
+    "z0": {
+     "pitch": 1.45
+    },
+    "z1": {
+     "pitch": 1.45
+    }
+   },
+   "note": "Ridge at 31.5 down the wing's middle from x 123.3 to 144.4 (roof plan, elevations)."
+  },
+  {
+   "id": "wing_cross",
+   "footprint": {
+    "rect": [
+     137.34,
+     21.66,
+     "wing_n",
+     42.34
+    ]
+   },
+   "plate": 17.7,
+   "sides": {
+    "x0": {
+     "pitch": 1.27
+    },
+    "x1": {
+     "pitch": 1.27
+    },
+    "z0": {
+     "pitch": 2.1
+    },
+    "z1": {
+     "pitch": 2.1
+    }
+   },
+   "note": "the cross hip over the wing's north end, its ridge at 28.7 running east-west"
+  },
+  {
+   "id": "wing_east_dormer",
+   "footprint": {
+    "rect": [
+     135.6,
+     40.8,
+     138.8,
+     "wing_e"
+    ]
+   },
+   "sides": {
+    "x0": {
+     "plate": 19.0,
+     "pitch": 1.0,
+     "over": 0.3
+    },
+    "x1": {
+     "plate": 19.0,
+     "pitch": 1.0,
+     "over": 0.3
+    },
+    "z1": {
+     "kind": "gable",
+     "rake": 1.9
+    },
+    "z0": {
+     "kind": "gable",
+     "rake": 0.0
+    }
+   },
+   "note": "The wall dormer over the wing's east window through the cornice (east elevation)."
+  },
+  {
+   "id": "bath_dormer",
+   "dormer": {
+    "host": "se_gable",
+    "side": "x0",
+    "center": 77.8,
+    "width": 6.8
+   },
+   "plate": 21.6,
+   "pitch": 1.559,
+   "overhang": 0.5,
+   "rake": 1.2,
+   "note": "The south-east bath's window rises into a small gable facing south (south and east elevations: eave 21.6, peak 26.9, 7.8 ft across; the roof plan's V), its ridge running back into the great gable's south slope."
+  },
+  {
+   "id": "wing_dormer_w1",
+   "dormer": {
+    "host": "wing_main",
+    "side": "z0",
+    "center": 121.2,
+    "width": 6.1,
+    "setback": 3.17
+   },
+   "plate": 24.6,
+   "pitch": 0.426,
+   "overhang": 2.6,
+   "rake": 0.4,
+   "cheek": "clapboard",
+   "note": "a lattice dormer on the wing's roof (west, east and north elevations)"
+  },
+  {
+   "id": "wing_dormer_w2",
+   "dormer": {
+    "host": "wing_cross",
+    "side": "z0",
+    "center": 144.8,
+    "width": 6.1,
+    "setback": 2.19
+   },
+   "plate": 24.6,
+   "pitch": 0.426,
+   "overhang": 2.6,
+   "rake": 0.4,
+   "cheek": "clapboard",
+   "note": "a lattice dormer on the wing's roof (west, east and north elevations); its face where the cross hip at the wing's north end comes down to its sill"
+  },
+  {
+   "id": "wing_dormer_e",
+   "dormer": {
+    "host": "wing_main",
+    "side": "z1",
+    "center": 129.1,
+    "width": 5.8,
+    "setback": 3.93
+   },
+   "plate": 25.7,
+   "pitch": 0.69,
+   "overhang": 1.85,
+   "rake": 0.4,
+   "cheek": "clapboard",
+   "note": "a lattice dormer on the wing's roof (west, east and north elevations)"
+  },
+  {
+   "id": "wing_dormer_n",
+   "dormer": {
+    "host": "wing_cross",
+    "side": "x1",
+    "center": 31.2,
+    "width": 7.0,
+    "setback": 3.16
+   },
+   "plate": 24.0,
+   "pitch": 0.286,
+   "overhang": 1.5,
+   "rake": 0.4,
+   "cheek": "clapboard",
+   "note": "the lattice dormer on the wing's north end (north elevation)"
+  },
+  {
+   "id": "entrance_porch",
+   "footprint": {
+    "rect": [
+     84.6,
+     "e_wall",
+     95.7,
+     92.8
+    ]
+   },
+   "cover": "tin",
+   "sides": {
+    "x0": {
+     "plate": 10.9,
+     "pitch": 0.505,
+     "over": 3.4
+    },
+    "x1": {
+     "plate": 10.9,
+     "pitch": 0.505,
+     "over": 3.7
+    },
+    "z1": {
+     "kind": "gable",
+     "rake": 0.5
+    },
+    "z0": {
+     "kind": "abut"
+    }
+   },
+   "note": "the gable over the front door, standing out of the veranda on its posts (east elevation)"
+  },
+  {
+   "id": "ombra_roof",
+   "footprint": [
+    [
+     22.8,
+     74.4
+    ],
+    [
+     29.2,
+     67.3
+    ],
+    [
+     47.3,
+     67.3
+    ],
+    [
+     51.2,
+     72.3
+    ],
+    [
+     48.4,
+     90.2
+    ],
+    [
+     29.3,
+     90.2
+    ],
+    [
+     22.8,
+     84.0
+    ]
+   ],
+   "porch": "ombra",
+   "apex": [
+    33.7,
+    79.6
+   ],
+   "peak": 11.3,
+   "plate": 9.9,
+   "overhang": 1.0,
+   "cover": "builtup",
+   "note": "A low hipped roof, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 11.3 (east and south elevations, fascia 9.2-10.2).",
+   "edges_at": [
+    {
+     "at": [
+      47.3,
+      67.7
+     ],
+     "kind": "abut"
+    },
+    {
+     "at": [
+      49.25,
+      70.2
+     ],
+     "kind": "abut"
+    }
+   ]
+  },
+  {
+   "id": "veranda_roof",
+   "footprint": {
+    "space": "veranda"
+   },
+   "porch": "veranda",
+   "cover": "tin",
+   "shed": {
+    "from": [
+     [
+      100.0,
+      95.0
+     ],
+     [
+      40.0,
+      95.0
+     ]
+    ],
+    "plate": 9.62,
+    "pitch": 0.044
+   },
+   "rake": 1.2,
+   "edges": {
+    "0": {
+     "kind": "abut"
+    },
+    "1": {
+     "kind": "abut"
+    },
+    "2": {
+     "kind": "abut"
+    },
+    "3": {
+     "kind": "abut"
+    },
+    "4": {
+     "kind": "abut"
+    },
+    "5": {
+     "kind": "abut"
+    }
+   },
+   "note": "Nearly flat: 9.7 at its outer edge, 10.1 at the house wall, under the upper lights' sills (east elevation)."
+  },
+  {
+   "id": "porte_cochere",
+   "footprint": {
+    "rect": [
+     85.3,
+     92.8,
+     96.3,
+     108.2
+    ]
+   },
+   "porch": "porte_cochere",
+   "cover": "copper",
+   "plate": 10.2,
+   "pitch": 0.4,
+   "deck": 13.5,
+   "sides": {
+    "x0": {
+     "over": 2.8
+    },
+    "x1": {
+     "over": 2.7
+    },
+    "z0": {
+     "kind": "abut"
+    },
+    "z1": {
+     "over": 6.1
+    }
+   },
+   "note": "A low hip, eave 10.2 rising to 13.5 (south elevation's end view, the director's photograph)."
+  },
+  {
+   "id": "side_porch_hood",
+   "footprint": {
+    "space": "side_porch"
+   },
+   "porch": "side_porch",
+   "cover": "tin",
+   "plate": 9.3,
+   "pitch": 0.0,
+   "overhang": 0.6
+  },
+  {
+   "id": "back_stair",
+   "footprint": {
+    "space": "back_stair_way"
+   },
+   "porch": "back_stair_way",
+   "cover": "tin",
+   "shed": {
+    "from": [
+     [
+      136.7,
+      48.0
+     ],
+     [
+      131.39,
+      56.47
+     ]
+    ],
+    "plate": 10.2,
+    "pitch": 0.6724
+   },
+   "rake": 0.5,
+   "edges_at": [
+    {
+     "at": [
+      128.0,
+      43.8
+     ],
+     "kind": "abut"
+    }
+   ],
+   "note": "Falls with the stair from 19.6 at x 120.2 to 10.2 at 136.7 on its outer edge, 1.5 higher against the wall."
+  },
+  {
+   "id": "conservatory_roof",
+   "footprint": {
+    "space": "conservatory"
+   },
+   "apex": [
+    "s_wall",
+    47.0
+   ],
+   "peak": 15.5,
+   "plate": 11.2,
+   "overhang": 0.0,
+   "cover": "glass",
+   "edges_at": [
+    {
+     "at": [
+      57.5,
+      47.0
+     ],
+     "kind": "abut"
+    }
+   ],
+   "note": "A glass roof on ribs rising to the library's wall (model-v1)."
   }
- }
+ ]
 }

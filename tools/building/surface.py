@@ -11,6 +11,7 @@ building's skin enclose its rooms).
 from __future__ import annotations
 
 from collections import defaultdict
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -145,6 +146,7 @@ class EdgeReport:
     shells: list = field(default_factory=list)         # [poly indices]
     shell_volume: list = field(default_factory=list)
     pairs: list = field(default_factory=list)          # (poly, poly, a, b) meeting along a -> b
+    touching: list = field(default_factory=list)       # edges where parts touch along a line
 
     @property
     def closed(self) -> bool:
@@ -214,20 +216,59 @@ def analyse(polys: list[Poly]) -> EdgeReport:
             x = parent[x]
         return x
 
+    def join(x: int, y: int) -> None:
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            parent[rx] = ry
+
     rep = EdgeReport()
     for (a, b), fw in directed.items():
         bw = directed.get((b, a), [])
-        if a < b or not bw:
-            if len(fw) == 1 and len(bw) == 1:
-                rep.pairs.append((fw[0], bw[0], P[a], P[b]))
-            if len(fw) != len(bw):
+        if not (a < b or not bw):
+            continue
+        if len(fw) != len(bw):
+            rep.open_edges.append((P[a], P[b], len(fw), len(bw)))
+            for x in fw + bw:
+                join(x, fw[0])
+            continue
+        if len(fw) == 1:
+            rep.pairs.append((fw[0], bw[0], P[a], P[b]))
+            join(fw[0], bw[0])
+            continue
+        # more than two faces on one edge: parts touching along a line. Round
+        # the edge, faces that bound the same wedge of air belong to one
+        # surface; a wedge of solid between them does not join them.
+        rep.touching.append((P[a], P[b], len(fw), len(bw)))
+        e = P[b] - P[a]
+        e = e / np.linalg.norm(e)
+        mid = (P[a] + P[b]) / 2.0
+        ref = None
+        items = []
+        for pi in fw + bw:
+            pts = polys[pi].pts
+            c = sum(pts) / len(pts)
+            dvec = c - mid
+            dvec = dvec - e * float(np.dot(dvec, e))
+            L = float(np.linalg.norm(dvec))
+            if L < 1e-9:
+                continue
+            dvec /= L
+            if ref is None:
+                ref = dvec
+            th = math.atan2(float(np.dot(np.cross(ref, dvec), e)), float(np.dot(ref, dvec)))
+            # which way round the edge the face's outside lies
+            s = float(np.dot(polys[pi].n, np.cross(e, dvec)))
+            items.append((th, pi, s))
+        items.sort()
+        k = len(items)
+        for i in range(k):
+            t0, p0, s0 = items[i]
+            t1, p1, s1 = items[(i + 1) % k]
+            if s0 > 0 and s1 < 0:
+                join(p0, p1)
+                rep.pairs.append((p0, p1, P[a], P[b]))
+            elif (s0 > 0) != (s1 < 0):
                 rep.open_edges.append((P[a], P[b], len(fw), len(bw)))
-            elif len(fw) > 1:
-                rep.open_edges.append((P[a], P[b], len(fw), len(bw)))
-        for x in fw + bw:
-            rx, ry = find(x), find(fw[0])
-            if rx != ry:
-                parent[rx] = ry
     for pi, loop in enumerate(loops):
         polys[pi].loops = [P[v] for v in loop]
     shells: dict = defaultdict(list)

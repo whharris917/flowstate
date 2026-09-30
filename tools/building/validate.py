@@ -70,6 +70,7 @@ class Validator:
     def __init__(self, m: arch.Model):
         self.m = m
         self.findings: list[Finding] = []
+        self.edge_classes: list = []          # (kind, a, b) for every roof edge classified
         self.stats: dict = {}
         self.cells: list[Cell] = []
         self.owner: list[str] = []
@@ -105,7 +106,7 @@ class Validator:
             if probs:
                 self.add("closed", "%s: two of its pieces lie on each other" % e.id, e.cells[probs[0][0]].centroid())
             rep = analyse(polys)
-            for a, b, fw, bw in rep.open_edges[:3]:
+            for a, b, fw, bw in (rep.open_edges + rep.touching)[:3]:
                 self.add("closed", "%s: an edge met %d/%d times" % (e.id, fw, bw), tuple((a + b) / 2.0))
 
     # ---- overlap ----------------------------------------------------------
@@ -171,15 +172,22 @@ class Validator:
                 return "soffit"
             return r
         if e.kind in ("wall", "cheek"):
-            if r in ("outer", "inner", "end", "top", "bottom", "reveal", "chimney_joint", "seat", "underside"):
-                return r
+            if r == "inner":
+                # a room behind it, or only a porch or the air
+                n = poly.n
+                cy = sum(p[1] for p in c) / len(c)
+                if not self.m.enclosed_at(cx + n[0] * 0.3, cz + n[2] * 0.3, cy):
+                    return "inner_open"
             return r
         if e.kind == "partition":
             return "partition"
         if e.kind == "slab":
             sp = self.m.space.get(e.info.get("space"), {})
             if sp.get("open"):
-                return {"top": "deck_top", "bottom": "deck_under"}.get(r, "deck_edge")
+                if r in ("bottom", "underside"):
+                    cy = sum(p[1] for p in c) / len(c)
+                    return "ceiling" if self.m.enclosed_at(cx, cz, cy - 0.5) else "deck_under"
+                return {"top": "deck_top"}.get(r, "deck_edge")
             if r == "top":
                 # a doorway's threshold, under the wall's thickness, is neither
                 cx_, cz_ = cx, cz
@@ -236,42 +244,58 @@ class Validator:
             if a < 0.01:
                 continue
             self.add("fitted", "%s: %.2f sq ft of its %s rests on nothing" % (eid, a, role), where[(eid, role)])
-        # sealed: the outside's shell holds no inside face
+        # sealed: no room's floor can be reached from outside; finish: no
+        # inside face shows to the weather. The way in is traced from the
+        # roof's top faces along the surface to the first inside faces.
         vols = rep.shell_volume
         if vols:
             outer = max(range(len(vols)), key=lambda k: vols[k])
-            leaks = defaultdict(float)
-            lwhere = {}
-            for pi in rep.shells[outer]:
-                role = self._role(polys[pi])
-                if role in INTERIOR:
-                    eid = self.owner[polys[pi].owner]
-                    a = _area(polys[pi].pts)
-                    leaks[(eid, role)] += a
-                    lwhere.setdefault((eid, role), tuple(sum(p) / len(polys[pi].pts) for p in zip(*polys[pi].pts)))
+            oset = set(rep.shells[outer])
             self.stats["shells"] = len(vols)
-            outer_set = set(rep.shells[outer])
-            gaps = []
+            roles = {pi: self._role(polys[pi]) for pi in oset}
+            floors = [pi for pi in oset if roles[pi] == "floor"]
+            inside = [pi for pi in oset if roles[pi] in INTERIOR]
+            adj = defaultdict(list)
             for pi, pj, a, b in rep.pairs:
-                if pi not in outer_set:
+                if pi in oset and pj in oset:
+                    adj[pi].append((pj, (a + b) / 2.0))
+                    adj[pj].append((pi, (a + b) / 2.0))
+            start = [pi for pi in oset if roles[pi] in ("slope", "deck") and
+                     self.m.elements[self.owner[polys[pi].owner]].kind == "roof"]
+            import collections
+            # breadth first from the roof; each face remembers where its
+            # path last crossed from an outside face to an inside one
+            seen = {pi: None for pi in start}
+            door = {pi: None for pi in start}
+            dq = collections.deque(start)
+            first = []
+            while dq:
+                i = dq.popleft()
+                if roles[i] in INTERIOR and not floors:
+                    first.append(i)
                     continue
-                ri, rj = self._role(polys[pi]), self._role(polys[pj])
-                if (ri in INTERIOR) != (rj in INTERIOR) and not self._opening_part(pi) and not self._opening_part(pj):
-                    gaps.append((a + b) / 2.0)
-            clusters = []
-            for g in gaps:
-                for c in clusters:
-                    if sum((g[k] - c[0][k]) ** 2 for k in range(3)) < 4.0:
-                        c[1] += 1
-                        break
-                else:
-                    clusters.append([g, 1])
-            for c, n in clusters[:30]:
-                self.add("sealed", "the inside meets the outside along %d edge%s" % (n, "s" if n > 1 else ""), tuple(c))
-            if not clusters:
-                for (eid, role), a in sorted(leaks.items(), key=lambda kv: -kv[1])[:10]:
-                    self.add("sealed", "%s: %.1f sq ft of its %s face can be reached from outside" % (eid, a, role),
-                             lwhere[(eid, role)])
+                for j, at in adj[i]:
+                    if j not in seen:
+                        seen[j] = at
+                        door[j] = door[i] if roles[i] in INTERIOR else (at, j)
+                        dq.append(j)
+            if floors:
+                first = [i for i in floors if i in door]
+            spots = []
+            for i in first:
+                d_ = door.get(i) if floors else (seen[i], i)
+                if d_ is None or d_[0] is None:
+                    continue
+                at, j = d_
+                if any(sum((at[k] - q[0][k]) ** 2 for k in range(3)) < 9.0 for q in spots):
+                    continue
+                spots.append((at, j))
+            check = "sealed" if floors else "finish"
+            what = ("the rooms are open to the outside here: %s meets the outside"
+                    if floors else "an inside finish shows to the weather: %s")
+            for at, i in spots[:30]:
+                self.add(check, what % ("%s's %s" % (self.owner[polys[i].owner], roles[i])), tuple(at))
+            self.stats["floors reached from outside"] = len(floors)
         self.roof_edges(polys, rep)
 
     def _opening_part(self, pi) -> bool:
@@ -337,6 +361,7 @@ class Validator:
                 bad.append(("a roof face of %s meets %s of %s" % (ei.id, rj, ej.id), (a + b) / 2.0))
                 continue
             counts[kind] += 1
+            self.edge_classes.append((kind, a, b))
         self.stats["roof edges"] = dict(counts)
         seen = set()
         for what, at in bad:
@@ -376,7 +401,7 @@ class Validator:
                 s1 = run.s_range()[1]
                 us = [q[0] for q in op["prof"]]
                 ys = [q[1] for q in op["prof"]]
-                probe = arch.run_cell(run, arch.rect(min(us) + 0.3, max(us) - 0.3, min(ys) + 0.3, max(ys) - 0.3), s1 + 0.35, s1 + 1.5)
+                probe = arch.run_cell(run, arch.rect(min(us) + 0.3, max(us) - 0.3, min(ys) + 0.3, max(ys) - 0.3), s1 + 0.15, s1 + 0.5)
                 if probe is not None:
                     for i, c in enumerate(self.cells):
                         if self.owner[i] in own or boxes_apart(probe, c):
@@ -394,15 +419,16 @@ class Validator:
             import model as M
             cx, cz = M.expand_point(ch["at"])
             top = float(ch["top"])
+            sx, sz = ch["size"]
             worst = -1e9
             for R in self.m.roofs.values():
-                for k in range(24):
-                    for r in (0.0, 3.0, 6.0, 10.0):
-                        p = (cx + r * math.cos(k * math.pi / 12), cz + r * math.sin(k * math.pi / 12))
+                for i in range(5):
+                    for j in range(5):
+                        p = (cx - sx / 2 + sx * i / 4, cz - sz / 2 + sz * j / 4)
                         if any(P.point_in(p, q) for q in R.extent_parts):
                             worst = max(worst, R.top(*p))
             if worst > -1e8 and top < worst + 2.0:
-                self.add("chimneys", "chimney %s: top %.1f is %.1f ft over the roof within 10 ft (needs 2)"
+                self.add("chimneys", "chimney %s: top %.1f is %.1f ft over the roof it passes through (needs 2)"
                          % (ch["id"], top, top - worst), (cx, top, cz))
 
     # ---- headroom ---------------------------------------------------------
@@ -477,7 +503,7 @@ class Validator:
         by = defaultdict(list)
         for f in self.findings:
             by[f.check].append(f)
-        for check in ("generation", "closed", "overlap", "fitted", "sealed", "roof edges", "openings", "chimneys",
+        for check in ("generation", "closed", "overlap", "fitted", "sealed", "finish", "roof edges", "openings", "chimneys",
                       "headroom", "carried"):
             fs = by.get(check, [])
             lines.append("%-11s %s" % (check, "ok" if not fs else "%d finding%s" % (len(fs), "s" if len(fs) > 1 else "")))
