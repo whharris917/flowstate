@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 EPS = 1e-7          # distance from a plane that counts as on it, feet
 VOL_EPS = 1e-6      # cubic feet: smaller is numerical noise, not a solid
 AREA_EPS = 1e-6     # square feet
-THIN = 1e-4         # feet: a piece thinner than this across a face is no piece
+THIN = 1e-3         # feet: a piece thinner than this across a face is no piece
 BOUND = 1.0e4       # the box every cell starts from
 
 

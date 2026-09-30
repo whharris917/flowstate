@@ -1545,8 +1545,11 @@ class Model:
                 cuts = [0.0] + stops + [L]
                 pieces = []
                 for j in range(len(cuts) - 1):
-                    u0 = cuts[j] + (0.25 if j > 0 else 0.0)
-                    u1 = cuts[j + 1] - (0.25 if j + 1 < len(cuts) - 1 else 0.0)
+                    # a rail stops clear of a square post: at its half width
+                    # along a square run, its half diagonal along a slanting one
+                    half = 0.25 if min(abs(d[0]), abs(d[1])) < 1e-6 else 0.36
+                    u0 = cuts[j] + (half if j > 0 else 0.0)
+                    u1 = cuts[j + 1] - (half if j + 1 < len(cuts) - 1 else 0.0)
                     free = [(u0, u1)]
                     for g0, g1 in gaps:
                         ga, gb = run.uv(g0)[0], run.uv(g1)[0]
@@ -1568,19 +1571,28 @@ class Model:
                     if u1 - u0 < 0.5:
                         continue
                     s0, s1 = -ins - 0.12, -ins + 0.12
-                    rails.append(run_cell(run, rect(u0, u1, fl + 2.7, fl + 3.0), s0 - 0.04, s1 + 0.04, "rail"))
-                    rails.append(run_cell(run, rect(u0, u1, fl + 0.25, fl + 0.45), s0, s1, "rail"))
+                    seg = []
+                    seg.append(run_cell(run, rect(u0, u1, fl + 2.7, fl + 3.0), s0 - 0.04, s1 + 0.04, "rail"))
+                    seg.append(run_cell(run, rect(u0, u1, fl + 0.25, fl + 0.45), s0, s1, "rail"))
                     nb = max(1, int((u1 - u0) / 0.45))
                     for q in range(nb):
                         uc = u0 + (u1 - u0) * (q + 0.5) / nb
-                        rails.append(run_cell(run, rect(uc - 0.06, uc + 0.06, fl + 0.45, fl + 2.7), -ins - 0.06, -ins + 0.06, "rail"))
-            self.add("rail:" + s["id"], "rail", disjoint([r_ for r_ in rails if r_ is not None]), "trim", space=s["id"])
-            for R2 in self.roofs.values():
-                self.yield_to("rail:" + s["id"], self._above_underside(R2), "roof:" + R2.id)
-            # and stop at the walls they meet
-            for e_ in list(self.elements.values()):
-                if e_.kind in ("wall", "cheek", "chimney", "post"):
-                    self.yield_to("rail:" + s["id"], e_.cells, e_.id)
+                        seg.append(run_cell(run, rect(uc - 0.06, uc + 0.06, fl + 0.45, fl + 2.7), -ins - 0.06, -ins + 0.06, "rail"))
+                    rails.append([c_ for c_ in seg if c_ is not None])
+            # each run of railing between posts is a part of its own; where
+            # two meet the later stops against the earlier
+            done_ = []
+            for n_, seg in enumerate(rails):
+                seg = subtract_all(seg, done_)
+                done_.extend(seg)
+                eid = "rail:%s:%d" % (s["id"], n_)
+                self.add(eid, "rail", seg, "trim", space=s["id"])
+                for R2 in self.roofs.values():
+                    self.yield_to(eid, self._above_underside(R2), "roof:" + R2.id)
+                # and stop at the walls and posts they meet
+                for e_ in list(self.elements.values()):
+                    if e_.kind in ("wall", "cheek", "chimney", "post"):
+                        self.yield_to(eid, e_.cells, e_.id)
             # a skirt from the ground to a porch floor standing clear of it
             if s["level"] == self._lowest_level():
                 sk = []

@@ -9,7 +9,7 @@ import math
 
 from solid import ccw, poly_area, is_convex
 
-TOL = 1e-4          # feet: points and lines this close are the same
+TOL = 5e-3          # feet: points closer than this are one point
 
 
 def _cross(o, a, b) -> float:

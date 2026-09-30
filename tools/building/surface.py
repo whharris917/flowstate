@@ -18,7 +18,9 @@ import numpy as np
 
 from solid import Cell, poly_less, poly_meet, poly_area, AREA_EPS
 
-WELD = 1e-4         # feet: points this close are one point
+WELD = 5e-4         # feet: points this close are one point
+NORMAL_TOL = 2e-5   # faces whose normals differ by less lie in one plane...
+PLANE_TOL = 2e-4    # ...when their distances from the origin differ by less
 
 
 @dataclass
@@ -39,11 +41,11 @@ def _basis(n: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _canon(n: np.ndarray, d: float) -> tuple[np.ndarray, float, int]:
-    for k in range(3):
-        if abs(n[k]) > 1e-9:
-            if n[k] < 0:
-                return -n, -d, -1
-            return n, d, 1
+    """A plane's normal turned the one way of the two, decided by its
+    largest component (a stray millionth elsewhere must not decide)."""
+    k = int(np.argmax(np.abs(n)))
+    if n[k] < 0:
+        return -n, -d, -1
     return n, d, 1
 
 
@@ -53,11 +55,26 @@ def boundary(cells: list[Cell]) -> tuple[list[Poly], list[str]]:
     cells overlapping, or drawn twice)."""
     groups: dict = defaultdict(list)
     recs = []
+    # planes are one plane when their normals agree within NORMAL_TOL
+    # (a plane reached by another route may tilt by a millionth)
+    reps: dict = defaultdict(list)            # quantised normal -> [(rep normal, group key)]
+    Q = 1e-4
     for ci, c in enumerate(cells):
         for f in c.faces:
             pl = c.planes[f.plane]
             n, d, s = _canon(np.array(pl.n), pl.d)
-            key = (round(n[0], 6), round(n[1], 6), round(n[2], 6))
+            qk = tuple(int(np.floor(v / Q)) for v in n)
+            key = None
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    for dz in (-1, 0, 1):
+                        for rn, gk in reps.get((qk[0] + dx, qk[1] + dy, qk[2] + dz), ()):
+                            if key is None and np.linalg.norm(rn - n) < NORMAL_TOL:
+                                key = gk
+            if key is None:
+                key = len(reps) + len(groups) + 1
+                key = ("g", len(groups), qk)
+                reps[qk].append((n, key))
             recs.append((ci, f, pl, n, d, s))
             groups[key].append(len(recs) - 1)
     out: list[Poly] = []
@@ -68,7 +85,7 @@ def boundary(cells: list[Cell]) -> tuple[list[Poly], list[str]]:
         clusters, cur, last = [], [], None
         for i in idxs:
             d = recs[i][4]
-            if last is not None and d - last > 1e-5:
+            if last is not None and d - last > PLANE_TOL:
                 clusters.append(cur)
                 cur = []
             cur.append(i)
@@ -101,7 +118,12 @@ def boundary(cells: list[Cell]) -> tuple[list[Poly], list[str]]:
                     if not pieces:
                         break
                 for p in pieces:
-                    if abs(poly_area(p)) < AREA_EPS:
+                    a_ = abs(poly_area(p))
+                    if a_ < AREA_EPS:
+                        continue
+                    # a face narrower than points are welded at is rounding
+                    longest = max(math.dist(p[k], p[(k + 1) % len(p)]) for k in range(len(p)))
+                    if 2.0 * a_ / longest < 4e-4:
                         continue
                     pts = [u * a + v * b + n * dval for a, b in p]
                     # anticlockwise seen from outside: about the face's own normal
@@ -259,11 +281,33 @@ def analyse(polys: list[Poly]) -> EdgeReport:
             # which way round the edge the face's outside lies
             s = float(np.dot(polys[pi].n, np.cross(e, dvec)))
             items.append((th, pi, s))
-        items.sort()
+        # two faces at the same angle facing the same way are one surface
+        # (chips of a face split twice): keep one, join the other to it
+        kept = []
+        for it in sorted(items):
+            dup = next((q for q in kept if abs(q[0] - it[0]) < 1e-6 and (q[2] > 0) == (it[2] > 0)), None)
+            if dup is not None:
+                join(it[1], dup[1])
+                continue
+            kept.append(it)
+        items = kept
+        # faces at the same angle (one plane, one side) may go in either
+        # order: take the order in which the wedges alternate consistently
         k = len(items)
+        best = None
+        for sign in (1, -1):
+            order = sorted(items, key=lambda it: (round(it[0], 6), sign * it[2]))
+            bad = 0
+            for i in range(k):
+                s0, s1 = order[i][2], order[(i + 1) % k][2]
+                if (s0 > 0) != (s1 < 0):
+                    bad += 1
+            if best is None or bad < best[0]:
+                best = (bad, order)
+        order = best[1]
         for i in range(k):
-            t0, p0, s0 = items[i]
-            t1, p1, s1 = items[(i + 1) % k]
+            t0, p0, s0 = order[i]
+            t1, p1, s1 = order[(i + 1) % k]
             if s0 > 0 and s1 < 0:
                 join(p0, p1)
                 rep.pairs.append((p0, p1, P[a], P[b]))
