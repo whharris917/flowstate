@@ -1326,11 +1326,14 @@ class Model:
             trim = o.get("trim", ["casing", "hood", "sill"])
             if not o.get("hood", True) and "hood" in trim:
                 trim = [t_ for t_ in trim if t_ != "hood"]
-            left, right = self._room_beside(k, run, u, w)
+            left, right, up, down = self._room_around(k, run, u, w, sill, head)
             cl, cr_ = min(CW, left), min(CW, right)
             xl, xr = min(0.2, left - cl), min(0.2, right - cr_)
+            ytop_prof = max(q[1] for q in prof)
+            up = self._clear_above(run, u - w / 2 - cl, u + w / 2 + cr_, ytop_prof, s1, min(up, 1.2))
+            ct = min(CW, up)
             n_ = len(prof)
-            widths = [0.0] + [CW] * (n_ - 1)
+            widths = [0.0] + [ct] * (n_ - 1)
             widths[1] = cr_
             widths[n_ - 1] = cl
             grown = offset_poly(prof, widths)
@@ -1338,13 +1341,95 @@ class Model:
             if "casing" in trim:
                 casing = [run_cell(run, q, s1, s1 + 0.12, "casing") for q in poly_less(ccw(grown), ccw(prof))]
                 self.add(oid + ":casing", "casing", casing, "trim", opening=oid, host=run.element)
-            if "hood" in trim:
+            # a hood where the wall rises clear over the casing; a sill board
+            # where it stands clear under the opening
+            if "hood" in trim and up >= ct + 0.35:
                 hood = run_cell(run, rect(u - w / 2 - cl - xl, u + w / 2 + cr_ + xr, ytop, ytop + 0.3), s1, s1 + 0.3, "hood")
                 self.add(oid + ":hood", "hood", [hood], "trim", opening=oid, host=run.element)
             if "sill" in trim and not door and kind != "french":
-                sl = run_cell(run, rect(u - w / 2 - cl - min(0.15, xl), u + w / 2 + cr_ + min(0.15, xr), sill - 0.3, sill),
-                              s1, s1 + 0.3, "sill")
-                self.add(oid + ":sill", "sill", [sl], "stone", opening=oid, host=run.element)
+                dn = self._clear_below(run, u - w / 2 - cl - min(0.15, xl), u + w / 2 + cr_ + min(0.15, xr), sill, s1, min(down, 0.6))
+                if dn >= 0.35:
+                    sl = run_cell(run, rect(u - w / 2 - cl - min(0.15, xl), u + w / 2 + cr_ + min(0.15, xr), sill - 0.3, sill),
+                                  s1, s1 + 0.3, "sill")
+                    self.add(oid + ":sill", "sill", [sl], "stone", opening=oid, host=run.element)
+
+    def _obstacles(self, lo, hi) -> list:
+        """Every solid but the walls within a box, for trim to keep clear of."""
+        out = []
+        for e in self.elements.values():
+            if e.kind in ("wall", "partition", "frame", "glass", "door"):
+                continue
+            for c_ in e.cells:
+                a, b = c_.aabb()
+                if all(a[i] <= hi[i] and b[i] >= lo[i] for i in range(3)):
+                    out.append(c_)
+        return out
+
+    def _clear_above(self, run: Run, u0: float, u1: float, y: float, s1: float, limit: float) -> float:
+        """How far above height y the face stays clear (nothing in front of
+        it, the wall behind it) across u0..u1, up to limit."""
+        pts = [run.plan(u0 + (u1 - u0) * i / 6.0, 0.0) for i in range(7)]
+        back = [run.plan(u0 + (u1 - u0) * i / 6.0, s1 - 0.02) for i in range(7)]
+        front = [run.plan(u0 + (u1 - u0) * i / 6.0, s1 + 0.1) for i in range(7)]
+        xs = [p[0] for p in pts]
+        zs = [p[1] for p in pts]
+        obs = self._obstacles((min(xs) - 1, y - 1, min(zs) - 1), (max(xs) + 1, y + limit + 1, max(zs) + 1))
+        walls = [c_ for e in self.elements.values() if e.kind in ("wall", "cheek", "chimney") for c_ in e.cells]
+        h = 0.0
+        while h < limit:
+            yy = y + h + 0.05
+            if any(contains(c_, (q[0], yy, q[1]), 1e-6) for q in front for c_ in obs):
+                break
+            if not all(any(contains(c_, (q[0], yy, q[1]), 1e-6) for c_ in walls) for q in back):
+                break
+            h += 0.05
+        return max(0.0, h - 0.05)
+
+    def _clear_below(self, run: Run, u0: float, u1: float, y: float, s1: float, limit: float) -> float:
+        pts = [run.plan(u0 + (u1 - u0) * i / 6.0, 0.0) for i in range(7)]
+        front = [run.plan(u0 + (u1 - u0) * i / 6.0, s1 + 0.15) for i in range(7)]
+        xs = [p[0] for p in pts]
+        zs = [p[1] for p in pts]
+        obs = self._obstacles((min(xs) - 1, y - limit - 1, min(zs) - 1), (max(xs) + 1, y + 1, max(zs) + 1))
+        h = 0.0
+        while h < limit:
+            yy = y - h - 0.05
+            if any(contains(c_, (q[0], yy, q[1]), 1e-6) for q in front for c_ in obs):
+                break
+            h += 0.05
+        return max(0.0, h - 0.05)
+
+    def _room_around(self, k: int, run: Run, u: float, w: float, sill: float, head: float) -> tuple:
+        """How far the trim of opening k may reach on its wall's face: along
+        it to the wall's end or half way to the next opening beside it, and
+        up or down half way to an opening above or below it."""
+        left, right = u - w / 2.0, run.length - (u + w / 2.0)
+        up, down = 9.0, 9.0
+        ops = self.data.get("openings", [])
+        for pl in self._placed:
+            if pl is None or pl[3] == k:
+                continue
+            r2, u2, w2, k2 = pl
+            if r2.kind == "partition":
+                continue
+            c = r2.plan(u2, 0.0)
+            uu, ss = run.uv(c)
+            d2 = r2.dir
+            if abs(ss) > 0.05 or d2[0] * run.dir[0] + d2[1] * run.dir[1] < 0.99:
+                continue
+            s2, h2 = float(ops[k2]["sill"]), float(ops[k2]["head"])
+            side_by_side = s2 < head and h2 > sill
+            if side_by_side:
+                if uu > u:
+                    right = min(right, ((uu - w2 / 2.0) - (u + w / 2.0)) / 2.0)
+                else:
+                    left = min(left, ((u - w / 2.0) - (uu + w2 / 2.0)) / 2.0)
+            elif abs(uu - u) < (w + w2) / 2.0 + 0.8:
+                if s2 >= head:
+                    up = min(up, (s2 - head) / 2.0)
+                elif h2 <= sill:
+                    down = min(down, (sill - h2) / 2.0)
+        return max(0.0, left - 0.02), max(0.0, right - 0.02), max(0.0, up - 0.02), max(0.0, down - 0.02)
 
     def _room_beside(self, k: int, run: Run, u: float, w: float) -> tuple:
         """How far the trim of opening k may reach along its wall's face,
@@ -1480,7 +1565,8 @@ class Model:
                         continue
                     run = Run(a, b, 0.1, "skirt", "skirt")
                     sk.append(run_cell(run, rect(0.3, L - 0.3, g - 0.5, top), -0.4, -0.3, "skirt"))
-                self.add("skirt:" + s["id"], "skirt", sk, "lattice", space=s["id"])
+                self.add("skirt:" + s["id"], "skirt", disjoint([c_ for c_ in sk if c_ is not None]), "lattice",
+                         space=s["id"])
 
     def _entries(self, s: dict, open_edges: list) -> list:
         """An open space's entries: gaps in its railing, each with steps

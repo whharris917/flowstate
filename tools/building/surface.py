@@ -18,7 +18,7 @@ import numpy as np
 
 from solid import Cell, poly_less, poly_meet, poly_area, AREA_EPS
 
-WELD = 2e-5         # feet: points this close are one point
+WELD = 1e-4         # feet: points this close are one point
 
 
 @dataclass
