@@ -378,8 +378,8 @@ class Validator:
                 pi, pj, ri, rj, ei, ej, top_i, top_j = pj, pi, rj, ri, ej, ei, top_j, top_i
             d = b - a
             L = float(np.linalg.norm(d))
-            if L < 1e-4:
-                continue
+            if L < 0.01:
+                continue            # a hundredth of a foot is rounding, not an edge
             level = abs(d[1]) / L < 1e-3
             if top_j:
                 ni, nj = polys[pi].n, polys[pj].n
@@ -410,6 +410,10 @@ class Validator:
                     continue
             elif rj == "rake":
                 kind = "rake"
+            elif ej is ei and rj in ("meet", "wallline", "seam", "abut", "hole") and abs(float(np.dot(polys[pj].n, [0, 1, 0]))) < 1e-6:
+                # the roof ends in a vertical face of its own: a level end is
+                # an eave, a sloping one a rake
+                kind = "eave" if level else "rake"
             elif rj == "hole":
                 kind = "well"
             elif ej.kind in ("wall", "cheek", "chimney", "slab") or rj in ("chimney_joint",):

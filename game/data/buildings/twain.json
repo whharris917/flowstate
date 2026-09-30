@@ -3858,9 +3858,9 @@
      "over": 1.0
     },
     "x1": {
-     "plate": 20.71,
-     "pitch": 1.763,
-     "over": 1.8
+     "plate": 21.27,
+     "pitch": 1.63,
+     "over": 1.4
     },
     "z1": {
      "kind": "gable",
@@ -3871,7 +3871,7 @@
      "rake": 0.0
     }
    },
-   "note": "the great north-east gable facing east: peak 35.7 (east elevation)"
+   "note": "the great north-east gable facing east: its north slope the main roof's own north slope (21.27, 1.63), peak about 35.7 (east elevation)"
   },
   {
    "id": "e_gable_1",
@@ -3975,34 +3975,28 @@
    "note": "The Texas deck's roof: a pavilion on the deck's posts, its point at x 57.2, z 64.8 (roof plan), 37.1 (east elevation); its eaves at 34.7 reach the roof plan's octagon, 20.7 ft across flats.",
    "edges": {
     "0": {
-     "plate": 35.013,
      "over": 1.35
     },
     "1": {
-     "plate": 35.454,
      "over": 3.25
     },
     "2": {
-     "plate": 35.54,
      "over": 3.61
     },
     "3": {
-     "plate": 35.709,
      "over": 4.35
     },
     "4": {
-     "plate": 35.204,
      "over": 1.99
     },
     "5": {
-     "plate": 34.804,
      "over": 0.45
     },
     "6": {
-     "plate": 34.821,
      "over": 0.52
     }
-   }
+   },
+   "eave": 34.7
   },
   {
    "id": "alcove_spire",
@@ -4046,9 +4040,9 @@
     37.2
    ],
    "peak": 47.25,
-   "plate": 36.75,
    "overhang": 2.2,
-   "note": "An octagonal spire over the alcove's deck, centred where the roof plan and section A-A put its point (x 73.2, z 37.2, over the house's west wall), its eave octagon 17.4 ft across flats (roof plan); eave 33.2 and point 47.25 (the south elevation's mark, PEAK OF ROOF 47'-3\"). Its inner half dies into the long roof in valleys."
+   "note": "An octagonal spire over the alcove's deck, centred where the roof plan and section A-A put its point (x 73.2, z 37.2, over the house's west wall), its eave octagon 17.4 ft across flats (roof plan); eave 33.2 and point 47.25 (the south elevation's mark, PEAK OF ROOF 47'-3\"). Its inner half dies into the long roof in valleys.",
+   "plate": 36.75
   },
   {
    "id": "round_roof",
@@ -4063,16 +4057,7 @@
       78.2,
       6.7,
       [
-       58.292931
-      ]
-     ]
-    },
-    {
-     "arc_at": [
-      54.3,
-      78.2,
-      6.7,
-      [
+       58.292931,
        74,
        102,
        123,
@@ -4085,6 +4070,51 @@
      ]
     },
     [
+     "s_wall",
+     "part1"
+    ]
+   ],
+   "apex": [
+    "s_wall",
+    78.2
+   ],
+   "peak": 13.9,
+   "eave": 12.9,
+   "overhang": 1.2,
+   "cover": "tin",
+   "edges_at": [
+    {
+     "at": [
+      57.5,
+      78.0
+     ],
+     "kind": "abut"
+    },
+    {
+     "at": [
+      54.0,
+      72.3
+     ],
+     "over": 0.0
+    },
+    {
+     "at": [
+      57.65,
+      83.9
+     ],
+     "kind": "abut"
+    }
+   ],
+   "note": "the round's low cone, its point on the house wall (x 57.5, z 78.2), 13.9, its eave 12.9 round the round"
+  },
+  {
+   "id": "octagon_sliver_roof",
+   "footprint": [
+    [
+     51.125098,
+     "part1"
+    ],
+    [
      "oct_s",
      68.1
     ],
@@ -4095,30 +4125,17 @@
     [
      "s_wall",
      "part2"
+    ],
+    [
+     "s_wall",
+     "part1"
     ]
    ],
-   "shed": {
-    "from": [
-     [
-      46.2,
-      95.0
-     ],
-     [
-      46.2,
-      60.0
-     ]
-    ],
-    "plate": 13.0,
-    "pitch": 0.155
-   },
+   "plate": 12.9,
+   "pitch": 0.0,
+   "overhang": 0.0,
+   "cover": "tin",
    "edges_at": [
-    {
-     "at": [
-      57.5,
-      77.0
-     ],
-     "kind": "abut"
-    },
     {
      "at": [
       49.9,
@@ -4135,16 +4152,20 @@
     },
     {
      "at": [
-      57.65,
-      83.9
+      57.5,
+      71.5
+     ],
+     "kind": "abut"
+    },
+    {
+     "at": [
+      54.0,
+      72.3
      ],
      "kind": "abut"
     }
    ],
-   "cover": "tin",
-   "note": "the round's low roof, rising gently to the second floor's wall",
-   "edge": "eave",
-   "overhang": 1.2
+   "note": "the flat over the guest room's strip between the ground floor's octagon diagonal and the second floor's"
   },
   {
    "id": "bay_cone",
@@ -4157,9 +4178,9 @@
     69.5
    ],
    "peak": 31.3,
-   "plate": 23.2,
    "overhang": 1.2,
-   "note": "the cone over the bay's porch, on its posts, its back rising from the house wall to the point"
+   "note": "the cone over the bay's porch, on its posts, its back rising from the house wall to the point",
+   "eave": 21.1
   },
   {
    "id": "pantry_roof",
@@ -4171,7 +4192,6 @@
     "w_wall"
    ],
    "peak": 13.3,
-   "plate": 9.26,
    "overhang": 1.0,
    "cover": "asphalt",
    "edges_at": [
@@ -4190,7 +4210,8 @@
      "kind": "abut"
     }
    ],
-   "note": "the butler's pantry's quarter cone against the wing and the house"
+   "note": "the butler's pantry's quarter cone against the wing and the house",
+   "eave": 9.0
   },
   {
    "id": "wing_cornice",
@@ -4486,7 +4507,6 @@
     79.6
    ],
    "peak": 11.3,
-   "plate": 9.9,
    "overhang": 1.0,
    "cover": "builtup",
    "note": "A low hipped roof, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 11.3 (east and south elevations, fascia 9.2-10.2).",
@@ -4505,7 +4525,8 @@
      ],
      "kind": "abut"
     }
-   ]
+   ],
+   "eave": 9.8
   },
   {
    "id": "veranda_roof",
@@ -4563,7 +4584,6 @@
    },
    "porch": "porte_cochere",
    "cover": "copper",
-   "plate": 10.2,
    "pitch": 0.4,
    "deck": 13.5,
    "sides": {
@@ -4574,13 +4594,14 @@
      "over": 2.7
     },
     "z0": {
-     "kind": "abut"
+     "over": 0.0
     },
     "z1": {
      "over": 6.1
     }
    },
-   "note": "A low hip, eave 10.2 rising to 13.5 (south elevation's end view, the director's photograph)."
+   "note": "A low hip, eave 10.2 rising to 13.5 (south elevation's end view, the director's photograph).",
+   "eave": 10.2
   },
   {
    "id": "side_porch_hood",
@@ -4645,7 +4666,6 @@
     47.0
    ],
    "peak": 15.5,
-   "plate": 11.2,
    "overhang": 0.0,
    "cover": "glass",
    "edges_at": [
@@ -4657,7 +4677,8 @@
      "kind": "abut"
     }
    ],
-   "note": "A glass roof on ribs rising to the library's wall (model-v1)."
+   "note": "A glass roof on ribs rising to the library's wall (model-v1).",
+   "eave": 11.2
   }
  ]
 }

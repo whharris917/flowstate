@@ -354,17 +354,33 @@ class Model:
                 raise GenError("roof %s: its apex stands outside its footprint" % rid)
             if spec.get("peak") is None:
                 raise GenError("roof %s: an apex needs a peak height" % rid)
+        eave_y = spec.get("eave")
         for i, e in enumerate(edges):
-            if apex is not None and e["kind"] == "eave" and e.get("pitch") is None:
+            if e["kind"] != "eave":
+                continue
+            over_i = float(e["over"])
+            if apex is not None and e.get("pitch") is None:
                 a, b = fp[i], fp[(i + 1) % len(fp)]
                 dist = abs((b[0] - a[0]) * (apex[1] - a[1]) - (b[1] - a[1]) * (apex[0] - a[0])) / math.dist(a, b)
                 if dist < 1e-3:
                     raise GenError("roof %s: edge %d runs through its apex (make it abut)" % (rid, i))
-                rise = float(spec["peak"]) - self.y(e["plate"])
+                peak = float(spec["peak"])
+                if eave_y is not None:
+                    # every eave at one height: the plate over each edge
+                    # follows from its overhang and its distance to the apex
+                    ratio = over_i / dist
+                    plate = (float(eave_y) + peak * ratio) / (1.0 + ratio)
+                    e = dict(e, plate=plate)
+                rise = peak - self.y(e["plate"])
                 if rise <= 0:
                     raise GenError("roof %s: its peak is under its plate" % rid)
                 e = dict(e, pitch=rise / dist)
                 edges[i] = e
+            elif eave_y is not None and e.get("pitch") is not None and "shed" not in spec:
+                # a level eave all round: each plate stands the overhang's
+                # fall above it
+                edges[i] = dict(e, plate=float(eave_y) + float(e["pitch"]) * over_i)
+        for i, e in enumerate(edges):
             kind = e["kind"]
             if kind not in ("eave", "gable", "abut"):
                 raise GenError("roof %s edge %d: kind %r" % (rid, i, kind))
@@ -400,7 +416,10 @@ class Model:
         if not planes:
             raise GenError("roof %s has no eave: nothing makes its surface" % rid)
         single = len(planes) == 1
-        if not single and not is_convex(fp):
+        # a pyramid's planes all meet at its point: any outline every corner
+        # of which the point sees is sound
+        star = apex is not None and _seen_from(fp, apex)
+        if not single and not star and not is_convex(fp):
             raise GenError("roof %s: a roof of several planes needs a convex footprint "
                            "(compose it from convex roofs)" % rid)
         parts = [fp] if is_convex(fp) else P.convex_parts(fp)
@@ -1745,6 +1764,27 @@ class Model:
                     if bears:
                         cells.append(c_)
             self.add("brackets:" + R.id, "bracket", cells, "trim", roof=R.id)
+
+
+def _seen_from(fp: list, p) -> bool:
+    """Whether every corner of a polygon is seen from a point in it (the
+    straight line to it crosses no edge)."""
+    n = len(fp)
+    for i in range(n):
+        v = fp[i]
+        if math.dist(v, p) < 1e-6:
+            continue
+        for j in range(n):
+            a, b = fp[j], fp[(j + 1) % n]
+            if i in (j, (j + 1) % n):
+                continue
+            d1 = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+            d2 = (b[0] - a[0]) * (v[1] - a[1]) - (b[1] - a[1]) * (v[0] - a[0])
+            d3 = (v[0] - p[0]) * (a[1] - p[1]) - (v[1] - p[1]) * (a[0] - p[0])
+            d4 = (v[0] - p[0]) * (b[1] - p[1]) - (v[1] - p[1]) * (b[0] - p[0])
+            if d1 * d2 < -1e-12 and d3 * d4 < -1e-12:
+                return False
+    return True
 
 
 def _grown_pieces(fp: list, parts: list, overs: list) -> list:
