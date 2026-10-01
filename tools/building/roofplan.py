@@ -62,6 +62,13 @@ def main(argv: list[str]) -> int:
         font = ImageFont.truetype("arial.ttf", 18)
     except OSError:
         font = ImageFont.load_default()
+    # each roof's name at the middle of its footprint
+    small = font.font_variant(size=14) if hasattr(font, "font_variant") else font
+    for rid, r in m.roofs.items():
+        fp = r.footprint
+        cx = sum(p[0] for p in fp) / len(fp)
+        cz = sum(p[1] for p in fp) / len(fp)
+        d.text(px(cx, cz), rid, fill=(200, 0, 120), font=small)
     n = 0
     for f in v.findings:
         if f.check != "roof edges" or f.where is None:

@@ -3505,7 +3505,7 @@
   },
   {
    "at": [
-    121.2,
+    122.5,
     24.86
    ],
    "w": 4.4,
@@ -3525,7 +3525,7 @@
   },
   {
    "at": [
-    129.1,
+    122.4,
     36.79
    ],
    "w": 4.2,
@@ -4205,7 +4205,7 @@
     "w_wall"
    ],
    "peak": 13.3,
-   "overhang": 1.0,
+   "overhang": 2.25,
    "cover": "asphalt",
    "edges_at": [
     {
@@ -4223,7 +4223,7 @@
      "kind": "abut"
     }
    ],
-   "note": "the butler's pantry's quarter cone against the wing and the house",
+   "note": "the butler's pantry's quarter cone against the wing and the house; its bracketed eave 2.25 ft out (roof plan)",
    "eave": 9.0
   },
   {
@@ -4281,15 +4281,36 @@
       38.3
      ],
      "kind": "abut"
+    },
+    {
+     "at": [
+      125.0,
+      22.3
+     ],
+     "over": 2.6
+    },
+    {
+     "at": [
+      145.0,
+      20.3
+     ],
+     "over": 2.6
+    },
+    {
+     "at": [
+      154.2,
+      30.0
+     ],
+     "over": 2.1
     }
    ],
-   "note": "the wing's deep cornice: a flat band at 17.7 round the wing, its slopes rising from it"
+   "note": "the wing's deep cornice: a flat band at 17.7 round the wing, 2.6 ft out along the west side, 2.1 at the north end, 1.8 on the east and over the pantry, where it meets the main block's windows (roof plan)"
   },
   {
    "id": "wing_main",
    "footprint": {
     "rect": [
-     115.55,
+     "pantry_wing",
      "wing_w",
      145.3,
      40.72
@@ -4298,7 +4319,7 @@
    "plate": 17.7,
    "sides": {
     "x0": {
-     "pitch": 1.78
+     "pitch": 1.384
     },
     "x1": {
      "kind": "gable",
@@ -4311,7 +4332,7 @@
      "pitch": 1.45
     }
    },
-   "note": "The wing hip rising from its cornice (17.7) all round, its west eave on the west wall; ridge about 31.1 from x 123 (roof plan, elevations: 31.5); its north end a small gable standing over the cross hip (north elevation)"
+   "note": "The wing hip on its walls at the cornice (17.7): its ridge end at x 122.2 (roof plan), ridge about 31.1 (east and north elevations); its north end a small gable standing over the cross hip"
   },
   {
    "id": "wing_cross",
@@ -4391,7 +4412,7 @@
    "dormer": {
     "host": "wing_main",
     "side": "z0",
-    "center": 121.2,
+    "center": 122.5,
     "width": 6.1,
     "setback": 2.56
    },
@@ -4400,7 +4421,7 @@
    "overhang": 1.2,
    "rake": 0.4,
    "cheek": "clapboard",
-   "note": "a lattice dormer on the wing's roof (west, east and north elevations)"
+   "note": "a lattice dormer on the wing's west slope, centred at x 122.5 (roof plan 122.6)"
   },
   {
    "id": "wing_dormer_w2",
@@ -4423,7 +4444,7 @@
    "dormer": {
     "host": "wing_main",
     "side": "z1",
-    "center": 129.1,
+    "center": 122.4,
     "width": 5.8,
     "setback": 3.93
    },
@@ -4432,7 +4453,7 @@
    "overhang": 1.85,
    "rake": 0.4,
    "cheek": "clapboard",
-   "note": "a lattice dormer on the wing's roof (west, east and north elevations)"
+   "note": "a lattice dormer on the wing's east slope, centred at x 122.4 (roof plan 122.7, east elevation 122.2)"
   },
   {
    "id": "wing_dormer_n",
@@ -4522,7 +4543,7 @@
    "peak": 11.3,
    "overhang": 1.0,
    "cover": "builtup",
-   "note": "A low hipped roof, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 11.3 (east and south elevations, fascia 9.2-10.2).",
+   "note": "A low hipped roof, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 11.3 (east and south elevations, fascia 9.2-10.2). Eaves to the roof plan's outer line: 1.5 and 1.0 on the north-west and north, 2.5 to 3.0 on the west, south-west and south.",
    "edges_at": [
     {
      "at": [
@@ -4539,7 +4560,24 @@
      "kind": "abut"
     }
    ],
-   "eave": 9.8
+   "eave": 9.8,
+   "edges": {
+    "0": {
+     "over": 1.5
+    },
+    "1": {
+     "over": 1.0
+    },
+    "4": {
+     "over": 3.0
+    },
+    "5": {
+     "over": 2.75
+    },
+    "6": {
+     "over": 2.5
+    }
+   }
   },
   {
    "id": "veranda_roof",
