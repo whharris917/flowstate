@@ -3644,16 +3644,16 @@
   {
    "id": "great_north",
    "at": [
-    115.2,
+    114.2,
     59.3
    ],
    "size": [
-    2.8,
+    2.2,
     9.2
    ],
    "base": -2.5,
    "top": 36.5,
-   "note": "base 9.2 ft across to 8.8 ft, in to 4.7 at 16, shaft to a crown at 33.2-36.5"
+   "note": "in the north wall, thickening it from x 113.1 to 115.3 over z 54.7-64.0 (first, second and third floor plans); base 9.2 ft across, in to 4.7 at 16, shaft to a crown at 33.2-36.5"
   },
   {
    "id": "great_north_stack",
