@@ -4011,8 +4011,12 @@
      39.89
     ],
     [
-     73.2,
-     46.39
+     70.51,
+     43.7
+    ],
+    [
+     75.89,
+     43.7
     ],
     [
      79.7,
@@ -4038,8 +4042,38 @@
    ],
    "peak": 47.25,
    "overhang": 2.2,
-   "note": "An octagonal spire over the alcove's deck, its point at x 73.2, z 37.2 over the house's west wall (roof plan, section A-A), 47.25 (south elevation); eave octagon 17.4 ft across flats. On the house side its two diagonal faces run on to a ridge that dies into the long roof (roof plan: the V east of the octagon).",
+   "note": "An octagonal spire over the alcove's deck, its point at x 73.2, z 37.2 over the house's west wall (roof plan, section A-A), 47.25 (south elevation); eave octagon 17.4 ft across flats. Both elevations draw it a plain octagon, its east flank as steep as its west; its back half stands in the long roof, with a saddle behind it (spire_saddle)",
    "plate": 36.75
+  },
+  {
+   "id": "spire_saddle",
+   "footprint": {
+    "rect": [
+     70.51,
+     41.5,
+     75.89,
+     44.6
+    ]
+   },
+   "sides": {
+    "x0": {
+     "plate": 37.21,
+     "pitch": 0.48,
+     "over": 0.0
+    },
+    "x1": {
+     "plate": 37.21,
+     "pitch": 0.48,
+     "over": 0.0
+    },
+    "z0": {
+     "kind": "abut"
+    },
+    "z1": {
+     "kind": "abut"
+    }
+   },
+   "note": "The saddle behind the spire, where its back face meets the long roof's west slope: a ridge at 38.5 falling each way to the corners of that meeting, so it drains (the V the roof plan draws east of the spire)"
   },
   {
    "id": "round_roof",
@@ -4472,38 +4506,6 @@
    "note": "the lattice dormer on the wing's north end (north elevation)"
   },
   {
-   "id": "entrance_porch",
-   "footprint": {
-    "rect": [
-     84.6,
-     "e_wall",
-     95.7,
-     92.8
-    ]
-   },
-   "cover": "tin",
-   "sides": {
-    "x0": {
-     "plate": 10.9,
-     "pitch": 0.505,
-     "over": 3.4
-    },
-    "x1": {
-     "plate": 10.9,
-     "pitch": 0.505,
-     "over": 3.7
-    },
-    "z1": {
-     "kind": "gable",
-     "rake": 0.5
-    },
-    "z0": {
-     "kind": "abut"
-    }
-   },
-   "note": "the gable over the front door, standing out of the veranda on its posts (east elevation)"
-  },
-  {
    "id": "ombra_roof",
    "footprint": [
     [
@@ -4628,31 +4630,33 @@
    "footprint": {
     "rect": [
      85.3,
-     92.8,
+     "e_wall",
      96.3,
      108.2
     ]
    },
    "porch": "porte_cochere",
    "cover": "copper",
-   "pitch": 0.4,
-   "deck": 13.5,
    "sides": {
     "x0": {
+     "plate": 11.51,
+     "pitch": 0.36,
      "over": 2.8
     },
     "x1": {
+     "plate": 11.47,
+     "pitch": 0.36,
      "over": 2.7
     },
     "z0": {
-     "over": 0.0
+     "kind": "abut"
     },
     "z1": {
-     "over": 6.1
+     "kind": "gable",
+     "rake": 4.55
     }
    },
-   "note": "A low hip, eave 10.2 rising to 13.5 (south elevation's end view, the director's photograph).",
-   "eave": 10.2
+   "note": "One long gabled roof of flat-seam copper over the front door and the carriage way: ridge 13.5 running east from the house, eaves 10.5 (south elevation draws the slope's face 10.5-13.5 level from the house to z 112.75 and a vertical end; the north elevation no rise above it; the roof plan no hips); its gable over the drive (east elevation)"
   },
   {
    "id": "side_porch_hood",
