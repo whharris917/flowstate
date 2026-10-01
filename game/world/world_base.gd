@@ -41,8 +41,6 @@ var sky_env: Environment = null
 var settings: SettingsPanel
 var music_player: AudioStreamPlayer = null
 var time_of_day := 10.0
-var weather_level := -1.0              # 0 fair to 1 storm; below 0, the world has no weather
-var settings_prefix := ""              # a world that keeps its own clock and weather saves them under its own keys
 var music_on := false
 var graphics := GraphicsSettings.new()   # presets and knobs; see ui/graphics_settings.gd
 var _sun_base_energy := 1.5
@@ -89,10 +87,6 @@ func _ready() -> void:
 	settings.on_time_changed = func(hours: float) -> void:
 		set_time_of_day(hours)
 		_save_settings()
-	if weather_level >= 0.0:
-		settings.on_weather_changed = func(level: float) -> void:
-			set_weather(level)
-			_save_settings()
 	settings.on_music_changed = func(on: bool) -> void:
 		set_music(on)
 		_save_settings()
@@ -498,19 +492,11 @@ func set_music(on: bool) -> void:
 		music_player.stop()
 
 
-## The weather, 0 fair to 1 a storm. A world with weather overrides
-## this; the options slider calls it.
-func set_weather(level: float) -> void:
-	weather_level = clampf(level, 0.0, 1.0)
-
-
 ## Every world's keys share one file: what this world does not own is
 ## read back and kept.
 func _save_settings() -> void:
 	var saved := _read_settings()
-	saved[settings_prefix + "time_of_day"] = time_of_day
-	if weather_level >= 0.0:
-		saved[settings_prefix + "weather"] = weather_level
+	saved["time_of_day"] = time_of_day
 	saved["music"] = music_on
 	saved["graphics"] = graphics.to_dict()
 	saved["hotbar"] = builder.hotbar if builder != null else []
@@ -535,19 +521,14 @@ func _load_settings() -> void:
 	var on := music_on
 	var saved := _read_settings()
 	if not saved.is_empty():
-		hours = float(saved.get(settings_prefix + "time_of_day", hours))
+		hours = float(saved.get("time_of_day", hours))
 		on = bool(saved.get("music", on))
-		if weather_level >= 0.0:
-			weather_level = float(saved.get(settings_prefix + "weather", weather_level))
 		if saved.get("graphics") is Dictionary:
 			graphics.from_dict(saved["graphics"])
 		if saved.get("hotbar") is Array and builder != null:
 			builder.set_hotbar(saved["hotbar"])
 		elif bool(saved.get("high_lighting", false)):
 			graphics.set_preset("Ultra")  # a legacy high_lighting setting
-	if weather_level >= 0.0:
-		set_weather(weather_level)
-		settings.set_weather(weather_level)
 	set_time_of_day(hours)
 	set_music(on)
 	graphics.apply(self)
@@ -570,10 +551,10 @@ func _build_audio() -> void:
 	reverb.wet = reverb_wet
 	reverb.damping = 0.55
 	AudioServer.add_bus_effect(bus, reverb)
-	# The weather and the sea play through Outdoor, a harbour bell through
-	# Bell into it; each has a low-pass a world closes when the sound is
-	# heard through walls (a world with nothing to muffle leaves them open).
-	for name_: String in ["Outdoor", "Bell"]:
+	# The sea, the wind and the river play through Outdoor, with a
+	# low-pass a world closes when the sound is heard through walls (a
+	# world with nothing to muffle leaves it open).
+	for name_: String in ["Outdoor"]:
 		if AudioServer.get_bus_index(name_) == -1:
 			var idx := AudioServer.bus_count
 			AudioServer.add_bus(idx)
@@ -581,7 +562,7 @@ func _build_audio() -> void:
 			var cut := AudioEffectLowPassFilter.new()
 			cut.cutoff_hz = 20000.0
 			AudioServer.add_bus_effect(idx, cut)
-		AudioServer.set_bus_send(AudioServer.get_bus_index(name_), "Outdoor" if name_ == "Bell" else "Master")
+		AudioServer.set_bus_send(AudioServer.get_bus_index(name_), "Master")
 		var i := AudioServer.get_bus_index(name_)
 		(AudioServer.get_bus_effect(i, 0) as AudioEffectLowPassFilter).cutoff_hz = 20000.0
 		AudioServer.set_bus_volume_db(i, 0.0)

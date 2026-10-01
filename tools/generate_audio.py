@@ -23,11 +23,6 @@ Writes to game/audio/:
                   with bubbles under it
   dosing_loop.wav 2 s seamless metering-pump drive: a small motor with
                   the diaphragm's tick every half second
-  rain_loop.wav   10 s seamless light drizzle: a soft hiss, a gentle drop
-  gale_loop.wav   14 s seamless gale, gusting hard, a moan on an edge
-  thunder_near.wav, thunder_1..3.wav  a close stroke's crack and roll;
-                  three distant rolls, darker with distance
-  bell_1..2.wav   a bell buoy's bronze bell, struck hard and soft
 
 Loops are made seamless by quantizing every sustained frequency to an
 integer number of cycles per loop and forcing envelopes to zero at the
@@ -828,145 +823,6 @@ def make_clink() -> None:
 # The harbour town's weather and its harbour. Each has its own RNG, or
 # none, so every file above stays byte-identical.
 
-def make_rain() -> None:
-    """A light drizzle: a soft, even hiss with the top rolled off, a
-    faint wash of water running in the gutters under it, and now and
-    then a single gentle drop close by. Seamless over ten seconds."""
-    r = random.Random(20260925)
-    dur = 10.0
-    n = int(SR * dur)
-    fade = int(0.5 * SR)
-    total = n + fade
-    white = _noise_r(r, total)
-    low = _lowpass(white, 0.02)
-    soft = _lowpass(white, 0.12)
-    softer = _lowpass(soft, 0.35)
-    out = [0.0] * total
-    for i in range(total):
-        t = i / SR
-        swell = 0.9 + 0.1 * math.sin(2.0 * math.pi * t * 2.0 / dur + 0.3)
-        out[i] = ((softer[i] - low[i]) * 1.0 + low[i] * 0.6) * swell
-    for _ in range(int(dur * 14)):
-        start = int(r.random() * n)
-        f0 = r.uniform(900.0, 2200.0)
-        amp = r.uniform(0.02, 0.10)
-        length = int(SR * 0.03)
-        for k in range(length):
-            t = k / SR
-            env = math.exp(-t / 0.006) * min(1.0, t / 0.001)
-            out[(start + k) % total] += math.sin(2.0 * math.pi * f0 * t) * env * amp
-    out = loop_crossfade(out, 0.5)
-    write_wav(OUT_DIR / "rain_loop.wav", [out], normalize_to=0.30)
-
-
-def make_gale() -> None:
-    """A gale: the wind loop's big brother, a roaring low band that
-    gusts hard on slow cycles, and a thin moan where it finds an edge,
-    rising and falling with the gusts."""
-    r = random.Random(20260926)
-    dur = 14.0
-    n = int(SR * dur)
-    fade = int(0.7 * SR)
-    total = n + fade
-    white = _noise_r(r, total)
-    low = _lowpass(white, 0.035)
-    mid = _lowpass(white, 0.20)
-    out = [0.0] * total
-    phase = 0.0
-    for i in range(total):
-        t = i / SR
-        gust = 0.55 + 0.30 * math.sin(2.0 * math.pi * t * 2.0 / dur + 0.4) \
-            + 0.25 * math.sin(2.0 * math.pi * t * 5.0 / dur + 1.9)
-        gust = max(0.0, gust)
-        phase += 2.0 * math.pi * (310.0 + 140.0 * gust) / SR
-        moan = math.sin(phase) * max(0.0, gust - 0.55) ** 2 * 0.35
-        out[i] = low[i] * (0.5 + 0.8 * gust) * 3.2 + (mid[i] - low[i]) * gust * gust * 1.6 + moan * 0.05
-    out = loop_crossfade(out, 0.7)
-    write_wav(OUT_DIR / "gale_loop.wav", [out], normalize_to=0.40)
-
-
-def make_thunder(path: Path, r: random.Random, crack: float, length: float,
-                 bumps: int, darkness: float) -> None:
-    """Thunder: a crack (a split second of broadband tearing, several
-    tears in a row) when the stroke is close, then the roll: brown
-    noise under an envelope of rumbles, each a stretch of the channel
-    heard later from further along it, decaying. darkness is the
-    low-pass on the roll: distance takes the top off."""
-    n = int(SR * length)
-    white = _noise_r(r, n)
-    roll_src = _lowpass(_lowpass(white, 0.012 * (1.0 - darkness) + 0.002), 0.05)
-    env = [0.0] * n
-    for b in range(bumps):
-        at = r.uniform(0.05, 0.55) * length * (b + 1) / bumps
-        width = r.uniform(0.4, 1.4)
-        amp = r.uniform(0.5, 1.0) * math.exp(-at / (0.35 * length))
-        for i in range(n):
-            d = (i / SR - at) / width
-            if -3.0 < d < 8.0:
-                env[i] += amp * (math.exp(-d * d) if d < 0.0 else math.exp(-d * 0.7))
-    out = [roll_src[i] * env[i] * 9.0 for i in range(n)]
-    if crack > 0.0:
-        tears = _lowpass(white, 0.6)
-        for k in range(4):
-            start = int(SR * (0.02 + 0.07 * k + r.uniform(0.0, 0.03)))
-            m = int(SR * 0.18)
-            for j in range(m):
-                t = j / SR
-                e = math.exp(-t / 0.045) * min(1.0, t / 0.002) * (1.0 - 0.18 * k)
-                if start + j < n:
-                    out[start + j] += tears[start + j] * e * crack * 1.4
-    # Fade the last half second so nothing is cut off.
-    tail = int(0.5 * SR)
-    for i in range(tail):
-        out[n - tail + i] *= 1.0 - i / tail
-    write_wav(path, [out], normalize_to=0.55)
-
-
-def make_thunders() -> None:
-    r = random.Random(20260927)
-    make_thunder(OUT_DIR / "thunder_near.wav", r, crack=1.0, length=9.0, bumps=5, darkness=0.2)
-    make_thunder(OUT_DIR / "thunder_1.wav", r, crack=0.0, length=10.0, bumps=6, darkness=0.6)
-    make_thunder(OUT_DIR / "thunder_2.wav", r, crack=0.0, length=12.0, bumps=7, darkness=0.85)
-    make_thunder(OUT_DIR / "thunder_3.wav", r, crack=0.0, length=15.0, bumps=9, darkness=0.92)
-
-
-def make_bell(path: Path, f0: float, bright: float) -> None:
-    """A bell buoy's bell: bronze, struck by a free clapper as the buoy
-    rolls. The partials of a heavy bell (the hum an octave under the
-    strike, the strike, the minor third, the fifth, the octave, the
-    upper partials) each ring out at their own rate, the hum longest;
-    each is a pair a fraction of a hertz apart, as a cast bell never is
-    quite round, which gives the slow shimmer. Over them, the clang of
-    the clapper: a few hundredths of a second of high, fast-dying
-    partials. bright is how hard it struck. Pure sines, no RNG."""
-    duration = 7.0
-    n = int(duration * SR)
-    partials = [(0.5, 0.45, 0.35, 0.21), (1.0, 1.0, 0.7, 0.37), (1.19, 0.5, 1.0, 0.53),
-                (1.50, 0.28, 1.4, 0.61), (2.0, 0.40 * bright, 1.9, 0.83), (2.51, 0.22 * bright, 2.6, 0.97),
-                (3.01, 0.14 * bright, 3.4, 1.21), (4.07, 0.07 * bright, 5.0, 1.43)]
-    clang = [(5.3, 0.30), (6.9, 0.22), (8.4, 0.16), (10.2, 0.10)]
-    buf = [0.0] * n
-    for i in range(n):
-        t = i / SR
-        v = 0.0
-        for ratio, amp, decay, split in partials:
-            f = f0 * ratio
-            env = math.exp(-t * decay)
-            v += amp * env * 0.5 * (math.sin(2.0 * math.pi * f * t) + math.sin(2.0 * math.pi * (f + split) * t + 0.7))
-        for ratio, amp in clang:
-            v += amp * bright * math.sin(2.0 * math.pi * f0 * ratio * t) * math.exp(-t * 45.0)
-        buf[i] = v * min(1.0, t / 0.0015)
-    tail = int(0.4 * SR)
-    for i in range(tail):
-        buf[n - tail + i] *= 1.0 - i / tail
-    write_wav(path, [buf], normalize_to=0.45)
-
-
-def make_bells() -> None:
-    make_bell(OUT_DIR / "bell_1.wav", 330.0, 1.0)
-    make_bell(OUT_DIR / "bell_2.wav", 330.0, 0.55)
-
-
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     print("generating audio ->", OUT_DIR)
@@ -997,10 +853,6 @@ def main() -> None:
     make_pour()
     make_dosing()
     make_clink()
-    make_rain()
-    make_gale()
-    make_thunders()
-    make_bells()
     print("done")
 
 

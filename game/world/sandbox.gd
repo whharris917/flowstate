@@ -215,12 +215,11 @@ func _process(delta: float) -> void:
 func _on_time_of_day(_horizon: float, twilight: float) -> void:
 	if _stars != null:
 		# The first stars wait for the afterglow to go: the brightest at
-		# the end of civil twilight, the field once it is dark. Cloud
-		# hides them; the moon's light drowns the faint ones.
-		var cover := _sky_cover()
+		# the end of civil twilight, the field once it is dark; the moon's
+		# light drowns the faint ones.
 		var moon := SkyClock.moon_world(time_of_day)
 		var moon_light := pow(SkyClock.moon_lit(time_of_day), 1.5) * clampf(moon.y * 5.0, 0.0, 1.0)
-		_stars.update(time_of_day, pow(1.0 - twilight, 1.8) * pow(1.0 - cover, 2.0), moon_light * (1.0 - cover))
+		_stars.update(time_of_day, pow(1.0 - twilight, 1.8), moon_light)
 	# Night level: 3 is too dim, 9 too bright; 5.5 is a lit night shift.
 	for light in _hall_lights:
 		light.light_energy = lerpf(5.5, 1.2, twilight)
@@ -230,11 +229,6 @@ func _on_time_of_day(_horizon: float, twilight: float) -> void:
 		light.visible = twilight < 0.999
 	if _hall_lamp_mat != null:
 		_hall_lamp_mat.emission_energy_multiplier = lerpf(4.5, 1.5, twilight)
-
-
-## How much of the sky cloud hides, 0 to 1: a world with weather says.
-func _sky_cover() -> float:
-	return 0.0
 
 
 ## ---- the hall -------------------------------------------------------------

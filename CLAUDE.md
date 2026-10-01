@@ -3,6 +3,7 @@
 A first-person factory-building game set aboard a starship. The player builds a pharmaceutical plant from raw materials, one sensor, relay and wire at a time, advised by an AI that sees only what the player sees and controls nothing.
 
 - `docs/GDD.md` is the source of truth for vision, story, world, systems and progression. Read it before design or implementation work. It sets no build order; sequencing is a working decision made here.
+- The harbour town, the Monroe courthouse, the Mark Twain house and the building generator moved to their own repository on 2026-10-01: `C:\Users\wilha\projects\veribuilder` (github.com/whharris917/veribuilder), its own Claude project. Nothing here depends on it.
 - `docs/history.md` is the full session-by-session record: why each rule exists, measurements, findings. Look there for background. New history goes there, not here.
 - This file holds rules and current state only. Keep it under 5,000 words, in the plain register below.
 
@@ -36,7 +37,7 @@ The director is the creative director: fluent in process control, does not code,
 
 ### Checks
 
-- **Per change** (director's rule): `& $exe --headless --path <repo>\game --import`, then one headless smoke, `--quit-after 600` with the scene named (the default scene is the title menu, which quits at once headless). Worlds: `res://world/sandbox.tscn` (the showcase), `hall.tscn`, `campaign.tscn` (the milestone ladder check), `blank.tscn` (kernel self-checks), `maine.tscn` (landscape check and the exercises), `town.tscn`. The director launches the game to check fixes; do not add automated tests beyond what a change needs.
+- **Per change** (director's rule): `& $exe --headless --path <repo>\game --import`, then one headless smoke, `--quit-after 600` with the scene named (the default scene is the title menu, which quits at once headless). Worlds: `res://world/sandbox.tscn` (the showcase), `hall.tscn`, `campaign.tscn` (the milestone ladder check), `blank.tscn` (kernel self-checks), `maine.tscn` (landscape check and the exercises). The director launches the game to check fixes; do not add automated tests beyond what a change needs.
 - If `--import` reports only `Could not resolve class "X"`, run `--check-only -s res://path/to/changed.gd` on each changed script to find the real error.
 - Each smoke prints the kernel self-checks, `hydraulic solves that did not converge since t=0` (keep at none), `lines priced by their length and size: all`, the four routing counts (overlaps, crossings, unsupported, through solids) and a startup time. Watch the exit output for "resources still in use".
 - **Windowed probes** take minutes. Run them once per batch of related edits, before a delivery that needs a screenshot, and at the end of a session. `showcase_probe.tscn` (about 4 min; `FLOWSTATE_SOAK_MIN=2` shortens its soak): screenshots, the soak's material balance, walks up every stair. `hud_probe.tscn`: graphics presets with frame rates, frame pacing, noon/dusk/night shots; read these before touching lighting. `maine_probe.tscn`: the Maine vantages. `library_probe.tscn`: pages missing prose, an editorial to-do list rather than a failure. `FLOWSTATE_PROBE_SCENE=<scene>` points a probe at another world.
@@ -165,25 +166,11 @@ Each of these cost real time; the stories are in `docs/history.md`. They hold in
 - Commit small and often. Never commit `.venv/`, `game/.godot/` or `docs/design_guidelines.docx` (the director's file). Ask before pushing.
 - **New equipment type checklist:** (1) Python class in `sim/` with pytest; (2) its `EquipmentSpec` with a meaning for every port and an honest assumptions list; (3) GD mirror in `game/sim/` with `state_dict`/`apply_state` and `build_hydraulics`/`update_hydraulics`/`supplied_stream`/`tap_ports`; (4) view in `game/components/` with describe()/use(), sim-edge audio, members held for anything it will change; (5) `plant_factory.gd`: catalog entry, FOOTPRINTS, Y_OFFSETS, CONFIG rows, PORT_ANCHORS, make_record and make_view arms; (6) `plant.gd`: place() arm, `_params_for`, `elevation_m` if its pressures depend on height; (7) `asset_preview.gd` arm; (8) a library page draft for the director; (9) a demonstration (Maine exercise or showcase, as the director wants) and a rung's `unlocks` in `data/milestones.gd`, or the campaign can never build it; (10) pytest, `--import`, a smoke, the probes, and read the screenshots.
 
-## Real buildings
-
-A real building is generated from architectural decisions and validated as a solid; nothing in it is placed or sized by hand. Method, generator and fitting tools: `docs/real_buildings.md`.
-
-- **Data, not geometry.** `game/data/buildings/<name>.json`: grid lines, levels, spaces, openings (point on a wall, width, sill, head), roofs (footprint; per edge eave, gable or abut, with plate, pitch, overhang; dormers by host, side, centre, width, setback), chimneys, style. A number that is not the obvious reading of a drawing carries a `note` naming its sheet.
-- **Derived, never typed.** `tools/building/arch.py` computes walls from the spaces' outlines, roof surfaces from plates and pitches (hips, ridges, valleys as intersections), roof joins, cheeks, openings cut from their walls, porch posts and railings. A kind of fault is fixed in the generator, not in the data.
-- **Refused, not drawn.** Parameters that cannot make a building raise `GenError` with the reason.
-- **Validated after every change** (`tools/building/validate.py`): closed solids, no overlap, every face fitted, sealed with openings shut, no inside finish in the weather, every roof edge classified (eave, rake, ridge, hip, valley, deck edge, abutment, well, seam, cricket), openings in their walls clear of roof and neighbours, chimneys 2 ft over their roof, headroom, every roof carried. A building that fails is broken, not a draft: `tools/building/build.py <name>` writes the game's `.bld` only when clean.
-- **Fitting comes last** and only moves parameters, then validates again.
-- `tools/building/examples/cottage.json` with `tests/test_building_generator.py`: the test house stays clean and each kind of fault stays found. A new kind of fault gets a case there.
-
 ## Where things stand
 
 **Worlds** (title screen `world/menu.tscn`; each saves to its own file):
 - **Showcase** (`world/sandbox.tscn`, built by `showcase.gd`): the home loop, pipe rack, Unit 100 level loop, MCC room, **Unit 300** (the full synthesis train with a closed solvent recycle), **Unit 400** (a PLC-sequenced transfer tower with HMI-400 and a local station), Unit 500 gallery, inside the hall.
 - **Maine coast** (`world/maine.tscn`): the blank map's rules on a landscape (`landscape.gd`, `maine_coast.gd`) with a river and the heighliner as scenery. It hosts the exercises: routing, the drip demo (small-bore devices on tubing, on the home pad), line pressure gauges, the vial filling line built from parts (`world/fill_line_demo.gd`, 40 vials a minute), and the bench east of the home pad (`world/bench_demo.gd`).
-- **Harbor town** (`town.tscn`, `town_probe.tscn`): a 1940s town on the Maine coast (`harbor_town.gd`, `full_house.gd`, `main_street.gd`, `harbor.gd`, `weather.gd`).
-- **Monroe courthouse** (`courthouse.tscn`, `courthouse_probe.tscn`): the Union County courthouse (1886), its square and blocks (`union_courthouse.gd`, `courthouse_*.gd`). Its stage (`stage*.gd`, `actor*.gd`) hosts actors driven over `http://127.0.0.1:47886`, documented in `data/actor_handbook.md`.
-- **Mark Twain house** (`twain.tscn`, `twain_probe.tscn`): the Clemens house, Hartford (1874), from the HABS drawings (CT-359), with its grounds (`twain_*.gd`). The plain entry is hand-built; FROM ITS DATA (`twain_data.tscn`) is generated (see Real buildings). `TwainInterior.snap` places pieces against a wall.
 - **Blank map**, **campaign** (a Satisfactory-style milestone ladder, `data/milestones.gd`; journal on J), and **the hall** (parked, kept bootable).
 
 **What exists:** both kernels on pressure with species streams; the control tier (PLC with ladder editor, PID, valves, relays, cabinets built module by module, the `pd8` fused 24 V strip (`PowerDistribution`), junction boxes, multicores, stations); the process train (boiler to vial filler); small-bore family; filling-line parts; alarms; trends; the material balance screen; save/load; undo; graphics presets; bench chemistry; the player's body (`player/player_figure.gd`) and a 0.6 m jump. Equipment, lines and cables are solid to the player (`world/plant_solids.gd`, layer 32): a convex hull per drawn primitive (MeshMerge's `sources`), capsules along lines; rebuilt when a mesh changes under a thing; nothing while carried.
@@ -198,9 +185,6 @@ A real building is generated from architectural decisions and validated as a sol
 0. **The bench, open for the director:** the substance library and its draft notes (`chemistry.json`), seven library page drafts, the Maine bench, and whether the bench and the plant's six species should become one chemistry.
 1. **Filling line, open for the director:** the compact room (its cabinet, fused strip, tray CT-601 and clear sleeve SL-601), ten library page drafts (the nine line parts and the 24 V distribution strip), the campaign rung. Not done: 480 V feeders into trays (feeders stay pipe-routed conduit runs).
 2. **Standing review items:** the drip demo's tube-sized nozzles; the small-bore views (first drafts); the two `docs/` documents and their five spec-prose drifts; the showcase's walk report and startup time.
-3. **Monroe courthouse:** the monument's inscriptions (modelled plain). Next films: scripted top-down by Claude, no agent actors; pipeline in `tools/film/`.
-4. **Harbor town, open for the director:** the domed hall, the sign names, the town's name, the moon's phase (`SkyClock.MOON_AGE`), the noon sun's height (60°).
-5. **Twain house, generated from its data**: clean and fitted to the survey and photographs; awaits the director's look and the judgment calls in `docs/history.md` (2026-09-30). Next: stair, finishes and furniture, then retire the hand-built house.
 
 **Known gaps:**
 - Mass does not close across the steam generator: its drum is a fixed-pressure boundary that makes up whatever is drawn. Closing it needs a real drum inventory and changes the boiler's dynamics; the director's call.
