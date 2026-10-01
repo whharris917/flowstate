@@ -4639,13 +4639,13 @@
    "cover": "copper",
    "sides": {
     "x0": {
-     "plate": 11.51,
-     "pitch": 0.36,
+     "plate": 11.38,
+     "pitch": 0.315,
      "over": 2.8
     },
     "x1": {
-     "plate": 11.47,
-     "pitch": 0.36,
+     "plate": 11.35,
+     "pitch": 0.315,
      "over": 2.7
     },
     "z0": {
@@ -4656,7 +4656,7 @@
      "rake": 4.55
     }
    },
-   "note": "One long gabled roof of flat-seam copper over the front door and the carriage way: ridge 13.5 running east from the house, eaves 10.5 (south elevation draws the slope's face 10.5-13.5 level from the house to z 112.75 and a vertical end; the north elevation no rise above it; the roof plan no hips); its gable over the drive (east elevation)"
+   "note": "One long gabled roof of flat-seam copper over the front door and the carriage way: ridge 13.1 running east from the house, eaves 10.5 (south elevation draws the slope's face 10.5-13.5 level from the house to z 112.75 and a vertical end; the north elevation its ridge at 12.75, the south its top at 13.5; the roof plan no hips); its gable over the drive (east elevation)"
   },
   {
    "id": "side_porch_hood",
