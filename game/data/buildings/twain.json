@@ -3525,7 +3525,7 @@
   },
   {
    "at": [
-    122.4,
+    123.8,
     36.79
    ],
    "w": 4.2,
@@ -4319,7 +4319,7 @@
    "plate": 17.7,
    "sides": {
     "x0": {
-     "pitch": 1.384
+     "pitch": 1.27
     },
     "x1": {
      "kind": "gable",
@@ -4332,7 +4332,7 @@
      "pitch": 1.45
     }
    },
-   "note": "The wing hip on its walls at the cornice (17.7): its ridge end at x 122.2 (roof plan), ridge about 31.1 (east and north elevations); its north end a small gable standing over the cross hip"
+   "note": "The wing hip on its walls at the cornice (17.7): ridge about 31.1 ending at x 123.0 (west elevation 123.0, roof plan 122.2, east elevation 123.75); its north end a small gable over the cross hip"
   },
   {
    "id": "wing_cross",
@@ -4444,7 +4444,7 @@
    "dormer": {
     "host": "wing_main",
     "side": "z1",
-    "center": 122.4,
+    "center": 123.8,
     "width": 5.8,
     "setback": 3.93
    },
@@ -4453,7 +4453,7 @@
    "overhang": 1.85,
    "rake": 0.4,
    "cheek": "clapboard",
-   "note": "a lattice dormer on the wing's east slope, centred at x 122.4 (roof plan 122.7, east elevation 122.2)"
+   "note": "a lattice dormer on the wing's east slope, centred at x 123.8: the roof plan draws it at 122.5 and the east elevation at 125.1; each sheet's error on the wing ridge's end (-0.8 and +0.75) corrected"
   },
   {
    "id": "wing_dormer_n",
@@ -4540,10 +4540,10 @@
     33.7,
     79.6
    ],
-   "peak": 11.3,
+   "peak": 10.5,
    "overhang": 1.0,
    "cover": "builtup",
-   "note": "A low hipped roof, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 11.3 (east and south elevations, fascia 9.2-10.2). Eaves to the roof plan's outer line: 1.5 and 1.0 on the north-west and north, 2.5 to 3.0 on the west, south-west and south.",
+   "note": "A low built-up hip, its hips meeting at x 33.7, z 79.6 (roof plan); eave 9.8, peak 10.5 (west elevation; the roof plan names it built-up roofing). Eaves to the roof plan's outer line: 1.5 and 1.0 on the north-west and north, 2.5 to 3.0 on the west, south-west and south.",
    "edges_at": [
     {
      "at": [
