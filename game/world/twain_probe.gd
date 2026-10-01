@@ -38,33 +38,6 @@ func _run(world: TwainMap) -> void:
 		get_tree().quit()
 		return
 	var views := OS.get_environment("FLOWSTATE_TW_VIEWS")
-	# FLOWSTATE_TW_FINDINGS=rule[,rule]: photograph each finding of
-	# tools/building/validity.py of those rules from 5 m outside the house
-	# (user://probe_tw_find_<n>.png), for reading what is wrong there.
-	var fr := OS.get_environment("FLOWSTATE_TW_FINDINGS")
-	if fr != "":
-		var fj := FileAccess.open("user://validity_twain.json", FileAccess.READ)
-		var found: Array = JSON.parse_string(fj.get_as_text())
-		var parts: Array[String] = []
-		var centre := TwainHouse.w(85.0, 70.0, 20.0)
-		var n := 0
-		for f: Dictionary in found:
-			if not fr.split(",").has(str(f["rule"])):
-				continue
-			var at: Array = f["at"]
-			var p := TwainHouse.w(float(at[0]), float(at[1]), float(at[2]))
-			var out := Vector3(p.x - centre.x, 0, p.z - centre.z).normalized()
-			# From outside and above, where the finding's spot shows.
-			var eye := p + out * 5.0 + Vector3(0, 4.0, 0)
-			if f.has("from"):
-				var fa: Array = f["from"]
-				eye = TwainHouse.w(float(fa[0]), float(fa[1]), float(fa[2]))
-			parts.append("cam_find_%d:50:%.2f,%.2f,%.2f:%.2f,%.2f,%.2f" % [n, eye.x, eye.y, eye.z, p.x, p.y, p.z])
-			print("[probe] find_%d: %s" % [n, f["text"]])
-			n += 1
-			if n >= 16:
-				break
-		views = ";".join(parts)
 	if views != "":
 		# Pictures for comparison: no panels, hotbar or crosshair over them.
 		for layer: Node in get_tree().root.find_children("*", "CanvasLayer", true, false):

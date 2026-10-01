@@ -18,16 +18,22 @@ A building that fails any check is broken, not a draft. The invariants:
   sealed        with windows and doors shut, no face of the inside (a
                 wall's inner face, a floor, a ceiling, the roof's
                 underside over rooms, a partition) can be reached from
-                outside: no gap anywhere between walls, floors and roofs
+                outside: no gap anywhere between walls, floors and roofs;
+                the smallest set of faces the air passes is listed
+  finish        no face finished for the inside stands in the weather,
+                and no outside finish faces into a room
   roof edges    every edge of the roof's surface is an eave (level, over a
                 fascia), a rake (over a bargeboard), a ridge, a hip, a
                 valley, a deck's edge, an abutment (against a wall or
-                chimney) or a well's edge; anything else is a step or a
-                slot and is listed
+                chimney or another roof's end), a well's edge, a seam
+                between two roofs in one plane, or a cricket (a level
+                valley no longer than CRICKET, drained by a flashed
+                saddle); anything else is a step or a slot and is listed
   openings      every opening lies in its wall with its casing on the
                 wall's face, clear of the roof above it and of the other
                 openings beside it, and glazed windows see out
-  chimneys      every chimney clears the roof within 10 ft of it by 2 ft
+  chimneys      every chimney's top clears, by 2 ft, the highest point of
+                the roof it passes through over its own plan
   headroom      every enclosed room has at least 6.5 ft of it somewhere
   carried       every roof rests on walls, posts or another roof
   generation    whatever the generator could not honour (a wall with

@@ -1,52 +1,63 @@
 # Modelling a real building
 
-How a real building is brought into the game from its survey drawings and photographs. Written from the Mark Twain house (HABS CT-359), where most of the time went on errors this method prevents: a first model built by hand, piece by piece, then fixed one fault at a time as they were found.
+How a real building is brought into the game. Written from the Mark Twain house (HABS CT-359), and general for any building.
 
-## The rule behind the method
+## Why a generator
 
-A building is data, not code. It is a set of spaces (rooms, halls, stairs, porches, balconies, decks, attics) on levels, joined by openings, covered by roof bodies. Everything else (every wall, a gable's end, a dormer's cheeks, where one roof dies into another, eaves, bargeboards, railings, a room's ceiling under a slope) is derived from those by one general builder, so the parts cannot disagree. Every number in the data is read off a drawing and checked against every drawing that shows it, by tools, before and after the building is built.
+The first Twain models were built from pieces placed and sized by hand: a wall here, a roof face there, a gable's triangle, a dormer's cheeks. Each piece was right on its own, and nothing related one piece to another, so the faults were in the relations: a gable sunk behind an eave, a slot between two roofs, a wall rising through a room, a window cut by a roof, brick showing inside. Checks on pictures and sampled grids found some of them, after the fact and not all; a fix to one piece broke its neighbour. The faults came from the representation, not from individual mistakes.
 
-The faults the hand-built Twain house kept producing, and what now prevents each:
+So the building is now generated. The data holds only architectural decisions (where the rooms are, how high each floor is, the pitch and overhang of each roof, the width and head of each opening). Everything else is computed from them: walls from the rooms' outlines, roof planes from plates and pitches, eaves, ridges, hips and valleys as the planes' intersections, openings cut from the walls they stand in. Parameters that cannot make a building are refused while generating. What is generated is then validated as a solid, with no drawing or photograph involved. A building that fails validation is broken, not a draft: it is not written out for the game.
 
-| Fault | Cause | Prevented by |
-|---|---|---|
-| A wall across a room at ceiling height (the north-east gable's closing triangle in the Clemenses' bedroom) | roof pieces drawn with no knowledge of the rooms | walls and roofs derived from spaces; nothing is drawn inside a space |
-| Outer brick showing inside rooms (about 250 audit findings) | rooms with a flat ceiling under a sloping roof; walls with a fixed top per side | a room's finish stops at its ceiling or the roof's underside, whichever is lower; walls rise to what is over them |
-| A steep roof face hiding a gable; a slot or a step between two roofs | each roof and gable placed by hand, the join patched per case | the roof is the highest of its bodies at every point; a body standing over another's edge closes the step itself |
-| A partition 1.5 ft from where the plan draws it; a tower drawn on its wall's inner face | numbers read by eye from a picture of the sheet | the measuring tool reads each wall off the sheet; the comparison tool lists every line with no ink under it |
-| A floor plan read 2 ft off | each floor drawn on its own sheet, placed differently | each sheet registered to the frame by fitting the outer walls |
-| A window on solid brick, a railing round no floor, a door onto a roof | openings, walls and rails authored separately | openings stand on space edges; railings are derived from open edges; the data check lists any opening on no edge |
-| A roof cone 4 ft high inside a room | a cone whose point sits on its own edge treated as the lowest of its planes | each face of a pyramid or cone owns its sector |
+Fitting to drawings and photographs comes after, and only moves the parameters: it chooses a building within the space of valid ones.
 
-## The files and tools
+## The pieces
 
-- **The building file**, `game/data/buildings/<name>.json`: sheets and their registration, grid lines, levels, groups (the main block, a wing: which owns the wall between them), spaces, openings, roofs, chimneys, wall overrides (a framed wall, a different thickness). The format is described at the top of `tools/building/model.py`. Every coordinate is in the drawings' own feet. A coordinate may be a grid line's name, so one measurement moves every wall that stands on it.
-- **`tools/building/register.py`** finds where each plan sheet sits in the building's frame, by fitting the building's outer walls to the sheet's drawn outer faces (a line, the wall's hatched body inside, bare paper outside). The first floor's plan is the frame.
-- **`tools/building/measure.py`** reads the walls off a plan: across each wall in the data it samples the sheet, finds the drawn wall band, and proposes the grid line's position (an outer wall's outer face, a partition's centre), pooling every wall on a grid line and reporting how well they agree.
-- **`tools/building/overlay.py`** draws the data over each sheet (spaces, openings and chimneys on the plans; the roof's eaves, ridges, hips and valleys on the roof plan; skyline and visible edges on the elevations) and lists every run of the building's lines with no ink under it, longest first, with a score per sheet.
-- **`tools/building/check.py`** checks the data against the rules any building keeps: spaces that overlap or leave gaps, rooms with no roof or too little headroom, windows between two rooms or on no edge, openings above the roof, chimneys standing in a room's floor or not clearing the roof, roofs over nothing, porches with no headroom. A few seconds; run it after every edit.
-- **The builder**, `game/world/building/` (`BuildingData`, `BuildingRoof`, `BuildingBuilder`, `BuildingGeom`): builds any building file. A style (`twain_style.gd` for the Twain house) supplies colours, the ground and the joinery; nothing in the builder knows which building it is.
-- **`tools/building/validity.py`** checks the building as the game draws it, with no reference to any drawing: is it a sound, weathertight, livable shell? The builder exports every triangle it draws, tagged with what drew it (`FLOWSTATE_BLD_EXPORT=1`); the tool samples them onto a 10 cm grid, shuts every window and door, and floods the outside air in from the edges. It lists where the outside air gets into the house (`gap`), rooms it reaches (`leak`), a room's finish showing to the weather (`exposed`), a wall standing free with air on both sides (`above-roof`), roof or trim standing inside a room (`intrudes`), pieces joined to nothing (`floating`), windows whose view is blocked close in front (`blocked`) and outer doors with no step or floor outside (`no-footing`). Run it with `--seal 1`: the drawn surfaces are thickened a cell first, so it reports openings wider than about 30 cm and not the grid's own sampling gaps. The probe photographs each finding from outside air nearby (`FLOWSTATE_TW_FINDINGS=gap,above-roof`).
+- **The building file**, `game/data/buildings/<name>.json`, in feet. Grid lines (`grid.x`, `grid.z`) name the lines walls stand on; any coordinate may be a grid name, so one measurement moves every wall on it. Levels with their floors. Groups (the main block, a wing): which owns the wall between them. Spaces on levels: rooms, halls, stairs, porches, balconies, decks, attics, with a polygon (`rect`, points, `arc_at` for a round or a bay), a floor and a top. Openings at a point on a wall with a width, sill and head, and a kind (window, french, door, interior door, shutters, open). Roofs. Chimneys from hearth to top. A style: materials, brick bands, slate courses. A `note` on anything whose number is not the obvious reading of a drawing says which sheet it came from and why.
+- **The kernel**, `tools/building/solid.py` and `surface.py`: every part is a set of convex cells, each the intersection of half-spaces, each plane carrying the role of the face it makes (a wall's inner face, a roof's slope, a fascia). Subtraction, exact overlap by volume, and the union's surface with every edge matched.
+- **The generator**, `tools/building/arch.py` (`Model.generate`), in this order:
+  1. *Roofs.* Each roof has a footprint and, per edge, a kind (eave, gable, abut), a plate height, a pitch and an overhang. Its surface is the lowest of its edge planes. Hips, ridges and valleys follow from the planes. A pyramid or cone gives an apex and peak; `eave` sets every eave at one height and derives each edge's plate. A shed rises from one edge; a flat roof has pitch 0; a deck is a level cut with its own covering; holes leave a well open. A dormer is defined by its host roof, side, centre, width and setback, and its footprint is derived.
+  2. *Composition.* Where roofs meet, the higher wins inside the other's footprint. An eave is cut where another roof stands above it. A gable rising from the same wall line cuts the eave across its span. Nothing is trimmed by hand.
+  3. *Walls.* Per level and group, from the outline of its rooms, mitred at corners, standing on the floor of the room they close and rising to what is over them: the slab, the next level's wall or the roof's underside.
+  4. *Partitions*, inside the level's rooms only.
+  5. *Cheeks.* The wall under one roof's edge where it stands over another roof is derived from the two roofs.
+  6. *Chimneys.*
+  7. *Openings.* Each is found on the wall containing its middle and must fit that wall's face with a ring of wall round it. Frames, glass and leaves follow. Casings, hoods and sills take only the room their face leaves, clear of roofs and of other openings.
+  8. *Porches.* Posts on open edges, rising to the roof that covers them. Railings run between posts and walls. Then skirts, and steps at entries.
+  9. *Brackets*, kept only where they bear on wall and soffit.
 
-- **`tools/building/penetration.py`** finds parts that pass through each other, from the same tagged export: an edge of one part crossing a face of another and running on more than 3 cm either side. Parts that only touch or meet along a line (two slopes in a valley) do not count. Some kinds of part may pass into each other, and a table in the tool says which: a wall's top into its roof's thickness, a chimney through the roof, a window's casing in its wall, a porch post on its floor, a gutter or bargeboard into its own roof. Everything else is a fault: one roof's gutter or bargeboard through another roof or its trim, trim through a chimney or a window's casing, a roof across a window, a rail or post through a wall. The fix is a rule in the builder rather than a nudge to the data: trim is drawn only where it stands clear of other roofs, chimneys, window casings and balcony air (`_clear`), and a window's hood and sill only where no roof or floor crosses them.
-- **`tools/building/camera.py`** finds where a photograph was taken from five or more points in it whose place in the building is known (a gable's peak, a chimney's top), renders the model from that camera (`cam_<name>` views in the probe) and lays the render's edges over the photograph. Where the edges part from the building is where the model is wrong. `tools/building/chimneys.py` finds chimneys on the roof plan (the densest ink) and their tops on each elevation.
-- **Pictures**: the probe's straight-on elevations and top view of the built house (`ortho_<front>.png`, `ortho_top.png`) at the sheets' scale, for laying over the drawings; views from the photographs' viewpoints.
+  Whatever cannot be honoured raises `GenError` with the reason, such as a window into a roof, a pitch too steep for its span, or a plate above its peak.
+- **The validator**, `tools/building/validate.py`, checks the solids alone:
+  - *closed*: every part is a closed solid.
+  - *overlap*: no two parts share volume; designed joints are already cut by the generator.
+  - *fitted*: every face that must rest on something does: wall tops, frames, casings, posts, brackets.
+  - *sealed*: with openings shut, no inside face can be reached from outside. Where it can, the smallest leak is named.
+  - *finish*: no inside finish stands in the weather.
+  - *roof edges*: each is classified as eave, rake, ridge, hip, valley, deck edge, abutment, well, seam or cricket. Anything else is a step or slot and a finding.
+  - *openings*: each lies in its wall, clear of the roof and its neighbours.
+  - *chimneys*: each clears the roof it passes through by 2 ft.
+  - *headroom*: every room has headroom.
+  - *carried*: every roof stands on walls, posts or roof.
+  - *generation*: whatever the generator could not honour.
+- **`tools/building/build.py <name>`** generates, validates, and writes `game/data/buildings/<name>.bld` only when clean (`--force` writes it marked broken, for looking). `BuildingMesh` (`game/world/building/building_mesh.gd`) draws the `.bld` in the game with its collision.
+- **Fitting tools**, which read the drawings and never decide validity:
+  - `register.py` places each plan sheet in the frame.
+  - `measure.py` reads walls off a plan.
+  - `overlay.py` lays the data and the generated roof over every sheet and lists lines with no ink under them.
+  - `roofplan.py` draws the classified roof edges over the roof plan.
+  - `chimneys.py` finds chimney tops.
+  - `camera.py` solves a photograph's camera and lays the render over it.
+  - The world's probe photographs the built house from any viewpoint.
+- **The test house**, `tools/building/examples/cottage.json`, with `tests/test_building_generator.py`. It must stay clean, and each kind of fault must stay found.
 
 ## The steps
 
-Each step's checks pass before the next begins.
+1. **Sources.** Gather every sheet and photograph, and register the plans.
+2. **Spaces**, level by level, on named grid lines, until `measure.py` and `overlay.py` agree with the plans.
+3. **Openings**, from the plans (position, width) and elevations (sill, head).
+4. **Roofs**, as architectural parameters read from the roof plan, sections and elevations: footprint, plates, pitches, overhangs, gables. Never as faces.
+5. **Chimneys.**
+6. **Generate and validate** after every change to the data or the generator. Fix a finding in the data when a number is wrong. Fix it in the generator when it is a kind of fault, so the next building cannot have it. Add the kind to the test house when it is new.
+7. **Fit.** Compare the clean house with the drawings and photographs (`overlay.py`, `roofplan.py`, `camera.py`, probe views), adjust parameters, and validate again.
+8. **Then interiors**: finishes, stairs, furniture.
 
-1. **Gather and register the sources.** Every sheet (plans of every level, roof plan, elevations, sections), every photograph. List the sheets in the building file; register the plans with `register.py`, the elevations and sections by their own level marks (0'-0", the floors, the ridge). A sheet whose registration is doubtful is registered by hand on distinct features before anything is read from it.
-2. **Spaces, level by level.** From the plans, every space on every level with an opening, including the attic and the basement: its kind, its polygon (outer walls on their outer faces, rooms meeting on the partitions' centre lines), its floor and its top (a ceiling height, or "roof"). Put every wall line shared by more than one space on a named grid line. Then `measure.py` on each plan, `overlay.py` on each plan, until every wall in the data stands on a drawn wall (a remaining disagreement is named with its reason). `check.py` clean of overlaps and gaps.
-3. **Openings.** Each window and door from the plan (position, width) and an elevation (sill, head), on its wall's grid line. `check.py`: none on no edge, none between two rooms.
-4. **The roof.** From the roof plan, the sections and the elevations together: each body's footprint, form (hip, gable, pyramid or cone, flat, shed, or planes), heights and overhang; holes where a deck or a well is open to the sky. The attic plan and the sections show where the roof is over each room; the elevations show heights; the roof plan shows which body is the roof where. `overlay.py` on the roof plan and every elevation until the ridges, hips, valleys, eaves and skylines stand on drawn lines. `check.py`: no room without a roof, headroom where the plan puts rooms under the roof.
-5. **Chimneys.** Each from its hearth to its top, placed from the plan and both elevations that see it. `check.py`: none in a room's floor, all clear the roof.
-6. **Is it a building?** Before comparing with any picture: `check.py` on the data (spaces tile each level; every room has a roof and headroom and no floor above its roof; no window reaches over its ceiling or has a roof across it; porches meet the walls; every roof is carried by walls or posts; no gable is sunk behind the eave of the roof it rises from), then build and run `validity.py --seal 1` and `penetration.py` on what was built, and fix every finding in the data or, when it is a kind of fault, in the builder, so it cannot come back on the next building.
-7. **Build and look.** Build it; lay the top view over the roof plan and the elevations over their sheets; solve the camera of every photograph and lay the render over it (the built house must follow the data: where it does not, the builder is wrong, not the data); walk it; photograph it from the photographs' viewpoints. A fault found by eye is traced to the data or the builder and becomes a rule in `check.py` or the builder, so it cannot come back.
-8. **Then the interiors.** Finishes (per space in the data), stairs, furniture.
-
-Where two sources disagree: the plan decides position, the elevation height, a section what is inside the roof, a photograph between drawings. Record in the data which sheet each number came from when it is not the obvious one.
-
-## For the next building
-
-Start with an empty building file and the sheet table; register; spaces level by level with the measuring and comparison tools; openings; roof bodies; chimneys; check; build; look. The builder, the tools and the checks are general; what is particular to a building is its file and its style.
+Where sources disagree, the plan decides position, the elevation height, a section what is inside the roof, and a photograph between drawings. The note on the number records which was taken.

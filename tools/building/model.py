@@ -277,7 +277,15 @@ class Building:
             o = dict(o)
             o["at"] = expand_point(o["at"])
             self.openings.append(o)
-        self.bodies: list[Body] = []
+        self.bodies: list = []
+        self.chimneys = data.get("chimneys", [])
+        # a building file for the generator (tools/building/arch.py) gives
+        # its roofs by plates and pitches: the roof is read off the
+        # generated covering instead
+        self.generated = any("kind" not in r for r in data.get("roofs", []))
+        self._covering = None
+        if self.generated:
+            return
         by_id = {sp["id"]: sp for sp in self.spaces}
         for r in data.get("roofs", []):
             # A roof over a space may take the space's outline.
@@ -302,7 +310,50 @@ class Building:
                         body.planes.append(pl[0])
                         body.sectors.append([a, c, (ax, az)])
             self.bodies.append(body)
-        self.chimneys = data.get("chimneys", [])
+
+    def _generated_raster(self, xs, zs, X, Z, H, L):
+        """The top of the generated roof covering: each convex cell's
+        top is the lowest of its upward planes, where the point lies
+        within the cell's plan."""
+        if self._covering is None:
+            import arch
+            from types import SimpleNamespace
+            m = arch.Model(self.data)
+            m._roofs()
+            m._compose_roofs()
+            m._covering_elements()
+            self._covering = [(SimpleNamespace(id=k.split(":", 1)[1]), e.cells)
+                              for k, e in m.elements.items() if e.kind == "roof"]
+            self.bodies = [b for b, _ in self._covering]
+        for bi, (_, cells) in enumerate(self._covering):
+            ups: list = []
+            for c in cells:
+                lo, hi = c.aabb()
+                if hi[0] < xs[0] or lo[0] > xs[-1] or hi[2] < zs[0] or lo[2] > zs[-1]:
+                    continue
+                top = np.full(X.shape, np.inf)
+                pidx = np.full(X.shape, -1, dtype=np.int32)
+                bot = np.full(X.shape, -np.inf)
+                ok = (X >= lo[0] - 1e-6) & (X <= hi[0] + 1e-6) & (Z >= lo[2] - 1e-6) & (Z <= hi[2] + 1e-6)
+                for pl in c.planes:
+                    nx, ny, nz = pl.n
+                    if ny > 1e-6:
+                        key = (round(nx / ny, 6), round(nz / ny, 6), round(pl.d / ny, 4))
+                        if key not in ups:
+                            ups.append(key)
+                        y = (pl.d - nx * X - nz * Z) / ny
+                        lower = y < top
+                        top = np.where(lower, y, top)
+                        pidx = np.where(lower, ups.index(key), pidx)
+                    elif ny < -1e-6:
+                        bot = np.maximum(bot, (pl.d - nx * X - nz * Z) / ny)
+                    else:
+                        ok &= nx * X + nz * Z <= pl.d + 1e-6
+                ok &= (bot <= top + 1e-6) & np.isfinite(top)
+                up = ok & (top > H + 1e-6)
+                H = np.where(up, top, H)
+                L = np.where(up, bi * 64 + np.minimum(pidx, 63), L)
+        return xs, zs, H, L
 
     @staticmethod
     def load(name_or_path: str) -> "Building":
@@ -323,6 +374,8 @@ class Building:
         X, Z = np.meshgrid(xs, zs, indexing="ij")
         H = np.full(X.shape, -np.inf)
         L = np.full(X.shape, -1, dtype=np.int32)
+        if self.generated:
+            return self._generated_raster(xs, zs, X, Z, H, L)
         for bi, b in enumerate(self.bodies):
             m = inside(b.extent, X, Z)
             for h in b.holes:

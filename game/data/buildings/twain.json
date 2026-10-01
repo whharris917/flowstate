@@ -543,17 +543,17 @@
    },
    "slate_red": {
     "color": [
-     0.44,
-     0.26,
-     0.24
+     0.38,
+     0.3,
+     0.28
     ],
     "kind": "slate"
    },
    "slate_dark": {
     "color": [
-     0.26,
-     0.3,
-     0.29
+     0.31,
+     0.35,
+     0.34
     ],
     "kind": "slate"
    },
@@ -636,15 +636,15 @@
     "slate",
     "slate",
     "slate",
+    "slate",
     "slate_dark",
+    "slate",
+    "slate",
     "slate",
     "slate",
     "slate_red",
     "slate",
-    "slate",
-    "slate_dark",
-    "slate",
-    "slate_red"
+    "slate"
    ]
   }
  },
