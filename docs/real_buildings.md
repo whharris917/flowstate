@@ -43,7 +43,8 @@ Fitting to drawings and photographs comes after, and only moves the parameters: 
   - `register.py` places each plan sheet in the frame.
   - `measure.py` reads walls off a plan.
   - `overlay.py` lays the data and the generated roof over every sheet and lists lines with no ink under them.
-  - `roofplan.py` draws the classified roof edges over the roof plan.
+  - `roofplan.py` draws the classified roof edges over the roof plan, each roof named.
+  - `eaves.py` reads each eave's distance from the drawn eave line on the roof plan.
   - `chimneys.py` finds chimney tops.
   - `camera.py` solves a photograph's camera and lays the render over it.
   - The world's probe photographs the built house from any viewpoint.
@@ -60,4 +61,4 @@ Fitting to drawings and photographs comes after, and only moves the parameters: 
 7. **Fit.** Compare the clean house with the drawings and photographs (`overlay.py`, `roofplan.py`, `camera.py`, probe views), adjust parameters, and validate again.
 8. **Then interiors**: finishes, stairs, furniture.
 
-Where sources disagree, the plan decides position, the elevation height, a section what is inside the roof, and a photograph between drawings. The note on the number records which was taken.
+Where sources disagree, the plan decides position, the elevation height, a section what is inside the roof, and a photograph between drawings. When two sheets disagree on a position, measure each sheet's error on a feature both draw and that is already settled (a ridge's end, a wall), correct each reading by it, and take the mean. An elevation is read by its own registration: check the sign of its offset on a known feature before reading anything from it. Probe views from the photographs' cameras hide the grounds, so a foundation below grade shows in them. The note on the number records which was taken.

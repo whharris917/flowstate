@@ -200,7 +200,7 @@ A real building is generated from architectural decisions and validated as a sol
 2. **Standing review items:** the drip demo's tube-sized nozzles; the small-bore views (first drafts); the two `docs/` documents and their five spec-prose drifts; the showcase's walk report and startup time.
 3. **Monroe courthouse:** the monument's inscriptions (modelled plain). Next films: scripted top-down by Claude, no agent actors; pipeline in `tools/film/`.
 4. **Harbor town, open for the director:** the domed hall, the sign names, the town's name, the moon's phase (`SkyClock.MOON_AGE`), the noon sun's height (60°).
-5. **Twain house, generated from its data**: clean on every check; awaits the director's look and the judgment calls listed in `docs/history.md` (2026-09-30). Next: fit to the photographs, then stair, finishes and furniture, then retire the hand-built house.
+5. **Twain house, generated from its data**: clean and fitted to the survey and photographs; awaits the director's look and the judgment calls in `docs/history.md` (2026-09-30). Next: stair, finishes and furniture, then retire the hand-built house.
 
 **Known gaps:**
 - Mass does not close across the steam generator: its drum is a fixed-pressure boundary that makes up whatever is drawn. Closing it needs a real drum inventory and changes the boiler's dynamics; the director's call.
